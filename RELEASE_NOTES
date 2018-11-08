@@ -1,0 +1,81 @@
+ZENBU release notes
+
+2.11.1
+- added new eedb_download.cgi webservice to provide download access to the original BAM files uploaded into the system. Currently only a webservice, but will eventually enable interface access. Performs full security access checks if user has privilege to download the file. May provide same feature for BED/OSC/GFF files in the future. 
+- added gff_mdata to file upload. Allows for setting bulk metadata at upload time in a more efficient manner. Only limitation is that imposed by the gff-attribute format: no CR, no ",", no ";" within the metadata data/values.
+- added expression_mode CL_NONE to allow completely transparent operations. Needed to fixing bugs when resort-buffer is needed (like in ZDX files) but is not supposed to modify the data, just resort
+- added source_file_size and source_md5sum calculation for peers to enable more precise matching of file duplications
+- added ability to control visualization color from feature metadata. before this was automatic (if the bed:itemRgb was present). Now users can control if they use the metadata or not and to allow specification of an alternate metadata column name
+- added specification of the experiment display name in the linked experiment-signal panel. Can now specify the name from any of the metadata keys assigned to the experiments. Allows multiple keys to create concatenated composite names 
+- redesigned the track visualizaation interface to be cleaner and only show options relevant to the selected style
+- changed the zenbu_upload to default to pervent duplication and now user needs to specify -allow_duplicates to bypass the checks
+- fixed bug in the session when the URL is very long which would cause truncation and a malformed session
+- fixed bug in paraclu related to output sort order. triggered in rare circumstances. Temporary fix to buffer all clusters into ResortBuffer until finished with processing region. I will revisit the code in the future to maybe combine both strands into a single strand-aware tool to allow correct "finishing" of clusters early.
+- improved responsiveness and feedback in the user management tool interface for adding/deleting users from a collaboration.
+- changed the track (re)configuration interface for visualization to better control how color is controlled. Added more interface for metadata/itemRGB color control.
+
+2.11.0
+- Added new genome upload capabilities
+  - Users can create new reference genomes by uploading a fasta file (or fasta.tar of directory) of the genome sequences for each chromosome. Must also provide the taxon_id for the genome. Uses the taxon_id to connect to the NXBI taxonomy system to obtain all the relevant species/genus/classification/common-name informatio. Supported file types: .fasta .fas .fa .fasta.tar .fasta.tar.gz 
+  - Ported the NCBI webservice based genome loading from the old perl script into the c++ Job system. Currently only available with test code, but eventually will have web interface and commandline tool controls.
+- Added "seqalign" visualization. Works with BAM alignments which have metadata sam:seq and sam:cigar. Parses the seq/cigar to show the actual sequence of each alignment read aligned to the genome. Shows inserts,delete,soft-clipping, and mismatches.
+- Added the metadata sam:seq and sam:cigar to the BAM alignment features in BAMDB. Can be toggled on by using the feature mode: full_feature. "seqalign" visualization requires this metadata.
+- added move-ability to the feature_info panel.  Rebuilt the look of the sequence sub-panel so that it is contained within and togglable on/off
+- added highlight search to interface (and URL). if visible features in the tracks contain search string, then those features are colored red and everything else is grayed out
+- added embedded mode to allow a simplified ZENBU to be placed inside iframes in other websites. [F][E] button to toggle, and access with gLyphs/index_embed.html
+- Modified the ranksum calculation and display to merge metadata groups which generate the exact same subset of experiments. Avoids duplicate entries in the display and makes it easier to see when particular metadata are co-corellated, and makes calculation faster.
+- added -filelist option to zenbu_upload command line tool. One creates a control file with a list of all the files to upload. Control file has 3 columns: 1- full path to file (required), 2- display name, 3- description. Columns 2 and 3 are optional. This option perfoms checks to prevent duplicate uploading of the same file (hence the full path), and it allows for failure/restart of the upload which is necessary when uploading 1000s of files.
+- changed API: removed old desc_xml() and replaced with a more general purpose mdata_xml() where one can specify the specific metadata tags to include in the output.
+- fixed bug in track saving where descriptions had carriage returns
+- fixed bug in DEX related to the metadata browser and refining searches. Had previously changed the xml format for mdstats but forgot to change the XML parser in DEX
+- fixed bug in OSDB: somehow lost the code which checks genome assembly is matching. Need this so that when people do a region query on the wrong assembly that it returns nothing
+- fixed BAMDB so that if a build job needs to be re-run, that it can use the already linked/copied BAM files and not cause a crash.
+- revisting the mysql database code because zenbu was performing too many disconnect/connects and using up tcp ports. Much more robust now for when mysql servers fail to connect. Also fixes problem in eedb_user.cgi of users being "poped out" and needing to login again (when the mysql server failed a connection)
+- added back eedb_user.fcgi for speed and due to the much more robust mysql (and connection management) code for most of the user related webservices
+
+2.10.0
+- Added easy build script zenbu_build_debian.sh. See README_AUTOBUILD for details
+- Added ranksum visualization option to the infopanel when in mann-whitney statistical mode
+- Added option to show error bars are either standard error or standard deviation when in grouping statistical mode
+- Rebuilt the BAM reading code around samtools htslib library function calls. Previously was using the BamTools c++ library. samtools introduced an incompatibilty with version 1.2. Sometimes BAM files built with samtools1.2 would cause the BamTools library to crash. So we decided to rebuild the code around the samtools library.
+- Fixed bug in the mann-whitney ranksum calculation since we want to preserve the directionality of the ranking in the z-score
+- Fix bug in BAM paired-end parsing code. Now correctly assigns the strand for the mated-pairs. Still does not parse the edge/link inforation, but this will happen in a future release.
+- Added processing module FlipStrand
+- Added "unshare" feature. Allows a user to unlink/unshare a data-set from a collaboration.
+- Added key-specific metadata searching to entire system. Two new syntax are added 
+    key:=value (eg UBERON:=0000061) is an exact match for this specific metadata
+    key~=value (eg UBERON:desc~=bone) is an exact key match and partial value match (like *bone*)
+- Added hover-over info panels from mdata-grouping mode. click shows detail panel with all individual experiments in the metadata key-group and hover-over the experiments shows for info and click on experiment show full experiment metadata. Improved formatting of these panels. Removed "keyword" from the experiment detailed metadata display.
+- Added new visualization mode into the genome browser called "split-signal". For each experiment / or experiment grouping in the linked expression-panel, a separate sub track is displayed in the signal-histogram form. All subtracks are put on a common scalling so that if an experiment/grouping is lower signal, than the max height of the subtrack is proportially lower. Changing the sort order in the linked expression panel changes the order of the sub-tracks in the split-view. If the linked panel is in a sort mode of signal then the sub-tracks will also dynamically resort themselves as a selection is made. The track-height parameter sets the height of each sub-track and the total height of the track is the track-height times the number of experiments/groupings. Although this works for a non-grouped tracks, it is most useful when the tracks experiments are grouped into clean categories or there are only a few experiments pooled together in the track.
+- Added remote capability to the region-sequence web service.
+- Added strand and reverse-complement capability to the region-sequence web service and interface. Sequence on features uses the strand of the feature to determine if it rev-comp. sequence of selection uses the global orientation of the view. Strandless features uses the global orientation.
+- Added search= to URL for genome browser to allow recentering on an exact match search term. Can be anything searchable in the view from entrez genes to gencodeIDs. eg: fantom.gsc.riken.jp/zenbu/gLyphs/#config=b-IMGb5lG53ntH8qgNeChB;search=egr1
+- Added active_track_exp_filter= to genome browser URL parsing. A very special mode where it performs this experiment-filter-search on the selected track at launch time. Allows for a common view of pooled data to be easily hyperlinked into from an external application where a specific filter of experiments is required.
+- Added keep_active_experiments_on_top option to the linked experiment-expression panel. Keeps the selected experiments at the top of the panel (with selected sort order) and then the deselected will follow (also in choosen sort order)
+- Added a "global no cache" for forcing direct queries. options is not saved in view configuration. mostly used for debugging.
+- Converted Collaborations to use sqlite databases for their registries. Originally used sqlite, then switched to mysql, but now realized that many mysql registries cause problems exhausting available network ports. So switched back to sqlite and will continue to remove mysql from the system in the future.
+- fixed small bug in tracking line where it wouldn't click to base 1 when zoomed in at a 1bp level
+- fixed display of sequence length of a selection
+- Improved the performance of feature-name-searching within ZDXdb (eg GFF loaded data with name searching). Now the system finds an intersection of potential znodes blocks based on the mdkeys.
+- Improved GFF uploader so that formating errors and parser failures are caught and detailed information is passed back to the user so they can fix their file formatting.
+- Improved performance of GFF uploader when dealing with draft genomes of 1000s of chromosome/scaffolds
+- Fixed NCBI gene loader. NCBI changed the output format for the entrez gene webservices (http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi). Had to rebuild scripts/eedb_sync_entrezgene.pl XML parsing
+- Fixed bug when uploading BED files with score-count or single-count. The automatic normalization ("_pm" datatype) was not being triggered correctly. This will be fixed for all new uploaded. For files which were previously uploaded, but missing the _pm datatype, we are considering a "repair" tool.
+- Fixed bug in the UniqueFeature code when in "strandless" mode. In some situations it would not properly merge the different strands and return stranded features
+- Fixed some bugs in the zenbu_upload -mdedit system. 
+- Fixed small bug in eedb_chromChunkTool.pl to now allow files with extensions .fa .fa.gz .fasta .fasta.gz
+- Fixed bugs in the data explorer DEX URL parsing and init for collab= and search=
+
+
+2.9.1
+This version update is mostly about bug fixes, but there are several important changes.
+
+- Collaborations can now be "published". This allows for projects to be more neatly packaged into a collaboration group. A published collaboration means that all the views/tracks/scripts and data which was shared with the collaboration, will now be visible to all users. Publishing is currently done by the system administrator but I will add a user interface in the future. "Publishing" should only be done after a project has been made public since everything will be visible by the world. After publishing, the collaboration can see be edited by it's selected members, while the public has read-only access. Of course secured collaborations are the norm. On the http://fantom.gsc.riken.jp/zenbu server one can see two "published" collaboration at this time "FANTOM5 Promoterome" and "FANTOM5 Time Course".
+
+Please note for people upgrading from a previous version: this feature required a change in the mysql schema for collaborations. Please apply the 2.9.1_patch file in the zenbu/sql directory if you are upgrading.
+
+- Adding users to a collaboration now allows for directly adding new people to the system. When a collaboration manager adds a person to a collaboration, it will now create new accounts if the person has not previously made a ZENBU account. The person is sent an email inviting them to confirm their account. This dramatically simplifies the process of adding many people to a collaboration, and for people to join ZENBU and a collaboration.
+
+- Refinements in the zenbu_upload command line program. This is a client tool to allow upload and metadata editing from any remote machine to a zenbu server. It is most useful for bulk loading of data from a computation-node server (aka bioinformatics processing pipeline).
+
+- A more robust remote-data access system. There is now a direct-stream-process system to send track data to a remote server even if the track has not been processed into a cache. This is the first step in toward a more powerful cache and data-sharing system which is planed for the future 3.0 release.

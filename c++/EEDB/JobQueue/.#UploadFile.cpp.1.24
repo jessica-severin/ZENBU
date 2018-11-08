@@ -1,0 +1,815 @@
+/* $Id: UploadFile.cpp,v 1.24 2015/03/12 10:16:12 severin Exp $ */
+
+/***
+
+NAME - EEDB::JobQueue::UploadFile
+
+SYNOPSIS
+
+DESCRIPTION
+
+Specific subclass of WebBase which is focused on caching metadata from sources
+in order to provide fast keyword logic searching
+
+CONTACT
+
+Jessica Severin <severin@gsc.riken.jp>
+
+LICENSE
+
+ * Software License Agreement (BSD License)
+ * EdgeExpressDB [eeDB] system
+ * copyright (c) 2007-2013 Jessica Severin RIKEN OSC
+ * All rights reserved.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the name of Jessica Severin RIKEN OSC nor the
+ *       names of its contributors may be used to endorse or promote products
+ *       derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+APPENDIX
+
+The rest of the documentation details each of the object methods. Internal methods are usually preceded with a _
+
+***/
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <iostream>
+#include <string>
+#include <stdarg.h>
+#include <sys/types.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+//#include <yaml.h>
+#include <rapidxml.hpp>  //rapidxml must be include before boost
+#include <boost/algorithm/string.hpp>
+#include <MQDB/MappedQuery.h>
+#include <EEDB/Peer.h>
+#include <EEDB/User.h>
+#include <EEDB/Collaboration.h>
+#include <EEDB/Experiment.h>
+#include <EEDB/FeatureSource.h>
+#include <EEDB/EdgeSource.h>
+#include <EEDB/Datatype.h>
+#include <EEDB/Chrom.h>
+#include <EEDB/Feature.h>
+#include <EEDB/Edge.h>
+#include <EEDB/Expression.h>
+#include <EEDB/SPStream.h>
+#include <EEDB/SPStreams/FederatedSourceStream.h>
+#include <EEDB/SPStreams/MultiMergeStream.h>
+#include <EEDB/SPStreams/OSCFileDB.h>
+#include <EEDB/SPStreams/BAMDB.h>
+#include <EEDB/JobQueue/Job.h>
+#include <EEDB/JobQueue/UploadFile.h>
+
+#include <EEDB/WebServices/RegionServer.h>
+#include <EEDB/ZDX/ZDXstream.h>
+#include <EEDB/ZDX/ZDXsegment.h>
+#include <lz4/lz4.h>
+
+using namespace std;
+using namespace MQDB;
+
+const char*               EEDB::JobQueue::UploadFile::class_name = "EEDB::JobQueue::UploadFile";
+
+void _upload_test_read_zdx(EEDB::ZDX::ZDXstream *zdxstream);
+
+EEDB::JobQueue::UploadFile::UploadFile() {
+  init();
+}
+
+EEDB::JobQueue::UploadFile::~UploadFile() {
+}
+
+void _eedb_job_upload_delete_func(MQDB::DBObject *obj) { 
+  delete (EEDB::JobQueue::UploadFile*)obj;
+}
+
+void EEDB::JobQueue::UploadFile::init() {
+  MQDB::MappedQuery::init();
+  _classname      = EEDB::JobQueue::UploadFile::class_name;
+  _funcptr_delete = _eedb_job_upload_delete_func;
+  
+  _current_job = NULL;
+  _userDB = NULL;
+}
+
+
+void  EEDB::JobQueue::UploadFile::userDB(MQDB::Database *db) {
+  _userDB = db;
+}
+
+
+void EEDB::JobQueue::UploadFile::set_parameter(string tag, string value) {
+  //used for debugging
+  _upload_parameters[tag] = value;
+}
+
+
+////////////////////////////////////////////////////////////////////////////
+
+
+bool  EEDB::JobQueue::UploadFile::process_upload_job(long job_id) {
+  _current_job = EEDB::JobQueue::Job::fetch_by_id(_userDB, job_id);
+  if(!_current_job) { return false; }
+
+  EEDB::Metadata *md = _current_job->metadataset()->find_metadata("xmlpath", "");
+  if(!md) { return false; }
+
+  string xmlpath = md->data();  
+  if(!read_upload_xmlinfo(xmlpath)) { 
+    _upload_parameters["upload_error"] = "unable to read upload xml config";
+    return false; 
+  }
+  string file = _upload_parameters["_inputfile"];
+  
+  struct stat statbuf;
+  if(stat(file.c_str(), &statbuf) != 0) {
+    _upload_parameters["upload_error"] = "unable to open input file";
+    return false; 
+  }
+  
+  if(!_current_job->user()) {
+    _upload_parameters["upload_error"] = "no user asigned to upload job";
+    return false; 
+  }
+
+  fprintf(stderr, "upload data into ZENBU [%s]\n", file.c_str());
+
+  map<string,string>::iterator  param_it;
+  bool zdxload = false;
+  if(_upload_parameters["filetype"] == "gff") { zdxload=true; }
+  if(_upload_parameters["filetype"] == "gff2") { zdxload=true; }
+  if(_upload_parameters["filetype"] == "gff3") { zdxload=true; }
+  if(_upload_parameters["filetype"] == "gtf") { zdxload=true; }
+  if(_upload_parameters["filetype"] == "gtf2") { zdxload=true; }
+  if(_upload_parameters["build_feature_name_index"] == "true") { zdxload=true; }
+  if(_upload_parameters["load_into_zdx"] == "true") { zdxload=true; }
+    
+  EEDB::Peer *upload_peer = NULL;
+  if(zdxload) {
+    _upload_parameters["owner_identity"] = _current_job->user()->email_identity();
+    upload_peer = load_into_zdx();
+  } 
+  else
+  if((_upload_parameters["filetype"]  == "bam") || (_upload_parameters["filetype"]  == "sam")) {
+    //BAMDB
+    EEDB::SPStreams::BAMDB *bamdb = new EEDB::SPStreams::BAMDB();
+    for(param_it = _upload_parameters.begin(); param_it != _upload_parameters.end(); param_it++) {
+      if((*param_it).first == "_inputfile") { continue; }
+      bamdb->set_parameter((*param_it).first, (*param_it).second);
+    }
+    bamdb->set_parameter("owner_identity", _current_job->user()->email_identity());
+    bamdb->set_parameter("ignore_internal_assembly", "yes");
+
+    string url = bamdb->create_new(file);
+    if(url.empty()) {
+      _current_job->metadataset()->add_tag_data("upload_error", "problem uploading BAM file");
+      _current_job->store_metadata();
+      return false; 
+    }
+    if(url.find("ERROR")!=std::string::npos) {
+      url.erase(0, 6);
+      _current_job->metadataset()->add_tag_data("upload_error", url);
+      _current_job->store_metadata();
+      return false; 
+    }
+    fprintf(stderr, "new bamdb url [%s]\n", url.c_str());
+        
+    //registry new oscdb peer into user registry
+    EEDB::Peer *user_reg = _current_job->user()->user_registry();
+    
+    EEDB::Peer *peer = bamdb->peer();
+    peer->db_url(url);  //set peer db_url to full URL location
+    fprintf(stderr, "%s\n", peer->xml().c_str());
+    peer->store(user_reg->peer_database());
+    upload_peer = peer;
+  } else {
+    //OSCDB for bed,gff,gtf,osctable files
+    EEDB::SPStreams::OSCFileDB *oscdb = new EEDB::SPStreams::OSCFileDB();
+
+    for(param_it = _upload_parameters.begin(); param_it != _upload_parameters.end(); param_it++) {
+      if((*param_it).first == "_inputfile") { continue; }
+      //fprintf(stderr, "set oscdb param [%s] = [%s]\n", (*param_it).first.c_str(), (*param_it).second.c_str());
+      oscdb->set_parameter((*param_it).first, (*param_it).second);
+    }
+    
+    //oscdb->set_parameter("build_dir","/tmp/");
+    //oscdb->set_parameter("deploy_dir", _user_profile->user_directory());
+    oscdb->set_parameter("owner_identity", _current_job->user()->email_identity());
+    
+    string oscpath = oscdb->create_db_for_file(file);
+    if(oscpath.empty()) {
+      //something went wrong
+      fprintf(stderr,"BUILD ERROR [%s]\n", oscdb->error_message().c_str());
+      _current_job->metadataset()->add_tag_data("upload_error",oscdb->error_message());
+      _current_job->store_metadata();
+      return false;
+    }
+    fprintf(stderr, "new oscdb url [%s]\n", oscpath.c_str());
+    
+    //registry new oscdb peer into user registry
+    EEDB::Peer *user_reg = _current_job->user()->user_registry();
+    EEDB::Peer *oscdb_peer = oscdb->peer();
+    oscdb_peer->db_url(oscpath);  //set peer db_url to full URL location
+    fprintf(stderr, "%s\n", oscdb_peer->xml().c_str());
+    oscdb_peer->store(user_reg->peer_database());
+    upload_peer = oscdb_peer;
+  }
+  
+  string cmd = string("chown -R apache:apache ") + _current_job->user()->user_directory();
+  fprintf(stderr, "%s\n", cmd.c_str());
+  system(cmd.c_str());
+  cmd = string("chown -R www-data ") + _current_job->user()->user_directory();
+  fprintf(stderr, "%s\n", cmd.c_str());
+  system(cmd.c_str());
+  
+  //link into collaboration at upload time
+  if(upload_peer and (_upload_parameters.find("collaboration_uuid") != _upload_parameters.end())) { 
+    EEDB::Collaboration *collaboration = EEDB::Collaboration::fetch_by_uuid(_current_job->user(), 
+                                                                            _upload_parameters["collaboration_uuid"]);
+    if(!collaboration) {
+      fprintf(stderr, "unable to find collab [%s]\n", _upload_parameters["collaboration_uuid"].c_str());
+    } else {
+      fprintf(stderr, "share to collaboration [%s] : %s\n", collaboration->group_uuid().c_str(), collaboration->display_name().c_str());
+      if((collaboration->member_status() == "MEMBER") or (collaboration->member_status() == "owner")) {
+        string error = collaboration->share_peer_database(upload_peer);
+        if(!error.empty()) {
+          fprintf(stderr, "collab_share_error: %s\n", error.c_str());
+        }
+      }
+    }      
+  }      
+
+  //unlink(xmlpath.c_str());
+  //unlink(file.c_str());
+
+  return true;
+}
+
+
+bool EEDB::JobQueue::UploadFile::read_upload_xmlinfo(string xmlfile) {
+  int                      fildes;
+  off_t                    cfg_len;
+  char*                    config_text;
+  rapidxml::xml_document<> doc;
+  rapidxml::xml_node<>     *node, *root_node, *section_node;
+  
+  _upload_parameters.clear();
+  
+  if(xmlfile.empty()) { return false; }
+  
+  fprintf(stderr, "read upload parameters from xmlconfig [%s]\n", xmlfile.c_str());
+  
+  //printf("=== read config [%s]\n", xmlfile.c_str());
+  //open config file, mmap into memory then copy into config_text
+  fildes = open(xmlfile.c_str(), O_RDONLY, 0x755);
+  if(fildes<0) { return false; } //error
+  
+  cfg_len = lseek(fildes, 0, SEEK_END);  
+  //printf("config file %lld bytes long\n", (long long)cfg_len);
+  lseek(fildes, 0, SEEK_SET);
+  
+  config_text = (char*)malloc(cfg_len+1);
+  memset(config_text, 0, cfg_len+1);
+  read(fildes, config_text, cfg_len);
+  //printf("config:::%s\n=========\n", config_text);
+  
+  doc.parse<rapidxml::parse_declaration_node | rapidxml::parse_no_data_nodes>(config_text);
+  
+  root_node = doc.first_node();
+  if(root_node->name() != string("oscfile")) { return false; }
+  
+  // parameters section
+  section_node = root_node->first_node("parameters");
+  if(section_node) { 
+    node = section_node->first_node("input_file");
+    if(node) { _upload_parameters["_inputfile"] = node->value(); }
+    
+    node = section_node->first_node();
+    while(node) {
+      fprintf(stderr, "param[%s] = %s\n", node->name(), node->value());
+      _upload_parameters[node->name()] = node->value();
+      node = node->next_sibling();
+    }
+  }
+  
+  free(config_text);
+  return true;
+}
+
+
+//--------------------------------------------------------------------------------
+//
+// Loading into ZDX related methods
+//
+//--------------------------------------------------------------------------------
+
+class fbuf_entry {
+  public:
+    string  link_id;
+    EEDB::Feature* feature;
+};
+
+
+EEDB::Peer*  EEDB::JobQueue::UploadFile::load_into_zdx() {
+  struct timeval      starttime,endtime,difftime;
+  long                count=0;
+  char                strbuffer[8192];
+  string              _error_msg;
+  
+  map<string, EEDB::Datatype*> datatypes;
+  map<string, bool>            sourceid_filter;
+
+  long long buflen = 10*1024*1024; //10MB
+  char*  _data_buffer = (char*)malloc(buflen);
+  bzero(_data_buffer, buflen);
+  
+  gettimeofday(&starttime, NULL);
+    
+  string inpath = _upload_parameters["_inputfile"];
+  string genome = _upload_parameters["genome_assembly"];
+  //boost::algorithm::to_lower(genome); 
+    
+  gzFile gz = gzopen(inpath.c_str(), "rb");
+  if(!gz) {
+    snprintf(strbuffer, 8190, "failed to gzopen input file [%s]", inpath.c_str());
+    _upload_parameters["upload_error"] = strbuffer;
+    return NULL;
+  }
+  
+  string outpath = _upload_output_name();
+  outpath += ".zdx";
+  fprintf(stderr, "upload to zdx : inpath [%s] => [%s]\n", inpath.c_str(), outpath.c_str());
+  
+  if(_upload_parameters.find("display_name") == _upload_parameters.end()) {    
+    _upload_parameters["display_name"] = _upload_parameters["_build_filename"];
+  }
+  _upload_parameters["orig_file"] = inpath;
+  
+
+  //create the ZDX file
+  EEDB::ZDX::ZDXstream *zdxstream = EEDB::ZDX::ZDXstream::create_new(outpath);
+  EEDB::Peer* zdxpeer = zdxstream->self_peer();
+  fprintf(stderr, "%s\n", zdxpeer->xml().c_str());
+  
+  //create the genome chromosomes in the ZDX
+  ZDXdb* zdxdb = zdxstream->zdxdb();
+  long numchroms =  EEDB::ZDX::ZDXsegment::num_chroms(zdxdb);
+  if(numchroms == 0) { 
+    //
+    // make sure all the chrom and segments are built
+    //
+    fprintf(stderr, "build zdx chroms [%s] ... ", genome.c_str());
+    EEDB::WebServices::RegionServer *webservice = new EEDB::WebServices::RegionServer();
+    webservice->parse_config_file("/zenbu/server_config/active_config.xml");
+    webservice->init_service_request();
+    webservice->postprocess_parameters();
+    
+    EEDB::Assembly *assembly = webservice->find_assembly(genome);
+    if(assembly) {
+      fprintf(stderr, "%s\n", assembly->xml().c_str());
+      vector<EEDB::Chrom*> chroms;
+      assembly->all_chroms(chroms);
+      for(unsigned int j=0; j<chroms.size(); j++) {
+        EEDB::Chrom *chrom = chroms[j];
+        if(chrom->chrom_length() < 1) { continue; }
+        zdxstream->create_chrom(chrom);
+        fprintf(stderr, "%ld :: %s\n", j, chrom->xml().c_str());
+      }
+    } else {
+      _upload_parameters["upload_error"] = "failed to get assembly and make ZDX chroms";
+      fprintf(stderr, "%s\n", _upload_parameters["upload_error"].c_str());
+      return NULL;
+    }
+    
+    numchroms =  EEDB::ZDX::ZDXsegment::num_chroms(zdxdb);
+    fprintf(stderr, "zdx loaded %ld chroms\n", numchroms);
+  }
+  
+  //
+  // OscFileParser based parsing
+  //
+  EEDB::Tools::OSCFileParser *oscparser = new EEDB::Tools::OSCFileParser();
+  oscparser->set_peer(zdxpeer);
+  map<string,string>::iterator    p_it;
+  for(p_it=_upload_parameters.begin(); p_it!=_upload_parameters.end(); p_it++) {
+    if((*p_it).first[0] == '_') { continue; }
+    oscparser->set_parameter((*p_it).first, (*p_it).second);
+  }  
+  
+  //start the parsing
+  if(!oscparser->init_from_file(inpath)) { 
+    _error_msg+="unable to parse file format. ";
+  }  
+  if(!oscparser->default_assembly()) { //to make sure it is initialized
+    _error_msg+="no genome_assembly is defined. ";
+  }
+  if(!oscparser->primary_feature_source()) { //to make sure it is initialized
+    _error_msg+="problem creating oscfile primary_feature_source. ";
+  }
+  
+  int chrom_idx, start_idx, end_idx, strand_idx; 
+  oscparser->get_genomic_column_indexes(chrom_idx, start_idx, end_idx, strand_idx);
+  if(chrom_idx== -1 || start_idx==-1) {
+    _error_msg+="malformed file: does not defined chrom or chrom_start columns. "; 
+  }
+  
+  if(!_error_msg.empty()) {
+    fprintf(stderr, "%s\n", _error_msg.c_str());
+    _upload_parameters["upload_error"] = _error_msg;
+    return NULL;
+  }
+  string filetype  = oscparser->get_parameter("filetype");
+  fprintf(stderr, "parsing [%s] filetype\n", filetype.c_str());
+  
+  
+  //reading of file and line parsing  
+  gzrewind(gz);
+  EEDB::ZDX::ZDXsegment* zseg = NULL;
+  
+  count=0;
+  long              last_update=starttime.tv_sec;
+  map<string,long>  category_count;
+  long              feature_id=1;
+  map<string,long>  chrom_count;
+  list<fbuf_entry>  feature_buffer;
+  
+  while(gzgets(gz, _data_buffer, buflen) != NULL) {
+    if(_data_buffer[0] == '#') { continue; }    
+    if(filetype == "osc") { 
+      if(count==0) { //first non-parameter/comment line is the header columns line
+        count++;
+        continue;
+      }
+    }
+    count++;
+    string tline = _data_buffer; //tmp copy for error message. not efficient but no other nice way
+    
+    char *p1=_data_buffer;
+    while((*p1 != '\0') && (*p1 != '\n') && (*p1 != '\r')) { p1++; }
+    *p1 = '\0';  //null terminate line if \n or \r
+    if(_data_buffer == p1) {
+      continue;  //empty line
+    }
+    
+    //fprintf(stderr, "convert_dataline [%s]\n", _data_buffer);
+    EEDB::Feature* in_feature = oscparser->convert_dataline_to_feature(_data_buffer, EEDB::FULL_FEATURE, datatypes, sourceid_filter);
+    if(!in_feature) { 
+      snprintf(strbuffer, 8190, "datafile error, unable to parse line %ld --[", count);
+      _upload_parameters["upload_error"] = strbuffer + tline + "]";
+      return NULL;
+    }
+
+    string chrname = "unmapped";
+    if(in_feature->chrom()) { 
+      chrname = in_feature->chrom()->chrom_name();
+      if(chrname.empty() || (chrname == "*")) { chrname = "unmapped"; } 
+    }
+    
+    string category = in_feature->feature_source()->category();
+    category_count[category]++;
+    EEDB::DataSource::add_to_sources_cache(in_feature->feature_source());
+
+        
+    in_feature->primary_id(feature_id++);
+    fbuf_entry fent1;
+    fent1.feature = in_feature;
+    fent1.link_id = "";
+    
+    bool made_link = false;
+    
+    //fprintf(stderr, "===IN  %13s %30s  %s\n", category.c_str(), in_feature->chrom_location().c_str(), in_feature->db_id().c_str());
+
+    //GFF based sub-in_feature consolidation
+    if((filetype == "gff") || (filetype == "gff3") || (filetype == "gff2") || (filetype == "gtf") || (filetype == "gtf2")) {
+      map<string,bool> parents;
+      EEDB::Metadata* md1;
+      
+      //exon_id, transcript_id, gene_id are Ensembl, Havana, gencode variation GTF
+      //like GTF2  http://mblab.wustl.edu/GTF2.html
+      if(category=="exon") {
+        md1 = in_feature->metadataset()->find_metadata("exon_id","");
+        if(md1) { 
+          in_feature->primary_name(md1->data());
+        }
+      }
+
+      md1 = in_feature->metadataset()->find_metadata("gene_id","");
+      if(md1) {
+        if(category=="gene") {
+          in_feature->primary_name(md1->data());
+          fent1.link_id = md1->data();
+        } else {
+          parents[md1->data()] = true;; 
+        }
+      }
+      
+      md1 = in_feature->metadataset()->find_metadata("transcript_id","");
+      if(md1) { 
+        if(category=="transcript") {
+          in_feature->primary_name(md1->data());
+          fent1.link_id = md1->data();
+        } else {
+          parents[md1->data()] = true;; 
+        }
+      }
+
+      //GFF3 spec (ID and Parenti) override the GTF2 attributes
+      if((md1 = in_feature->metadataset()->find_metadata("ID",""))) {
+        fent1.link_id = md1->data();
+        in_feature->primary_name(md1->data());
+      }
+      if((md1 = in_feature->metadataset()->find_metadata("Name",""))) {
+        in_feature->primary_name(md1->data()); 
+      }
+      vector<Metadata*> md2s = in_feature->metadataset()->find_all_metadata_like("Parent", "");
+      for(unsigned i2=0; i2<md2s.size(); i2++) {
+        parents[md2s[i2]->data()] = true; 
+      }
+
+      //cleanup old display_name so that it resets
+      in_feature->metadataset()->remove_metadata_like("eedb:display_name", ""); //since reset above
+
+      //might need to parse other GFF/GTF parent/child methods in the future
+
+      if(!parents.empty()) {
+        list<fbuf_entry>::iterator it7;
+        for(it7=feature_buffer.begin(); it7!=feature_buffer.end(); it7++) {
+          if(parents.find((*it7).link_id) != parents.end()) { 
+            EEDB::Feature *linkfeat = (*it7).feature;
+            //fprintf(stderr, "  LINK into %s\n", linkfeat->display_desc().c_str());
+            linkfeat->add_subfeature(in_feature);
+            made_link = true;
+          }
+        }
+      }
+    }
+    
+    feature_buffer.push_front(fent1);      
+
+    //show progress update every 3 seconds
+    gettimeofday(&endtime, NULL);
+    if(endtime.tv_sec > last_update + 3) {
+      last_update = endtime.tv_sec;
+      timersub(&endtime, &starttime, &difftime);
+      double rate = (double)count / ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+      fprintf(stderr, "%10ld input features  %13.2f obj/sec [buf %ld]\n", count, rate, feature_buffer.size());
+    }
+    
+    if(made_link) { continue; }
+    
+    //write some features into ZDX
+    while(feature_buffer.size() > 300) {       
+      fbuf_entry fent2 = feature_buffer.back();
+      EEDB::Feature *out_feature = fent2.feature;
+      feature_buffer.pop_back();
+      
+      //printf("\n===OUT %ld\n%s======\n\n", feature_buffer.size(), out_feature->xml().c_str());
+      
+      if(!zseg 
+         || (zseg->assembly_name() != out_feature->chrom()->assembly_name()) 
+         || (zseg->chrom_name() != out_feature->chrom()->chrom_name())
+         || (out_feature->chrom_start() > zseg->chrom_end())
+         || (out_feature->chrom_start() < zseg->chrom_start())
+         ) {
+        if(zseg) {
+          //if(zseg->chrom_name() != out_feature->chrom()->chrom_name()) {
+          //  fprintf(stderr, "  chrom [%s] total count %ld\n", zseg->chrom_name().c_str(), chrom_count[zseg->chrom_name()]);
+          //}
+          //write the old zsegment
+          //fprintf(stderr, "write ZDXsegment %s\n", zseg->xml().c_str());
+          zseg->write_segment_features();
+          zseg->release();
+          zseg=NULL;
+        }
+        zseg = EEDB::ZDX::ZDXsegment::fetch(zdxdb, out_feature->chrom()->assembly_name(), out_feature->chrom()->chrom_name(), out_feature->chrom_start());
+        if(zseg) { zseg->reclaim_for_appending(); }
+        //fprintf(stderr, "changed ZDXsegment %s\n", zseg->xml().c_str());
+      }
+      if(zseg) {
+        zseg->add_unsorted_feature(out_feature);
+        chrom_count[chrname]++;
+      } else { 
+        fprintf(stderr, "failed to fetch zseg [%s]\n", out_feature->chrom_location().c_str()); 
+      }
+      
+      out_feature->release();
+    }
+    
+  }
+  
+  //flush remaining feature_buffer
+  while(!feature_buffer.empty()) {    
+    fbuf_entry fent2 = feature_buffer.back();
+    EEDB::Feature *out_feature = fent2.feature;
+    feature_buffer.pop_back();
+
+    //printf("\n===OUT %ld\n%s======\n\n", feature_buffer.size(), out_feature->xml().c_str());
+    
+    //write into ZDX
+    if(!zseg 
+       || (zseg->assembly_name() != out_feature->chrom()->assembly_name()) 
+       || (zseg->chrom_name() != out_feature->chrom()->chrom_name())
+       || (out_feature->chrom_start() > zseg->chrom_end())
+       || (out_feature->chrom_start() < zseg->chrom_start())
+       ) {
+      if(zseg) {
+        //write the old zsegment
+        //fprintf(stderr, "write ZDXsegment %s\n", zseg->xml().c_str());
+        zseg->write_segment_features();
+        zseg->release();
+        zseg=NULL;
+      }
+      zseg = EEDB::ZDX::ZDXsegment::fetch(zdxdb, out_feature->chrom()->assembly_name(), out_feature->chrom()->chrom_name(), out_feature->chrom_start());
+      if(zseg) { zseg->reclaim_for_appending(); }
+      //fprintf(stderr, "changed ZDXsegment %s\n", zseg->xml().c_str());
+    }
+    if(zseg) {
+      zseg->add_unsorted_feature(out_feature);
+      chrom_count[out_feature->chrom()->chrom_name()]++;
+    } else { 
+      fprintf(stderr, "failed to fetch zseg [%s]\n", out_feature->chrom_location().c_str());
+    }
+    
+    out_feature->release();        
+  }
+  if(zseg) { zseg->write_segment_features(); } //write the last zsegment  
+  gzclose(gz); //close input file
+    
+  //go through all the segments and make sure all the empty ones are set to "finished"
+  EEDB::ZDX::ZDXsegment::finish_build(zdxdb);
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  fprintf(stderr, "\n%ld input features in %1.6f sec \n", count, (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+  fprintf(stderr, "%1.3f obj/sec\n", count /((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));  
+  fprintf(stderr, "%ld output features\n", feature_id-1);
+  
+  map<string,long>::iterator it1;
+  for(it1=category_count.begin(); it1!=category_count.end(); it1++) {
+    fprintf(stderr, "  %s :: %ld\n", it1->first.c_str(), (*it1).second);
+  } 
+  
+  
+  //save data sources
+  fprintf(stderr, "\n==== save sources\n");
+  zdxpeer = zdxstream->self_peer();
+  zdxpeer->retain();
+  fprintf(stderr, "%s\n", zdxpeer->xml().c_str());
+
+  vector<EEDB::DataSource*> sources = oscparser->datasources();
+  vector<EEDB::DataSource*>::iterator it2;
+  for(it2=sources.begin(); it2!=sources.end(); it2++) {
+    EEDB::DataSource *source = (*it2);
+    source->peer_uuid(zdxpeer->uuid());  //reset uuid
+    source->metadataset()->remove_metadata_like("osc_header","");
+    source->metadataset()->remove_metadata_like("eedb:owner_OpenID","");
+    //if(!owner_ident.empty()) { source->owner_identity(owner_ident); }
+
+    if(source->classname() == EEDB::FeatureSource::class_name) { 
+      string ctg = ((EEDB::FeatureSource*)source)->category();
+      ((EEDB::FeatureSource*)source)->feature_count(category_count[ctg]);
+    }
+    
+    if(zdxstream->get_datasource(source->db_id()) == NULL) {
+      fprintf(stderr, "%s", source->simple_xml().c_str()); 
+      zdxstream->add_datasource(source);
+    }
+  }
+  zdxstream->write_source_section();
+  
+  //_upload_test_read_zdx(zdxstream);  
+
+  //always build the feature index and name index when loading into ZDX
+  zdxstream->rebuild_feature_index();
+  zdxstream->build_feature_name_index();
+
+  free(_data_buffer);
+  zdxstream->release();
+  
+  //registry new zdx peer into user registry
+  if(_current_job && _current_job->user()) {
+    EEDB::Peer *user_reg = _current_job->user()->user_registry();
+    fprintf(stderr, "%s\n", zdxpeer->xml().c_str());
+    zdxpeer->store(user_reg->peer_database());
+  }
+  
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  fprintf(stderr, "load_into_zdx in %1.6f sec [%s]\n",
+          (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0, outpath.c_str());  
+  return zdxpeer;
+}
+
+
+string  EEDB::JobQueue::UploadFile::_upload_output_name() {
+  string filepath = _upload_parameters["_inputfile"];
+  if(filepath.empty()) { return ""; }
+  
+  size_t ridx = filepath.rfind("/");
+  if(ridx!=string::npos) {
+    _upload_parameters["_input_dir"] = filepath.substr(0,ridx);
+    filepath = filepath.substr(ridx+1);
+  }
+  
+  string extension;    
+  size_t strpos = filepath.rfind(".gz");
+  if(strpos!=string::npos) { filepath.resize(strpos); }
+  strpos = filepath.rfind(".");
+  if(strpos!=string::npos) {
+    extension = filepath.substr(strpos+1);
+    filepath.resize(strpos);
+  }
+  _upload_parameters["_build_filename"] = filepath;
+  
+  string output_path;
+  if(_upload_parameters.find("_build_dir") != _upload_parameters.end()) { 
+    //should also check to make sure the build_dir exists with a stat()
+    output_path = _upload_parameters["_build_dir"] +"/"+ filepath;
+  } else if(!_upload_parameters["_input_dir"].empty()) {
+    output_path = _upload_parameters["_input_dir"] +"/"+ filepath;
+  } else {
+    output_path = filepath;
+  }
+  _upload_parameters["_outputfile"] = filepath;
+  return output_path;  
+}
+
+
+void _upload_test_read_zdx(EEDB::ZDX::ZDXstream *zdxstream) {
+  struct timeval      starttime,endtime,difftime;
+  gettimeofday(&starttime, NULL); //reset timer
+  
+  if(!zdxstream) { return;}
+  ZDXdb* zdxdb = zdxstream->zdxdb();
+
+  //cache the sources
+  zdxstream->stream_data_sources();
+  while(EEDB::DataSource* source = (EEDB::DataSource*)zdxstream->next_in_stream()) {
+    EEDB::DataSource::add_to_sources_cache(source);
+  }
+  
+  // get chroms
+  vector<EEDB::Chrom*> chroms = EEDB::ZDX::ZDXsegment::fetch_all_chroms(zdxdb);
+  sort(chroms.begin(), chroms.end(), chrom_length_sort_func);
+  fprintf(stderr,"\n==== zdx read test %ld chroms\n", chroms.size());
+    
+  long total_count=0;
+  long chrom_count=0;
+  map<string,long> category_count;
+  vector<EEDB::Chrom*>::iterator chr_it;
+  for(chr_it=chroms.begin(); chr_it!=chroms.end(); chr_it++) {
+    EEDB::Chrom *chrom = (*chr_it);
+    chrom_count=0;
+    zdxstream->stream_by_named_region(chrom->assembly_name(), chrom->chrom_name(), -1, -1);
+    while(MQDB::DBObject *obj = zdxstream->next_in_stream()) {
+      if(obj->classname() != EEDB::Feature::class_name) { obj->release(); fprintf(stderr, "oops not a feature\n"); continue; }
+      EEDB::Feature *feature = (EEDB::Feature*)obj;
+      if(feature->feature_source()) { 
+        string category = feature->feature_source()->category();
+        category_count[category]++;
+      }      
+      total_count++;
+      chrom_count++;
+      obj->release();
+    }
+    
+    if(chrom_count>0) {
+      gettimeofday(&endtime, NULL);
+      timersub(&endtime, &starttime, &difftime);
+      double runtime  = (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0;
+      fprintf(stderr, "%s :: %1.2f obj/sec  %ld \n", chrom->fullname().c_str(), (total_count/runtime), chrom_count);
+    }
+  }
+  
+  map<string,long>::iterator it1;
+  for(it1=category_count.begin(); it1!=category_count.end(); it1++) {
+    fprintf(stderr, "  %s :: %ld\n", it1->first.c_str(), (*it1).second);
+  } 
+  
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  fprintf(stderr, "zdx read %ld features in %1.6f sec \n", total_count, (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);  
+}
+
+

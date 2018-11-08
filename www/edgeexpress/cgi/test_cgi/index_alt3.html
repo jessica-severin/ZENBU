@@ -1,0 +1,68 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<HTML>
+<HEAD>
+  <meta http-equiv="content-type" content="text/html;charset=x-sjis">
+  <TITLE> .o0 JMS 0o.  </TITLE>
+<BODY BGCOLOR="#000000" TEXT="#FF00FF" LINK="#00FF00" VLINK="#9400D3">
+
+<center>
+<p> RIKEN GSC - Genome Exploration Group
+<FONT COLOR="#00BB00">.</FONT>
+<font color="#0000FF" size="+1"><strong><b>バイオインフォマティシャン
+</b></strong></font>
+<p>jessica michelle severin
+</center>
+
+<HR>
+
+
+<body>
+<center><h3 class="boxed">GOI</h3>
+    <form action="search_goi.cgi" method="get" style="font-size: 0.9em">
+    gene name search : 
+    <input name="name" size="20" value="" />
+    </form>
+    </center>
+<hr>
+
+<table align=center>
+<tr><td>
+<h3 class="boxed">Look up Ensembl Genes, Transcripts, Exons</h3>
+</td></tr>
+
+<tr><td>
+
+ <form action="ens_lookup.cgi" method="get" style="font-size: 0.9em">
+    <input type="hidden" name="species" value="Mus_musculus" />
+    Lookup <i><span style="color:#3366bb">e</span><span class="red">!</span></i> Mouse:
+    <select name="idx" style="font-size: 0.9em">
+      <option value="Gene">Gene</option> 
+      <option value="Transcript">Transcript</option> 
+      <option value="Exon">Exon</option> 
+    </select>
+    <input name="q" size="20" value="" />
+    <input type="submit" value="Go" class="red-button" />
+    </form>
+</td></tr>
+
+<tr><td>
+    <h3 class="boxed">YHLab shortRNA / CAGE system API<h3>
+</td></tr>
+<tr><td>
+    <form action="getalign.cgi" method="get" style="font-size: 0.9em">
+    view alignment: 
+    <input name="id" size="20" value="" />
+    </form>
+</td></tr>
+
+</table>
+<hr>
+    
+<div id="related"><div id="related-box">
+
+</div></div>
+<div id="release-t">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+<div id="release"><div>
+</div></div>
+</body>
+</html>

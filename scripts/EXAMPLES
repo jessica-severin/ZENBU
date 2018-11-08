@@ -1,0 +1,11 @@
+# not all scripts in this directory are still valid and functional. But they provide a good collection of example code on how the API can be used.
+# the following scripts do work and here are examples on how to use them.
+
+
+eedb_mirror_source.pl -url "mysql://read:read@osc-mysql.gsc.riken.jp/eeDB_core" -url2 "mysql://severin:<pass>@osc-mysql.gsc.riken.jp/eeDB_fantom3" -fsrc mm9_cytobands -store
+
+eedb_load_mapexpress.pl -url "mysql://loader:password@osc-mysql.gsc.riken.jp:3308/eeDB_test_LSA138" -file I29-DA.mapping.gz -asm hg18 -platform solexaCAGE -store
+
+eedb_load_bed.pl -url "mysql://upload:upload@osc-mysql.gsc.riken.jp/eeDB_upload1" -assembly mm9 -fsrc "gene::UCSC_mm9_refgene_test" -file mm9_refgene_2008july17.bed.gz -block -store
+
+

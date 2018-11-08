@@ -1,0 +1,18 @@
+<zenbu_server_config>
+  <eedb_root>/eeDB/src/ZENBU_devel/</eedb_root>
+  <eedb_user_rootdir>/zenbu/users</eedb_user_rootdir>
+
+  <user_db>mysql://zenbu_admin:zenbu_admin@osc-mysql.gsc.riken.jp:3306/eeDB_zenbu_login</user_db>
+  <federation_seeds>
+      <seed>mysql://read:read@osc-mysql.gsc.riken.jp:3306/eeDB_public_configs</seed>
+      <seed>mysql://read:read@osc-mysql.gsc.riken.jp:3306/eeDB_LSA_registry</seed>
+      <seed>sqlite:///eeDB/dbs/eeDB_OSC_registry2.sqlite</seed>
+  </federation_seeds>
+
+  <default_genome>hg18</default_genome>
+
+  <session_name>ZENBU2_osc1_DEV_SESSID</session_name>
+  <server_name>osc-intweb1.gsc.riken.jp</server_name>
+  <web_root>http://osc-intweb1.gsc.riken.jp/zenbu2</web_root>
+
+</zenbu_server_config>

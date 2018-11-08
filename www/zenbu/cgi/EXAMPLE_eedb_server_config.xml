@@ -1,0 +1,47 @@
+<zenbu_server_config>
+  <eedb_root>/zenbu/src/ZENBU_2.9.1/</eedb_root>
+  <eedb_user_rootdir>/zenbu/users</eedb_user_rootdir>
+  <cache_dir>/zenbu/cache</cache_dir>
+
+  <user_db>mysql://zenbu_admin:zenbu_admin@some.mysql.server:3306/zenbu_users</user_db>
+  <user_admin_password>zenbu_admin</user_admin_password>
+
+  <smtp_server>smtps://smtp.my_email_server.host</smtp_server>
+  <smtp_user></smtp_user>
+  <smtp_password></smtp_password>
+  <smtp_from>zenbu@myserver.mydomain</smtp_from>
+
+
+  <federation_seeds>
+      <seed>sqlite:///zenbu/dbs/zenbu_something_registry.sqlite</seed>
+      <seed>mysql://read:read@some.mysql.server:3306/zenbu_some_genome_core</seed>
+      <seed>mysql://read:read@some.mysql.server:3306/zenbu_hg19_core</seed>
+      <seed>mysql://read:read@some.mysql.server:3306/zenbu_mm9_core</seed>
+      <seed>zenbu://fantom.gsc.riken.jp/zenbu</seed> <note>keep this at the bottom</note>
+  </federation_seeds>
+
+  <public_collaboration>
+      <database>mysql://read:read@some.mysql.server:3306/zenbu_public_share</database>
+      <name>public sharing - MY zenbu server name</name>
+      <description>collaboration for sharing public data and public views/tracks/scripts on the MY_ZENBU_SERVER_NAME</description>
+  </public_collaboration>
+
+  <curated_collaboration>
+      <database>mysql://read:read@some.mysql.server:3306/zenbu_curated</database>
+      <name>curated - MY zenbu server name</name>
+      <description>curated data collaboration for MY_ZENBU_SERVER_NAME</description>
+      <curators>
+        <user>USER1_email</user>
+        <user>USER2_email</user>
+      </curators>
+  </curated_collaboration>
+
+  <default_genome>hg19</default_genome>
+
+  <session_name>ZENBU_MYSERVER_NAME_SESSID</session_name>
+  <server_name>myserver.some.domain</server_name>
+  <web_root>http://myserver.some.domain/zenbu</web_root>
+  <web_uuid>NEED_TO_GENERATE_UUID like e149adcf-f384-4f5c-a4f5-0f2ed189eedb, use commandline tool uuidgen</web_uuid>
+
+</zenbu_server_config>
+

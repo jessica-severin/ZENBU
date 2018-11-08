@@ -1,0 +1,87 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 42;
+	objects = {
+
+/* Begin PBXFileReference section */
+		4C181DB60EAECF38009879CC /* www */ = {isa = PBXFileReference; lastKnownFileType = folder; path = www; sourceTree = "<group>"; };
+		4C30ABD211BCAEE1009DD5B8 /* c++ */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "c++"; sourceTree = "<group>"; };
+		4CA6414007959B130006EDE0 /* scripts */ = {isa = PBXFileReference; lastKnownFileType = folder; path = scripts; sourceTree = "<group>"; };
+		4CA6415507959B1B0006EDE0 /* sql */ = {isa = PBXFileReference; lastKnownFileType = folder; path = sql; sourceTree = "<group>"; };
+		4CCA4E600F611A1600D10844 /* lib */ = {isa = PBXFileReference; lastKnownFileType = folder; path = lib; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		4CE41BC506C4CE650052E296 = {
+			isa = PBXGroup;
+			children = (
+				4C30ABD211BCAEE1009DD5B8 /* c++ */,
+				4CCA4E600F611A1600D10844 /* lib */,
+				4CA6414007959B130006EDE0 /* scripts */,
+				4C181DB60EAECF38009879CC /* www */,
+				4CA6415507959B1B0006EDE0 /* sql */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXProject section */
+		4CE41BC906C4CE650052E296 /* Project object */ = {
+			isa = PBXProject;
+			buildConfigurationList = 4C01860B08CDA0960078253C /* Build configuration list for PBXProject "ZENBU" */;
+			compatibilityVersion = "Xcode 2.4";
+			developmentRegion = English;
+			hasScannedForEncodings = 1;
+			knownRegions = (
+				English,
+				Japanese,
+				French,
+				German,
+			);
+			mainGroup = 4CE41BC506C4CE650052E296;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+			);
+		};
+/* End PBXProject section */
+
+/* Begin XCBuildConfiguration section */
+		4C01860C08CDA0960078253C /* Development */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Development;
+		};
+		4C01860D08CDA0960078253C /* Deployment */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Deployment;
+		};
+		4C01860E08CDA0960078253C /* Default */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Default;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4C01860B08CDA0960078253C /* Build configuration list for PBXProject "ZENBU" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4C01860C08CDA0960078253C /* Development */,
+				4C01860D08CDA0960078253C /* Deployment */,
+				4C01860E08CDA0960078253C /* Default */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Default;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 4CE41BC906C4CE650052E296 /* Project object */;
+}

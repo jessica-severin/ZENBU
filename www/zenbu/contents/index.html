@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML Basic 1.1//EN" "http://www.w3.org/TR/xhtml-basic/xhtml-basic11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en" dir="ltr">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>ZENBU internal - experiment contents</title>
+
+  <link href="../css/f4_style.css" rel="stylesheet" type="text/css"/>
+  <link href="../css/edgeExpress.css" rel="stylesheet" type="text/css"/>
+
+  <!-- dhtmlhistory toolkit -->
+  <textarea id="historyStorageField" style="position: absolute; top: -1000px; left: -1000px;"></textarea>
+  <script language="Javascript" type="text/javascript" src="../jscript/dhtmlHistory.js"></script>
+  <!--                      -->
+
+  <script language="Javascript" type="text/javascript" src="../jscript/prototype-1.6.0.3.js"></script>
+
+  <script>
+    gLyphsROOT="/zenbu/dev";
+    eedbRegistryURL="/zenbu/dev";
+    dexTemplateConfig ="58071C30-204E-11DF-B53C-3ED4C06D4F1B";
+  </script>
+
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_common.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_search.js"></script>
+  <script language="Javascript" type="text/javascript" src="./contents.js"></script>
+
+</head>
+
+<body onload="document.getElementById('searchText').focus();initToolTips();initContents();">
+
+
+<!-- START OF HEADER -->
+<div id="header">
+<!--               -->
+<div id="logo-left" style="float:left;">
+<a href="http://www.osc.riken.jp/english/"> <img src="../images/osc_logo.jpg" style="float:left;"/></a>
+</div>
+
+<div style="margin-left:350px;"><table><tr><td align="center">
+<div id="gLyphs_title" style="font-size:20px; font-weight:bold;"></div>
+<div id="gLyphs_description" style="font-size:10px; width:500px;"></div>
+</td></tr></table></div>
+
+<div id="top_menu" style="clear:both;">
+  <a href="../../">ZENBU internal</a>
+  <a href="../about">about</a>
+  <a href="../gLyphs">gLyphs genome browser</a>
+  <a href="../contents" class="selected">data explorer</a>
+</div>
+<!-- End Sub Header -->
+
+<!--               -->
+</div>
+<!-- END OF HEADER -->
+
+<div id="toolTipLayer" style="z-index:100; position:absolute; visibility: hidden"></div>
+
+<!-- START OF MAIN CONTENTS OF THE WEB PAGE -->
+<div id='mainContents'>
+<!--              -->
+
+<div id="message" class=""></div>
+<div id="contents_cart"></div>
+
+<!-- Sub Header for EdgeExpressDB -->
+<div id="exdb_menu" style="width:600px; font-size:16px; margin-bottom:5px; font-weight:bold;">
+<span id="mode_track"  style="margin-left:30px; color:#808080;" onclick="reconfigContentsParam('mode','Tracks');">Tracks</span>
+<span id="mode_exp"    style="margin-left:30px; color:#808080;" onclick="reconfigContentsParam('mode','Experiments');">Experiments</span>
+<span id="mode_anot"   style="margin-left:30px; color:#808080;text-decoration:line-through;" onclick="reconfigContentsParam('mode','Annotation');">Annotation data</span>
+<span id="mode_config" style="margin-left:30px; color:#808080;" onclick="reconfigContentsParam('mode','Configs');">View configs</span>
+</div>
+
+<div style="margin-bottom:5px;">
+<form onsubmit="contentsSearchSubmit('eedbSearchBox1');return false;">
+<span>Search:</span>
+<input id="searchText" type="text" autocomplete="off" size="50" style="font-size:12px;"></input>
+<input type="button" value="search" onclick="contentsSearchSubmit('eedbSearchBox1')" />
+<input type="button" value="clear" onclick="contentsSearchClear('eedbSearchBox1')" />
+</form>
+<div id="eedbSearchBox1"></div>
+</div>
+
+<div id="contents_controls" class=""></div>
+<div id="contents_table_div" class=""></div>
+
+<!--              -->
+</div>
+<!--END OF MAIN CONTENTS OF THE WEB PAGE -->
+
+<!-- START OF FOOTER -->
+<div>
+<!--                 -->
+  <table width="95%" border="0" cellspacing="3" cellpadding="2" align='center' 
+         style="margin:1px auto 3px auto; border-color:#999999; border-style:solid; border-bottom-width:1px;">
+  <tr class="small">
+    <td nowrap="nowrap"><div align="left"><a href="http://www.osc.riken.jp">RIKEN OMICS Sciences Center (OSC) RIKEN Yokohama Institute</a></div></td>
+    <td><div align="center">ZENBU 1.211 development</div></td>
+    <td><div align="right">Copyright © 2009 RIKEN, Japan. All rights reserved.</div></td>
+  </tr>
+</table>
+<!--                                     -->
+</div>
+<!-- END OF FOOTER -->
+
+</body>
+</html>

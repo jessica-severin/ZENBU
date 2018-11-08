@@ -1,0 +1,423 @@
+/* $Id: Symbol.cpp,v 1.64 2013/04/08 05:47:52 severin Exp $ */
+
+/***
+
+NAME - EEDB::Symbol
+
+SYNOPSIS
+
+DESCRIPTION
+
+CONTACT
+
+Jessica Severin <severin@gsc.riken.jp>
+
+LICENSE
+
+ * Software License Agreement (BSD License)
+ * ZENBU [EEDB] system
+ * copyright (c) 2007-2013 Jessica Severin RIKEN OSC
+ * All rights reserved.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the name of Jessica Severin RIKEN OSC nor the
+ *       names of its contributors may be used to endorse or promote products
+ *       derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+APPENDIX
+
+The rest of the documentation details each of the object methods. Internal methods are usually preceded with a _
+
+***/
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <iostream>
+#include <string>
+#include <sqlite3.h>
+#include <stdarg.h>
+#include <rapidxml.hpp>  //rapidxml must be include before boost
+
+#include <MQDB/MappedQuery.h>
+#include <EEDB/Symbol.h>
+
+#include <EEDB/Feature.h>
+#include <EEDB/Experiment.h>
+#include <EEDB/Edge.h>
+#include <EEDB/Experiment.h>
+#include <EEDB/FeatureSource.h>
+#include <EEDB/EdgeSource.h>
+#include <EEDB/User.h>
+#include <EEDB/Collaboration.h>
+#include <EEDB/Configuration.h>
+
+
+using namespace std;
+using namespace MQDB;
+
+const char*               EEDB::Symbol::class_name = "Symbol";
+
+void _eedb_symbol_delete_func(MQDB::DBObject *obj) { 
+  delete (EEDB::Symbol*)obj;
+}
+void _eedb_symbol_xml_func(MQDB::DBObject *obj, string &xml_buffer) { 
+  ((EEDB::Symbol*)obj)->_xml(xml_buffer);
+}
+void _eedb_symbol_simple_xml_func(MQDB::DBObject *obj, string &xml_buffer) { 
+  ((EEDB::Symbol*)obj)->_xml(xml_buffer);
+}
+string _eedb_symbol_display_desc_func(MQDB::DBObject *obj) { 
+  return ((EEDB::Symbol*)obj)->_display_desc();
+}
+
+
+EEDB::Symbol::Symbol() {
+  init();
+}
+
+EEDB::Symbol::Symbol(string type, string data) {
+  init();
+  _type.swap(type);
+  _data = data;
+}
+
+EEDB::Symbol::Symbol(const char* type, const char* data) {
+  init();
+  if(type!=NULL) { _type = type; }
+  if(data!=NULL) { _data = data; }
+}
+
+EEDB::Symbol::~Symbol() {
+  if(_database) {
+    _database->release();
+    _database = NULL;
+  }  
+}
+
+
+void EEDB::Symbol::init() {
+  EEDB::Metadata::init();
+  _classname                 = EEDB::Symbol::class_name;
+  _funcptr_delete            = _eedb_symbol_delete_func;
+  _funcptr_xml               = _eedb_symbol_xml_func;
+  _funcptr_simple_xml        = _eedb_symbol_simple_xml_func;
+  _funcptr_display_desc      = _eedb_symbol_display_desc_func;
+}
+
+bool EEDB::Symbol::is_symbol(string value) {
+  if(value.find_first_of(",[](){};<>&#$!-_./\? \'\"\t\n\r")!=string::npos) { return false; }
+  return true;
+}
+
+string EEDB::Symbol::_display_desc() {
+  char buffer[2048];
+  snprintf(buffer, 2040, "Symbol(%ld) [%s]:%s", 
+    _primary_db_id, _type.c_str(), _data.c_str());
+  return buffer;
+}
+
+string EEDB::Symbol::display_contents() {
+  return _display_desc();
+}
+
+void EEDB::Symbol::_xml(string &xml_buffer) {
+  xml_buffer.append("<symbol type=\"");
+  xml_buffer.append(html_escape(_type));
+  xml_buffer.append("\" value=\"");
+  //xml_buffer.append(html_escape(_data));
+  xml_buffer.append(html_escape(_data));  //maybe should html_escape the data
+  xml_buffer.append("\" />\n");
+}
+
+EEDB::Symbol::Symbol(void *xml_node) {
+  //constructor using a rapidxml node
+  init();
+  if(xml_node==NULL) { return; }
+  
+  rapidxml::xml_node<>      *root_node = (rapidxml::xml_node<>*)xml_node;
+  rapidxml::xml_attribute<> *attr;
+  
+  if(string(root_node->name()) != "symbol") { return; }
+  if((attr = root_node->first_attribute("type")))  { _type = attr->value(); }
+  if((attr = root_node->first_attribute("value"))) { _data = attr->value(); }
+}
+
+
+/*
+sub new_from_xmltree {
+  my $class = shift;
+  my $xmlTree = shift;  //a hash tree generated by XML::TreePP
+  
+  my $self = new $class;
+  $self->type($xmlTree->{'-type'}) if(defined($xmlTree->{'-type'}));
+  $self->symbol($xmlTree->{'-value'}) if(defined($xmlTree->{'-value'}));
+  return $self;
+}
+*/
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// DBObject override methods : storage methods
+//
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+bool EEDB::Symbol::check_exists_db(MQDB::Database *db) {
+  if(db==NULL) { return false; }
+  
+  dynadata value = db->fetch_col_value("SELECT symbol_id FROM symbol where sym_type=? and sym_value=?", "ss", 
+                                       _type.c_str(), _data.c_str());
+  if(value.type != MQDB::INT) { return false; }
+  
+  _primary_db_id = value.i_int;
+  database(db);
+  return true;
+}
+
+
+bool EEDB::Symbol::store(MQDB::Database *db) {
+  if(db==NULL) { return false; }
+  if(check_exists_db(db)) { return true; }
+  
+  db->do_sql("INSERT ignore INTO symbol (sym_type, sym_value) VALUES(?,?)", "ss", 
+             _type.c_str(), _data.c_str());
+             
+  return check_exists_db(db);  //checks the database and sets the id
+}
+
+
+bool EEDB::Symbol::store_link_to_feature(EEDB::Feature *obj) {
+  if(obj==NULL) { return false; }
+  if(obj->database() == NULL) { return false; }
+  if(obj->primary_id() == -1) { return false; }
+
+  MQDB::Database *db = obj->database();
+  if(!check_exists_db(db)) { if(!store(db)) { return false; } }
+    
+  db->do_sql("INSERT ignore INTO feature_2_symbol (feature_id, symbol_id) VALUES(?,?)", "dd", 
+            obj->primary_id(), _primary_db_id);
+  return true;
+}
+
+
+bool EEDB::Symbol::store_link_to_experiment(EEDB::Experiment *obj) {
+  if(obj==NULL) { return false; }
+  if(obj->database() == NULL) { return false; }
+  if(obj->primary_id() == -1) { return false; }
+
+  MQDB::Database *db = obj->database();
+  if(!check_exists_db(db)) { if(!store(db)) { return false; } }
+    
+  db->do_sql("INSERT ignore INTO experiment_2_symbol (experiment_id, symbol_id) VALUES(?,?)", "dd", 
+            obj->primary_id(), _primary_db_id);
+  return true;
+}
+
+
+bool EEDB::Symbol::store_link_to_featuresource(EEDB::FeatureSource *obj) {
+  if(obj==NULL) { return false; }
+  if(obj->database() == NULL) { return false; }
+  if(obj->primary_id() == -1) { return false; }
+
+  MQDB::Database *db = obj->database();
+  if(!check_exists_db(db)) { if(!store(db)) { return false; } }
+    
+  db->do_sql("INSERT ignore INTO feature_source_2_symbol (feature_source_id, symbol_id) VALUES(?,?)", "dd", 
+            obj->primary_id(), _primary_db_id);
+  return true;
+}
+
+
+bool EEDB::Symbol::store_link_to_edge_source(EEDB::EdgeSource *obj) {
+  if(obj==NULL) { return false; }
+  if(obj->database() == NULL) { return false; }
+  if(obj->primary_id() == -1) { return false; }
+
+  MQDB::Database *db = obj->database();
+  if(!check_exists_db(db)) { if(!store(db)) { return false; } }
+    
+  db->do_sql("INSERT ignore INTO edge_source_2_symbol (edge_source_id, symbol_id) VALUES(?,?)", "dd", 
+            obj->primary_id(), _primary_db_id);
+  return true;
+}
+
+
+bool EEDB::Symbol::store_link_to_edge(EEDB::Edge *obj) {
+  if(obj==NULL) { return false; }
+  if(obj->database() == NULL) { return false; }
+  if(obj->primary_id() == -1) { return false; }
+
+  MQDB::Database *db = obj->database();
+  if(!check_exists_db(db)) { if(!store(db)) { return false; } }
+    
+  db->do_sql("INSERT ignore INTO edge_2_symbol (edge_id, symbol_id) VALUES(?,?)", "dd", 
+            obj->primary_id(), _primary_db_id);
+  return true;
+}
+
+
+bool EEDB::Symbol::store_link_to_user(EEDB::User *obj) {
+  if(obj==NULL) { return false; }
+  if(obj->database() == NULL) { return false; }
+  if(obj->primary_id() == -1) { return false; }
+
+  MQDB::Database *db = obj->database();
+  if(!check_exists_db(db)) { if(!store(db)) { return false; } }
+    
+  db->do_sql("INSERT ignore INTO user_2_symbol (user_id, symbol_id) VALUES(?,?)", "dd", 
+            obj->primary_id(), _primary_db_id);
+  return true;
+}
+
+
+bool EEDB::Symbol::store_link_to_collaboration(EEDB::Collaboration *obj) {
+  if(obj==NULL) { return false; }
+  if(obj->database() == NULL) { return false; }
+  if(obj->primary_id() == -1) { return false; }
+
+  MQDB::Database *db = obj->database();
+  if(!check_exists_db(db)) { if(!store(db)) { return false; } }
+    
+  db->do_sql("INSERT ignore INTO collaboration_2_symbol (collaboration_id, symbol_id) VALUES(?,?)", "dd", 
+            obj->primary_id(), _primary_db_id);
+  return true;
+}
+
+
+bool EEDB::Symbol::store_link_to_configuration(EEDB::Configuration *obj) {
+  if(obj==NULL) { return false; }
+  if(obj->database() == NULL) { return false; }
+  if(obj->primary_id() == -1) { return false; }
+  
+  MQDB::Database *db = obj->database();
+  if(!check_exists_db(db)) { if(!store(db)) { return false; } }
+  
+  db->do_sql("INSERT ignore INTO configuration_2_symbol (configuration_id, symbol_id) VALUES(?,?)", "dd", 
+             obj->primary_id(), _primary_db_id);
+  return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////
+//
+// unlink methods
+//
+////////////////////////////////////////////////////////////////////////////////////////////
+
+bool EEDB::Symbol::unlink_from_feature(EEDB::Feature *obj) {
+  return true;
+}
+
+bool EEDB::Symbol::unlink_from_experiment(EEDB::Experiment *obj) {
+  return true;
+}
+
+bool EEDB::Symbol::unlink_from_feature_source(EEDB::FeatureSource *obj) {
+  return true;
+}
+
+bool EEDB::Symbol::unlink_from_edge_source(EEDB::EdgeSource *obj) {
+  return true;
+}
+
+bool EEDB::Symbol::unlink_from_user(EEDB::User *obj) {
+  return true;
+}
+
+
+/******************************************************************/
+
+
+/*
+sub unlink_from_feature { 
+  my $self = shift;
+  my $feature = shift;
+  
+  unless($self->database) { printf("ERROR:: no database\n"); die(); }
+  unless($self->primary_id) { printf("ERROR:: undef symbol_id\n"); die(); }
+  unless($feature->primary_id) { printf("ERROR:: undef feature_id\n"); die(); }
+
+  //then link
+  my $sql = sprintf("DELETE from feature_2_symbol where feature_id=%s and symbol_id=%s", $feature->id, $self->id);
+  //printf("%s\n", $sql);
+  $feature->database->do_sql($sql);
+}
+
+
+sub unlink_from_experiment { 
+  my $self = shift;
+  my $experiment = shift;
+  
+  unless($experiment->database) {
+    printf("ERROR:: %s has no database to link Symbol\n", $experiment->display_desc);
+    die();
+  }
+  $experiment->database->execute_sql(  
+      "DELETE from experiment_2_symbol where experiment_id=? and symbol_id=?",
+      $experiment->id, $self->id);
+}
+
+sub unlink_from_feature_source { 
+  my $self = shift;
+  my $fsrc = shift;
+  
+  unless($fsrc->database) {
+    printf("ERROR:: %s has no database to link Symbol\n", $fsrc->display_desc);
+    die();
+  }
+  $fsrc->database->execute_sql(  
+      "DELETE from feature_source_2_symbol where feature_source_id=? and symbol_id=?",
+      $fsrc->id, $self->id);
+}
+
+sub unlink_from_edge_source { 
+  my $self = shift;
+  my $edge_source = shift;
+  
+  unless($edge_source->database) {
+    printf("ERROR:: %s has no database to link Symbol\n", $edge_source->display_desc);
+    die();
+  }
+  $edge_source->database->execute_sql(  
+      "DELETE from edge_source_2_symbol where edge_source_id=? and symbol_id=?",
+      $edge_source->id, $self->id);
+}
+
+sub unlink_from_user { 
+  my $self = shift;
+  my $user = shift;
+  
+  unless($user->database) {
+    printf(STDERR "ERROR:: %s has no database to unlink Symbol\n", $user->display_desc);
+    die();
+  }
+  $user->database->execute_sql(  
+      "DELETE from user_2_symbol where user_id=? and symbol_id=?",
+      $user->id, $self->id);
+}
+*/
+
+
+void  EEDB::Symbol::init_from_row_map(map<string, dynadata> &row_map) {
+  _primary_db_id   = row_map["symbol_id"].i_int;
+  _type.swap(row_map["sym_type"].i_string);
+  _data.swap(row_map["sym_value"].i_string);
+}
+

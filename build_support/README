@@ -1,0 +1,18 @@
+this directory includes support files and scripts to make the installation process easier.
+This is still under development and testing, but the files here may help with the 
+installation process. Please follow the installation documentation primarily until this automated process is available
+
+For apache2 on debian8: remember to enable both cgi and fcgi
+  lrwxrwxrwx 1 root root 27 Nov 16 18:16 /etc/apache2/mods-enabled/cgid.conf -> ../mods-available/cgid.conf
+  lrwxrwxrwx 1 root root 27 Nov 16 18:16 /etc/apache2/mods-enabled/cgid.load -> ../mods-available/cgid.load
+  lrwxrwxrwx 1 root root 26 Nov 16 18:16 /etc/apache2/mods-enabled/cgi.load -> ../mods-available/cgi.load
+  lrwxrwxrwx 1 root root 28 Sep 14 16:18 /etc/apache2/mods-enabled/fcgid.conf -> ../mods-available/fcgid.conf
+  lrwxrwxrwx 1 root root 28 Sep 14 16:18 /etc/apache2/mods-enabled/fcgid.load -> ../mods-available/fcgid.load
+also modify the sites-enabled 000-default.conf by adding this section
+  <Directory "/var/www/html/zenbu">
+               Options +ExecCGI
+               AddHandler cgi-script .cgi .fcgi .pl
+               AddHandler fcgid-script .fcgi
+  </Directory>
+
+

@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1 plus MathML 2.0 plus SVG 1.1//EN" "http://www.w3.org/2002/04/xhtml-math-svg/xhtml-math-svg.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en" dir="ltr">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <META HTTP-EQUIV="CACHE-CONTROL" CONTENT="NO-CACHE" />
+
+  <title>ZENBU - genome browser</title>
+
+  <link href="../css/f4_style.css" rel="stylesheet" type="text/css"></link>
+  <link href="../css/edgeExpress.css" rel="stylesheet" type="text/css"></link>
+
+  <!-- dhtmlhistory toolkit -->
+  <textarea id="historyStorageField" style="position: absolute; top: -1000px; left: -1000px;"></textarea>
+  <script language="Javascript" type="text/javascript" src="../jscript/dhtmlHistory.js"></script>
+  <!--                      -->
+
+  <script language="Javascript" type="text/javascript" src="../jscript/Colour.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/rgbcolor.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/prototype-1.6.0.3.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/jscolor/jscolor.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_variables.js"></script>
+
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_common.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_search.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_gLyphs.js"></script>
+
+</head>
+
+
+<body style="min-width:800px;" onload="eedbInitToolTips();gLyphsInit();">
+
+<!-- START OF HEADER -->
+<div id="header">
+
+<table width="100%" cellpadding="0px" >
+<tr>
+<td rowspan="2" width="100px" nowrap valign="top">
+<a target="_blank" href="http://www.clst.riken.jp/en/index.html"><img src="../images/CLST_c.gif" height="60px"></img></a>
+<img height="60px" src="../images/zenbu_logo_small.png"></img>
+</td>
+<td valign="bottom"><div id="top_menu" style="clear:both; white-space:nowrap; margin:0px; padding=0px;">
+  <a href="../">ZENBU</a>
+  <a href="../gLyphs" class="selected">genome browser</a>
+  <a href="../dex">data explorer</a>
+  <a href="../user">user upload & share</a>
+  <a href="http://fantom.gsc.riken.jp/zenbu/wiki">documentation wiki</a>
+</div></td>
+<td width="1px" valign="bottom"><img height="27px" src="../images/riken-logo_big.png"></img></td>
+</tr>
+<tr>
+<td colspan="3">
+<div id="eedb_login_div"></div>
+
+
+<div style="margin-left:80px;">
+<center>
+<table><tr><td align="center">
+<div id="gLyphs_title" style="font-size:20px; font-weight:bold;"></div>
+<div id="gLyphs_description" style="font-size:10px; width:100%;"></div>
+</td></tr></table>
+</center>
+</div>
+
+</td>
+</tr>
+</table>
+</div>
+<!-- END OF HEADER -->
+
+
+<div id="toolTipLayer" style="z-index:100; position:absolute; visibility: hidden"></div>
+<!-- START OF MAIN CONTENTS OF THE WEB PAGE -->
+<div id='mainContents'>
+<!--              -->
+
+<!-- EEDB search system -->
+<div>
+<form onsubmit="return false;">
+<span onclick="eedbClearSearchResults('glyphsSearchBox1')"></span>
+<input id="glyphsSearchBox1_inputID" type="text" autocomplete="off" onkeyup="glyphsMainSearchInput('glyphsSearchBox1', this.value, event)" width="700px" ></input>
+<input type="button" value="search" style="font-size:10px; font-weight:bold; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2);" onclick="glyphsMainSearchInput('glyphsSearchBox1', '', event)" />
+<input type="button" value="clear" style="font-size:10px; font-weight:bold; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2);" onclick="eedbClearSearchResults('glyphsSearchBox1')" />
+</form>
+<div id="glyphsSearchBox1" class="EEDBsearchSet">
+<div id="glyphsSearchBox1_messageID"></div>
+</div>
+</div>
+<!--              -->
+
+<div id="message"></div>
+<div id="global_panel_layer"></div>
+
+<table><tr>
+<td><div id="feature_info"></div></td>
+<td><div id="source_info"></div></td>
+</tr></table>
+
+<div id="genome_region_div" style="display:block;">
+  <div id="gLyphTrackSet" class="gLyphTrackSet" display_width="950" loc="HG18::chr6:43244316..43259802" feature="eeDB_core::5558263">
+    <div id="track0" class="gLyphTrack"  glyph="cytoband" trackTitle="Chromosome"></div> 
+  </div>
+</div>
+
+<div id="experiment_express_frame" style="visibility:hidden;" ></div>
+
+<!--              -->
+<img src="../images/blank.gif"></img>
+</div>
+<!--END OF MAIN CONTENTS OF THE WEB PAGE -->
+
+<!-- START OF FOOTER -->
+<div>
+<!--                 -->
+  <table width="95%" border="0" cellspacing="3" cellpadding="2" align='center' 
+         style="margin:1px auto 3px auto; border-color:#999999; border-style:solid; border-top-width:1px; border-bottom-width:1px;">
+  <tr class="small">
+    <td nowrap="nowrap"><div align="left"><a href="http://www.clst.riken.jp/en/index.html">RIKEN Center for Life Science Technology (CLST)</a></div></td>
+    <td><div align="center">ZENBU <span id="zenbuVersionSpan"></span></div></td>
+    <td><div align="right">Copyright © 2009-2016 RIKEN, Japan. All rights reserved.</div></td>
+  </tr>
+</table>
+<!--                                     -->
+</div>
+<!-- END OF FOOTER -->
+
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd" >
+<html>
+<head>
+  <title>ZENBU internal - login</title>
+  <link href="../css/f4_style.css" rel="stylesheet" type="text/css">
+  <link href="../css/edgeXpress.css" rel="stylesheet" type="text/css">
+
+  <!-- dhtmlhistory toolkit -->
+  <textarea id="historyStorageField" style="position: absolute; top: -1000px; left: -1000px;"></textarea>
+  <script language="Javascript" type="text/javascript" src="../jscript/dhtmlHistory.js"></script>
+  <!--                      -->
+
+  <script language="Javascript" type="text/javascript" src="../jscript/prototype-1.6.0.3.js"></script>
+
+  <script>
+    eedbWebRoot="/zenbu/dev";
+    eedbRegistryURL="/zenbu/dev";
+  </script>
+
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_common.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_search.js"></script>
+</head>
+
+<body onload="eedbInitToolTips();eedbShowLogin();">
+
+<!-- START OF HEADER -->
+<div id="header">
+<!--               -->
+<div id="logo-left" style="float:left;">
+<a href="http://www.osc.riken.jp/english/"> <img src="../images/osc_logo.jpg" style="float:left;"/></a>
+</div>
+<div id="eedb_login_div"></div>
+
+<div style="margin-left:350px;"><table><tr><td align="center">
+<div id="gLyphs_title" style="font-size:20px; font-weight:bold;"></div>
+<div id="gLyphs_description" style="font-size:10px; width:500px;"></div>
+</td></tr></table></div>
+
+<div id="top_menu" style="clear:both;">
+  <a href="../../" >ZENBU internal</a>
+  <a href="../about">about</a>
+  <a href="../gLyphs">gLyphs genome browser</a>
+  <a href="../dex">data explorer</a>
+  <a href="../user" class="selected">user</a>
+</div>
+
+<!-- Sub Header  -->
+<div id="exdb_menu" style="width:500px; font-size:12px; margin-bottom:5px; font-weight:bold;">
+  <a href="../login/" class="selected">login</a>
+  <a href="../upload/" >data upload</a>
+  <a href="../download/" >data download</a>
+  <a href="../collaborators/" >collaborators</a>
+  <a href="../groups/" >manage groups</a>
+</div>
+<div  style="width:600px; font-size:12px; margin-bottom:5px; font-weight:bold;"></div>
+<!-- End Sub Header -->
+
+<!--               -->
+</div>
+<!-- END OF HEADER -->
+
+<div id="toolTipLayer" style="z-index:100; position:absolute; visibility: hidden"></div>
+
+<!-- START OF MAIN CONTENTS OF THE WEB PAGE -->
+<div id="mainContents">
+<!--                                        -->
+
+<div style="margin: 0% 5% 0% 5%; font-size:14px"> 
+<h3>Welcome to ZENBU : Login or Create a New Account</h3>
+
+
+<form id="form" method="post" action="../cgi/eedb_user.cgi">
+<div id="loginform">
+    <label for="openid">Please enter Email or OpenID </label>
+    <img src="http://wiki.openid.net/f/openid-16x16.gif"/>
+    :
+    <input type="text" id="user_query" name="user_query" size="50" />
+    <input id="submit-button" type="submit" value="Continue"/>
+    <img id="spinner" src="ajax-loader.gif" style="display: none;" />
+</div>
+</form>
+
+
+<div>
+<p><strong>Surprise!</strong> You may already have an OpenID.</p>
+</div>
+<p>If you use any of the following services, you already have your own OpenID.  Below are instructions on how to sign in with each of the following providers on an OpenID enabled website.  (When you see bold text, you should replace it with your own username or screenname on that service.)</p>
+
+
+<div style="float: left; margin-left:10%; padding: 0; width: 88.5%; font-size:10px;">
+<div style="float:left; width:130px; margin:10px;">
+<div><a href="http://google.com"><img src="http://openid.net/images/get-logos/google.png" alt="Google" /></a></div>
+<p>Look for the &#8220;Sign in with a Google Account&#8221; button or use your <a href="http://google.com/profiles/me">Google Profile URL</a>.</p>
+</div>
+
+<div style="float:left; width:130px; margin:10px;">
+<div><a href="http://yahoo.com"><img src="http://openid.net/wp-content/uploads/2009/11/yahoo.png" alt="Yahoo" /></a></div>
+<p>Look for the &#8220;Sign in with Yahoo&#8221; button.</p>
+</div>
+
+<div style="float:left; width:130px; margin:10px;">
+<div><a href="http://yahoo.co.jp"><img src="http://openid.net/wp-content/uploads/2009/11/yahoo-jp.png" alt="Yahoo! Japan" /></a></div>
+<p>Look for the &ldquo;Yahoo! JAPAN ID&#x3067;&#x30ED;&#x30B0;&#x30A4;&#x30F3;&rdquo; button.</p>
+</div>
+
+<div style="float:left; width:130px; margin:10px;">
+<div><a href="http://mixi.co.jp/"><img src="http://openid.net/wp-content/uploads/2009/11/mixi_jp.png" alt="mixi" /></a></div>
+<p><a href="http://mixi.co.jp/">mixi</a> is a web service that allows users to communicate with their friends and acquaintances.</p>
+</div>
+
+<div style="float:left; width:130px; margin:10px;">
+<div><a href="http://blogger.com"><img src="http://openid.net/images/get-logos/blogger.png" alt="Blogger" /></a></div>
+<p>Enter your blog URL: &#8220;<strong>blogname</strong>.blogspot.com&#8221;</p>
+</div>
+</div>
+
+<div style="float: left; margin-left:10%; padding: 0; width: 88.5%; font-size:10px;">
+<div style="float:left; width:130px; margin:10px;">
+<div><a href="http://flickr.com"><img src="http://openid.net/images/get-logos/flickr.png" alt="Flickr" /></a></div>
+<p>Look for the &#8220;Sign in with Yahoo&#8221; button or enter &#8220;www.flickr.com/<strong>username</strong>&#8221;</p>
+</div>
+
+<div style="float:left; width:130px; margin:10px;">
+<div><a href="http://livejournal.com"><img src="http://openid.net/images/get-logos/livejournal.png" alt="LiveJournal" /></a></div>
+<p>Enter &#8220;<strong>username</strong>.livejournal.com&#8221;</p>
+</div>
+
+<div style="float:left; width:130px; margin:10px;">
+<div><a href="http://myspace.com"><img src="http://openid.net/images/get-logos/myspace.png" alt="MySpace" /></a></div>
+<p>Look for the &#8220;Login with MySpaceID&#8221; button or enter &#8220;www.myspace.com/<b>username</b>&#8221;</p>
+</div>
+
+<div style="float:left; width:130px; margin:10px;">
+<div><a href="http://wordpress.com"><img src="http://img.skitch.com/20090826-r3p2xwnc1u8jhgdf91q19bwymt.png" alt="Wordpress" /></a></div>
+<p>Enter your Wordpress.com URL, for example:  &#8220;<strong>username</strong>.wordpress.com&#8221;</p>
+</div>
+
+<div style="float:left; width:130px; margin:10px;">
+<div><a href="http://aol.com"><img src="http://openid.net/images/get-logos/aol.png" alt="AOL" /></a></div>
+<p>Look for a &#8220;Sign in with AOL&#8221; button or enter &#8220;openid.aol.com/<strong>screenname</strong>&#8221;</p>
+</div>
+</div>
+
+
+<div>
+<h2>Other Well Known &amp; Simple Providers</h2>
+<p>In addition, there are several dedicated OpenID providers that are generally recommended by various members of the community.  While not a comprehensive list, each of these providers offers a free and secure OpenID to use across the web.
+</div>
+
+<div style="float: left; margin-left:10%; padding: 0; width: 88.5%; font-size:10px;">
+<div style="float:left; width:230px; margin:10px;">
+<div><a href="http://chi.mp"><img src="http://openid.net/images/get-logos/chimp.png" alt="Chi.mp" /></a></div>
+<p><a href="http://chi.mp">Chi.mp</a> allows you to create your own social hub on an OpenID domain you own and control.</p>
+</div>
+
+<div style="float:left; width:230px; margin:10px;">
+<div><a href="http://claimid.com"><img src="http://openid.net/images/get-logos/claimid.png" alt="ClaimID" /></a></div>
+<p><a href="http://claimid.com">ClaimID</a> is an easy way to manage your online identity with OpenID.</p>
+</div>
+
+<div style="float:left; width:230px; margin:10px;">
+<div><a href="http://myid.net"><img src="http://openid.net/images/get-logos/myidnet.png" alt="myID.net" /></a></div>
+<p><a href="http://myid.net">myID.net</a> is an OpenID provider with support for groups and the Korean language.</p>
+</div>
+</div>
+
+<div style="float: left; margin-left:10%; padding: 0; width: 88.5%; font-size:10px;">
+<div style="float:left; width:230px; margin:10px;">
+<div><a href="http://myopenid.com"><img src="http://openid.net/images/get-logos/myopenid.png" alt="myOpenID" /></a></div>
+<p><a href="http://myopenid.com">myOpenID</a> is the first standalone provider for both individuals and businesses, with secure multi-factor authentication.</p>
+</div>
+
+<div style="float:left; width:230px; margin:10px;">
+<div><a href="http://pip.verisignlabs.com"><img src="http://openid.net/images/get-logos/verisign.png" alt="Verisign" /></a></div>
+<p><a href="http://pip.verisignlabs.com">VeriSign’s Personal Identity Provider</a> is an OpenID provider with support for multi-factor authentication.</p>
+</div>
+
+<div style="float:left; width:230px; margin:10px;">
+<div><a href="http://www.yiid.com/"><img src="http://openid.net/images/get-logos/yiid.png" alt="Your Internet ID" /></a></div>
+<p><a href="http://www.yiid.com/">Your Internet ID</a> lets you build a social identity to use on the web.</p>
+</div>
+</div>
+
+<a href="http://openid.net"><img height=34px; src="http://wiki.openid.net/f/openid-logo-wordmark.png" alt="OpenID" /></a>
+
+<!--                                     -->
+</div>
+<!--END OF MAIN CONTENTS OF THE WEB PAGE -->
+
+<!-- START OF FOOTER -->
+<div id="footer">
+<!--                 -->
+  <table width="95%" border="0" cellspacing="0" cellpadding="0">
+  <tr>
+    <td nowrap><div align="left"><a href="http://www.osc.riken.jp">RIKEN Omics Sciences Center (OSC) RIKEN Yokohama Institute</a>&nbsp;</div></td>
+    <td nowrap>Copyright &copy; 2008 RIKEN, Japan. All rights reserved.&nbsp;</td>
+    <td nowrap><div align="right"><a href="#header">Back to the top<img src="/4/images/up.gif" align="absmiddle"/></a></div></td>
+  </tr>
+</table>
+<!--               -->
+</div>
+<!-- END OF FOOTER -->
+</div>
+
+</body>
+</html>
+

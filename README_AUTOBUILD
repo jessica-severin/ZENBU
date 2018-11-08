@@ -1,0 +1,33 @@
+in verion 2.10.x we introduced a new easy build script to build and install ZENBU on debian/ubuntu linux systems.  zenbu_build_debian.sh
+The script performs 95% of the necessary operations to get a working zenbu server
+ - apt-get operations to install all the dependent libraries and system components
+ - builds the zenbu c++ cgi webservices and commandline tools
+ - installs the website into /var/www/html
+ - installs a basic zenbu.conf file into /etc/zenbu/
+ - sets up the mysql zenbu_users database. assumes mysql root password is "root". change script if needed
+
+You will still need to
+ - configure your apache2 server to allow cgi and fcgid exec for zenbu
+ - modify the zenbu.conf file for your SMTP email server. Zenbu needs this to send emails to verify user accounts. Without the SMTP, your zenbu will not allow users to make accounts, not allow users to upload data
+ - start the zenbu_agent_launcher.sh script in the background as root. This launches the background process for track building and processing uploaded files.
+
+please look in the build_support directory for some examples of ways to configure your apache server. Currently we include examples for debian8 apache2.4
+
+For apache2.4 on debian8: 
+remember to enable both cgi and fcgi
+  lrwxrwxrwx 1 root root 27 Nov 16 18:16 /etc/apache2/mods-enabled/cgid.conf -> ../mods-available/cgid.conf
+  lrwxrwxrwx 1 root root 27 Nov 16 18:16 /etc/apache2/mods-enabled/cgid.load -> ../mods-available/cgid.load
+  lrwxrwxrwx 1 root root 26 Nov 16 18:16 /etc/apache2/mods-enabled/cgi.load -> ../mods-available/cgi.load
+  lrwxrwxrwx 1 root root 28 Sep 14 16:18 /etc/apache2/mods-enabled/fcgid.conf -> ../mods-available/fcgid.conf
+  lrwxrwxrwx 1 root root 28 Sep 14 16:18 /etc/apache2/mods-enabled/fcgid.load -> ../mods-available/fcgid.load
+also modify the sites-enabled 000-default.conf by adding this section
+  <Directory "/var/www/html/zenbu">
+               Options +ExecCGI
+               AddHandler cgi-script .cgi .fcgi .pl
+               AddHandler fcgid-script .fcgi
+  </Directory>
+
+for other versions of apache, please refer to apache documentation for enabling ExecCGI.
+This build script was tested on debian8, but should also work for ubuntu.
+
+For other versions of linux like Centos, we appologize, but we do not provide direct support. Please look though this script and the online installation documentation to figure how to install the necessary c and c++ support libraries, mysql, and apache. Good luck.

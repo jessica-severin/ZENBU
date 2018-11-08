@@ -1,0 +1,90 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+<title>eeDB gLyphs - browser upgrade page</title>
+  <script language="Javascript" type="text/javascript" src="../jscript/prototype-1.6.0.3.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_common.js"></script>
+
+<script type="text/javascript">
+  function show_options() {
+    if(!browserCompatibilityCheck()) { 
+      document.getElementById('browser_options').style.display = 'block';
+    }
+  }
+</script>
+
+</head>
+
+<body onload="show_options()">
+
+<h1 align='center'>eeDB gLyphs web browser compatibility page</h1>
+<script type="text/javascript">
+with (document){
+  if(browserCompatibilityCheck()) { 
+    write("<h3>your web browser is supported</h3>");
+  } else {   
+    write("<h3><span style='color:darkorchid;'>Our appologizes, but your web browser is not currently supported by the gLyphs systems, please upgrade.</span></h3>"); 
+  }
+  write("<b>appName:</b> "+navigator.appName+"<br />")
+  write("<b>platform:</b> "+navigator.platform+"<br />")
+  write("<b>appVersion:</b> "+navigator.appVersion+"<br />")
+  write("<b>userAgent:</b> "+navigator.userAgent+"<br />")
+}
+</script>
+
+<div id="browser_options" style="display:none;">
+  <h2>Please choose one of these supported web browsers</h2>
+		
+  <table>
+  <tr>
+    <td><img src="../images/firefox_logo.jpg" width=50px align='middle' /> <span>Firefox 3.5</span></td>
+    <td><a href="http://www.firefox.com" target="_blank">
+      <img src="../images/download_icon.gif" style='margin-left:30px;' width=50px align='middle'/> </a></td>
+  </tr>
+
+  <tr>
+    <td><img src="../images/firefox_logo.jpg" width=50px align='middle' /> <span>Firefox 3.0.10</span></td>
+    <td><a href="http://www.firefox.com" target="_blank">
+      <img src="../images/download_icon.gif" style='margin-left:30px;' width=50px align='middle'/> </a></td>
+  </tr>
+
+  <tr>
+    <td><img src="../images/opera_logo.png" width=50px align='middle' /> <span>Opera 9.64</span></td>
+    <td><a href="http://www.opera.com/download/" target="_blank">
+      <img src="../images/download_icon.gif" style='margin-left:30px;' width=50px align='middle'/> </a></td>
+  </tr>
+  <tr>
+    <td><img src="../images/opera_logo.png" width=50px align='middle' /> <span>Opera 10.00 beta</span></td>
+    <td><a href="http://snapshot.opera.com/" target="_blank">
+      <img src="../images/download_icon.gif" style='margin-left:30px;' width=50px align='middle'/> </a></td>
+  </tr>
+
+  <tr> 
+    <td><img src="../images/SafariLogo.png" width=50px align='middle'/><span>Safari 4.0 </span></td>
+    <td><a href="http://www.apple.com/safari/download/" target="_blank"> 
+      <img src="../images/download_icon.gif" style='margin-left:30px;' width=50px align='middle'/> </a></td>
+  </tr>
+		
+  <div>
+  <tr>
+    <td><img src="../images/ChromeLogo.png" width=50px align='middle' /> <span>Chrome 2.0.172.30</span></td>
+    <td><a href="http://www.google.com/chrome" target="_blank">
+      <img src="../images/download_icon.gif" style='margin-left:30px;' width=50px align='middle'/> </a></td>
+  </tr>
+					
+  <tr>
+    <td><img src="../images/ChromeLogo.png" width=50px align='middle' /> <span>Chrome 2.0.181.1 beta</span></td>
+    <td><a href="http://www.google.com/landing/chrome/beta/" target="_blank">
+      <img src="../images/download_icon.gif" style='margin-left:30px;' width=50px align='middle'/> </a></td>
+  </tr>
+  </div>
+
+  </table>
+</div>
+
+</body>
+
+</html>
+
+

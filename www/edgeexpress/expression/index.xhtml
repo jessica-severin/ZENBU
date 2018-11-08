@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1 plus MathML 2.0 plus SVG 1.1//EN" "http://www.w3.org/2002/04/xhtml-math-svg/xhtml-math-svg.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en" dir="ltr">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>EdgeExpress - gLyphs</title>
+
+  <link href="../css/f4_style.css" rel="stylesheet" type="text/css"></link>
+  <link href="../css/edgeExpress.css" rel="stylesheet" type="text/css"></link>
+
+  <!-- dhtmlhistory toolkit -->
+  <textarea id="historyStorageField" style="position: absolute; top: -1000px; left: -1000px;"></textarea>
+  <script language="Javascript" type="text/javascript" src="../jscript/dhtmlHistory.js"></script>
+  <!--                      -->
+
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_common.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/prototype-1.6.0.3.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/flensed-1.0/deploy/flXHR.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_search.js"></script>
+  <script language="Javascript" type="text/javascript" src="./eedb_gLyphs.js"></script>
+  <script>
+    eedbRegistryURL="http://osc-intweb1.gsc.riken.jp/eedb_LSA_registry"; 
+    eedbDefaultAssembly = "rn4";
+    current_region.title = "eeDB gLyphs development website";
+  </script>
+</head>
+
+
+<body onload="eedbClearSearchResults('eedbSearchBox1');document.getElementById('searchText').focus();initToolTips();gLyphTracksInit('gLyphTrackSet');">
+
+<!-- START OF HEADER -->
+<div id="header">
+<!--               -->
+<div id="logo-left">
+<a href="http://www.riken.jp"><img src="../images/riken-logo.png" style="float:left;"></img></a>
+<a href="http://www.osc.riken.jp"> <img src="../images/osc_color.png" style="float:left;"></img></a> 
+</div>
+<span style="font-size:20px; font-weight:bold;">
+  <span style="color:CornflowerBlue;">OMICS sciences center</span>
+  <center id="gLyphs_title"></center>
+</span>
+<center><div id="gLyphs_description" style="font-size:10px; width:500px;"></div></center>
+
+<div id="top_menu" style="clear:both;">
+    <a href="/">Home</a>
+    <a href="/fantom44/gev/gbrowse/hg18">Genome Browser</a>
+    <a class="selected" href="../view">EdgeExpressDB</a>
+</div>
+
+<!-- Sub Header for EdgeExpressDB -->
+<div id="exdb_menu">
+<div class="text">
+<span class="geneStyle">OSC EdgeExpressDB </span>
+<a href="../about">about</a>
+<a href="../view">center view</a>
+<a href="../expression" class="selected">expression view</a>
+<a href="../contents">contents</a>
+</div>
+</div>
+<!-- End Sub Header -->
+
+<!--               -->
+</div>
+<!-- END OF HEADER -->
+
+<div id="toolTipLayer" style="z-index:100; position:absolute; visibility: hidden"></div>
+<!-- START OF MAIN CONTENTS OF THE WEB PAGE -->
+<div id='mainContents'>
+<!--              -->
+
+<!-- EEDB search system -->
+<div id="eedbSearchBox1" class="EEDBsearchSet">
+<span onclick="eedbClearSearchResults('eedbSearchBox1')">Search:</span>
+<form onsubmit="singleSearchValue('eedbSearchBox1');return false;">
+<input id="searchText" type="text" autocomplete="off" onkeyup="eedbMultiSearch('eedbSearchBox1', this.value, event)" size="140"></input>
+</form>
+<div id="search1" class="EEDBsearch" peer="eeDB_ratbrain"></div>
+<div id="search2" class="EEDBsearch" peer="eeDB_core" sources="Entrez_gene_rn4,UCSC_rn4_all_mrna,UCSC_rn4_est,UCSC_rn4_refgene"></div>
+<div id="search3" class="EEDBsearch" peer="eeDB_affy_rat230" sources="AffyRat230.2_probeloc"></div>
+</div>
+<!--              -->
+
+<div id="message"></div>
+
+<table><tr>
+<td><div id="feature_info"></div></td>
+<td><div id="probe_info"></div></td>
+<td><div id="experiment_info"></div></td>
+<td><div id="save_config_div"></div><input type="button" value="save configuration" onclick="gLyphsSaveConfig();" /></td>
+</tr></table>
+
+<div id="genome_region_div" style="display:block;">
+<table>
+<tr><td align="right" nowrap="nowrap">
+<span id="svgTestArea2" align="center"></span>
+<img src="../images/left_arrow.png" width="24px" height="24px" onclick="regionChange('ll')"></img>
+<img src="../images/left_arrow.png" width="20px" height="20px" onclick="regionChange('l')"></img>
+<img src="../images/right_arrow.png" width="20px" height="20px" onclick="regionChange('r')"></img>
+<img src="../images/right_arrow.png" width="24px" height="24px" onclick="regionChange('rr')"></img>
+<img src="../images/plus.png" width="24px" height="24px" onclick="regionChange('+++')"></img>
+<img src="../images/plus.png" width="20px" height="20px" onclick="regionChange('++')"></img>
+<img src="../images/plus.png" width="16px" height="16px" onclick="regionChange('+')"></img>
+<img src="../images/minus.png" width="16px" height="16px" onclick="regionChange('-')"></img>
+<img src="../images/minus.png" width="20px" height="20px" onclick="regionChange('--')"></img>
+<img src="../images/minus.png" width="24px" height="24px" onclick="regionChange('---')"></img>
+<img src="../images/reset.png" width="24px" height="24px" onclick="regionChange('reload')" title="reload current"></img>
+<img src="../images/reset.png" width="16px" height="16px" onclick="regionChange('reset')" title="reset to feature"></img>
+display width: <input id="regionWidthText" type="text" onkeydown="if(event.keyCode==13) { changeExpressRegionConfig('dwidth', this.value, this)}" size="5"></input>
+</td>
+</tr>
+
+<tr nowrap="nowrap">
+<td align="center">
+<div id="gLyphTrackSet" class="gLyphTrackSet" display_width="1024" loc="rn4::chr4:84474984..84480383" feature="eeDB_core::10585094">
+<div id="track10" class="gLyphTrack"  glyph="cytoband"    peer="eeDB_core" source="rn4_cytobands" trackTitle="RN4 Chromosome"></div>
+<div id="track0b" class="gLyphTrack"  glyph="cytoband"    peer="eeDB_core" source="hg18_cytobands,rn4_cytobands.mm9_cytobands"></div>
+<div id="track1b" class="gLyphTrack"  glyph="express"     peer="eeDB_ratbrain" source="" exptype="tpm" levels="120" trackTitle="ratbrain nanoCAGE"></div>
+<div id="track2"  class="gLyphTrack"  glyph="centroid"    peer="eeDB_core" source="Entrez_gene_rn4"></div>
+<div id="track2b" class="gLyphTrack"  glyph="centroid"    peer="eeDB_ratbrain" source="Entrez_gene_rn4_expressregion"></div>
+<div id="track3"  class="gLyphTrack"  glyph="transcript"  peer="eeDB_core" source="UCSC_rn4_refgene" levels="10"></div>
+<div id="track4"  class="gLyphTrack"  glyph="transcript"  peer="eeDB_core" source="UCSC_rn4_all_mrna" levels="10"></div>
+<div id="track5"  class="gLyphTrack"  glyph="transcript"  peer="eeDB_core" source="UCSC_rn4_est" levels="20"></div>
+<div id="track6"  class="gLyphTrack"  glyph="probesetloc" peer="eeDB_affy_rat230" source="AffyRat230.2_probeloc"></div>
+</div>
+</td>
+</tr>
+
+</table>
+</div>
+
+<table>
+<tr><td width="750px">
+<div id="express_div" width="750px" style="background-color:white; padding: 5px 5px 5px 5px; "></div>
+</td>
+
+<td nowrap='nowrap' valign='top'> 
+<h3>expression sort order</h3>
+<input type="radio" name="express_sort" onclick="change_express_sort('expid')" value="expid" checked='checked'></input> expID<br></br>
+<input type="radio" name="express_sort" onclick="change_express_sort('norm')" value="norm"></input> expression value<br></br>
+<input type="radio" name="express_sort" onclick="change_express_sort('series')" value="series"></input> series<br></br>
+</td>
+
+</tr></table>
+
+<!-- <input type="button" value="Click Me for flXHR test" onclick="doit();" /> -->
+
+<!--              -->
+</div>
+<!--END OF MAIN CONTENTS OF THE WEB PAGE -->
+
+<!-- START OF FOOTER -->
+<div id="footer">
+<!--                 -->
+  <table width="95%" border="0" cellspacing="3" cellpadding="2" align='center' 
+         style="margin:1px auto 3px auto; border-color:#999999; border-style:solid; border-bottom-width:1px;">
+  <tr class="small">
+    <td nowrap="nowrap"><div align="left"><a href="http://www.gsc.riken.jp">RIKEN Genomic Sciences Center (GSC) RIKEN Yokohama Institute</a></div></td>
+    <td><div align="center">FANTOM4 EdgeExpressDB V1.1</div></td>
+    <td><div align="right">Copyright © 2008 RIKEN, Japan. All rights reserved.</div></td>
+  </tr>
+</table>
+<!--                                     -->
+</div>
+<!-- END OF FOOTER -->
+
+</body>
+</html>

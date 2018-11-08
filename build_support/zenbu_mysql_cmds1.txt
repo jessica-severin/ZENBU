@@ -1,0 +1,2 @@
+CREATE USER 'read'@'%' IDENTIFIED BY 'read';
+CREATE USER 'zenbu_admin'@'%' IDENTIFIED BY 'zenbu_admin';

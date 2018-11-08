@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1 plus MathML 2.0 plus SVG 1.1//EN" "http://www.w3.org/2002/04/xhtml-math-svg/xhtml-math-svg.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en" dir="ltr">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <META HTTP-EQUIV="CACHE-CONTROL" CONTENT="NO-CACHE" />
+
+  <title>ZENBU - omics interactive visualization system</title>
+
+  <link href="./css/f4_style.css" rel="stylesheet" type="text/css"></link>
+  <link href="./css/edgeExpress.css" rel="stylesheet" type="text/css"></link>
+
+  <!-- dhtmlhistory toolkit -->
+  <textarea id="historyStorageField" style="position: absolute; top: -1000px; left: -1000px;"></textarea>
+  <script language="Javascript" type="text/javascript" src="./jscript/dhtmlHistory.js"></script>
+  <!--                      -->
+
+  <script language="Javascript" type="text/javascript" src="./jscript/prototype-1.6.0.3.js"></script>
+
+  <script language="Javascript" type="text/javascript" src="./jscript/eedb_variables.js"></script>
+
+  <script language="Javascript" type="text/javascript" src="./jscript/eedb_common.js"></script>
+  <script language="Javascript" type="text/javascript" src="./jscript/eedb_search.js"></script>
+  <script language="Javascript" type="text/javascript" src="./frontpage.js"></script>
+  <script>
+    eedbDefaultAssembly = "hg18";
+    function frontPageLogin() { window.location = eedbWebRoot + "/user"; }
+  </script>
+
+
+</head>
+
+
+<body style="min-width:800px;" onload="eedbClearSearchResults('zenbuFrontSearch');document.getElementById('zenbuFrontSearch_inputID').focus();eedbInitToolTips();eedbShowLogin(); zenbuFrontViewInfo('yll7lH7bEJNrdc116a5Cg');">
+
+
+<!-- START OF HEADER -->
+<div id="header">
+
+<table width="100%" cellpadding="0px">
+<tr>
+<td valign="bottom"><div id="top_menu" style="clear:both; white-space:nowrap; margin:0px; padding=0px;">
+  <a href="./" class="selected">ZENBU</a>
+  <a href="./gLyphs">genome browser</a>
+  <a href="./dex" >data explorer</a>
+  <a href="./user">user upload & share</a>
+  <a href="https://zenbu-wiki.gsc.riken.jp/zenbu/wiki">documentation wiki</a>
+</div></td>
+
+<td width="1px" valign="bottom" nowrap="nowrap">
+<a target="_blank" href="http://www.riken.jp/en/"><img height="27px" src="./images/riken-logo_big.png"></img></a>
+</td>
+
+<td rowspan="2" width="1px" valign="top" nowrap="nowrap">
+<a target="_blank" href="http://www.clst.riken.jp/en/index.html"><img src="./images/CLST_c.gif" height="60px"></img></a>
+</td>
+
+</tr>
+<tr>
+<td colspan="2">
+
+<div id="eedb_login_div"></div>
+
+<div><table><tr>
+<td rowspan="2" align="center">
+<img height="57px" src="./images/zenbu_logo.png"></img>
+</td><td>
+<span style="color:black;font-size:26px; font-weight:bold;">ZENBU 全部</span>
+<span style="font-size:10px;">zenbu: japanese for all, entire, whole, altogether</span> 
+</td></tr><tr>
+<td>
+<span style="font-size:14px; font-weight:bold;">a collaborative, omics data integration and interactive visualization system</span>
+</td></tr></table>
+</div>
+
+</td>
+</tr>
+</table>
+</div>
+<!-- END OF HEADER -->
+
+
+<div id="toolTipLayer" style="z-index:100; position:absolute; visibility: hidden"></div>
+<!-- START OF MAIN CONTENTS OF THE WEB PAGE -->
+<div id='mainContents'>
+<!--              -->
+<div id="message"></div>
+
+<div style="font-size:12px; margin:0px 0px 10px 0px; float:right; display:none;">
+<img style="float:right" height="24px" src="./images/arrow06_up.png" ></img>
+<div style="align:top; float:right;"><span style="color:blue; font-weight:bold;">Collaborators</span>: please <span style="font-style:italic;">sign in</span> to access and upload secured data and views</div>
+</div>
+
+<!-- MAIN table for views system -->
+<table width=100% border="0"> 
+<tr valign="top" style="height:1px;">
+<td width="50%" colspan="2">
+<img src="http://fantom.gsc.riken.jp/assets/templates/fantom-osc/imgs/FANTOM_Ssize3.png" height="50px" align="left"><span style="font-size:10px;">FANTOM is an international research consortium established by Dr. Hayashizaki and his colleagues in 2000 to assign functional annotations to the full-length cDNAs that were collected during the Mouse Encyclopedia Project at RIKEN. 
+<br><b>FANTOM1-3</b> focused on identifying the transcribed components of mammalian cells, improving gene identification and alternative transcript isoforms in both human and mouse, and revealed that a large fraction of the transcriptome is non-coding.
+<br><b>FANTOM4</b> focused on the dynamics of transcription start site (TSS) usage via deepCAGE monitoring during a time course of monocytic differentiation in the acute myeloid leukemia cell line THP-1 helping to identifying key factors that determine cell fates. 
+<br><b><a href="http://fantom.gsc.riken.jp/5/">FANTOM5</a></b> focused on systematically investigating transciptional expression in virtually all cell types across the human body and mice. We aim to use this information to build transcriptional regulatory models for every primary cell type that makes up a human. <a style="cursor:pointer;" href="./dex/#section=Views;search=fantom5">All FANTOM5 views in data explorer</a>
+</span></img>
+</td>
+<td width="50%" rowspan="8"><div id="zenbu_front_view_info"></div> </td>
+</tr>
+
+
+<tr style="height:1px;">
+<td>
+<div>
+<a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('b-IMGb5lG53ntH8qgNeChB');" href="./gLyphs/#config=b-IMGb5lG53ntH8qgNeChB"><b>FANTOM5 Human promoterome</b></a>
+<a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('2Z4giXeUDRQulVO5sw_x8C');" href="./gLyphs/#config=2Z4giXeUDRQulVO5sw_x8C"><b>  with gene expression</b></a>
+</div>
+<div><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('ne92nJ20PhPv5ziW90qnND');" href="./gLyphs/#config=ne92nJ20PhPv5ziW90qnND;loc=hg19::chr19:36307745..36428760+"><b>FANTOM5 Human time course</b></a></div>
+<div><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('RlgHnpZeKBTgvaFzqDtdnD');" href="./gLyphs/#config=RlgHnpZeKBTgvaFzqDtdnD">FANTOM4 ThP1 Human hg18 view</a></div>
+</td><td>
+<div><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('DmO_zYuHPxvu83HbOzew1C');" href="./gLyphs/#config=DmO_zYuHPxvu83HbOzew1C;loc=mm9::chr11:96645573..96674829+"><b>FANTOM5 Mouse promoterome</b></a></div>
+<div><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('rzYMYC5JGxkmSE7akQJnR');" href="./gLyphs/#config=rzYMYC5JGxkmSE7akQJnR;loc=mm9::chr11:52039190..52143552+"><b>FANTOM5 Mouse time course</b></a></div>
+<div><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('Qh-QzXo0EVqsodGqQF8ltC');" href="./gLyphs/#config=Qh-QzXo0EVqsodGqQF8ltC">FANTOM3: Mouse mm9 CAGE view</a></div>
+</td>
+</tr>
+
+<tr style="height:1px;"> <td colspan="2"> <img src="http://genome.ucsc.edu/images/ENCODE_scaleup_logo.png" height="50px" style="margin-top:5px;"></img>
+<div style="margin-top:3px;"><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('yll7lH7bEJNrdc116a5Cg');" href="./gLyphs/#config=yll7lH7bEJNrdc116a5Cg;loc=hg19::chr19:36377615..36399522">ZENBU - Severin et al fig1. ENCODE RNAseq/CAGE many tracks from same data</a></div>
+<div style="margin-top:3px;"><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('F7qqaR8BF11hwWwcgaLIFB');" href="./gLyphs/#config=F7qqaR8BF11hwWwcgaLIFB">ZENBU - Severin et al. supp Fig 2. CAGE mapability, signal filtering - PMS2L2</a></div>
+<div style="margin-top:3px;"><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('Uz5b6taLMxerSifWo-pBo');" href="./gLyphs/#config=Uz5b6taLMxerSifWo-pBo">ZENBU - Severin et al. supp Fig 3. shortRNA-Seq dynamic processing - MIR183</a></div>
+<div style="margin-top:3px;"><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('yTSDyGMLHx4nX06tIlVzY');" href="./gLyphs/#config=yTSDyGMLHx4nX06tIlVzY">ZENBU - Severin et al. supp Fig 4. ChipSeq dynamic peak calling - SH3BP4</a></div>
+<div style="margin-top:3px;"><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('l_D-jGt1IlehEahizVAMeB');" href="./gLyphs/#config=l_D-jGt1IlehEahizVAMeB;loc=hg19::chr8:128746973..128755020">ENCODE wold lab RNAseq Human hg19</a></div>
+</td></tr>
+
+<tr style="height:1px;"> <td colspan="2">
+<span style="font-weight:bold; font-size:14px">Basic annotation views</span>
+</td></tr>
+
+<tr style="height:1px;"><td valign="top">
+<div><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('64Bm-JzKJdjrAhl2rKyj_B');" href="./gLyphs/#config=64Bm-JzKJdjrAhl2rKyj_B">Human hg38 annotation view</a></div>
+<div><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('on4FiGtMP1NupqjVlOfGi');" href="./gLyphs/#config=on4FiGtMP1NupqjVlOfGi;loc=hg19::chr19:50161252..50170707">Human hg19 annotation view</a></div>
+<div><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('g17X3NiJNRNrWEpttnoaFD');" href="./gLyphs/#config=g17X3NiJNRNrWEpttnoaFD;loc=hg18::chr19:54853066..54862509">Human hg18 annotation view</a></div>
+<div><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('zFpZUcaFNJTkMbAKOvjYMD');" href="./gLyphs/#config=zFpZUcaFNJTkMbAKOvjYMD;loc=mm10::chr7:44996347..45004147">Mouse mm10 annotation view</a></div>
+<div><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('EFjD6oXBMdWkMan5zPClRC');" href="./gLyphs/#config=EFjD6oXBMdWkMan5zPClRC;loc=mm9::chr7:52251732..52259514">Mouse mm9 annotation view</a></div>
+<div><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('upzQ4aej4BGbGytyiU35hg');" href="./gLyphs/#config=upzQ4aej4BGbGytyiU35hg">Rat rn4 annotation view</a></div>
+</td>
+<td valign="top" align="left">
+<div><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('hIr7WY3wNRMpXG2YnfxtdC');" href="./gLyphs/#config=hIr7WY3wNRMpXG2YnfxtdC">Chicken galGal4 annotation view</a></div>
+<div><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('Lej5KumgAZnvc6fkQC722C');" href="./gLyphs/#config=Lej5KumgAZnvc6fkQC722C">Chicken galGal3 annotation view</a></div>
+<div><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('SuQv_gIiKBSrytRYsdDAsC');" href="./gLyphs/#config=SuQv_gIiKBSrytRYsdDAsC">Drosophila melanogaster R5/dm3 annotation view</a></div>
+<div><a style="cursor:pointer;" onmouseover="zenbuFrontViewInfo('as-wJUspPRpmtGe8eOR67C');" href="./gLyphs/#config=as-wJUspPRpmtGe8eOR67C">Zebrafish Zv9 annotation view</a></div>
+</td>
+</tr>
+
+<tr><td colspan=2 valign="top" style="color:#A32100; font-weight:bold;">If you do not see your genome of interest, please search for a view configuration in the <a href="./dex/#section=Views">data explorer</a></td></tr>
+</table>
+
+
+<div style="margin-top:5px; width:100%; margin: 0 auto;" >
+<span style="color:blue; font-size:130%; font-weight:bold;">ZENBU</span> <span style="font-size:12px;">is a data integration, data analysis, and visualization system enhanced for RNAseq, ChipSeq, CAGE and other types of next-generation-sequence-tag (NGS) based data.  ZENBU allows for novel data exploration through "on-demand" data processing and interactive linked-visualizations and is able to make many-views from the same primary sequence alignment data which users can uploaded from BAM, BED, GFF and tab-text files. 
+<br>Please check our <a href="http://fantom.gsc.riken.jp/zenbu/wiki">documentation wiki</a> for details on how to use the system, or check out some of the views above.</span>
+</div>
+
+
+<!-- EEDB search system -->
+<div align="center" style="visibility:hidden; display:none;">
+<form onsubmit="return false;">
+<span onclick="eedbClearSearchResults('zenbuFrontSearch')">Search for view configurations:</span>
+<input id="zenbuFrontSearch_inputID" type="text" autocomplete="off" onkeyup="eedbMultiSearch('zenbuFrontSearch', this.value, event)" size="60" style="font-size:12px;"></input>
+<input type="button" value="search" onclick="eedbMultiSearch('zenbuFrontSearch', '', event)" />
+<input type="button" value="clear" onclick="eedbClearSearchResults('zenbuFrontSearch')" />
+</form>
+<div id="zenbuFrontSearch" class="EEDBsearchSet" align=center>
+  <div id="search1" class="EEDBsearch" mode="eeDB_gLyphs_configs"></div>
+  <div id="zenbuFrontSearch_messageID" align=center></div>
+</div>
+</div>
+<!--              -->
+
+<hr style="margin-top:10px; margin-bottom:10px;" />
+
+The <span style="color:rgb(73,172,211);font-size:110%;font-weight:bold;">ZENBU</span> system is compatible with the majority of web browsers : <a href="http://www.google.com/chrome">Google Chrome</a>, <a href="http://www.mozilla.org/firefox/">Firefox</a>, <a href="http://www.apple.com/safari/">Safari</a>, <a href="http://www.opera.com/download/">Opera</a>.
+<br><span style="font-size:80%;">currently ZENBU does not support InternetExplorer for lack of sufficient HTML5/SVG/XML support.
+</span>
+
+<!--              -->
+</div>
+<!--END OF MAIN CONTENTS OF THE WEB PAGE -->
+
+<table width="95%" border="0" cellspacing="3" cellpadding="2" align='center'
+       style="table-layout:fixed; margin:1px auto 3px auto; border-color:#999999; border-style:solid; border-top-width:1px;">
+  <tr class="small">
+    <td nowrap="nowrap" align="center">
+      <a target="_blank" href="http://www.riken.jp/en/"><img src="http://www.riken.jp/en/~/media/riken/img/common/rikenlogo_en.gif" ></img></a>
+      <div align="center"><a target="_blank" href="http://www.riken.jp">RIKEN</a></div>
+    </td>
+    <td nowrap="nowrap" align="center">
+      <a target="_blank" href="http://www.clst.riken.jp/en/index.html"><img src="./images/CLST_c.gif" height="50px"></img></a>
+      <div align="center"><a target="_blank" href="http://www.clst.riken.jp/en/index.html">RIKEN Center for Life Science Technology (CLST)<br>RIKEN Yokohama Institute</a></div>
+    </td>
+    <td nowrap="nowrap" align="center">
+      <a target="_blank" href="http://www2.clst.riken.jp/genas/"><img src="./images/GeNAS_logo.png" height="50px"></img></a>
+      <div align="center"><a target="_blank" href2="http://www2.clst.riken.jp/genas/" href="http://www2.clst.riken.jp/genas/en/index.html" >RIKEN CLST GeNAS<br>Genome Network Analysis Support Facility</a></div>
+    </td>
+  </tr>
+</table>
+
+<!-- START OF FOOTER -->
+<div>
+<!--                 -->
+  <table width="95%" border="0" cellspacing="3" cellpadding="2" align='center' 
+         style="margin:1px auto 3px auto; border-color:#999999; border-style:solid; border-top-width:1px; border-bottom-width:1px;">
+  <tr class="small">
+    <td nowrap="nowrap"><div align="left"><a href="http://www.clst.riken.jp/en/index.html">RIKEN Center for Life Science Technology (CLST)</a></div></td>
+    <td><div align="center">ZENBU <span id="zenbuVersionSpan"></span></div></td>
+    <td><div align="right">Copyright © 2009-2016 RIKEN, Japan. All rights reserved.</div></td>
+  </tr>
+</table>
+<!--                                     -->
+</div>
+<!-- END OF FOOTER -->
+
+</body>
+</html>

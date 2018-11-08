@@ -1,0 +1,239 @@
+=head1 NAME - EEDB::SPStream::OverlapFilter
+
+=head1 DESCRIPTION
+
+
+Modification based on of  EEDB::SPStream::OverlapTag
+
+  a signal-processing-stream built around the same overlap code as EEDB::Tools:OverlapCompare
+  The side-stream is used to overlap with the primary stream.  
+  If a source_stream feature/expression overlaps with a feature on the side stream,
+  it is allowed to pass through. Objects of other classes are passed through.
+  The "inverse" switch passes those that do-not overlap instead.
+
+
+=head1 CONTACT
+
+Jessica Severin <severin@gsc.riken.jp>
+Nicolas Bertin <nbertin@gsc.riken.jp>
+
+=head1 LICENSE
+
+ * Software License Agreement (BSD License)
+ * EdgeExpressDB [eeDB] system
+ * copyright (c) 2007-2009 Jessica Severin RIKEN OSC
+ * All rights reserved.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the name of Jessica Severin RIKEN OSC nor the
+ *       names of its contributors may be used to endorse or promote products
+ *       derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+=head1 APPENDIX
+
+The rest of the documentation details each of the object methods. Internal methods are usually preceded with a _
+
+=cut
+
+package EEDB::SPStream::OverlapFilter;
+
+use strict;
+
+use EEDB::SPStream;
+use EEDB::Edge;
+use EEDB::SPStream::MergeStreams;
+our @ISA = qw(EEDB::SPStream::MergeStreams);
+
+#################################################
+# Class methods
+#################################################
+
+sub class { return "EEDB::SPStream::OverlapFilter"; }
+
+
+#################################################
+# 
+# initialization and configuration methods
+#
+#################################################
+
+sub init {
+  my $self = shift;
+  my @args = @_;
+  $self->SUPER::init(@args);
+
+  $self->{'is_strand_sensitive'} = 1;
+  $self->{'inverse'} = 0;
+  $self->{'debug'} = 0;
+  $self->{'side_stream_empty'} =0;
+
+  return $self;
+}
+
+sub is_strand_sensitive {
+  my $self = shift;
+  return $self->{'is_strand_sensitive'} = shift if(@_);
+  return $self->{'is_strand_sensitive'};
+}
+
+sub inverse {
+  my $self = shift;
+  if(@_) {
+    my $val = shift if(@_);
+    if($val) { $self->{'inverse'} = 1; }
+    else { $self->{'inverse'} = 0; }
+  }
+  return $self->{'inverse'};
+}
+
+
+#################################################
+#
+# override method for subclasses which will
+# do all the work
+#
+#################################################
+
+sub next_in_stream {
+  my $self = shift;
+  if(!defined($self->source_stream)) { return undef; }
+  while(my $obj = $self->source_stream->next_in_stream) {
+    if(($obj->class eq 'Expression') or ($obj->class eq "Feature")) {
+      if($self->process_feature($obj)) { return $obj; }
+    } else {
+      #other object classes are just passed through this module
+      return $obj;
+    }
+  } 
+  return undef;
+}
+
+sub _reset_stream {
+  my $self = shift;
+  $self->{'side_stream_empty'} =0;
+  $self->{'current_feature2'}= undef;
+  return undef;
+}
+
+#
+#################################################
+#
+
+sub display_desc {
+  my $self = shift;
+  my $str = sprintf("OverlapFilter");
+  return $str;
+}
+
+sub xml_start {
+  my $self = shift;
+  my $str = sprintf("<spstream module=\"%s\" >\n", $self->class);
+  if($self->is_strand_sensitive) { $str .= "<is_strand_sensitive value='1'/>\n"; }
+  else { $str .= "<is_strand_sensitive value='0'/>\n"; }
+  if($self->inverse) { $str .= "<inverse value='1'/>\n"; }
+  else { $str .= "<inverse value='0'/>\n"; }
+  if($self->side_stream) {
+    $str .= "<side_stream>\n";
+    $str .= $self->side_stream->xml;
+    $str .= "</side_stream>\n";
+  }
+  return $str;
+}
+
+sub _init_from_xmltree {
+  my $self = shift;
+  my $xmlTree = shift;  #a hash tree generated by XML::TreePP
+  
+  unless($xmlTree->{'-module'} eq "EEDB::SPStream::OverlapFilter") { return undef; }  
+  if($xmlTree->{'is_strand_sensitive'}) {
+    $self->is_strand_sensitive($xmlTree->{'is_strand_sensitive'}->{'-value'});
+  }
+  if($xmlTree->{'inverse'}) {
+    $self->inverse($xmlTree->{'inverse'}->{'-value'});
+  }  
+  if($xmlTree->{'side_stream'}) {
+    my ($head,$tail) = EEDB::SPStream->create_stream_from_xmltree($xmlTree->{'side_stream'});
+    if($head) { $self->side_stream($head); }
+  }  
+  return $self;
+}
+
+
+###############################################################
+#
+# The OverlapCompare algorithm code modified for 
+# stream-filtering without the call-out functions
+#
+###############################################################
+
+sub next_side_feature {
+  my $self = shift;
+
+  if(!defined($self->side_stream)) { return undef; }
+  if($self->{'side_stream_empty'}) { return undef; }
+  my $obj = $self->side_stream->next_in_stream;
+  while($obj and ($obj->class ne "Feature") and ($obj->class ne "Expression")) { 
+    $obj = $self->side_stream->next_in_stream;
+  }
+  if(!defined($obj)) { $self->{'side_stream_empty'} = 1; }
+  return $obj;
+}
+
+sub process_feature {
+  my $self = shift;
+  my $obj1 = shift;
+
+  my $fail = $self->inverse;
+  my $ok   = !($fail);
+
+  if(!defined($self->side_stream)) { return $fail; }
+  if($self->{'side_stream_empty'}) { return $fail; }
+  if(!defined($obj1->chrom)) { return 0; }
+
+  my $obj2 = $self->{"current_feature2"};
+  if(!$obj2) { 
+    $obj2 = $self->next_side_feature;
+    if(!$obj2) { return $fail; }
+    $self->{"current_feature2"} = $obj2;
+  }
+  #we have an $obj2 now
+
+  if($obj1->chrom_name ne $obj2->chrom_name) { return $fail; } 
+
+  #obj2 before obj1 can throw away
+  while($obj2 and ($obj2->chrom_end < $obj1->chrom_start)) {
+    $obj2 = $self->next_side_feature;
+    $self->{"current_feature2"} = $obj2;
+  }
+  if(!$obj2) { return $fail; }
+    
+  #we know $obj2->ends >= obj1->start
+  #check other side now
+  if($obj2->chrom_start > $obj1->chrom_end) { return $fail; }
+
+  if($self->is_strand_sensitive) {
+    if(($obj1->strand eq "") or ($obj2->strand eq "")) { return $ok; }
+    if($obj1->strand ne $obj2->strand) { return $fail; }
+  }
+  return $ok;
+}
+
+
+1;
+

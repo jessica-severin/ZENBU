@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1 plus MathML 2.0 plus SVG 1.1//EN" "http://www.w3.org/2002/04/xhtml-math-svg/xhtml-math-svg.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en" dir="ltr">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <META HTTP-EQUIV="CACHE-CONTROL" CONTENT="NO-CACHE" />
+
+  <title>ZENBU - user data upload and collaboration sharing</title>
+  <link href="../css/f4_style.css" rel="stylesheet" type="text/css">
+  <link href="../css/edgeExpress.css" rel="stylesheet" type="text/css">
+
+  <!-- dhtmlhistory toolkit -->
+  <textarea id="historyStorageField" style="position: absolute; top: -1000px; left: -1000px;"></textarea>
+  <script language="Javascript" type="text/javascript" src="../jscript/dhtmlHistory.js"></script>
+  <!--                      -->
+
+  <script language="Javascript" type="text/javascript" src="../jscript/prototype-1.6.0.3.js"></script>
+
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_variables.js"></script>
+
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_common.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_search.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_DEX.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_user.js"></script>
+</head>
+
+<body style="min-width:800px;" onload="eedbInitToolTips();eedbUserInitContents();">
+
+<div id="toolTipLayer" style="z-index:100; position:absolute; visibility: hidden"></div>
+<div id="source_info" style="z-index:60; position:absolute;"></div>
+
+<!-- START OF HEADER -->
+<div id="header">
+<table width="100%" cellpadding="0px" >
+<tr>
+<td rowspan="2" width="100px" nowrap>
+<a target="_blank" href="http://www.clst.riken.jp/en/index.html"><img src="../images/CLST_c.gif" height="60px"></img></a>
+<img height="60px" src="../images/zenbu_logo_small.png"></img>
+</td>
+<td valign="bottom"><div id="top_menu" style="clear:both; white-space:nowrap; margin:0px; padding=0px;">
+  <a href="../">ZENBU</a>
+  <a href="../gLyphs">genome browser</a>
+  <a href="../dex">data explorer</a>
+  <a href="../user" class="selected">user upload & share</a>
+  <a href="http://fantom.gsc.riken.jp/zenbu/wiki">documentation wiki</a>
+</div></td>
+<td width="1px" valign="bottom"><img height="27px" src="../images/riken-logo_big.png"></img></td>
+</tr>
+<tr>
+<td colspan="3">
+<div id="eedb_login_div"></div>
+<div id="eedb_user_submenu"></div>
+</td>
+</tr>
+</table>
+</div>
+<!-- END OF HEADER -->
+
+<div id="message"></div>
+<div id="eedb_user_altdiv"></div>
+<div id="eedb_user_maindiv"></div>
+
+<!-- START OF FOOTER -->
+<div>
+<!--                 -->
+  <table width="95%" border="0" cellspacing="3" cellpadding="2" align='center'
+         style="margin:20px auto 3px auto; border-color:#999999; border-style:solid; border-top-width:1px; border-bottom-width:1px;">
+  <tr class="small">
+    <td nowrap="nowrap"><div align="left"><a href="http://www.clst.riken.jp/en/index.html">RIKEN Center for Life Science Technology (CLST)</a></div></td>
+    <td><div align="center">ZENBU <span id="zenbuVersionSpan"></span></div></td>
+    <td><div align="right">Copyright © 2009-2016 RIKEN, Japan. All rights reserved.</div></td>
+  </tr>
+</table>
+
+<!--               -->
+</div>
+<!-- END OF FOOTER -->
+
+</body>
+</html>
+

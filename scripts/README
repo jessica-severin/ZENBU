@@ -1,0 +1,11 @@
+most of these scripts are legacy code and obsolete. 
+I have left these here for historical purposes and for people who might find some of this code interesting.
+
+The only scripts which are still useful are
+
+eedb_chromChunkTool.pl
+  used by ZENBU server administrators for loading new genomes into mysql databases 
+
+eedb_sync_entrezgene.pl
+  used for loading/updating Entrez genes into mysql database via the NCBI webservices
+

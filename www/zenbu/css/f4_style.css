@@ -1,0 +1,71 @@
+@charset "utf-8";
+html, body {
+	height:100%;
+	margin:0;
+	padding:0;
+	background-color		: #F6F6F6;
+	font-family			: 'Tahoma', 'Verdana', 'arial', 'sans-serif';
+	font-size			: 12px;
+	
+}
+#mainContainer {
+	padding:0;
+	min-height			: 100%;
+	position			: relative;
+}
+
+#header{ 
+	padding				: 0px 8px 8px 8px;  
+}
+
+#mainContents {
+	padding				: 8px;
+	margin-bottom : 20px;
+}
+
+#mainContents  UL LI {
+        margin                          : 0em 0em 0em 2em;
+        list-style                      : url( ../images/bullet1.gif );
+}
+
+img {
+	border				: 0px none #FFFFFF;
+	background-color		: transparent;
+}
+#top_menu {
+	width				: 100%;
+	padding-top			: 4px;
+	background-image		: url(../images/tab_base_graph2.gif);
+	background-repeat		: repeat-x;
+	margin-bottom			: 6px;
+	margin-top			: 6px;
+}
+#top_menu a{
+	line-height			: 2em;
+	padding				: 5px 10px 6px 10px;
+	text-decoration			: none;
+	font-size			: 11px;
+	color				: #FFFFFF;
+	font-weight			: bold;
+}
+#top_menu a:hover {
+	color				: #000000;
+}
+#top_menu .selected {
+	color				: #000000;
+	background-color		: #F6F6F6;
+	margin-left			: -3px;
+}
+
+#footer{
+	position                        :absolute; 
+	bottom				: 0px;
+	margin-left			: 8px;
+	margin-right			: 8px;
+	height				: 20px;
+	width				: 100%;
+	font-size			: x-small;
+	border-top-width: 2px;
+	border-top-style: solid;
+	border-top-color: #A4DDDB;
+}

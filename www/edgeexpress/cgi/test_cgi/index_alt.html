@@ -1,0 +1,88 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-gb"  lang="en-gb">
+<head>
+  <title>Team87 QC : EUCOMM / KOMP / Mouse</title>
+  <style type="text/css" media="all">
+    @import url(http://www.ensembl.org/css/ensembl.css);
+    @import url(http://www.ensembl.org/css/content.css);
+  </style>
+  <style type="text/css" media="print">
+    @import url(http://www.ensembl.org/css/printer-styles.css);
+  </style>
+  <style type="text/css" media="screen">
+    @import url(http://www.ensembl.org/css/screen-styles.css);
+  </style>
+<link rel="alternate" type="application/rss+xml" title="Ensembl website news feed" href="http://www.ensembl.org/common/rss.xml" />  <script type="text/javascript" src="http://www.ensembl.org/js/core.js"></script>
+  <script type="text/javascript" src="http://www.ensembl.org/js/hier_menu.js"></script>
+  <script type="text/javascript">
+addLoadEvent( coll_all )</script>
+</head>
+<body id="ensembl-webpage">
+<div id="masthead">
+  <h1>
+<a class="home serif">Team 87 QC</a> 
+<a href="http://www.ensembl.org/Mus_musculus/" class="section">Mouse</a></h1>
+</div>
+<div id="page"><div id="i1"><div id="i2"><div class="sptop">&nbsp;</div>
+<div class="col-wrapper">
+    
+
+
+    <h3 class="boxed">Look up Ensembl Genes, Transcripts, Exons</h3>
+
+ <form action="ens_lookup.cgi" method="get" style="font-size: 0.9em">
+    <input type="hidden" name="species" value="Mus_musculus" />
+    Lookup <i><span style="color:#3366bb">e</span><span class="red">!</span></i> Mouse:
+    <select name="idx" style="font-size: 0.9em">
+      <option value="Gene">Gene</option> 
+      <option value="Transcript">Transcript</option> 
+      <option value="Exon">Exon</option> 
+    </select>
+    <input name="q" size="20" value="" />
+    <input type="submit" value="Go" class="red-button" />
+    </form>
+
+    <h3 class="boxed">Team 87 Vector QC</h3>
+    <form action="design_list.cgi" method="get" style="font-size: 0.9em">
+    QC: 
+    <select name="stage" style="font-size: 0.9em">
+      <option value="post_cre">Post Cre</option> 
+      <option value="post_gate">Post Gateway</option> 
+      <option value="es_cell">ES Cell</option> 
+    </select>
+    plate:
+    <input name="plate" size="20" value="" />
+    <input type="submit" value="Go" class="red-button" />
+    </form>
+
+    <br>
+    <form action="trace_view.cgi" method="get" style="font-size: 0.9em">
+    view trace: 
+    <input name="trace" size="20" value="" />
+    </form>
+
+    <br>
+    <form action="qctest_view.cgi" method="get" style="font-size: 0.9em">
+    Lookup qctest by id: 
+    <input name="id" size="20" value="" />
+    </form>
+
+    <br>
+    <form action="design_search.cgi" method="get" style="font-size: 0.9em">
+    Lookup design by name (gene, symbol, exon,..): 
+    <input name="name" size="20" value="" />
+    </form>
+
+</div>
+
+
+<hr/>
+    
+<div id="related"><div id="related-box">
+
+</div></div>
+<div id="release-t">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+<div id="release"><div>
+</div></div>
+</body>
+</html>

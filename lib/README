@@ -1,0 +1,5 @@
+perl lib/ directory is here for legacy purposes. ZENBU originally evolved from the EdgeExpressDB system of FANTOM4 which was written in perl. The first versions of ZENBU expanded on this system up until version 1.3 (unpublished). With ZENBU versions 2.x the entire system was ported into c++ for speed and additional functionality.
+
+Current ZENBU 2.5.x has all primary systems ported into c++. But there are two web services which still use the perl system. the OpenID login system is still in perl. Also the file upload system uses a mix of perl and c++ systems.  perl is used for the first raw file-copy step due to the code being more robust, but finishes with the c++ system code for file parsing and importing into ZENBU database-engines.
+
+In a future release we plan to remove all perl code.  Please consider this code (and API) legacy and deprecated.
