@@ -1,4 +1,4 @@
-/* $Id: zenbu_ncbi_genome_load.cpp,v 1.1 2016/10/12 07:10:07 severin Exp $ */
+/* $Id: zenbu_ncbi_genome_load.cpp,v 1.3 2017/02/09 07:37:53 severin Exp $ */
 
 /****
  
@@ -139,11 +139,11 @@ int main(int argc, char *argv[]) {
   _webservice->parse_config_file("/etc/zenbu/zenbudev_config.xml");
   _webservice->init_service_request();
 
-  get_cmdline_user();
-  if(!_user_profile) {
-    printf("\nERROR: unable to read your ~/.zenbu/id_hmac file to identify your login identify. Please create file according to documentation.\nhttps://zenbu-wiki.gsc.riken.jp/zenbu/wiki/index.php/Data_loading#Bulk_command-line_upload_of_datafiles\n\n");
-    usage();
-  }
+  //get_cmdline_user();
+  //if(!_user_profile) {
+  //  printf("\nERROR: unable to read your ~/.zenbu/id_hmac file to identify your login identify. Please create file according to documentation.\nhttps://zenbu-wiki.gsc.riken.jp/zenbu/wiki/index.php/Data_loading#Bulk_command-line_upload_of_datafiles\n\n");
+  //  usage();
+  //}
 
   for(int argi=1; argi<argc; argi++) {
     if(argv[argi][0] != '-') { continue; }
@@ -159,6 +159,9 @@ int main(int argc, char *argv[]) {
     if(arg == "-debug")         { _parameters["debug"] = "true"; }
     if(arg == "-mode")          { _parameters["mode"] = argvals[0]; }
     if(arg == "-i")             { _parameters["mode"] = "load_genome"; }
+    if(arg == "-registry")      { _parameters["registry_url"] = argvals[0]; }
+    if(arg == "-skip_seq")      { _parameters["skip_seq"] = "true"; }
+    if(arg == "-skip_entrez")   { _parameters["skip_entrez"] = "true"; }
     if(arg == "-search")        { 
       _parameters["mode"] = "load_genome";
       _parameters["search"] = argvals[0];
@@ -184,7 +187,12 @@ int main(int argc, char *argv[]) {
 void usage() {
   printf("zenbu_ncbi_genome_load [options]\n");
   printf("  -help                     : printf(this help\n");
+  printf("  -registry <url>           : DB URL registry instance\n");
+  printf("  -i                        : interactive interface\n");
   printf("  -name_mode <value>        : ucsc, ncbi, or ensembl naming convention\n");
+  printf("  -skip_seq                 : don't load the genome sequence\n");
+  printf("  -skip_entrez              : don't load the NCBI entrez gene annoataions\n");
+  exit(1);
 }
 
 
@@ -223,6 +231,9 @@ void ncbi_genome_load() {
   uploader->userDB(userdb);
   //uploader->set_parameter("genome_name_mode", "ensembl");
   uploader->set_parameter("genome_name_mode", _parameters["name_mode"]);
+  uploader->set_parameter("skip_seq", _parameters["skip_seq"]);
+  uploader->set_parameter("skip_entrez", _parameters["skip_entrez"]);
+  uploader->set_parameter("registry_url", _parameters["registry_url"]);
 
   EEDB::Peer*  peer = NULL;
   //EEDB::Peer*  peer = uploader->load_genome_from_NCBI(ncbi_acc);
@@ -254,7 +265,7 @@ void ncbi_genome_load() {
       }
     }
   }
-  printf("%d assemblies returned\n", assembly_array.size());
+  //printf("%d assemblies returned\n", assembly_array.size());
 
   //peer = uploader->load_genome_from_NCBI("canFam3");
   //peer = uploader->load_genome_from_NCBI("rn6");

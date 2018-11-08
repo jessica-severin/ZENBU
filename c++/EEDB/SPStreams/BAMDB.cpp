@@ -1,4 +1,4 @@
-/* $Id: BAMDB.cpp,v 1.62 2016/06/20 06:35:15 severin Exp $ */
+/* $Id: BAMDB.cpp,v 1.64 2016/11/30 04:51:17 severin Exp $ */
 
 /***
 
@@ -305,6 +305,7 @@ string  EEDB::SPStreams::BAMDB::create_new(string filepath) {
   _primary_source->name(_parameters["_filename"]);
   _primary_source->category("bam");  
   EEDB::MetadataSet *mdset = _primary_source->metadataset();
+  EEDB::Metadata *md;
 
   mdset->add_tag_data("input_filename", _parameters["_filename"]);
   mdset->add_tag_symbol("eedb:assembly_name", _parameters["genome_assembly"]);
@@ -331,11 +332,13 @@ string  EEDB::SPStreams::BAMDB::create_new(string filepath) {
   if(!mdset->has_metadata_like("eedb:display_name", "")) { 
     mdset->add_tag_data("eedb:display_name", _parameters["_filename"]);
   }
+
+  md = mdset->find_metadata("gff_mdata", "");
+  if(md) { mdset->add_from_gff_attributes(md->data()); }
   
   mdset->remove_duplicates();
 
   //create primary experiment
-  EEDB::Metadata *md;
   _primary_experiment = _create_experiment();
   _primary_experiment->add_datatype(EEDB::Datatype::get_type("tagcount"));
   _primary_experiment->add_datatype(EEDB::Datatype::get_type("mapquality"));
@@ -1370,6 +1373,11 @@ bool  EEDB::SPStreams::BAMDB::calc_total_counts() {
 
 long EEDB::SPStreams::BAMDB::source_file_size() {
   if(!experiment()) { return -1; }
+  EEDB::Metadata  *mdata = experiment()->metadataset()->find_metadata("zenbu:source_file_size", "");
+  if(mdata) {  
+    long val = strtol(mdata->data().c_str(), NULL, 10);
+    return val;
+  }
 
   string file = _zendb_dir+"/"+_db_type + ".bam";
   int fildes = open(file.c_str(), O_RDONLY, 0x755);
@@ -1377,6 +1385,10 @@ long EEDB::SPStreams::BAMDB::source_file_size() {
 
   long file_size = lseek(fildes, 0, SEEK_END);
   close(fildes);
+
+  string str1 = l_to_string(file_size);
+  experiment()->metadataset()->add_tag_data("zenbu:source_file_size", str1);
+  save_xmldb();
 
   return file_size;
 }
@@ -1414,7 +1426,7 @@ bool EEDB::SPStreams::BAMDB::path_to_bam_file(string &path, string &filename) {
   struct stat statbuf; 
   if(stat(path.c_str(), &statbuf) == -1) {
     path = "";
-    fprintf(stderr, "bamdb internal bam does not exist\n");
+    //fprintf(stderr, "bamdb internal bam does not exist\n");
     return false;
   }
 
@@ -1422,16 +1434,16 @@ bool EEDB::SPStreams::BAMDB::path_to_bam_file(string &path, string &filename) {
   //EEDB::Metadata *md2 = experiment()->metadataset()->find_metadata("input_filename", "");
   EEDB::Metadata *md3 = experiment()->metadataset()->find_metadata("upload_unique_name", "");
   EEDB::Metadata *md4 = experiment()->metadataset()->find_metadata("original_filename", ""); //older upload system
-  fprintf(stderr, "bam path ok1\n");
+  //fprintf(stderr, "bam path ok1\n");
 
   if(md1) {
     //orig_filename: new system where this is the name of the original file prior to upload. Usually a full path
     //so just use this but remove the full path
     string tname = md1->data();
-    fprintf(stderr, "orig_filename [%s]\n", tname.c_str());
+    //fprintf(stderr, "orig_filename [%s]\n", tname.c_str());
     std::size_t p1 = tname.rfind("/");
     if(p1!=std::string::npos) { tname = tname.substr(p1+1); }
-    fprintf(stderr, "name from orig_filename [%s]\n", tname.c_str());
+    //fprintf(stderr, "name from orig_filename [%s]\n", tname.c_str());
     filename = tname;
   } else
   if(md4 || md3) {
@@ -1440,18 +1452,18 @@ bool EEDB::SPStreams::BAMDB::path_to_bam_file(string &path, string &filename) {
     string tname;
     if(md3) { tname = md3->data(); }
     if(md4) { tname = md4->data(); }
-    fprintf(stderr, "upload_unique_name [%s]\n", tname.c_str());
+    //fprintf(stderr, "upload_unique_name [%s]\n", tname.c_str());
     std::size_t p1 = tname.rfind("/");
     if(p1!=std::string::npos) { tname = tname.substr(p1+1); }
     p1 = tname.rfind("__");
     if(p1!=std::string::npos) { tname.resize(p1); }
     tname += ".bam";
-    fprintf(stderr, "name from upload_unique_name [%s]\n", tname.c_str());
+    //fprintf(stderr, "name from upload_unique_name [%s]\n", tname.c_str());
     filename = tname;
   } else {
     //use the pathname of this BAMDB
     string tname = _zendb_dir;
-    fprintf(stderr, "name from bamdb path [%s]\n", tname.c_str());
+    //fprintf(stderr, "name from bamdb path [%s]\n", tname.c_str());
     std::size_t p1 = tname.rfind("/");
     if(p1!=std::string::npos) { tname = tname.substr(p1+1); }
     p1 = tname.rfind("__");
@@ -1459,7 +1471,7 @@ bool EEDB::SPStreams::BAMDB::path_to_bam_file(string &path, string &filename) {
     p1 = tname.rfind(".bamdb");
     if(p1!=std::string::npos) { tname.resize(p1); }
     tname += ".bam";
-    fprintf(stderr, "name from bamdb path [%s]\n", tname.c_str());
+    //fprintf(stderr, "name from bamdb path [%s]\n", tname.c_str());
     filename = tname;
   }
 

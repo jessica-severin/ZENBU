@@ -346,6 +346,7 @@ CREATE TABLE job (
   status                    enum('READY','BLOCKED','CLAIMED','RUN','DONE','FAILED') DEFAULT 'READY' NOT NULL,
   retry_count               int default 0 not NULL,
   created timestamp         NOT NULL default CURRENT_TIMESTAMP,
+  starttime                 datetime NOT NULL,
   completed                 datetime NOT NULL,
   runtime                   int default 0 NOT NULL,
   host                      varchar(64) NOT NULL default '',

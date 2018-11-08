@@ -63,6 +63,7 @@ function eedbUserInitContents() {
   userview.filters.assembly = "";
   userview.filters.search = "";
   userview.filters.hide_mapcount = 1;
+  userview.filters.only_my_uploads = true;
 
   userview.assemblies = new Object;
   userview.assemblies['hg18'] = 'human hg18';
@@ -290,6 +291,7 @@ function eedbUserReloadContentsData() {
 }
 
 function eedbUserShowContents() {
+  current_collaboration.callOutFunction = null;
   if(!userview.user) { return eedbUserProfilePanel(); }
   if(userview.mode == "profile") { return eedbUserProfilePanel(); }
   if(userview.mode == "uploads") { return eedbUserShowUploads(); }
@@ -2010,7 +2012,8 @@ function eedbUserReloadMySourceData() {
 
   //userview.current_view_index = 0;
 
-  var paramXML = "<zenbu_query><mode>sources</mode><collab>private</collab><format>descxml</format>";
+  var paramXML = "<zenbu_query><mode>sources</mode><format>descxml</format>";
+  paramXML += "<collab>" + current_collaboration.uuid + "</collab>";
   if((userview.filters.assembly != "") || (userview.filters.search != "")) {
     paramXML += "<filter>";
     if(userview.filters.assembly != "") { paramXML += " "+userview.filters.assembly; }
@@ -2183,7 +2186,7 @@ function eedbUserPrepareQueueStatus() {
     userview.uploads.refreshInterval = undefined;
   }
   if(refresh && !userview.uploads.refreshInterval) {
-    userview.uploads.refreshInterval = setInterval("eedbUserReloadMySourceData();", 30000); //30 seconds
+    userview.uploads.refreshInterval = setInterval("eedbUserReloadMySourceData();", 300000); //300 seconds, 5min
   }
   eedbUserShowMydataQueue();
 }
@@ -2234,6 +2237,13 @@ function eedbUserFilteredPeerArray() {
   //for (var platform in userview.uploads.platforms) {
   for (var uuid in peer_hash) {
     var peer = peer_hash[uuid];
+    if(!peer) { continue; }
+
+    var primary_source = peer.primary_source;
+    if(!primary_source) { continue; }
+
+    if(userview.filters.only_my_uploads && (userview.user.email != primary_source.owner_identity)) { continue; }
+
     filter_array.push(peer);
   }
   return filter_array;
@@ -2241,6 +2251,7 @@ function eedbUserFilteredPeerArray() {
 
 
 function eedbUserShowUploads() {
+  current_collaboration.callOutFunction = function() { eedbUserSearchSubmit(); }
   var master_div = document.getElementById("eedb_user_maindiv");
   if(!master_div) { return; }
 
@@ -2433,19 +2444,32 @@ function eedbUserShowUploads() {
 
     tr.appendChild(new Element('td').update(encodehtml(primary_source.assembly)));
     tr.appendChild(new Element('td').update(encodehtml(primary_source.description)));
-    tr.appendChild(new Element('td').update(encodehtml(primary_source.import_date)));
+
+    //create data/owner/edit cell
+    //tr.appendChild(new Element('td').update(encodehtml(primary_source.import_date)));
+    var td = tr.appendChild(new Element('td'));
+    td.setAttribute("nowrap", "nowrap");
+    var tdiv = td.appendChild(new Element('div'));
+    tdiv.setAttribute("style", "font-size:10px;");
+    var tspan = tdiv.appendChild(new Element('span'));
+    tspan.innerHTML = primary_source.owner_identity;
+    var tdiv = td.appendChild(new Element('div'));
+    tdiv.setAttribute("style", "font-size:10px; color:rgb(94,115,153);");
+    tdiv.innerHTML = encodehtml(primary_source.import_date);
 
     var td = tr.appendChild(new Element('td'));
-    var input = td.appendChild(new Element('input'));
-    input.setAttribute('type', "checkbox");
-    input.setAttribute("style", "background:white;");
-    input.setAttribute("onclick", "eedbUserSelectPeer(\"" +peer.uuid+ "\", this.checked);");
-    if(peer.selected) { input.setAttribute('checked', "checked"); }
+    if(userview.user.email == primary_source.owner_identity) {
+      var input = td.appendChild(new Element('input'));
+      input.setAttribute('type', "checkbox");
+      input.setAttribute("style", "background:white;");
+      input.setAttribute("onclick", "eedbUserSelectPeer(\"" +peer.uuid+ "\", this.checked);");
+      if(peer.selected) { input.setAttribute('checked', "checked"); }
+    }
 
+    //sharing interface
     var td1 = tr.appendChild(new Element('td'));
     //td1.setAttribute('nowrap', "nowrap");
-
-//  if(userview.user.email == primary_source.owner_identity) {
+    if(userview.user.email == primary_source.owner_identity) {
       var a1 = td1.appendChild(document.createElement('a'));
       a1.setAttribute("target", "eeDB_featuresource_view");
       a1.setAttribute("href", "./");
@@ -2462,7 +2486,11 @@ function eedbUserShowUploads() {
         else if(peer.public == "curated") { div2.innerHTML = "curated"; }
         else { div2.innerHTML = "shared "+ peer.shared_count + " collaboration"; }
       }
- // }
+    } else {
+      tdiv = td1.appendChild(new Element('div'));
+      tdiv.setAttribute("style", "font-size:10px; color:rgb(180,51,51);");
+      tdiv.innerHTML = "not owner";
+    }
   }
   if(peer_array.length == 0) {
     var tr = tbody.appendChild(new Element('tr'));
@@ -2650,12 +2678,12 @@ function eedbUserSelectedPeersPanel(mode) {
   var divFrame = document.createElement('div');
   divFrame.id = "eedb_user_share_panel";
   alt_div.appendChild(divFrame);
-  divFrame.setAttribute('style', "position:absolute; background-color:LightYellow; text-align:left; "
+  divFrame.setAttribute('style', "position:fixed; background-color:LightYellow; text-align:left; "
                         +"border:inset; border-width:1px; padding: 3px 7px 3px 7px; "
                         +"z-index:1; "
-                        +"left:" + ((winW/2)-200) +"px; "
-                        +"top:200px; "
-                        +"width:400px; min-height:100px;"
+                        +"left:" + ((winW/2)-300) +"px; "
+                        +"top:5%; "
+                        +"width:600px; min-height:100px;"
                         );
 
   // title
@@ -2688,48 +2716,116 @@ function eedbUserSelectedPeersPanel(mode) {
     tspan.innerHTML = "Warning: About to delete shared data sources";
   }
 
-  if(mode == "share") {
+  var tdiv = divFrame.appendChild(document.createElement('div'));
+
+  if(mode == "delete") {
     var tdiv = divFrame.appendChild(document.createElement('div'));
-    var collabWidget = eedbCollaborationSelectWidget();
-    tdiv.appendChild(collabWidget);  
+    tdiv.setAttribute('style', "margin-top:10px; font-size:12px;");
+    var tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.innerHTML += "Do you really want to "+mode+"?"
+
+    var tdiv = divFrame.appendChild(document.createElement('div'));
+    var button1 = tdiv.appendChild(document.createElement('input'));
+    button1.setAttribute("type", "button");
+    button1.setAttribute("value", mode);
+    button1.setAttribute('style', "margin-left: 20px; width: 100px;");
+    if(mode == "delete") { button1.setAttribute("onclick", "eedbUserDeleteMultipleDatabases();"); }
+
+    var button2 = tdiv.appendChild(document.createElement('input'));
+    button2.setAttribute("type", "button");
+    button2.setAttribute("value", "cancel");
+    button2.setAttribute('style', "margin-left: 20px; width:100px;");
+    button2.setAttribute("onclick", "eedbUserClearAltDiv();");
   }
 
-  var tdiv = divFrame.appendChild(document.createElement('div'));
-  tdiv.setAttribute('style', "margin-top:10px; font-size:12px;");
-  var tspan = tdiv.appendChild(document.createElement('span'));
-  tspan.innerHTML += "Do you really want to "+mode+"?"
+  if(mode == "share") {
+    var member_collaborations = new Array;
+    var collaboration_array = eedbUserFilteredCollaborationArray();
 
-  var tdiv = divFrame.appendChild(document.createElement('div'));
+    for(var j=0; j<collaboration_array.length; j++) {
+      collaboration = collaboration_array[j]
+      if((collaboration.member_status == "OWNER") || (collaboration.member_status == "ADMIN") || (collaboration.member_status == "MEMBER")) {
+        member_collaborations.push(collaboration);
+      }
+    }
+    if(member_collaborations.length == 0) { 
+      eedbUserClearAltDiv();
+      eedbUserNoCollaborationWarn();
+      return; 
+    }
 
-  var button1 = tdiv.appendChild(document.createElement('input'));
-  button1.setAttribute("type", "button");
-  button1.setAttribute("value", mode);
-  button1.setAttribute('style', "margin-left: 20px; width: 100px;");
-  if(mode == "delete") { button1.setAttribute("onclick", "eedbUserDeleteMultipleDatabases();"); }
-  if(mode == "share")  { button1.setAttribute("onclick", "eedbUserShareMultipleDatabases();"); }
+    //sort the collaborations
+    member_collaborations.sort(eedbUser_collab_share_sort_func);
 
-  var button2 = tdiv.appendChild(document.createElement('input'));
-  button2.setAttribute("type", "button");
-  button2.setAttribute("value", "cancel");
-  button2.setAttribute('style', "margin-left: 20px; width:100px;");
-  button2.setAttribute("onclick", "eedbUserClearAltDiv();");
+    // scroll frame
+    var scrolldiv = divFrame.appendChild(document.createElement('div'));
+    scrolldiv.setAttribute("style", "height:350px; width:100%;border:1px; margin-bottom:5px; overflow:auto; resize:vertical;");
+
+    //
+    // now display as table
+    //
+    var my_table = new Element('table');
+    my_table.setAttribute("width", "100%");
+    scrolldiv.appendChild(my_table);
+    var trhead = my_table.appendChild(new Element('thead')).appendChild(new Element('tr'));
+    trhead.appendChild(new Element('th', { 'class': 'listView' }).update('row'));
+    trhead.appendChild(new Element('th', { 'class': 'listView' }).update('name'));
+    trhead.appendChild(new Element('th', { 'class': 'listView' }).update('description'));
+    trhead.appendChild(new Element('th', { 'class': 'listView' }).update('# members'));
+    trhead.appendChild(new Element('th', { 'class': 'listView' }).update('action'));
+
+    var tbody = my_table.appendChild(new Element('tbody'));
+    for(i=0; i<member_collaborations.length; i++) {
+      var collaboration = member_collaborations[i];
+
+      var tr = tbody.appendChild(new Element('tr'));
+      if(i%2 == 0) { tr.setAttribute("style", "background-color: #E0E0E0;"); } 
+      else { tr.setAttribute("style", "background-color: #E8E8E8;"); }
+
+      tr.appendChild(new Element('td').update(i+1));  //row
+      tr.appendChild(new Element('td').update(encodehtml(collaboration.name)));
+      tr.appendChild(new Element('td').update(encodehtml(collaboration.description)));
+      if(collaboration.member_count>0) { tr.appendChild(new Element('td').update(encodehtml(collaboration.member_count))); } 
+      else { tr.appendChild(new Element('td').update("-")); }
+
+      if((collaboration.uuid== "public") || (collaboration.uuid == "curated")) {
+        tr.setAttribute("style", "background-color: #F4A460;");
+      }
+
+      var td = tr.appendChild(new Element('td'));
+      var button = td.appendChild(document.createElement("button"));
+      button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+      //button.setAttribute("onclick", "eedbUserShareDatabaseWithCollaboration(\""+ source_id +"\", \""+collaboration.uuid+"\");");
+      button.setAttribute("onclick", "eedbUserShareMultipleDatabases(\""+collaboration.uuid+"\");");
+      button.setAttribute("onmouseover", "eedbMessageTooltip(\"share data source to this collaboration\",100);");
+      button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+      button.innerHTML = "share";
+    }
+  }
+
 }
 
 
-function eedbUserShareMultipleDatabases() {
+function eedbUserShareMultipleDatabases(collab_uuid) {
   if(!userview.uploads) { return; }
   var peer_hash = userview.uploads.peer_hash;
-  if(!peer_hash) { return; }
+  if(!peer_hash || !collab_uuid) { 
+    eedbUserClearAltDiv();
+    return; 
+  }
 
+  var count=0;
+  var total = peer_hash.length;
   for (var uuid in peer_hash) {
     var peer = peer_hash[uuid];
     if(!peer.selected) { continue; }
     if(!peer.primary_source) { continue; }
+    count++;
 
     var paramXML = "<zenbu_query>\n";
     paramXML += "<mode>sharedb</mode>\n";
     paramXML += "<sharedb>"+peer.primary_source.id+"</sharedb>";
-    paramXML += "<collaboration_uuid>"+current_collaboration.uuid+"</collaboration_uuid>";
+    paramXML += "<collaboration_uuid>"+collab_uuid+"</collaboration_uuid>";
     paramXML += "</zenbu_query>\n";
 
     var xhr=GetXmlHttpObject();
@@ -2738,10 +2834,19 @@ function eedbUserShareMultipleDatabases() {
     //xhr.setRequestHeader("Content-length", paramXML.length);
     //xhr.setRequestHeader("Connection", "close");
     xhr.send(paramXML);
+
+    peer.selected = false;
   }
 
   eedbUserClearAltDiv();
-  eedbUserReloadMySourceData();
+  eedbClearSearchTooltip();
+
+  userview.uploads.loading = true;
+  eedbUserShowUploads();
+
+  eedbUserReloadCollaborations(false, collab_uuid);
+  userview.uploads.loading = false;
+  eedbUserShowUploads();
 }
 
 
@@ -2810,13 +2915,14 @@ function eedbUserShareDatabasePanel(source_id) {
   var divFrame = document.createElement('div');
   divFrame.id = "eedb_user_share_panel";
   alt_div.appendChild(divFrame);
-  divFrame.setAttribute('style', "position:absolute; background-color:LightYellow; text-align:left; "
+  divFrame.setAttribute('style', "position:fixed; background-color:LightYellow; text-align:left; "
                         +"border:inset; border-width:1px; padding: 3px 7px 3px 7px; "
                         +"z-index:1; "
                         +"left:" + ((winW/2)-300) +"px; "
-                        +"top:200px; "
+                        +"top:5%; "
                         +"width:600px; min-height:100px;"
                         );
+
   var tdiv = divFrame.appendChild(document.createElement('div'));
   tdiv.setAttribute('style', "font-size:14px;");
   var tspan = tdiv.appendChild(document.createElement('span'));
@@ -2869,7 +2975,7 @@ function eedbUserShareDatabasePanel(source_id) {
 
   // scroll frame
   var scrolldiv = divFrame.appendChild(document.createElement('div'));
-  scrolldiv.setAttribute("style", "max-height:350px; width:100%;border:1px; margin-bottom:5px; overflow:auto;");
+  scrolldiv.setAttribute("style", "height:350px; width:100%;border:1px; margin-bottom:5px; overflow:auto; resize:vertical;");
 
   //
   // now display as table
@@ -2991,6 +3097,7 @@ function eedbUserShareDatabaseWithCollaboration(source_id, collab_uuid) {
 
   eedbUserReloadCollaborations(false, collab_uuid);
   eedbUserShareDatabasePanel(source_id);
+  eedbUserShowUploads();
 }
 
 
@@ -3010,6 +3117,7 @@ function eedbUserUnshareDatabaseWithCollaboration(source_id, collab_uuid) {
 
   eedbUserReloadCollaborations(false, collab_uuid);
   eedbUserShareDatabasePanel(source_id);
+  eedbUserShowUploads();
 }
 
 
@@ -3172,10 +3280,20 @@ function eedbUserRefreshSearchControls() {
   input1.setAttribute("value", "clear");
   input1.setAttribute("onclick", "eedbUserSearchClear('true')");
     
-  //td1 = tr1.appendChild(document.createElement('td'));
-  //var collabWidget = eedbCollaborationSelectWidget();
-  //collabWidget.setAttribute("submode", "filter_search");
-  //td1.appendChild(collabWidget);  
+  td1 = tr1.appendChild(document.createElement('td'));
+  td1.setAttribute("width", "1px");
+  td1.setAttribute("style", "padding-left:15px");
+  var tdiv1 = td1.appendChild(document.createElement('div'));
+  var collabWidget = eedbCollaborationSelectWidget("filter_search");
+  tdiv1.appendChild(collabWidget);  
+  tdiv1 = td1.appendChild(document.createElement('div'));
+  var tcheck = tdiv1.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin-top: 2px;");
+  tcheck.setAttribute('type', "checkbox");
+  tcheck.setAttribute("onclick", "eedbUserReconfigParam('only_my_uploads', this.checked);");
+  if(userview.filters.only_my_uploads) { tcheck.setAttribute("checked", "checked"); }
+  tspan = tdiv1.appendChild(document.createElement('span'));
+  tspan.innerHTML = "show only my uploads";
 
   td1 = tr1.appendChild(document.createElement('td'));
 
@@ -3519,6 +3637,11 @@ function eedbUserReconfigParam(param, value) {
     userview.upload.taxon_id  = value;
     eedbUserNewUploadPanelRefresh();
     //eedbUserGetNCBITaxonInfo(userview.upload.taxon_id);
+  }
+  if(param == "only_my_uploads") {  
+    userview.filters.only_my_uploads = value;
+    //eedbUserSearchSubmit();
+    eedbUserShowContents();
   }
 
   if(param == "page") {  

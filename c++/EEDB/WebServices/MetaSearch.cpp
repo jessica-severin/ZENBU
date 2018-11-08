@@ -1,4 +1,4 @@
-/* $Id: MetaSearch.cpp,v 1.85 2016/10/05 08:52:58 severin Exp $ */
+/* $Id: MetaSearch.cpp,v 1.86 2017/01/17 05:39:28 severin Exp $ */
 
 /***
 
@@ -216,8 +216,6 @@ bool  EEDB::WebServices::MetaSearch::execute_request() {
   } else if(_parameters["mode"] == string("experiments")) {
     //show_experiments();
     show_all_sources();
-  } else if(_parameters["mode"] == string("collaborations")) {
-    show_collaborations();
   } else if(_parameters["mode"] == string("expression_datatypes")) {
     show_expression_datatypes();
   } else if(_parameters["mode"] == string("sources")) {
@@ -322,7 +320,10 @@ void EEDB::WebServices::MetaSearch::show_api() {
   printf $cgi->header(-cookie=>$cookie, -type => "text/html", -charset=> "UTF8");
   */
 
-  printf("Content-type: text/html\r\n\r\n");
+  printf("Content-type: text/html\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<!DOCTYPE html  PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n");
 
   printf("<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en-US\" xml:lang=\"en-US\">\n");
@@ -747,7 +748,10 @@ GFF2, GFF3, and BED are common formats.  XML is supported in all access modes, b
 
 
 void EEDB::WebServices::MetaSearch::search_feature() {  
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<results>\n");
 
@@ -812,7 +816,10 @@ void EEDB::WebServices::MetaSearch::search_feature() {
 
 
 void EEDB::WebServices::MetaSearch::show_all_sources() {  
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<sources>\n");
 
@@ -952,7 +959,10 @@ bool _feature_source_sort_func (EEDB::FeatureSource *a, EEDB::FeatureSource *b) 
 
 
 void EEDB::WebServices::MetaSearch::show_feature_sources() {  
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<feature_sources>\n");
 
@@ -1033,7 +1043,10 @@ void EEDB::WebServices::MetaSearch::show_feature_sources() {
 
 
 void EEDB::WebServices::MetaSearch::show_edge_sources() {  
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<edge_sources>\n");
   
@@ -1075,7 +1088,10 @@ void EEDB::WebServices::MetaSearch::show_edge_sources() {
 
 
 void EEDB::WebServices::MetaSearch::show_experiments() {  
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<experiments>\n");
 
@@ -1151,7 +1167,10 @@ void EEDB::WebServices::MetaSearch::show_experiments() {
 
 
 void EEDB::WebServices::MetaSearch::show_expression_datatypes() {  
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<expression_datatypes>\n");
 
@@ -1195,7 +1214,10 @@ void EEDB::WebServices::MetaSearch::show_expression_datatypes() {
 
 
 void EEDB::WebServices::MetaSearch::show_feature_list() {  
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<features>\n");
 
@@ -1287,71 +1309,11 @@ void EEDB::WebServices::MetaSearch::show_feature_list() {
 }
 
 
-
-void EEDB::WebServices::MetaSearch::show_collaborations() {  
-  printf("Content-type: text/xml\r\n\r\n");
-  printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
-  printf("<collaborations>\n");
-
-  /*
-  my $cgi = $self->{'cgi'};
-  if($self->{'session'}) {
-    my $cookie = $cgi->cookie($SESSION_NAME => $self->{'session'}->{'id'});
-    print $cgi->header(-cookie=>$cookie, -type => "text/xml", -charset=> "UTF8");
-  } else {
-    print $cgi->header(-type => "text/xml", -charset=> "UTF8");
-  }
-  printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
-  printf("<collaborations>\n");
-
-  if(defined($self->{'user_profile'})) {
-    print($self->{'user_profile'}->simple_xml);
-
-    my $collaborations = $self->{'user_profile'}->member_collaborations;
-    foreach my $collaboration (@{$collaborations}) {
-      my $str = $collaboration->xml_start;
-      if($collaboration->{'_member_status'} eq "OWNER") {
-        $str .= "\n". $collaboration->metadataset->xml;
-        my $requests = $collaboration->pending_user_requests;
-        if(scalar(@$requests)>0) {
-          $str .= sprintf("<user_requests count=\"%d\" >", scalar(@$requests));
-          foreach my $user (@$requests) { $str .= $user->simple_xml; }
-          $str .= "</user_requests>\n";
-        }
-      } else {
-        my $descMD = $collaboration->metadataset->find_metadata("description", undef);
-        if($descMD) { $str .= $descMD->xml; }
-      }
-
-      #my $mdstats = $collaboration->group_registry_stats;
-      #$str .= $mdstats->xml;
-
-      $str .= $collaboration->xml_end;
-      print($str);
-    }
-  }
-
-  my $total_time = (time()*1000) - $self->{'starttime'};
-  printf("<process_summary processtime_sec=\"%1.3f\" />\n", $total_time/1000.0);
-
-  printf("</collaborations>\n");
-  */
-  
-  struct timeval       endtime, time_diff;
-  gettimeofday(&endtime, NULL);
-  timersub(&endtime, &_starttime, &time_diff);
-  double   runtime  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
-
-  //printf("<process_summary processtime_sec=\"%1.3f\" loaded_sources=\"%s\"/>\n", $total_time/1000.0, scalar(keys(%$global_source_cache)));
-  printf("<process_summary processtime_sec=\"%1.6f\" />\n", runtime);
-  printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
-  printf("</collaborations>\n");
-
-}
-
-
 void  EEDB::WebServices::MetaSearch::show_source_metadata_stats() {  
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<source_metadata>\n");
   
@@ -1511,7 +1473,10 @@ bool _expression_rank_sort_func (EEDB::Expression *a, EEDB::Expression *b) {
 
 
 void  EEDB::WebServices::MetaSearch::show_ranksum_stats() {  
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<ranksum_stats>\n");
   

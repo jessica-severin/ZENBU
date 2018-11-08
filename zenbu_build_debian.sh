@@ -35,9 +35,9 @@ echo $ZENBU_SRC_DIR
 
 #zenbu source code - when pulling from sourceforge
 #cd /usr/share/zenbu/src
-#wget http://downloads.sourceforge.net/project/zenbu/ZENBU_2.11.1.tar.gz
-#tar -xzf ZENBU_2.11.1.tar.gz
-#cd ZENBU_2.11.1/c++
+#wget http://downloads.sourceforge.net/project/zenbu/ZENBU_2.11.2.tar.gz
+#tar -xzf ZENBU_2.11.2.tar.gz
+#cd ZENBU_2.11.2/c++
 #make
 
 #zenbu source code - when using script packaged with the source code
@@ -54,11 +54,11 @@ make
 make install
 
 #make zenbu website
-cp -rp $ZENBU_SRC_DIR/www/zenbu /usr/share/zenbu/www/zenbu_2.11.1
-ln -s /usr/share/zenbu/www/zenbu_2.11.1  /var/www/html/zenbu 
+cp -rp $ZENBU_SRC_DIR/www/zenbu /usr/share/zenbu/www/zenbu_2.11.2
+ln -s /usr/share/zenbu/www/zenbu_2.11.2  /var/www/html/zenbu 
 cd $ZENBU_SRC_DIR/c++/cgi
 make
-cp -f *cgi /usr/share/zenbu/www/zenbu_2.11.1/cgi/
+cp -f *cgi /usr/share/zenbu/www/zenbu_2.11.2/cgi/
 
 #configure zenbu server
 export ZUUID=`uuidgen`

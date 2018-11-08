@@ -20,6 +20,7 @@
 CREATE TABLE `assembly` (
   `assembly_id` int(11) NOT NULL auto_increment,
   `taxon_id` int(11) default NULL,
+  `assembly_name` varchar(64) default NULL,
   `ncbi_version` varchar(32) default NULL,
   `ncbi_assembly_acc` varchar(128) default NULL,
   `ucsc_name` varchar(32) default NULL,
@@ -39,11 +40,15 @@ CREATE TABLE `chrom` (
   `assembly_id` int(11) default NULL,
   `chrom_length` int(11) default NULL,
   `chrom_type` char(64) default NULL,
+  `ncbi_chrom_name` char(64) default NULL,
   `ncbi_chrom_acc` char(64) default NULL,
+  `refseq_chrom_acc` char(64) default NULL,
+  `chrom_name_alt1` char(64) default NULL,
   `description` char(255) default NULL,
   PRIMARY KEY  (`chrom_id`),
   UNIQUE KEY `uqname` (`chrom_name`,`assembly_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+
 
 --
 -- Table structure for table `chrom_chunk`

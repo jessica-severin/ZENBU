@@ -1,4 +1,4 @@
-/* $Id: Chrom.h,v 1.32 2016/04/13 08:47:54 severin Exp $ */
+/* $Id: Chrom.h,v 1.33 2016/11/11 09:08:38 severin Exp $ */
 
 /***
 
@@ -88,8 +88,11 @@ class Chrom : public MQDB::MappedQuery {
     bool operator<(EEDB::Chrom& b);
 
     //get atribute
-    string       chrom_name() { return _chrom_name; }
-    string       ncbi_accession() { return _ncbi_accession; }
+    string       chrom_name() { return _chrom_name; } //usually ucsc name
+    string       ncbi_chrom_name() { return _ncbi_chrom_name; }
+    string       chrom_name_alt1() { return _chrom_name_alt1; }
+    string       ncbi_accession() { return _ncbi_accession; }  //GenBank accession
+    string       refseq_accession() { return _refseq_accession; }
     string       chrom_type() { return _chrom_type; }
     string       description() { return _description; }
     long int     chrom_length() { return _chrom_length; }
@@ -103,7 +106,10 @@ class Chrom : public MQDB::MappedQuery {
     //set attribute
     void         assembly_name(string value);
     void         chrom_name(string value);
+    void         chrom_name_alt1(string value);
+    void         ncbi_chrom_name(string value);
     void         ncbi_accession(string value);
+    void         refseq_accession(string value);
     void         chrom_type(string value);
     void         description(string value);
     void         chrom_length(long int value);
@@ -136,13 +142,8 @@ class Chrom : public MQDB::MappedQuery {
     // static member functions for object retrieval from database
     //
     static Chrom*             fetch_by_id(MQDB::Database *db, long int id);
-    static Chrom*             fetch_by_name(MQDB::Database *db, string assembly_name, string chrom_name);  
-    static Chrom*             fetch_by_name_assembly_id(MQDB::Database *db, string chrom_name, int assembly_id);
-    static Chrom*             fetch_by_assembly_ncbi_chrom_accession(EEDB::Assembly *assembly, string ncbi_chrom_acc);
-    static Chrom*             fetch_by_assembly_chrname(Assembly * assembly, string chrom_name);
-    static vector<DBObject*>  fetch_all(MQDB::Database *db);
+    vector<DBObject*>         fetch_all(MQDB::Database *db);
     static vector<DBObject*>  fetch_all_by_assembly(Assembly *assembly);
-    static vector<DBObject*>  fetch_all_by_assembly_name(Database *db, string assembly_name);
   
 
   protected:
@@ -152,7 +153,10 @@ class Chrom : public MQDB::MappedQuery {
     string      _fullname;
     string      _assembly_name;
     string      _chrom_name;
+    string      _chrom_name_alt1;
+    string      _ncbi_chrom_name;
     string      _ncbi_accession;
+    string      _refseq_accession;
     string      _chrom_type;
     string      _description;
     string      _xml_cache;

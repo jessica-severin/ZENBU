@@ -1,4 +1,4 @@
-/*  $Id: Assembly.cpp,v 1.59 2016/05/13 08:51:02 severin Exp $ */
+/*  $Id: Assembly.cpp,v 1.61 2017/02/09 07:37:53 severin Exp $ */
 
 /*******
 
@@ -72,6 +72,7 @@ size_t rss_curl_writeMemoryCallback(void *contents, size_t size, size_t nmemb, v
 const char*  EEDB::Taxon::class_name = "Taxon";
 const char*  EEDB::Assembly::class_name = "Assembly";
 map<long, EEDB::Taxon*>  EEDB::Taxon::global_ncbi_taxonid_cache;
+map<string, EEDB::Assembly*>  EEDB::Assembly::_global_assembly_cache;
 
 void _eedb_taxon_simple_xml_func(MQDB::DBObject *obj, string &xml_buffer) {
   ((EEDB::Taxon*)obj)->_xml(xml_buffer);
@@ -172,7 +173,7 @@ bool EEDB::Taxon::fetch_NCBI_taxonomy_info() {
   chunk.size = 0;    // no data at this point
   chunk.alloc_size = 0;    // no data at this point
   
-  string url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&retmode=xml&id="+l_to_string(_taxon_id);
+  string url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&retmode=xml&id="+l_to_string(_taxon_id);
   fprintf(stderr, "POST [%s]\n", url.c_str());
   
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
@@ -308,7 +309,7 @@ string  EEDB::Assembly::release_date_string() {
     struct tm  *t_tm = localtime(&t_update);
 
     char buff[50] = {0};
-    strftime(buff,50,"%b %Y",t_tm);
+    strftime(buff,50,"%Y-%b-%d",t_tm);
     str = buff;
     /*
     char *ct_value = ctime(&t_update);
@@ -377,17 +378,12 @@ void  EEDB::Assembly::sequence_loaded(bool value) {
 
 ////////////////////////////////////////////////////////////////
 
-EEDB::Chrom*  EEDB::Assembly::get_chrom(const char* chrom_name) {
-  if(chrom_name == NULL) { return NULL; }
+EEDB::Chrom*  EEDB::Assembly::get_chrom(string chrom_name) {
+  if(chrom_name.empty()) { return NULL; }
   if(_last_chrom!=NULL and (_last_chrom->chrom_name() == chrom_name)) { return _last_chrom; }
   
   if(_chroms_map.empty() && (_database!=NULL)) {
-    //printf("assembly [%s] load all chroms\n", assembly_name().c_str());
-    vector<DBObject*> chrs = EEDB::Chrom::fetch_all_by_assembly(this);
-    for(unsigned int i=0; i<chrs.size(); i++) {
-      EEDB::Chrom *chrom = (EEDB::Chrom*)(chrs[i]);
-      _chroms_map[chrom->chrom_name()] = chrom;
-    }
+    get_chroms();
   }
 
   if(_chroms_map.find(chrom_name) != _chroms_map.end()) { 
@@ -413,6 +409,10 @@ void  EEDB::Assembly::all_chroms(vector<EEDB::Chrom*> &chroms) {
     for(unsigned int i=0; i<chrs.size(); i++) {
       EEDB::Chrom *chrom = (EEDB::Chrom*)(chrs[i]);
       _chroms_map[chrom->chrom_name()] = chrom;
+      if(!chrom->ncbi_chrom_name().empty()) { _chroms_map[chrom->ncbi_chrom_name()] = chrom; }
+      if(!chrom->ncbi_accession().empty()) { _chroms_map[chrom->ncbi_accession()] = chrom; }
+      if(!chrom->refseq_accession().empty()) { _chroms_map[chrom->refseq_accession()] = chrom; }
+      if(!chrom->chrom_name_alt1().empty()) { _chroms_map[chrom->chrom_name_alt1()] = chrom; }
     }
   }
   map<string, EEDB::Chrom*>::iterator it1;
@@ -434,6 +434,10 @@ void  EEDB::Assembly::add_chrom(EEDB::Chrom* chrom) {
   if(_chroms_map.find(chrom->chrom_name()) != _chroms_map.end()) { return; }
   chrom->retain();
   _chroms_map[chrom->chrom_name()] = chrom;
+  if(!chrom->ncbi_chrom_name().empty()) { _chroms_map[chrom->ncbi_chrom_name()] = chrom; }
+  if(!chrom->ncbi_accession().empty()) { _chroms_map[chrom->ncbi_accession()] = chrom; }
+  if(!chrom->refseq_accession().empty()) { _chroms_map[chrom->refseq_accession()] = chrom; }
+  if(!chrom->chrom_name_alt1().empty()) { _chroms_map[chrom->chrom_name_alt1()] = chrom; }
 }
 
 
@@ -468,10 +472,19 @@ void EEDB::Assembly::_xml_start(string &xml_buffer) {
   if(!_genus.empty()) { xml_buffer +="genus=\""+_genus+"\" "; }
   if(!_species.empty()) { xml_buffer +="species=\""+_species+"\" "; }
   if(!_common_name.empty()) { xml_buffer +="common_name=\""+_common_name+"\" "; }
-
-  if(_release_date>0) { xml_buffer +="release_date=\""+release_date_string()+"\" "; }
   if(!_classification.empty()) { xml_buffer +="classification=\""+_classification+"\" "; }
-  
+
+  if(_release_date>0) {
+    xml_buffer +="release_date=\""+release_date_string()+"\" ";
+    snprintf(buffer, 2040, "release_timestamp=\"%ld\" ", _release_date);
+    xml_buffer.append(buffer);
+  }
+  if(_create_date>0) {
+    xml_buffer += "create_date=\""+ create_date_string() +"\" ";
+    snprintf(buffer, 2040, "create_timestamp=\"%ld\" ", _create_date);
+    xml_buffer.append(buffer);
+  }
+
   xml_buffer.append(">");
 }
 
@@ -541,6 +554,13 @@ EEDB::Assembly::Assembly(void *xml_node) {
     if(string("y") == attr->value()) { _sequence_loaded = true; }
   }
   
+  if((attr = root_node->first_attribute("release_timestamp"))) {
+    _release_date = strtol(attr->value(), NULL, 10);
+  }
+  if((attr = root_node->first_attribute("create_timestamp"))) {
+    _create_date = strtol(attr->value(), NULL, 10);
+  }
+
   //metadata
   if((node = root_node->first_node("mdata")) != NULL) {
     while(node) {
@@ -604,10 +624,14 @@ bool EEDB::Assembly::store(MQDB::Database *db) {
   if(db==NULL) { return false; }
   if(check_exists_db(db)) { return true; }
   
-  db->do_sql("INSERT ignore INTO assembly (taxon_id, ncbi_version, ncbi_assembly_acc, ucsc_name, release_date) \
+  db->do_sql("INSERT ignore INTO assembly (taxon_id, assembly_name, ncbi_version, ncbi_assembly_acc, ucsc_name, release_date) \
+             VALUES(?,?,?,?,?,?)", "dsssss",
+             _taxon_id, _assembly_name.c_str(), _ncbi_name.c_str(), _ncbi_assembly_acc.c_str(), _ucsc_name.c_str(), release_date_string().c_str());
+
+  db->do_sql("INSERT ignore INTO taxon (taxon_id, genus, species, common_name, classification) \
              VALUES(?,?,?,?,?)", "dssss",
-             _taxon_id, _ncbi_name.c_str(), _ncbi_assembly_acc.c_str(), _ucsc_name.c_str(), release_date_string().c_str());
-             
+             _taxon_id, _genus.c_str(), _species.c_str(), _common_name.c_str(), _classification.c_str());
+  
   return check_exists_db(db);  //checks the database and sets the id
 }
 
@@ -618,6 +642,9 @@ void  EEDB::Assembly::init_from_row_map(map<string, dynadata> &row_map) {
   _ncbi_name       = row_map["ncbi_version"].i_string;
   _ucsc_name       = row_map["ucsc_name"].i_string;
 
+  if(row_map["assembly_name"].type == MQDB::STRING) {
+    _assembly_name = row_map["assembly_name"].i_string;
+  }
   if(row_map["ncbi_assembly_acc"].type == MQDB::STRING) {
     _ncbi_assembly_acc = row_map["ncbi_assembly_acc"].i_string;
   }
@@ -672,6 +699,7 @@ void  EEDB::Assembly::init_from_row_map(map<string, dynadata> &row_map) {
   mdset->add_metadata("common_name", _common_name);
   mdset->add_metadata("release_date", release_date_string());
   mdset->add_metadata("classification", _classification);
+  mdset->add_metadata("import_date", create_date_string());
   
   mdset->remove_duplicates();
   
@@ -731,7 +759,7 @@ vector<EEDB::Assembly*>  EEDB::Assembly::fetch_from_NCBI_by_search(string search
   
   //http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=assembly&term=canfam3
   //string url = "http://www.ncbi.nlm.nih.gov/assembly/"+acc_id+"?report=xml&format=text";
-  string url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=assembly&term=" + search_term;
+  string url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=assembly&term=" + search_term;
   fprintf(stderr, "POST [%s]\n", url.c_str());
   
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
@@ -779,7 +807,7 @@ vector<EEDB::Assembly*>  EEDB::Assembly::fetch_from_NCBI_by_search(string search
   
   // query to get summary information
   //http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=assembly&retmode=xml&id=317138
-  url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=assembly&retmode=xml&id=" + id_list;
+  url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=assembly&retmode=xml&id=" + id_list;
   fprintf(stderr, "POST [%s]\n", url.c_str());
   
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
@@ -836,6 +864,7 @@ vector<EEDB::Assembly*>  EEDB::Assembly::fetch_from_NCBI_by_search(string search
     //if(!accNode || !taxNode || !ncbiNameNode || !ucscNameNode) { continue; }
     
     EEDB::Assembly* assembly = new EEDB::Assembly();
+    EEDB::MetadataSet *mdset = assembly->metadataset();
     if(accNode)      { assembly->ncbi_assembly_accession(accNode->value()); }
     if(ncbiNameNode) { assembly->ncbi_version(ncbiNameNode->value()); }
     if(ucscNameNode) { assembly->ucsc_name(ucscNameNode->value()); }
@@ -843,6 +872,7 @@ vector<EEDB::Assembly*>  EEDB::Assembly::fetch_from_NCBI_by_search(string search
     if(dateNode) {
       string date_string = dateNode->value();
       assembly->release_date(MQDB::seconds_from_epoch(date_string));
+      mdset->add_tag_data("AsmReleaseDate", date_string);
     }
     
     long txid = strtol(taxNode->value(),NULL, 10);
@@ -851,7 +881,6 @@ vector<EEDB::Assembly*>  EEDB::Assembly::fetch_from_NCBI_by_search(string search
     
     //extra metadata
     rapidxml::xml_node<> *node3;
-    EEDB::MetadataSet *mdset = assembly->metadataset();
     if((node3 = node2->first_node("EnsemblName"))) { mdset->add_tag_data("EnsemblName", node3->value()); }
     if((node3 = node2->first_node("RsUid"))) { mdset->add_tag_data("RsUid", node3->value()); }
     if((node3 = node2->first_node("GbUid"))) { mdset->add_tag_data("GbUid", node3->value()); }
@@ -867,9 +896,12 @@ vector<EEDB::Assembly*>  EEDB::Assembly::fetch_from_NCBI_by_search(string search
         node3 = node3->next_sibling();
       }
     }
-    if(!ftp_path.empty()) { mdset->add_tag_data(string("FtpPath_RefSeq"), ftp_path); }
-    
-    //fprintf(stderr, "%s\n", assembly->xml().c_str());
+    //if(!ftp_path.empty()) { mdset->add_tag_data(string("FtpPath_RefSeq"), ftp_path); }
+    if((node3 = node2->first_node("FtpPath_GenBank"))) { mdset->add_tag_data("FtpPath_GenBank", node3->value()); }
+    if((node3 = node2->first_node("FtpPath_RefSeq"))) { mdset->add_tag_data("FtpPath_RefSeq", node3->value()); }
+    if((node3 = node2->first_node("FtpPath_Assembly_rpt"))) { mdset->add_tag_data("FtpPath_Assembly_rpt", node3->value()); }
+    if((node3 = node2->first_node("FtpPath_Stats_rpt"))) { mdset->add_tag_data("FtpPath_Stats_rpt", node3->value()); }
+    if((node3 = node2->first_node("FtpPath_Regions_rpt"))) { mdset->add_tag_data("FtpPath_Regions_rpt", node3->value()); }
     assembly_array.push_back(assembly);
     node2 = node2->next_sibling("DocumentSummary");
   }
@@ -877,4 +909,43 @@ vector<EEDB::Assembly*>  EEDB::Assembly::fetch_from_NCBI_by_search(string search
   free(chunk.memory);
   return assembly_array;
 }
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// global assembly cache, can be accessed from anywhere in the code
+// webservices need to fill cache, no automatic systems, to maintain security
+//
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+EEDB::Assembly*  EEDB::Assembly::cache_get_assembly(string name) {
+  if(EEDB::Assembly::_global_assembly_cache.find(name) == EEDB::Assembly::_global_assembly_cache.end()) { return NULL; }
+  return EEDB::Assembly::_global_assembly_cache[name];
+}
+
+void EEDB::Assembly::_named_add_to_assembly_cache(string name, EEDB::Assembly* assembly) {
+  if(assembly == NULL) { return; }
+  if(name.empty()) { return; }
+  if(EEDB::Assembly::_global_assembly_cache.find(name) == EEDB::Assembly::_global_assembly_cache.end()) {
+    assembly->retain();
+    EEDB::Assembly::_global_assembly_cache[name] = assembly;
+  }
+}
+
+void EEDB::Assembly::add_to_assembly_cache(EEDB::Assembly* assembly) {
+  if(assembly == NULL) { return; }
+  EEDB::Assembly::_named_add_to_assembly_cache(assembly->assembly_name(), assembly);
+  EEDB::Assembly::_named_add_to_assembly_cache(assembly->ncbi_version(), assembly);
+  EEDB::Assembly::_named_add_to_assembly_cache(assembly->ncbi_assembly_accession(), assembly);
+  EEDB::Assembly::_named_add_to_assembly_cache(assembly->ucsc_name(), assembly);
+}
+
+void EEDB::Assembly::clear_assembly_cache() {
+  map<string, EEDB::Assembly*>::iterator  it;
+  for(it = EEDB::Assembly::_global_assembly_cache.begin(); it != EEDB::Assembly::_global_assembly_cache.end(); it++) {
+    if((*it).second != NULL) { (*it).second->release(); }
+  }
+  EEDB::Assembly::_global_assembly_cache.clear();
+}
+
 

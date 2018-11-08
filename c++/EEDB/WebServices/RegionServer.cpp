@@ -1,4 +1,4 @@
-/* $Id: RegionServer.cpp,v 1.258 2016/10/28 08:40:18 severin Exp $ */
+/* $Id: RegionServer.cpp,v 1.260 2017/01/17 05:41:18 severin Exp $ */
 
 /***
 
@@ -287,7 +287,10 @@ void EEDB::WebServices::RegionServer::show_api() {
   printf $cgi->header(-cookie=>$cookie, -type => "text/html", -charset=> "UTF8");
   */
 
-  printf("Content-type: text/html\r\n\r\n");
+  printf("Content-type: text/html\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<!DOCTYPE html  PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n");
 
   printf("<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en-US\" xml:lang=\"en-US\">\n");
@@ -1314,7 +1317,10 @@ EEDB::SPStream*  EEDB::WebServices::RegionServer::region_stream() {
 
 
 void EEDB::WebServices::RegionServer::show_debug() {  
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   
   printf("<region_debug>\n");
@@ -1489,7 +1495,11 @@ void  EEDB::WebServices::RegionServer::_direct_show_region() {
       //snprintf(buffer, 2040,"%d\t%1.3f\n", $start + floor(($win*$span) + 0.5), $windows->{$win}->{'all'});
     }
     
-    if(format == "gff") { _output_buffer += feature->gff_description(false) + "\n"; }
+    if(format == "gff") { 
+      bool show_mdata = false;
+      if(_parameters["export_feature_metadata"] == "true") { show_mdata = true; }
+      _output_buffer += feature->gff_description(show_mdata) + "\n"; 
+    }
     if(format == "osc" && (_osctable_generator!=NULL))  { 
       _output_buffer += _osctable_generator->osctable_feature_output(feature) + "\n";
     }
@@ -1704,7 +1714,11 @@ bool  EEDB::WebServices::RegionServer::_trackcache_show_region() {
       //snprintf(buffer, 2040,"%d\t%1.3f\n", $start + floor(($win*$span) + 0.5), $windows->{$win}->{'all'});
     }
     
-    if(format == "gff") { _output_buffer += feature->gff_description(false) + "\n"; }
+    if(format == "gff") { 
+      bool show_mdata = false;
+      if(_parameters["export_feature_metadata"] == "true") { show_mdata = true; }
+      _output_buffer += feature->gff_description(show_mdata) + "\n"; 
+    }
     if(format == "osc" && (_osctable_generator!=NULL))  { 
       _output_buffer += _osctable_generator->osctable_feature_output(feature) + "\n";
     }
@@ -1740,7 +1754,10 @@ bool  EEDB::WebServices::RegionServer::_trackcache_show_region() {
 
 
 void  EEDB::WebServices::RegionServer::send_trackcache_zdx() {
-  printf("Content-type: text/plain\r\n\r\n");
+  printf("Content-type: text/plain\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   //printf("Content-type: application/octet-stream\r\n\r\n");  
   
   track_cache();
@@ -1813,7 +1830,10 @@ void  EEDB::WebServices::RegionServer::show_region_stats() {
 
 void EEDB::WebServices::RegionServer::show_source_stream() {
   //used for debugging and stream coordination, shows XML description of current stream setup
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<stream>\n");
 
@@ -1836,7 +1856,10 @@ void EEDB::WebServices::RegionServer::show_source_stream() {
 
 void EEDB::WebServices::RegionServer::show_region_sequence() {
   //used for debugging and stream coordination, shows XML description of current stream setup
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
 
   string assembly_name = _parameters["assembly_name"];
@@ -1891,7 +1914,10 @@ void EEDB::WebServices::RegionServer::show_region_sequence() {
 
 
 void EEDB::WebServices::RegionServer::show_datasources() {  
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
 
   printf("<sources>\n");
@@ -2146,6 +2172,8 @@ void  EEDB::WebServices::RegionServer::_output_header(EEDB::SPStream* stream) {
       printf("Content-type: text/plain\r\n");
     }
     //printf("Content-Encoding: gzip\r\n");
+    printf("Access-Control-Allow-Origin: *\r\n");
+    printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
     printf("\r\n");
 
     _osctable_generator = new EEDB::Tools::OSCTableGenerator;
@@ -2184,6 +2212,8 @@ void  EEDB::WebServices::RegionServer::_output_header(EEDB::SPStream* stream) {
       printf("Content-type: text/plain\r\n");
     }
     //printf("Content-Encoding: gzip\r\n");
+    printf("Access-Control-Allow-Origin: *\r\n");
+    printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
     printf("\r\n");
 
     /*
@@ -2207,6 +2237,8 @@ void  EEDB::WebServices::RegionServer::_output_header(EEDB::SPStream* stream) {
       printf("Content-type: text/plain\r\n");
     }
     //printf("Content-Encoding: gzip\r\n");
+    printf("Access-Control-Allow-Origin: *\r\n");
+    printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
     printf("\r\n");
     /*
     #_output_buffer.append("browser position %s %s:%d-%d\n", $assembly_name, $chrom_name, $start, $end);
@@ -2225,10 +2257,14 @@ void  EEDB::WebServices::RegionServer::_output_header(EEDB::SPStream* stream) {
       printf("Content-type: text/plain\r\n");
       printf("Content-Disposition: attachment; filename=%s.xml;\r\n", filename.c_str());
       //printf("Content-Encoding: gzip\r\n");
+      printf("Access-Control-Allow-Origin: *\r\n");
+      printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
       printf("\r\n");
     } else {
       printf("Content-type: text/xml\r\n");
       //printf("Content-Encoding: gzip\r\n");
+      printf("Access-Control-Allow-Origin: *\r\n");
+      printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
       printf("\r\n");
       printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
     }
@@ -2255,10 +2291,14 @@ void  EEDB::WebServices::RegionServer::_output_header(EEDB::SPStream* stream) {
     if(_parameters["savefile"] == "true") {
       printf("Content-type: text/plain\r\n");
       printf("Content-Disposition: attachment; filename=%s.xml;\r\n", filename.c_str());
+      printf("Access-Control-Allow-Origin: *\r\n");
+      printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
       //printf("Content-Encoding: gzip\r\n");
       printf("\r\n");
     } else {
       printf("Content-type: text/xml\r\n");
+      printf("Access-Control-Allow-Origin: *\r\n");
+      printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
       //printf("Content-Encoding: gzip\r\n");
       printf("\r\n");
       printf("<\?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"\?>\n");
@@ -2280,8 +2320,11 @@ void  EEDB::WebServices::RegionServer::_output_header(EEDB::SPStream* stream) {
       printf("Content-type: text/plain\r\n");
       printf("Content-Disposition: attachment; filename=%s.wig;\r\n", filename.c_str());
     } else {
-      printf("Content-type: text/plain\r\n\r\n");
+      printf("Content-type: text/plain\r\n");
     }
+    printf("Access-Control-Allow-Origin: *\r\n");
+    printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+    printf("\r\n");
     /*
     _output_buffer.append("browser position %s:%d-%d\n",  $chrom_name, $start, $end);
     _output_buffer.append("browser hide all\n");
@@ -2298,7 +2341,10 @@ void  EEDB::WebServices::RegionServer::_output_header(EEDB::SPStream* stream) {
     */
   } 
   else {
-    printf("Content-type: text/plain\r\n\r\n");
+    printf("Content-type: text/plain\r\n");
+    printf("Access-Control-Allow-Origin: *\r\n");
+    printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+    printf("\r\n");
   }
   
   _output_buffer_send(true);
@@ -2711,7 +2757,10 @@ void EEDB::WebServices::RegionServer::show_securecheck() {
   long int ok_count    = secure_access_check(source_hash);
   long int total_count = source_hash.size();
 
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   //printf header(-type => "text/xml", -charset=> "UTF8");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<secure_check>\n");

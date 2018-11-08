@@ -1,4 +1,4 @@
-/* $Id: zenbu_upload.cpp,v 1.19 2016/09/16 03:24:08 severin Exp $ */
+/* $Id: zenbu_upload.cpp,v 1.20 2017/01/05 08:51:27 severin Exp $ */
 
 /****
  
@@ -284,16 +284,15 @@ int main(int argc, char *argv[]) {
     }      
   }
   
-  
-  if(_parameters.find("_url") == _parameters.end()) {
-    printf("\nERROR: must specify -url to remote ZENBU system\n\n");
-    usage(); 
-  }
-  
   get_cmdline_user();
   if(!_user_profile) {
     printf("\nERROR: unable to read your ~/.zenbu/id_hmac file to identify your login identify. Please create file according to documentation.\nhttps://zenbu-wiki.gsc.riken.jp/zenbu/wiki/index.php/Data_loading#Bulk_command-line_upload_of_datafiles\n\n");
     usage();
+  }
+
+  if(_parameters.find("_url") == _parameters.end()) {
+    printf("\nERROR: must specify -url to remote ZENBU system\n\n");
+    usage(); 
   }
 
   bool login_ok = verify_remote_user();
@@ -429,12 +428,14 @@ bool  get_cmdline_user() {
   read(fildes, config_text, cfg_len);
   char* email = strtok(config_text, " \t\n");
   char* secret = strtok(NULL, " \t\n");
+  char* url = strtok(NULL, " \t\n");
   
   //printf("[%s] -> [%s]\n", email, secret);
   
   _user_profile = new EEDB::User();
   if(email)  { _user_profile->email_address(email); }
   if(secret) { _user_profile->hmac_secretkey(secret); }
+  if(url)    { _parameters["_url"] = url; }
   
   free(config_text);
   close(fildes);

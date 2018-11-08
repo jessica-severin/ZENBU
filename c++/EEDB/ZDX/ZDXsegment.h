@@ -1,4 +1,4 @@
-/* $Id: ZDXsegment.h,v 1.45 2016/04/05 09:33:17 severin Exp $ */
+/* $Id: ZDXsegment.h,v 1.46 2016/11/11 09:08:38 severin Exp $ */
 
 /****
 NAME - EEDB::ZDX::ZDXsegment
@@ -86,15 +86,18 @@ namespace EEDB {
       int32_t    segment_size;
       int32_t    chrom_length;
       char       name[64];
-      char       ncbi_accession[64];
-      char       reserved[104];
+      char       ncbi_accession[32];
+      char       refseq_accession[32];
+      char       ncbi_name[32];
+      char       name_alt1[32];
+      char       reserved[40];
     } zdx_chrom; //256bytes
     
     typedef struct {
       int64_t    next_chrom_table;  //offset to next chrom_table in chaing. read all
       char       assembly_name[64];
-      char       ncbi_accession[64];
-      char       reserved[120];     //... maybe other assembly attributes
+      char       ncbi_accession[32];
+      char       reserved[152];     //... maybe other assembly attributes
       zdx_chrom  chroms[32];
     } zdx_chrom_table;
     

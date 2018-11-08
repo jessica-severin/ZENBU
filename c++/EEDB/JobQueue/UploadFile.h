@@ -1,4 +1,4 @@
-/* $Id: UploadFile.h,v 1.10 2016/04/19 06:40:31 severin Exp $ */
+/* $Id: UploadFile.h,v 1.12 2017/02/09 07:37:53 severin Exp $ */
 
 /***
 
@@ -99,7 +99,9 @@ class UploadFile : public MQDB::MappedQuery {
     EEDB::Peer*      load_into_new_genome();       //create new genome
     EEDB::Peer*      load_into_existing_genome();  //appends new chromosomes
     EEDB::Peer*      load_genome_from_NCBI(string ncbi_acc);  //create new genome via download from NCBI
-    bool             load_entrez_genes_from_NCBI(MQDB::Database *entrezDB, string assembly_name);
+    bool             load_entrez_genes_from_NCBI(ZDXdb* zdxdb, MQDB::Database *entrezDB, string assembly_name);
+    bool             load_ncbi_chrom_sequence(EEDB::ZDX::ZDXstream *zdxstream, EEDB::Assembly *assembly);
+
 
   //internal variables, should not be considered open API
   protected:
@@ -112,10 +114,11 @@ class UploadFile : public MQDB::MappedQuery {
     EEDB::Assembly*          _entrez_assembly;
     EEDB::FeatureSource*     _entrez_source;
     long                     _entrez_locmove_count;
+    bool                     _gff_virtual_parents;
 
   
     string      _upload_output_name();
-    bool        _create_chromosomes(EEDB::ZDX::ZDXstream *zdxstream, EEDB::Assembly *assembly, string path, bool use_header_name);
+    bool        _fasta_create_chromosomes(EEDB::ZDX::ZDXstream *zdxstream, EEDB::Assembly *assembly, string path, bool use_header_name);
     bool        _chromosome_chunk_fasta(EEDB::ZDX::ZDXstream *zdxstream, EEDB::Assembly *assembly, string path, bool use_header_name);
     bool        _create_chunk(EEDB::ZDX::ZDXstream *zdxstream, EEDB::Chrom *chrom, long chr_start, long chr_end, string seq);
 

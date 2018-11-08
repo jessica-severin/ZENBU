@@ -1,4 +1,4 @@
-/* $Id: ConfigServer.cpp,v 1.123 2016/09/16 07:01:23 severin Exp $ */
+/* $Id: ConfigServer.cpp,v 1.124 2016/11/11 09:08:38 severin Exp $ */
 
 /***
 
@@ -1375,8 +1375,10 @@ void  EEDB::WebServices::ConfigServer::_register_user_annotation() {
       }
 
       if((attr = node->first_attribute("chrom"))) {
-        chrom = EEDB::Chrom::fetch_by_assembly_chrname(assembly, attr->value());
+        //chrom = EEDB::Chrom::fetch_by_assembly_chrname(assembly, attr->value());
+        chrom = assembly->get_chrom(attr->value());
         if(!chrom) {
+          //TODO: do I really need to store this now with new method?
           chrom = new EEDB::Chrom;
           chrom->chrom_name(attr->value());
           chrom->assembly(assembly);

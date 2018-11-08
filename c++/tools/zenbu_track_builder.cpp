@@ -1,4 +1,4 @@
-/* $Id: zenbu_track_builder.cpp,v 1.73 2016/08/15 06:50:06 severin Exp $ */
+/* $Id: zenbu_track_builder.cpp,v 1.74 2016/12/01 06:16:26 severin Exp $ */
 
 /****
  
@@ -125,6 +125,7 @@ void show_zdx_buildstats();
 void trackcache_buildstats(EEDB::TrackCache* trackcache);
 void trackcache_segment_stats(ZDXdb* zdxdb);
 void repair_segments(ZDXdb* zdxdb);
+void show_zdx_region();
 
 int main(int argc, char *argv[]) {
 
@@ -177,6 +178,8 @@ int main(int argc, char *argv[]) {
     if(arg == "-chrom_name")    { _parameters["chrom"] = argvals[0]; }
     if(arg == "-start")         { _parameters["start"] = argvals[0]; }
     if(arg == "-end")           { _parameters["end"] = argvals[0]; }
+
+    if(arg == "-region")        { _parameters["mode"] = "region"; _parameters["chrom_loc"] = argvals[0]; }
 
     if(arg == "-sources")       { _parameters["mode"] = "sources"; }
     if(arg == "-fullsources")   { _parameters["mode"] = "sources"; _parameters["format"] = "fullxml";}
@@ -233,6 +236,9 @@ int main(int argc, char *argv[]) {
   if(_parameters["mode"] == "buildstats") {
     show_zdx_buildstats();
   }
+  if(_parameters["mode"] == "region") {
+    show_zdx_region();
+  }
   
   
   
@@ -263,6 +269,8 @@ void usage() {
   printf("  -showclaims               : display all trackcache which have active worker/claims\n");
   printf("  -resetclaims              : clear 'rougue' claims for failed workers\n");
   printf("  -repair                   : repair a trackcache, build segments and load missing sources\n");
+  printf("  -region <chrom_loc>       : make region query into cache/zdx-file\n");
+  printf("  -format <type>            : display output in : fullxml, simplexml, gff, bed, osc\n");
   printf("zenbu_track_builder v%s\n", EEDB::WebServices::WebBase::zenbu_version);
   
   exit(1);  
@@ -324,6 +332,7 @@ void zdx_read_sources() {
   long source_count=0;
   zdxstream->stream_data_sources(_parameters["source"], _parameters["filter"]);
   while(EEDB::DataSource *source = (EEDB::DataSource*)zdxstream->next_in_stream()) {
+    if(source->classname() == EEDB::Assembly::class_name) { continue; }
     if(_parameters["format"] == "fullxml") {
       printf("%s", source->xml().c_str());
     } else {
@@ -973,6 +982,147 @@ void trackcache_buildstats(EEDB::TrackCache* trackcache) {
   printf("realtime %1.2f to %1.2f -- %1.3f sec\n", real_starttime, real_endtime, real_endtime-real_starttime);
 
   zdxdb->disconnect();
+}
+
+
+void show_zdx_region() {
+  //find an claimed segment and clear them
+  struct timeval      starttime,endtime,difftime;
+  gettimeofday(&starttime, NULL);  
+  
+  //fprintf(stderr, "== show_zdx_region\n");
+  EEDB::ZDX::ZDXstream* zdxstream  = NULL;
+
+  string         assembly_name, chrom_name;
+  long           start, end;
+  string         format = "xml";
+
+  if(_parameters.find("format") != _parameters.end())  { format = _parameters["format"]; }
+  if(format.find("gff") != string::npos) { format = "gff"; }
+  if(format.find("bed") != string::npos) { format = "bed"; }
+ 
+  if(_parameters.find("chrom_loc") != _parameters.end()) { 
+    size_t   p1;
+    if((p1 = _parameters["chrom_loc"].find(":")) != string::npos) {
+      chrom_name = _parameters["chrom_loc"].substr(0,p1);
+      string tstr = _parameters["chrom_loc"].substr(p1+1);
+      if((p1 = tstr.find("..")) != string::npos) {
+        start = strtol(tstr.substr(0,p1).c_str(), NULL, 10);
+        end   = strtol(tstr.substr(p1+2).c_str(), NULL, 10);
+      }
+      else if((p1 = tstr.find("-")) != string::npos) {
+        start = strtol(tstr.substr(0,p1).c_str(), NULL, 10);
+        end   = strtol(tstr.substr(p1+1).c_str(), NULL, 10);
+      }
+    }
+  }
+
+  if(_parameters.find("asmb") != _parameters.end())  { assembly_name = _parameters["asmb"]; }
+  if(_parameters.find("chrom") != _parameters.end()) { chrom_name = _parameters["chrom"]; }
+  if(_parameters.find("start") != _parameters.end()) { start = strtol(_parameters["start"].c_str(), NULL, 10); }
+  if(_parameters.find("end") != _parameters.end())   { end = strtol(_parameters["end"].c_str(), NULL, 10); }
+  
+  if(_parameters.find("_input_file") != _parameters.end()) {  
+    string name = _parameters["_input_file"];
+    zdxstream = EEDB::ZDX::ZDXstream::open(_parameters["_input_file"]);
+    if(!zdxstream) {
+      fprintf(stderr, "ERROR with track cache [%s]\n", _parameters["_input_file"].c_str());
+      return;
+    }
+  }
+  if(_parameters.find("hashkey") != _parameters.end()) {
+    EEDB::Tools::TrackCacheBuilder  *trackbuilder = new EEDB::Tools::TrackCacheBuilder();  
+    trackbuilder->parse_config_file("/etc/zenbu/zenbu.conf");
+    trackbuilder->init_from_track_cache(_parameters["hashkey"]);
+    
+    EEDB::TrackCache* trackcache = trackbuilder->track_cache();
+    if(!trackcache) { return; }
+    zdxstream = trackcache->zdxstream();
+  }
+
+  if(!zdxstream) {
+    fprintf(stderr, "ERROR did not get zdxstream\n");
+    return;
+  }
+
+  fprintf(stderr, "== show_zdx_region %s %s:%ld..%ld\n", assembly_name.c_str(), chrom_name.c_str(), start, end);
+  string _output_buffer;
+
+  EEDB::Tools::OSCTableGenerator* _osctable_generator = new EEDB::Tools::OSCTableGenerator;
+  _osctable_generator->source_stream(zdxstream);
+  _osctable_generator->assembly_name(assembly_name);
+
+  _osctable_generator->export_subfeatures("");
+  if(_parameters.find("export_subfeatures") != _parameters.end()) { _osctable_generator->export_subfeatures(_parameters["export_subfeatures"]); }
+
+  _osctable_generator->export_experiment_metadata(false);
+  if(_parameters["export_experiment_metadata"] == "true") { _osctable_generator->export_experiment_metadata(true); }
+
+  _osctable_generator->export_header_metadata(true);
+  if(_parameters["export_osc_metadata"] == "false") { _osctable_generator->export_header_metadata(false); }
+
+  _osctable_generator->export_feature_metadata(false);
+  if(_parameters["export_feature_metadata"] == "true") { _osctable_generator->export_feature_metadata(true); }
+
+  if(_parameters.find("output_datatype") != _parameters.end()) {
+    _osctable_generator->add_expression_datatype(EEDB::Datatype::get_type(_parameters["output_datatype"]));
+  }
+  else if(_parameters.find("exptype") != _parameters.end()) {
+    _osctable_generator->add_expression_datatype(EEDB::Datatype::get_type(_parameters["exptype"]));
+  }
+  if(format == "osc" && (_osctable_generator!=NULL))  { 
+    _output_buffer.append(_osctable_generator->generate_oscheader());
+  }
+
+  long   total_count=0;
+  zdxstream->stream_by_named_region(assembly_name, chrom_name, start, end);
+  while(MQDB::DBObject *obj = zdxstream->next_in_stream()) {
+    EEDB::Feature    *feature = NULL;
+    EEDB::Expression *expression = NULL;
+    if(obj->classname() == EEDB::Feature::class_name) { feature = (EEDB::Feature*)obj; }
+    if(feature == NULL) { obj->release(); continue; }
+     
+    if(format == "bed") {
+      _output_buffer += feature->bed_description(_parameters["format"]) + "\n";
+    }
+    
+    if(format == "gff") { _output_buffer += feature->gff_description(false) + "\n"; }
+    if(format == "osc" && (_osctable_generator!=NULL))  { 
+      _output_buffer += _osctable_generator->osctable_feature_output(feature) + "\n"; 
+    }
+    if(format == "das")  { _output_buffer += feature->dasgff_xml(); }
+    if(format == "xml")  { 
+      if(total_count==1) { feature->chrom()->simple_xml(_output_buffer); }
+      if(_parameters["submode"] == "simple_feature") { 
+        feature->simple_xml(_output_buffer); 
+      } else if(_parameters["submode"] == "subfeature") { 
+        feature->_xml_start(_output_buffer);
+        feature->_xml_subfeatures(_output_buffer);
+        feature->_xml_end(_output_buffer);
+      } else { 
+        feature->xml(_output_buffer);
+      }
+    }
+    total_count++;
+    obj->release();
+
+    printf("%s", _output_buffer.c_str());
+    _output_buffer.clear();
+  }
+
+  printf("%s", _output_buffer.c_str());
+  _output_buffer.clear();
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  double runtime  = (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0;
+
+  if(difftime.tv_sec ==0) {
+    fprintf(stderr, "%ld features  %1.3f msec  %1.2f obj/sec\n", total_count, runtime*1000.0, (total_count/runtime));
+  } else {
+    fprintf(stderr, "%ld features  %1.3f sec  %1.2f obj/sec\n", total_count, runtime, (total_count/runtime));
+  }
+
 }
 
 

@@ -1,5 +1,13 @@
 ZENBU release notes
 
+2.11.2
+- added chromosome name aliases and extended chrom_name parsing from the NCBI genome loading code. Used when uploading via zenbu_ncbi_genome_load.
+- extended GFF export to include subfeatures, correct ID-Parent linking, optional feature metadata control in the interface
+- improved GFF3 parsing on upload to deal with more ID-Parent formats. GFF3 parser still does not allow for "virtual Parents" (missing Parent but infered by the collection of children) nor the "Discontinuous Features" of specifying multiple lines with the same ID. I hope to extend GFF3 parser in future to cover the full GFF3 specification.
+- fixed bugs in mdgrouping and ranksum display when applying experiment filters after grouping was calculated.
+- added Access-Control-Allow-Origin: code to html headers for eedb_region and eedb_search to allow remote javascript pages to make webservice queries and build external interfaces
+- NCBI changed their webservices which introduced bugs in zenbu_ncbi_genome_load. Fixed these and added additional options for skipping steps of the genome loading process 
+
 2.11.1
 - added new eedb_download.cgi webservice to provide download access to the original BAM files uploaded into the system. Currently only a webservice, but will eventually enable interface access. Performs full security access checks if user has privilege to download the file. May provide same feature for BED/OSC/GFF files in the future. 
 - added gff_mdata to file upload. Allows for setting bulk metadata at upload time in a more efficient manner. Only limitation is that imposed by the gff-attribute format: no CR, no ",", no ";" within the metadata data/values.

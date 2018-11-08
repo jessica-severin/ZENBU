@@ -1,4 +1,4 @@
-/* $Id: Feature.cpp,v 1.302 2016/08/09 05:33:07 severin Exp $ */
+/* $Id: Feature.cpp,v 1.305 2016/12/01 06:10:07 severin Exp $ */
 
 /***
 
@@ -764,18 +764,41 @@ string   EEDB::Feature::gff_description(bool show_metadata) {
   string str;
   char buffer[2048];
   EEDB::FeatureSource *fsrc = feature_source();
+  string fsrc_name = fsrc->name();
+  boost::algorithm::replace_all(fsrc_name, " ", "_");
 
   //GFF3 style
-  snprintf(buffer, 2040, "%s\t%s\t%s\t%ld\t%ld\t.\t%c\t.\t", 
+  snprintf(buffer, 2040, "%s\t%s\t%s\t%ld\t%ld\t%1.3f\t%c",
                     chrom_name().c_str(),
-                    fsrc->name().c_str(),
+                    fsrc_name.c_str(),
                     fsrc->category().c_str(),
                     _chrom_start,
                     _chrom_end,
+                    _significance,
                     _strand);
   str = buffer;
+  
+  EEDB::Metadata *phaseMD = metadataset()->find_metadata("gff:frame", "");
+  if(phaseMD) {
+    str += "\t" + phaseMD->data();
+  } else {
+    str += "\t.";
+  }
+  str += "\t";
 
-  snprintf(buffer, 2040, "ID=\"%ld\";Name=\"%s\"", _primary_db_id, _primary_name.c_str());
+  subfeatures(); //makes sure it is loaded and sorted
+
+  //attributes
+  string gff_id;
+  if(!_subfeature_array.empty()) {
+    EEDB::Metadata *gffIdMD = metadataset()->find_metadata("gff:ID", "");
+    if(gffIdMD) { gff_id = gffIdMD->data(); }
+    else { gff_id = MQDB::uuid_b64string(); }
+    snprintf(buffer, 2040, "ID=\"%s\";", gff_id.c_str());
+    str += buffer;
+  }
+
+  snprintf(buffer, 2040, "Name=\"%s\"", _primary_name.c_str());
   str += buffer;
   
   if(chrom()!=NULL) {
@@ -785,6 +808,50 @@ string   EEDB::Feature::gff_description(bool show_metadata) {
   if(show_metadata) {
     str += ";" +metadataset()->gff_description();
   }
+  
+  //subfeatures
+  for(unsigned int i=0; i<_subfeature_array.size(); i++) {
+    str += "\n"; //terminate previous line
+    EEDB::Feature *subfeat = _subfeature_array[i];
+    
+    string subfeat_gff;
+    
+    snprintf(buffer, 2040, "%s\t%s\t%s\t%ld\t%ld\t%1.3f\t%c",
+             chrom_name().c_str(),
+             fsrc_name.c_str(),
+             subfeat->feature_source()->category().c_str(),
+             subfeat->chrom_start(),
+             subfeat->chrom_end(),
+             subfeat->significance(),
+             subfeat->strand());
+    subfeat_gff = buffer;
+    
+    EEDB::Metadata *phaseMD = subfeat->metadataset()->find_metadata("gff:frame", "");
+    if(phaseMD) {
+      subfeat_gff += "\t" + phaseMD->data();
+    } else {
+      subfeat_gff += "\t.";
+    }
+    
+    //subfeature attributes
+    snprintf(buffer, 2040, "\tParent=\"%s\";Name=\"%s\"", gff_id.c_str(), subfeat->primary_name().c_str());
+    subfeat_gff += buffer;
+    
+    if(chrom()!=NULL) {
+      snprintf(buffer, 2040, ";asm=\"%s\"", chrom()->assembly_name().c_str());
+      subfeat_gff += buffer;
+    }
+    if(show_metadata) {
+      subfeat_gff += ";" + subfeat->metadataset()->gff_description();
+    }
+    
+    str += subfeat_gff;
+  }
+  
+  if(gff_id.empty()) {
+    metadataset()->add_metadata("gff:ID", gff_id); //for later reuse
+  }
+  
   return str;
 }
 
@@ -1481,7 +1548,10 @@ void  EEDB::Feature::stream_by_named_region(MQDB::DBStream   *dbstream,
   if(db==NULL) { return; }
   //printf("  stream_by_named_region %s :: %s : %ld .. %ld [%ld]\n", assembly_name.c_str(), chrom_name.c_str(), chrom_start, chrom_end, db->retain_count());
   
-  EEDB::Chrom *chrom = EEDB::Chrom::fetch_by_name(db, assembly_name, chrom_name);
+  //EEDB::Chrom *chrom = EEDB::Chrom::fetch_by_name(db, assembly_name, chrom_name);
+  EEDB::Assembly *asmb = EEDB::Assembly::fetch_by_name(db, assembly_name);
+  if(!asmb) { return; }
+  EEDB::Chrom *chrom = asmb->get_chrom(chrom_name.c_str());
   if(!chrom) { return; }
   
   string sql;
@@ -1536,7 +1606,10 @@ void  EEDB::Feature::stream_by_named_region(MQDB::DBStream   *dbstream,
   if(db==NULL) { return; }
   //printf("  stream_by_named_region (expr) %s :: %s : %ld .. %ld [%ld]\n", assembly_name.c_str(), chrom_name.c_str(), chrom_start, chrom_end, db->retain_count());
   
-  EEDB::Chrom *chrom = EEDB::Chrom::fetch_by_name(db, assembly_name, chrom_name);
+  //EEDB::Chrom *chrom = EEDB::Chrom::fetch_by_name(db, assembly_name, chrom_name);
+  EEDB::Assembly *asmb = EEDB::Assembly::fetch_by_name(db, assembly_name);
+  if(!asmb) { return; }
+  EEDB::Chrom *chrom = asmb->get_chrom(chrom_name.c_str());
   if(!chrom) { return; }
   
   //loop on feature_source_ids
@@ -1661,9 +1734,12 @@ void  EEDB::Feature::fetch_by_region(MQDB::Database *db, EEDB::SPStreams::Stream
   if(db==NULL) { return; }
   //printf("  fetch_by_region %s :: %s : %ld .. %ld\n", assembly_name.c_str(), chrom_name.c_str(), chrom_start, chrom_end);
   
-  EEDB::Chrom *chrom = EEDB::Chrom::fetch_by_name(db, assembly_name, chrom_name);
+  //EEDB::Chrom *chrom = EEDB::Chrom::fetch_by_name(db, assembly_name, chrom_name);
+  EEDB::Assembly *asmb = EEDB::Assembly::fetch_by_name(db, assembly_name);
+  if(!asmb) { return; }
+  EEDB::Chrom *chrom = asmb->get_chrom(chrom_name.c_str());
   if(!chrom) { return; }
-    
+  
   //loop on feature_source_ids
   string fsrc_clause;
   if(!fsrc_ids.empty()) {

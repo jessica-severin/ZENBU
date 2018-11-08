@@ -1,4 +1,4 @@
-/* $Id: WebBase.cpp,v 1.211 2016/10/06 05:20:24 severin Exp $ */
+/* $Id: WebBase.cpp,v 1.213 2017/01/17 05:39:44 severin Exp $ */
 
 /***
 
@@ -89,7 +89,7 @@ using namespace MQDB;
 
 const char*     EEDB::WebServices::WebBase::class_name = "EEDB::WebServices::WebBase";
 
-const char*     EEDB::WebServices::WebBase::zenbu_version = "2.11.1";
+const char*     EEDB::WebServices::WebBase::zenbu_version = "2.11.2";
 
 map<string,string>  EEDB::WebServices::WebBase::global_parameters;
 
@@ -493,7 +493,10 @@ void EEDB::WebServices::WebBase::show_api() {
   printf $cgi->header(-cookie=>$cookie, -type => "text/html", -charset=> "UTF8");
   */
 
-  printf("Content-type: text/html\r\n\r\n");
+  printf("Content-type: text/html\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<!DOCTYPE html  PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n");
 
   printf("<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en-US\" xml:lang=\"en-US\">\n");
@@ -584,7 +587,10 @@ void EEDB::WebServices::WebBase::show_status() {
   timersub(&endtime, &_starttime, &time_diff);
   double   runtime  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
 
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<zenbu_status>\n");
 
@@ -1636,15 +1642,19 @@ bool  EEDB::WebServices::WebBase::print_object_xml(MQDB::DBObject *obj) {
   xml_buffer.reserve(100000);  
 
   if(obj->classname() == EEDB::FeatureSource::class_name) { 
-    if(!((EEDB::FeatureSource*)obj)->is_active()) { return false; }
-    if(!((EEDB::FeatureSource*)obj)->is_visible()) { return false; }
+    EEDB::FeatureSource *fsrc = (EEDB::FeatureSource*)obj;
+    if(!fsrc->is_active()) { return false; }
+    if(!fsrc->is_visible()) { return false; }
+    fsrc->metadataset()->remove_metadata_like("keyword", "");
   }
   if(obj->classname() == EEDB::EdgeSource::class_name) { 
     if(!((EEDB::EdgeSource*)obj)->is_active()) { return false; }
     if(!((EEDB::EdgeSource*)obj)->is_visible()) { return false; }
   }
   if(obj->classname() == EEDB::Experiment::class_name) { 
-    if(!((EEDB::Experiment*)obj)->is_active()) { return false; }
+    EEDB::Experiment *exp = (EEDB::Experiment*)obj;
+    if(!exp->is_active()) { return false; }
+    exp->metadataset()->remove_metadata_like("keyword", "");
   }
   if(obj->classname() == EEDB::Feature::class_name) { 
     EEDB::Feature *feature = (EEDB::Feature*)obj;
@@ -1652,6 +1662,7 @@ bool  EEDB::WebServices::WebBase::print_object_xml(MQDB::DBObject *obj) {
     if(feature->feature_source() == NULL) { return false; }
     if(!feature->feature_source()->is_active()) { return false; }
     if(!feature->feature_source()->is_visible()) { return false; }
+    feature->metadataset()->remove_metadata_like("keyword", "");
   }
   
   if(_parameters["format_mode"]  == "fullxml") {
@@ -1671,7 +1682,10 @@ void EEDB::WebServices::WebBase::show_single_object() {
   MQDB::DBObject        *obj;
   EEDB::SPStreams::FederatedSourceStream  *stream;
   
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<objects query_id='%s'>\n", _parameters["id"].c_str());
   //printf("<params format=\"%s\" format_mode=\"%s\" />\n", _parameters["format"].c_str(), _parameters["format_mode"].c_str());
@@ -1703,7 +1717,10 @@ void EEDB::WebServices::WebBase::show_single_object() {
 
 
 void EEDB::WebServices::WebBase::show_objects() {
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<objects>\n");
 
@@ -1742,7 +1759,10 @@ void EEDB::WebServices::WebBase::show_peers() {
   vector<EEDB::Peer*>   peers;
   string                output_xml;
   
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<peers>\n");
   if(_user_profile) { printf("%s", _user_profile->simple_xml().c_str()); } 
@@ -1812,7 +1832,10 @@ void EEDB::WebServices::WebBase::show_chromosomes() {
   struct timeval        endtime, time_diff;
   double                runtime;
 
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   //printf header(-type => "text/xml", -charset=> "UTF8");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<chroms>\n");
@@ -1948,7 +1971,10 @@ void EEDB::WebServices::WebBase::show_system_load() {
   string str5 = exec_result("ps aux | grep eedb_region.cgi | grep -v grep|wc -l");
   long region_queries = strtol(str5.c_str(), NULL, 10);
 
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<zenbu_system_load>\n");
   

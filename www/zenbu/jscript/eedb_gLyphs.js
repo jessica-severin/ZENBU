@@ -897,7 +897,7 @@ function gLyphsTrackGroupInfo(trackID, mdgroup, fullmode, paneltype) {
   tdiv = main_div.appendChild(document.createElement('div'));
   tspan = tdiv.appendChild(document.createElement('span'));
   tspan.setAttribute('style', "font-size:8pt; padding: 0px 3px 0px 0px;");
-  tspan.innerHTML = mdgroup.source_ids.length+" experiments";
+  tspan.innerHTML = mdgroup.source_count+" experiments";
    
   if(!fullmode) { return; }  
 
@@ -1016,6 +1016,7 @@ function gLyphsTrackGroupInfo(trackID, mdgroup, fullmode, paneltype) {
       //if(experiment.hide && current_region.exppanel_hide_deactive) { continue; }
       //if(glyphTrack && glyphTrack.hidezeroexps && (experiment.value==0)) { continue; }
       if(current_region.hide_zero_experiments && (experiment.value==0)) { continue; }
+      gLyphsExperimentName(glyphTrack, experiment); //make the dynamic name 
       exp_array.push(experiment);
 
       if(glyphTrack.strandless) {
@@ -1024,7 +1025,7 @@ function gLyphsTrackGroupInfo(trackID, mdgroup, fullmode, paneltype) {
         if(experiment.sense_value > max_value)     { max_value = experiment.sense_value; }
         if(experiment.antisense_value > max_value) { max_value = experiment.antisense_value; }
       }
-      if(experiment.name.length > max_text) { max_text = experiment.name.length; }
+      if(experiment.expname.length > max_text) { max_text = experiment.expname.length; }
     }
     if(max_value==0) { max_value=1; } //avoid div-by-zero
     exp_array.sort(gLyphs_express_sort_func);
@@ -1056,7 +1057,7 @@ function gLyphsTrackGroupInfo(trackID, mdgroup, fullmode, paneltype) {
       text.setAttributeNS(null, 'x', '7px');
       text.setAttributeNS(null, 'y', (j*12+9) +'px');
       text.setAttributeNS(null, 'style', 'font-size:8pt; font-family:arial,helvetica,sans-serif; fill:black;');
-      text.appendChild(document.createTextNode(experiment.name));
+      text.appendChild(document.createTextNode(experiment.expname));
       if(!current_region.exportSVGconfig) {
         text.setAttributeNS(null, "onclick", "gLyphsLoadObjectInfo(\"" +experiment.id+ "\");");
         text.setAttributeNS(null, "onmouseover", "gLyphsTrackExperimentInfo(\""+ glyphTrack.trackID+ "\", \"" + experiment.id+"\");");
@@ -1490,8 +1491,9 @@ function gLyphsDrawExperimentExpression() {
   var graph_g1 = gLyphsRenderExpressionPanelGraph(glyphTrack);
   var graph_height = 12*experiments.length;
   if(glyphTrack.exppanelmode == "mdgroup") {
-    if(glyphTrack.experiment_mdgrouping) { graph_height = 12*glyphTrack.experiment_mdgrouping.length; }
-    else { graph_height = 0; }
+    if(graph_g1.getAttribute('mdgroup_graph_height')) {
+      graph_height = parseFloat(graph_g1.getAttribute('mdgroup_graph_height'));
+    }
   }
   if(glyphTrack.exppanelmode == "ranksum") { 
     //if(glyphTrack.experiment_ranksum_enrichment) { graph_height = 12*glyphTrack.experiment_ranksum_enrichment.length; }
@@ -2097,12 +2099,13 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
     var mdgroup = glyphTrack.experiment_mdgrouping[i];
     mdgroup.value = 0;
     mdgroup.sense_value = 0;
+    mdgroup.sense_error = 0;
     mdgroup.antisense_value = 0;
+    mdgroup.antisense_error = 0;
     mdgroup.value_total = 0;
     mdgroup.sense_total = 0;
     mdgroup.antisense_total = 0;
-    
-    if(mdgroup.source_ids.length==0) { continue; }
+    mdgroup.source_count = 0;
     
     var avgR=0, avgG=0, avgB=0, colorCnt=0;;
     for(var j=0; j<mdgroup.source_ids.length; j++) {
@@ -2121,6 +2124,7 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
       mdgroup.value_total     += experiment.value;
       mdgroup.sense_total     += experiment.sense_value;
       mdgroup.antisense_total += experiment.antisense_value;
+      mdgroup.source_count++;
 
       if(experiment.rgbcolor) {
         //document.getElementById("message").innerHTML += " ["+experiment.rgbcolor+"] ";
@@ -2131,9 +2135,11 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
         colorCnt++;
       }
     }
-    mdgroup.value           = mdgroup.value_total / mdgroup.source_ids.length;
-    mdgroup.sense_value     = mdgroup.sense_total / mdgroup.source_ids.length;
-    mdgroup.antisense_value = mdgroup.antisense_total / mdgroup.source_ids.length;
+    if(mdgroup.source_count==0) { continue; }
+
+    mdgroup.value           = mdgroup.value_total / mdgroup.source_count;
+    mdgroup.sense_value     = mdgroup.sense_total / mdgroup.source_count;
+    mdgroup.antisense_value = mdgroup.antisense_total / mdgroup.source_count;
         
     //calc error bar (stddev for now)
     mdgroup.value_error = 0;
@@ -2155,15 +2161,15 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
         mdgroup.antisense_error += (experiment.antisense_value - mdgroup.antisense_value) * (experiment.antisense_value - mdgroup.antisense_value);
       }
       //sample standard deviation : sqrt (sum-of-squares / (n-1) )
-      mdgroup.value_error     = Math.sqrt(mdgroup.value_error / (mdgroup.source_ids.length-1));
-      mdgroup.sense_error     = Math.sqrt(mdgroup.sense_error / (mdgroup.source_ids.length-1));
-      mdgroup.antisense_error = Math.sqrt(mdgroup.antisense_error / (mdgroup.source_ids.length-1));
+      mdgroup.value_error     = Math.sqrt(mdgroup.value_error / (mdgroup.source_count-1));
+      mdgroup.sense_error     = Math.sqrt(mdgroup.sense_error / (mdgroup.source_count-1));
+      mdgroup.antisense_error = Math.sqrt(mdgroup.antisense_error / (mdgroup.source_count-1));
 
       //standard error of the mean : stddev \ sqrt (n)
       if(glyphTrack.errorbar_type == "stderror") { 
-        mdgroup.value_error     = mdgroup.value_error / Math.sqrt(mdgroup.source_ids.length);
-        mdgroup.sense_error     = mdgroup.sense_error / Math.sqrt(mdgroup.source_ids.length);
-        mdgroup.antisense_error = mdgroup.antisense_error / Math.sqrt(mdgroup.source_ids.length);
+        mdgroup.value_error     = mdgroup.value_error / Math.sqrt(mdgroup.source_count);
+        mdgroup.sense_error     = mdgroup.sense_error / Math.sqrt(mdgroup.source_count);
+        mdgroup.antisense_error = mdgroup.antisense_error / Math.sqrt(mdgroup.source_count);
       }
     }
 
@@ -2190,10 +2196,19 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
   glyphTrack.experiment_mdgrouping.sort(gLyphs_exppanel_mdgroup_sort_func);
   clearKids(g1);
 
-  //draw names
-  var g2 = g1.appendChild(document.createElementNS(svgNS,'g'));
+  var active_mdgroups = new Array;
   for(var i=0; i<glyphTrack.experiment_mdgrouping.length; i++) {
     var mdgroup = glyphTrack.experiment_mdgrouping[i];
+    mdgroup.array_index = i;
+    if(mdgroup.source_count==0) { continue; }
+    active_mdgroups.push(mdgroup);
+  }
+  g1.setAttribute('mdgroup_graph_height', 12 * active_mdgroups.length);
+
+  //draw names
+  var g2 = g1.appendChild(document.createElementNS(svgNS,'g'));
+  for(var i=0; i<active_mdgroups.length; i++) {
+    var mdgroup = active_mdgroups[i];
 
     //make background box
     var back_rect = document.createElementNS(svgNS,'rect');
@@ -2203,8 +2218,8 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
     back_rect.setAttributeNS(null, 'height', '12px');
     back_rect.setAttributeNS(null, 'fill', "rgb(245,245,250)");
     if(!current_region.exportSVGconfig) {
-      back_rect.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\", true);");
-      back_rect.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\");");
+      back_rect.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\", true);");
+      back_rect.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\");");
       back_rect.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
     }
     mdgroup.back_rect = back_rect;
@@ -2213,15 +2228,15 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
     //draw the names
     var name ="";
     if(mdgroup.mdvalue) { name += mdgroup.mdvalue; }
-    name += " ("+mdgroup.source_ids.length+" exps)";
+    name += " ("+mdgroup.source_count+" exps)";
         
     var text = document.createElementNS(svgNS,'text');
     text.setAttributeNS(null, 'x', '10px');
     text.setAttributeNS(null, 'y', ((i*12)+9) +'px');
     text.setAttributeNS(null, 'style', 'fill: black;');
     if(!current_region.exportSVGconfig) {
-      text.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\", true);");
-      text.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\");");
+      text.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\", true);");
+      text.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\");");
       text.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
     }
     
@@ -2242,8 +2257,8 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
   
   var scale = 0;
   if(max_value>0) { scale = 225.0 / max_value; }
-  for(var i=0; i<glyphTrack.experiment_mdgrouping.length; i++) {
-    var mdgroup = glyphTrack.experiment_mdgrouping[i];
+  for(var i=0; i<active_mdgroups.length; i++) {
+    var mdgroup = active_mdgroups[i];
 
     var value           = mdgroup.value;
     var sense_value     = mdgroup.sense_value;
@@ -2261,8 +2276,8 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
       else { rect.setAttributeNS(null, 'fill', glyphTrack.posStrandColor); }
 
       if(!current_region.exportSVGconfig) {
-        rect.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\", true);");
-        rect.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\");");
+        rect.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\", true);");
+        rect.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\");");
         rect.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
       }
       g5b.appendChild(rect);
@@ -2278,8 +2293,8 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
         error1.setAttribute('stroke', "red");
         error1.setAttribute('stroke-width', '1px');
         if(!current_region.exportSVGconfig) {
-          error1.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\", true);");
-          error1.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\");");
+          error1.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\", true);");
+          error1.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\");");
           error1.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
         }
         g5b.appendChild(error1);
@@ -2296,8 +2311,8 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
       text1.setAttributeNS(null, 'style', 'fill: '+textColor); 
       text1.appendChild(document.createTextNode(Math.round(value*1000.0)/1000.0));
       if(!current_region.exportSVGconfig) {
-        text1.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\", true);");
-        text1.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\");");
+        text1.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\", true);");
+        text1.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\");");
         text1.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
       }
       g4b.appendChild(text1);
@@ -2317,8 +2332,8 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
       else { rect1.setAttributeNS(null, 'fill', glyphTrack.posStrandColor); }
 
       if(!current_region.exportSVGconfig) {
-        rect1.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\", true);");
-        rect1.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\");");
+        rect1.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\", true);");
+        rect1.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\");");
         rect1.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
       }
       g5b.appendChild(rect1);
@@ -2334,8 +2349,8 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
         error1.setAttribute('stroke', "red");
         error1.setAttribute('stroke-width', '1px');
         if(!current_region.exportSVGconfig) {
-          error1.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\", true);");
-          error1.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\");");
+          error1.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\", true);");
+          error1.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\");");
           error1.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
         }
         g5b.appendChild(error1);
@@ -2352,8 +2367,8 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
       else { rect2.setAttributeNS(null, 'fill', glyphTrack.revStrandColor); }
 
       if(!current_region.exportSVGconfig) {
-        rect2.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\", true);");
-        rect2.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\");");
+        rect2.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\", true);");
+        rect2.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\");");
         rect2.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
       }
       g5a.appendChild(rect2);
@@ -2370,8 +2385,8 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
         error1.setAttribute('stroke', "red");
         error1.setAttribute('stroke-width', '1px');
         if(!current_region.exportSVGconfig) {
-          error1.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\", true);");
-          error1.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\");");
+          error1.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\", true);");
+          error1.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\");");
           error1.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
         }
         g5b.appendChild(error1);
@@ -2390,8 +2405,8 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
       if(Y<=0.28) { textColor = "rgb(230, 230, 230);"; }
       text1.setAttributeNS(null, 'style', 'fill:'+textColor); 
       if(!current_region.exportSVGconfig) {
-        text1.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\", true);");
-        text1.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\");");
+        text1.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\", true);");
+        text1.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\");");
         text1.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
       }
       g4b.appendChild(text1);
@@ -2410,8 +2425,8 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
       if(Y<=0.28) { textColor = "rgb(230, 230, 230);"; }
       text2.setAttributeNS(null, 'style', 'fill:'+textColor); 
       if(!current_region.exportSVGconfig) {
-        text2.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\", true);");
-        text2.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + i +"\");");
+        text2.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\", true);");
+        text2.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\");");
         text2.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
       }
       g4a.appendChild(text2);
@@ -3052,7 +3067,7 @@ function gLyphsTrackFetchMetadataGrouping(trackID) {
   //OK rebuild this as a ws query outside of the generic search system
   var paramXML = "<zenbu_query>\n";
   paramXML += "<mode>mdstats</mode><md_show_ids>true</md_show_ids>";
-  paramXML += "<filter>"+glyphTrack.expfilter+"</filter>\n";
+  //paramXML += "<filter>"+glyphTrack.expfilter+"</filter>\n";
   paramXML += "<mdkey>"+glyphTrack.mdgroupkey+"</mdkey>\n";
   if(glyphTrack.peerName)   { paramXML += "<peer_names>"+glyphTrack.peerName+"</peer_names>\n"; }
   if(glyphTrack.sources)    { paramXML += "<source_names>"+glyphTrack.sources+"</source_names>\n"; }
@@ -3120,6 +3135,7 @@ function gLyphsTrackMdGroupingXMLResponse(trackID) {
       mdgroup.name    = mdvalue;
       mdgroup.source_ids = new Array;
       mdgroup.source_hash = new Object;
+      mdgroup.source_count = 0;
       mdgroup.hide = false;
       
       if(sourceXML && sourceXML.length>0) {
@@ -3138,12 +3154,14 @@ function gLyphsTrackMdGroupingXMLResponse(trackID) {
   //find all the sources not covered by the mdkey (outside)
   var ingroup = new Object;
   for(var i=0; i<glyphTrack.experiment_mdgrouping.length; i++) {
-    var mdg = glyphTrack.experiment_mdgrouping[i];
-    for(var j=0; j<mdg.source_ids.length; j++) {
-      var srcid = mdg.source_ids[j];
+    var mdgroup = glyphTrack.experiment_mdgrouping[i];
+    for(var j=0; j<mdgroup.source_ids.length; j++) {
+      var srcid = mdgroup.source_ids[j];
       var experiment = glyphTrack.experiments[srcid];
       if(!experiment) { continue; }
       ingroup[srcid] = true;
+      if(!(current_region.hide_zero_experiments && (experiment.value==0)) &&
+         !(experiment.hide)) { mdgroup.source_count++; }
     }
   }
 
@@ -3152,6 +3170,7 @@ function gLyphsTrackMdGroupingXMLResponse(trackID) {
   mdgroup.name = mdgroup.mdvalue
   mdgroup.source_ids = new Array;
   mdgroup.source_hash = new Object;
+  mdgroup.source_count = 0;
   mdgroup.hide = false;
   for(var expID in glyphTrack.experiments) {
     var experiment = glyphTrack.experiments[expID];
@@ -3160,6 +3179,8 @@ function gLyphsTrackMdGroupingXMLResponse(trackID) {
     if(!mdgroup.source_hash[expID]) {
       mdgroup.source_hash[expID] = true;
       mdgroup.source_ids.push(expID);
+      if(!(current_region.hide_zero_experiments && (experiment.value==0)) &&
+         !(experiment.hide)) { mdgroup.source_count++; }
     }
   }
   if(mdgroup.source_ids.length > 0) { 
@@ -4146,6 +4167,8 @@ function gLyphsSubmitExpExpressFilterSearch() {
     return false;
   }
 
+  glyphTrack.experiment_ranksum_enrichment = null; //clear this so it recalcs
+
   var searchMsg = document.getElementById("experiment_express_filter_panel_msg");
   if(searchMsg) { searchMsg.innerHTML = ""; }
 
@@ -4240,6 +4263,7 @@ function gLyphsClearExpExpressFilterSearch() {
   if(!glyphTrack) { return; }
 
   glyphTrack.expfilter = "";
+  glyphTrack.experiment_ranksum_enrichment = null; //clear this so it recalcs
 
   for(var expID in glyphTrack.experiments){
     var experiment = glyphTrack.experiments[expID];
@@ -4849,6 +4873,38 @@ function gLyphsDisplayFeatureInfo(feature) {
   if(feature.cytostain) { 
     tdiv = main_div.appendChild(document.createElement('div'));
     tdiv.innerHTML = "cytostain: " + feature.cytostain;
+  }
+
+  //metadata
+  if(feature.mdata) {
+    for(var tag in feature.mdata) { //new common mdata[].array system
+      if(tag=="description") { continue; }
+      if(tag=="eedb:description") { continue; }
+      if(tag=="eedb:category") { continue; }
+      if(tag=="display_name") { continue; }
+      if(tag=="eedb:display_name") { continue; }
+      if(tag=="eedb:owner_nickname") { continue; }
+      if(tag=="eedb:owner_OpenID") { continue; }
+      if(tag=="keyword") { continue; }
+
+      tdiv = main_div.appendChild(document.createElement('div'));
+      tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.setAttribute('style', "font-weight: bold;");
+      tspan.innerHTML = tag + ": ";
+      var value_array = feature.mdata[tag];
+      for(var idx1=0; idx1<value_array.length; idx1++) {
+        var value = value_array[idx1];
+
+        if(idx1!=0) { 
+          tspan = tdiv.appendChild(document.createElement('span'));
+          tspan.innerHTML = ", " 
+        }
+
+        tspan = tdiv.appendChild(document.createElement('span'));
+        tspan.setAttribute('style', "color: rgb(105,105,105);");
+        tspan.innerHTML = value;
+      }
+    }
   }
 
   if(current_region.has_sequence) {
@@ -8020,6 +8076,7 @@ function gLyphsRenderSplitSignalTrack(glyphTrack) {
     for(var k=0; k<glyphTrack.experiment_mdgrouping.length; k++) {
       var mdgroup = glyphTrack.experiment_mdgrouping[k];
       if(!mdgroup) { continue; }
+      if(mdgroup.source_count==0) { continue; }
       group_array.push(mdgroup);
     }
   } else if(glyphTrack.exppanelmode == "ranksum") { 
@@ -8074,7 +8131,8 @@ function gLyphsRenderSplitSignalTrack(glyphTrack) {
         var srcid = expr_group.source_ids[j];
         var experiment = glyphTrack.experiments[srcid];
         if(!experiment) { continue; }
-        if(experiment.hide && current_region.exppanel_hide_deactive) { continue; }
+        if(experiment.hide) { continue; }
+        if(current_region.hide_zero_experiments && (experiment.value==0)) { continue; }
         //if(glyphTrack && glyphTrack.hidezeroexps && (experiment.value==0)) { continue; }
         //if(current_region.hide_zero_experiments && (experiment.value==0)) { continue; }  //this might not work here
         expr_group.expr_hash[experiment.id] = true;
@@ -8423,6 +8481,7 @@ function gLyphsDrawSplitSignalTrack(glyphTrack) {
     for(var k=0; k<glyphTrack.experiment_mdgrouping.length; k++) {
       var mdgroup = glyphTrack.experiment_mdgrouping[k];
       if(!mdgroup) { continue; }
+      if(mdgroup.source_count==0) { continue; }
       group_array.push(mdgroup);
     }
   } else if(glyphTrack.exppanelmode == "ranksum") { 
@@ -8531,8 +8590,8 @@ function gLyphsDrawSplitSignalTrack(glyphTrack) {
     text1.setAttributeNS(null, "font-family", 'arial,helvetica,sans-serif');
     if(!current_region.exportSVGconfig) {
       if(glyphTrack.exppanelmode == "mdgroup") { 
-        text1.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + k +"\", true);");
-        text1.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + k +"\");");
+        text1.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\", true);");
+        text1.setAttributeNS(null, "onmouseover", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\");");
         text1.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
       } else if(glyphTrack.exppanelmode == "ranksum") { 
         text1.setAttributeNS(null, "onclick", "gLyphsTrackRankSumInfo(\""+ glyphTrack.trackID+ "\", \"" + k +"\", true);");
@@ -16345,6 +16404,21 @@ function gLyphsDownloadOptions(glyphTrack) {
     if(glyphTrack.download.osc_metadata) { tcheck.setAttribute('checked', "checked"); }
     tspan = tdiv.appendChild(document.createElement('span'));
     tspan.innerHTML = "oscheader metadata (skip for excel)";
+  }
+
+  if(glyphTrack.download.format == "gff") {
+    download_options.innerHTML = "";
+    download_options.style.display = "block";
+
+    //-----
+    var tdiv = download_options.appendChild(document.createElement('div'));
+    tcheck = tdiv.appendChild(document.createElement('input'));
+    tcheck.setAttribute('style', "margin: 0px 1px 3px 14px;");
+    tcheck.setAttribute('type', "checkbox");
+    tcheck.setAttribute("onclick", "reconfigTrackParam(\""+ trackID+"\", 'download-feature-metadata', this.checked);");
+    if(glyphTrack.download.feature_metadata) { tcheck.setAttribute('checked', "checked"); }
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.innerHTML = "feature metadata";
   }
 }
 

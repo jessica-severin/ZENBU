@@ -1,4 +1,4 @@
-/* $Id: OSCFileDB.cpp,v 1.260 2016/09/16 06:58:41 severin Exp $ */
+/* $Id: OSCFileDB.cpp,v 1.261 2016/11/11 09:08:38 severin Exp $ */
 
 /***
 
@@ -1217,7 +1217,10 @@ bool  EEDB::SPStreams::OSCFileDB::_region_index_sqlite(string assembly_name, str
   
   if(database()==NULL) { return false; }
   
-  EEDB::Chrom *chrom = EEDB::Chrom::fetch_by_name(_database, assembly_name, chrom_name);
+  //EEDB::Chrom *chrom = EEDB::Chrom::fetch_by_name(_database, assembly_name, chrom_name);
+  EEDB::Assembly *asmb = EEDB::Assembly::fetch_by_name(_database, assembly_name);
+  if(!asmb) { return false; }
+  EEDB::Chrom *chrom = asmb->get_chrom(chrom_name.c_str());
   if(!chrom) { return false; }
   
   //search internal sqlite database for chrom/chunk-offset information

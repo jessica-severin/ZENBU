@@ -1,4 +1,4 @@
-/* $Id: OSCFileParser.cpp,v 1.204 2016/08/30 05:35:46 severin Exp $ */
+/* $Id: OSCFileParser.cpp,v 1.205 2016/11/08 08:59:47 severin Exp $ */
 
 /***
 
@@ -478,6 +478,9 @@ void EEDB::Tools::OSCFileParser::_transfer_parameters_to_source(EEDB::DataSource
   }
   
   mdset->add_tag_data("eedb:name", source->name());  //allows for keyword extraction later
+
+  EEDB::Metadata *md = mdset->find_metadata("gff_mdata", "");
+  if(md) { mdset->add_from_gff_attributes(md->data()); }
 
   mdset->extract_keywords();
 }

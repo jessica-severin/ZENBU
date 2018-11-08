@@ -1,4 +1,4 @@
-/* $Id: UploadFile.cpp,v 1.32 2016/10/05 08:52:58 severin Exp $ */
+/* $Id: UploadFile.cpp,v 1.36 2017/02/09 07:37:53 severin Exp $ */
 
 /***
 
@@ -127,7 +127,7 @@ void EEDB::JobQueue::UploadFile::init() {
   //_chunk_overlap =   5000; //ie 5 kbase
   _chunk_size    = 100000;
   _chunk_overlap = 0;
-
+  _gff_virtual_parents = false;
 }
 
 
@@ -181,7 +181,10 @@ bool  EEDB::JobQueue::UploadFile::process_upload_job(long job_id) {
   if(_upload_parameters["filetype"] == "gtf2") { zdxload=true; }
   if(_upload_parameters["build_feature_name_index"] == "true") { zdxload=true; }
   if(_upload_parameters["load_into_zdx"] == "true") { zdxload=true; }
-    
+
+  _gff_virtual_parents = false;
+  if(_upload_parameters["gff_virtual_parents"] == "true") { _gff_virtual_parents=true; }
+
   EEDB::Peer *upload_peer = NULL;
   if(zdxload) {
     _upload_parameters["owner_identity"] = _current_job->user()->email_identity();
@@ -423,7 +426,7 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_into_zdx() {
   // make sure all the chroms are loaded into memory
   fprintf(stderr, "load chroms [%s] ... ", genome.c_str());
   EEDB::WebServices::RegionServer *webservice = new EEDB::WebServices::RegionServer();
-  webservice->parse_config_file("/zenbu/server_config/active_config.xml");
+  webservice->parse_config_file("/etc/zenbu/zenbu.conf");
   webservice->init_service_request();
   webservice->postprocess_parameters();
     
@@ -538,18 +541,23 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_into_zdx() {
     //GFF based sub-in_feature consolidation
     if((filetype == "gff") || (filetype == "gff3") || (filetype == "gff2") || (filetype == "gtf") || (filetype == "gtf2")) {
       map<string,bool> parents;
-      EEDB::Metadata* md1;
+      EEDB::Metadata* md1, *md2, *md3;
       
       //exon_id, transcript_id, gene_id are Ensembl, Havana, gencode variation GTF
       //like GTF2  http://mblab.wustl.edu/GTF2.html
+      md1 = in_feature->metadataset()->find_metadata("gene_id","");
+      md2 = in_feature->metadataset()->find_metadata("transcript_id","");
+      md3 = in_feature->metadataset()->find_metadata("exon_id","");
       if(category=="exon") {
-        md1 = in_feature->metadataset()->find_metadata("exon_id","");
-        if(md1) { 
+        if(md3) {
+          in_feature->primary_name(md3->data());
+        } else if(md2) {
+          in_feature->primary_name(md2->data());
+        } else if(md1) {
           in_feature->primary_name(md1->data());
         }
       }
 
-      md1 = in_feature->metadataset()->find_metadata("gene_id","");
       if(md1) {
         if(category=="gene") {
           in_feature->primary_name(md1->data());
@@ -559,13 +567,12 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_into_zdx() {
         }
       }
       
-      md1 = in_feature->metadataset()->find_metadata("transcript_id","");
-      if(md1) { 
+      if(md2) {
         if(category=="transcript") {
-          in_feature->primary_name(md1->data());
-          fent1.link_id = md1->data();
+          in_feature->primary_name(md2->data());
+          fent1.link_id = md2->data();
         } else {
-          parents[md1->data()] = true;; 
+          parents[md2->data()] = true;;
         }
       }
 
@@ -573,9 +580,14 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_into_zdx() {
       if((md1 = in_feature->metadataset()->find_metadata("ID",""))) {
         fent1.link_id = md1->data();
         in_feature->primary_name(md1->data());
+        parents[md1->data()] = true; //any object with ID is a potential parent
+        in_feature->metadataset()->add_metadata("gff:ID", md1->data());
+        in_feature->metadataset()->remove_metadata_like("ID", md1->data());
       }
       if((md1 = in_feature->metadataset()->find_metadata("Name",""))) {
         in_feature->primary_name(md1->data()); 
+        in_feature->metadataset()->add_metadata("gff:Name", md1->data());
+        in_feature->metadataset()->remove_metadata_like("Name", md1->data());
       }
       vector<Metadata*> md2s = in_feature->metadataset()->find_all_metadata_like("Parent", "");
       for(unsigned i2=0; i2<md2s.size(); i2++) {
@@ -612,11 +624,19 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_into_zdx() {
     }
     
     if(made_link) { continue; }
+
+    //check that in_feature does not overlap the next out_feature of the buffer
+    fbuf_entry fent2 = feature_buffer.back();
+    EEDB::Feature *out_feature = fent2.feature;
+    if(out_feature and (in_feature->chrom_start() <= out_feature->chrom_end())) {
+      //fprintf(stderr, "in_feature overlapping next out_feature so don't write out\n");
+      continue;
+    }
     
     //write some features into ZDX
     while(feature_buffer.size() > 300) {       
-      fbuf_entry fent2 = feature_buffer.back();
-      EEDB::Feature *out_feature = fent2.feature;
+      fent2 = feature_buffer.back();
+      out_feature = fent2.feature;
       feature_buffer.pop_back();
       
       //fprintf(stderr,"\n===OUT %ld\n%s======\n\n", feature_buffer.size(), out_feature->xml().c_str());
@@ -658,7 +678,6 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_into_zdx() {
       
       out_feature->release();
     }
-    
   }
   
   //flush remaining feature_buffer
@@ -909,6 +928,8 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_into_new_genome() {
   assembly->taxon_id(taxon_id);
   assembly->assembly_name(genome);
   assembly->sequence_loaded(true);
+  assembly->metadataset()->add_metadata("import_date", "today");
+
   if(!assembly->fetch_NCBI_taxonomy_info()) {
     snprintf(strbuffer, 8190, "error fetching taxon_id %ld from NCBI", taxon_id);
     _upload_parameters["upload_error"] = strbuffer;
@@ -962,7 +983,7 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_into_new_genome() {
       if(strcmp(d->d_name, "..")==0) { continue; }
       string path = seqdir +"/"+ d->d_name;
       
-      rtn &= _create_chromosomes(zdxstream, assembly, path, false);
+      rtn &= _fasta_create_chromosomes(zdxstream, assembly, path, false);
       if(!rtn) { break; }
       rtn &= _chromosome_chunk_fasta(zdxstream, assembly, path, false);
       if(!rtn) { break; }
@@ -988,7 +1009,7 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_into_new_genome() {
     fprintf(stderr,"   overlap    : %ld\n", _chunk_overlap);
     fprintf(stderr,"---------------\n");
     
-    if(!_create_chromosomes(zdxstream, assembly, inpath, true)) { return NULL; }
+    if(!_fasta_create_chromosomes(zdxstream, assembly, inpath, true)) { return NULL; }
     if(!_chromosome_chunk_fasta(zdxstream, assembly, inpath, true)) { return NULL; }
   }
   else {
@@ -1036,7 +1057,7 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_into_existing_genome() {
 
 //--------------------------------------------------------------------------------
 
-bool EEDB::JobQueue::UploadFile::_create_chromosomes(EEDB::ZDX::ZDXstream *zdxstream, EEDB::Assembly *assembly, string path, bool use_header_name) {
+bool EEDB::JobQueue::UploadFile::_fasta_create_chromosomes(EEDB::ZDX::ZDXstream *zdxstream, EEDB::Assembly *assembly, string path, bool use_header_name) {
   //zdx needs the chromosomes with correct length created first before it can create the zdxsegments, before we can load the ChromChunk into the
   //segments. So need to first scan the fasta file to get the correct sequence length
   struct timeval      starttime,endtime,difftime;
@@ -1051,12 +1072,13 @@ bool EEDB::JobQueue::UploadFile::_create_chromosomes(EEDB::ZDX::ZDXstream *zdxst
      (path.rfind(".fasta.gz") == string::npos) &&
      (path.rfind(".fa") == string::npos) &&
      (path.rfind(".fa.gz") == string::npos) &&
+     (path.rfind(".fna") == string::npos) &&
+     (path.rfind(".fna.gz") == string::npos) &&
      (path.rfind(".fas") == string::npos) &&
      (path.rfind(".tar.gz") == string::npos)) {
     _upload_parameters["upload_error"] = "unknown file type ["+path+"]";
     return false;
   }
-  
   fprintf(stderr,"fasta_create_chromosomes [%s]\n", path.c_str());
   
   long long buflen = 10*1024*1024; //10MB
@@ -1399,17 +1421,24 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_genome_from_NCBI(string search_ter
   
   CURL *curl = curl_easy_init();
   if(!curl) { return NULL; }
+
+  string name_mode = "ucsc";
+  if(_upload_parameters["genome_name_mode"] == "ncbi") { name_mode="ncbi"; }
+  if(_upload_parameters["genome_name_mode"] == "ensembl") { name_mode="ensembl"; }
   
   //get the genome assembly and taxon from NCBI webservices
   vector<EEDB::Assembly*> assembly_array = EEDB::Assembly::fetch_from_NCBI_by_search(search_term);
   if(assembly_array.empty()) { return NULL; }
   EEDB::Assembly *assembly = assembly_array[0];
+  assembly->sequence_loaded(true);
+  assembly->create_date(time(NULL));
+
+  if(name_mode!="ucsc") { assembly->assembly_name(assembly->ncbi_version()); }
   
   string user_rootdir = getenv("EEDB_USER_ROOTDIR");
   //zenbu_genome-9615-GCF_000002285.3-CanFam3.1
-  string outdir = user_rootdir +"/zenbu_genome-"+l_to_string(assembly->taxon_id())+"-NCBI-"+
-  assembly->ncbi_assembly_accession()+"-"+
-  assembly->ncbi_version();
+  string outdir = user_rootdir +"/zenbu_genome-"+l_to_string(assembly->taxon_id())+"-NCBI-"+ assembly->ncbi_assembly_accession()+"-"+ assembly->ncbi_version();
+  boost::algorithm::replace_all(outdir, " ", "_");
   fprintf(stderr, "upload to [%s]\n", outdir.c_str());
   mkdir(outdir.c_str(), 0770);
   
@@ -1422,7 +1451,6 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_genome_from_NCBI(string search_ter
   }
   EEDB::Peer* zdxpeer = zdxstream->self_peer();
   fprintf(stderr, "%s\n", zdxpeer->xml().c_str());
-  assembly->sequence_loaded(true);
   fprintf(stderr,"%s\n", assembly->xml().c_str());
   //write assembly into zdx
   zdxstream->add_genome(assembly);  //for loading new genomes
@@ -1440,8 +1468,9 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_genome_from_NCBI(string search_ter
   
   string entrez_dburl = "sqlite://"+entrezpath;
   MQDB::Database *entrezDB = new MQDB::Database(entrez_dburl);
+  EEDB::Peer *entrez_peer = NULL;
   if(entrezDB and entrezDB->get_connection()) {
-    EEDB::Peer *entrez_peer = EEDB::Peer::new_from_url(entrez_dburl);
+    entrez_peer = EEDB::Peer::new_from_url(entrez_dburl);
     if(!entrez_peer->is_valid()) {
       entrez_peer->create_uuid();
       string puburl = entrezDB->public_url();
@@ -1452,19 +1481,28 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_genome_from_NCBI(string search_ter
     }
     assembly->store(entrezDB);
     entrezDB->uuid(entrez_peer->uuid());
+
+    entrezDB->do_sql("PRAGMA journal_mode=OFF");
+    //entrezDB->do_sql("PRAGMA synchronous=OFF");
+    //entrezDB->do_sql("PRAGMA count_changes=OFF");
+    //entrezDB->do_sql("PRAGMA temp_store=OFF");
   } else {
     fprintf(stderr,"\nERROR: unable to connect to sql database [%s]!!\n\n", entrez_dburl.c_str());
+    return NULL;
   }
-  
-  
+
   //get the assembly report of all the chromosomes and create all the chromosomes
   struct RSS_curl_buffer  chunk;
   chunk.memory = NULL;  // will be grown as needed
   chunk.size = 0;    // no data at this point
   chunk.alloc_size = 0;    // no data at this point
   
-  //ftp://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/All/GCF_000002285.3.assembly.txt
-  string url = "ftp://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/All/"+assembly->ncbi_assembly_accession()+".assembly.txt";
+  //OLD ftp://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/All/GCF_000002285.3.assembly.txt  -- OLD pre Sept 2016
+  //string url = "ftp://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/All/"+assembly->ncbi_assembly_accession()+"_assembly_report.txt";
+  //ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/004/665/GCF_000004665.1_Callithrix_jacchus-3.2/GCF_000004665.1_Callithrix_jacchus-3.2_assembly_report.txt
+  //string url = "ftp://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/All/"+assembly->ncbi_assembly_accession()+"_assembly_report.txt";
+  EEDB::Metadata *md2 = assembly->metadataset()->find_metadata("FtpPath_Assembly_rpt", "");
+  string url = md2->data();
   fprintf(stderr, "POST [%s]\n", url.c_str());
   
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
@@ -1521,9 +1559,34 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_genome_from_NCBI(string search_ter
     //fprintf(stderr,"%ld columns\n", cols.size());
     
     string chrom_name   = cols[9]; //ucsc name
-    string chrom_acc    = cols[6];
-    if(chrom_name == "na") { chrom_name = cols[0]; } //use the NCBI chromname if there is no ucsc name
-    if(chrom_acc  == "na") { chrom_acc  = cols[4]; } //use the GenBank-Accn if the RefSeq-Accn is NA
+    string ncbi_name    = cols[0]; 
+    string refseq_accn  = cols[6];
+    string genbank_accn = cols[4];
+    string ucsc_name    = cols[9];
+
+    if(chrom_name == "na") { chrom_name = cols[0]; } //if no ucsc name then use the NCBI chrom name
+    if(chrom_name == "na") { chrom_name = cols[6]; } //else use RefSeq accession as name
+    if(chrom_name == "na") { chrom_name = cols[4]; } //else GenBank accession as name
+
+    if(ncbi_name=="na") { ncbi_name=""; }
+    if(refseq_accn=="na") { refseq_accn=""; }
+    if(genbank_accn=="na") { genbank_accn=""; }
+    if(ucsc_name=="na") { ucsc_name=""; }
+    
+    if(name_mode=="ncbi") {
+      if(!ncbi_name.empty()) { chrom_name = ncbi_name; }
+    }
+    if(name_mode=="ensembl") {
+      //special logic for zebrafish to make like Ensembl, might extend to other situations
+      if(!ncbi_name.empty()) {
+        if(cols[0][0]=='M') { chrom_name = ncbi_name; } //NCBI name for MT
+        if(isdigit(cols[0][0])) { chrom_name = ncbi_name; } //NCBI name is just a number
+      }
+      if(strstr(chrom_name.c_str(), "chrUn_")!=0) { chrom_name = genbank_accn; } //GenBank accn
+    }
+
+    //string chrom_acc    = cols[6];
+    //if(chrom_acc  == "na") { chrom_acc  = cols[4]; } //use the GenBank-Accn if the RefSeq-Accn is NA
     long   chrom_length = strtol(cols[8].c_str(), NULL, 10);
     //fprintf(stderr, "[%s] [%s] %ld\n", chrom_name.c_str(), chrom_acc.c_str(), chrom_length);
     
@@ -1534,7 +1597,10 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_genome_from_NCBI(string search_ter
       chrom->chrom_name(chrom_name);
       chrom->assembly(assembly);
       chrom->chrom_length(chrom_length);
-      chrom->ncbi_accession(chrom_acc);
+      chrom->ncbi_chrom_name(ncbi_name);  //NCBI chrom name
+      chrom->ncbi_accession(genbank_accn);   //GenBank accession
+      chrom->refseq_accession(refseq_accn); //RefSeq accession
+      chrom->chrom_name_alt1(ucsc_name); //store the UCSC name into the alt1 name
       //chrom->description(description);
       fprintf(stderr, "  create zdx chromosome %s\n", chrom->xml().c_str());
       if(zdxstream->create_chrom(chrom) == -1) {
@@ -1545,56 +1611,169 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_genome_from_NCBI(string search_ter
     } else {
       //maybe need version where entrezDB needs to be built from the zdx
       chrom->assembly(assembly);
-      chrom->ncbi_accession(chrom_acc);  //TODO: this is a bug, this should have been read from the ZDX
+      //TODO: this is a bug, these should have been read from the ZDX
+      chrom->ncbi_chrom_name(ncbi_name);  //NCBI chrom name
+      chrom->ncbi_accession(genbank_accn);   //GenBank accession
+      chrom->refseq_accession(refseq_accn); //RefSeq accession
+      chrom->chrom_name_alt1(ucsc_name); //store the UCSC name into the alt1 name
       chrom->store(entrezDB);
     }
   }
   
-  // get chroms
-  vector<EEDB::Chrom*> chroms = EEDB::ZDX::ZDXsegment::fetch_all_chroms(zdxdb);
-  //sort(chroms.begin(), chroms.end(), chrom_length_sort_func);
-  fprintf(stderr,"zdx has %ld chroms\n", chroms.size());
-  
-  load_entrez_genes_from_NCBI(entrezDB, assembly->assembly_name());
-  return NULL;
-  
-  /*
-  //http://www.ncbi.nlm.nih.gov/nuccore/NC_006583.3?report=fasta&log$=seqview&format=text
-  //http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=25026556&rettype=fasta&retmode=text
-  
-  long total_count=0;
-  long chrom_count=0;
-  map<string,long> category_count;
-  vector<EEDB::Chrom*>::iterator chr_it;
-  for(chr_it=chroms.begin(); chr_it!=chroms.end(); chr_it++) {
-    EEDB::Chrom *chrom = (*chr_it);
-    chrom_count++;
-    
-    gettimeofday(&endtime, NULL);
-    timersub(&endtime, &starttime, &difftime);
-    double runtime  = (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0;
-    fprintf(stderr, "%5ld :: %s %s (%ldbp) :: %1.2f obj/sec\n", chrom_count, chrom->fullname().c_str(), chrom->ncbi_accession().c_str(), chrom->chrom_length(),  (total_count/runtime));
-  }
-  */
-  
-  //then load the sequence for each chromosome
-  //first download the entire genome RefSeq from NCBI
-  EEDB::Metadata* md1 = assembly->metadataset()->find_metadata("FtpPath_RefSeq", "");
-  if(md1) {
-    fprintf(stderr, "ftp [%s]\n", md1->data().c_str());
-    //string cmd = "cd " + outdir + "; wget "+md1->data()+"/*genomic.fna.gz";
-    string fasta_name = assembly->ncbi_assembly_accession()+"_"+assembly->ncbi_version()+"_genomic.fna.gz";
-    string cmd = "cd " + outdir + "; wget "+md1->data()+"/"+fasta_name;
-    fprintf(stderr, "%s\n", cmd.c_str());
-    system(cmd.c_str());
-    _chromosome_chunk_fasta(zdxstream, assembly, outdir+"/"+fasta_name, true);
-  }
+  //next load the chrom sequences
+  load_ncbi_chrom_sequence(zdxstream, assembly);
+
+  //finally load the entrez genes
+  load_entrez_genes_from_NCBI(zdxdb, entrezDB, assembly->assembly_name());
+
+  //link zdx genome into entrez as registry
+  //zdxpeer->store(entrezDB);
 
   gettimeofday(&endtime, NULL);
   timersub(&endtime, &starttime, &difftime);
   fprintf(stderr, "created genome from NCBI [%s] in %1.6f sec \n", assembly->display_desc().c_str(), (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+ 
+  printf("genome peer::\n   %s\n", zdxpeer->xml().c_str());
+  printf("entrez peer::\n   %s\n", entrez_peer->xml().c_str());
+
+  //
+  // check registry
+  //
+  if(!(_upload_parameters["registry_url"].empty())) {
+    EEDB::Peer     *registry    = EEDB::Peer::new_from_url(_upload_parameters["registry_url"]);
+    MQDB::Database *registry_db = new MQDB::Database(_upload_parameters["registry_url"]);
+    //if(!registry or !(registry->is_valid())) {
+    //  printf("\nERROR: unable to connect to registry [%s]!!\n\n", _upload_parameters["registry_url"].c_str());
+    //}
+    //if((registry_db==NULL) or !(registry_db->get_connection())) {
+    //  printf("\nERROR: unable to connect to registry database [%s]!!\n\n", _upload_parameters["registry_url"].c_str());
+    //}
+    //printf("registry::\n   %s\n", registry->xml().c_str());
+
+    if(registry && registry_db) {
+      printf("registry::\n   %s\n", registry->xml().c_str());
+      zdxpeer->store(registry_db);
+      entrez_peer->store(registry_db);
+    }
+  }
+ 
+  return entrez_peer;
+}
+
+
+bool EEDB::JobQueue::UploadFile::load_ncbi_chrom_sequence(EEDB::ZDX::ZDXstream *zdxstream, EEDB::Assembly *assembly) {
+  if(_upload_parameters["skip_seq"] == "true") { return true; }
+
+  fprintf(stderr, "UploadFile::load_ncbi_chrom_sequence\n");
+  struct timeval                 starttime,endtime,difftime;
+  gettimeofday(&starttime, NULL);
+
+  if(!zdxstream) { return false; }
+  if(!assembly) { return false; }
+
+  EEDB::Peer* zdxpeer = zdxstream->self_peer();
+  fprintf(stderr, "%s\n", zdxpeer->xml().c_str());
+  fprintf(stderr,"%s\n", assembly->xml().c_str());
+  ZDXdb* zdxdb = zdxstream->zdxdb();
+
+  string user_rootdir = getenv("EEDB_USER_ROOTDIR");
+  //zenbu_genome-9615-GCF_000002285.3-CanFam3.1
+  string outdir = user_rootdir +"/zenbu_genome-"+l_to_string(assembly->taxon_id())+"-NCBI-"+ assembly->ncbi_assembly_accession()+"-"+ assembly->ncbi_version();
+  boost::algorithm::replace_all(outdir, " ", "_");
+  fprintf(stderr, "upload to [%s]\n", outdir.c_str());
+  mkdir(outdir.c_str(), 0770);
+
+  // get chroms from the zdx
+  vector<EEDB::Chrom*> chroms = EEDB::ZDX::ZDXsegment::fetch_all_chroms(zdxdb);
+  //sort(chroms.begin(), chroms.end(), chrom_length_sort_func);
+  fprintf(stderr,"zdx has %ld chroms\n", chroms.size());
+
+  //
+  // LOAD the chromosome sequence
+  //
+  //http://www.ncbi.nlm.nih.gov/nuccore/NC_006583.3?report=fasta&log$=seqview&format=text
+  //http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=25026556&rettype=fasta&retmode=text
+  string cmd;
+  long length_count=0;
+  long chrom_count=0;
+  string ids_str;
+  vector<EEDB::Chrom*>::iterator chr_it;
+  for(chr_it=chroms.begin(); chr_it!=chroms.end(); chr_it++) {
+    EEDB::Chrom *chrom = (*chr_it);
+    chrom_count++;
+    fprintf(stderr, "%5ld :: %s name[%s] ncbi_name[%s] ncbi_acc[%s] refseq_acc[%s] altname[%s] (%ldbp)\n", chrom_count, chrom->fullname().c_str(), 
+      chrom->chrom_name().c_str(), 
+      chrom->ncbi_chrom_name().c_str(), 
+      chrom->ncbi_accession().c_str(), 
+      chrom->refseq_accession().c_str(), 
+      chrom->chrom_name_alt1().c_str(), 
+      chrom->chrom_length());
+    
+    length_count += chrom->chrom_length();
+    if(!ids_str.empty()) { ids_str += ","; }
+    ids_str += chrom->refseq_accession();
+
+    if(length_count > 1000000) { //group the chrom ids so that we fetch at leat 1Mbase at a time
+      //http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=25026556&rettype=fasta&retmode=text
+      //string fasta_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&rettype=fasta&retmode=text&id=" + chrom->refseq_accession();
+      string fasta_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&rettype=fasta&retmode=text&id=" + ids_str;
+      cmd = "cd " + outdir + "; wget \""+fasta_url+"\" -O sequence.fasta";
+      fprintf(stderr, "%s\n", cmd.c_str());
+      system(cmd.c_str());
+
+      _chromosome_chunk_fasta(zdxstream, assembly, outdir+"/sequence.fasta", true);
+
+      //reset counters
+      ids_str.clear();
+      length_count = 0;
+    }
+  }
+  //last remaining chrom ids group
+  if(length_count > 0) { 
+    //http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=25026556&rettype=fasta&retmode=text
+    //string fasta_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&rettype=fasta&retmode=text&id=" + chrom->refseq_accession();
+    string fasta_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&rettype=fasta&retmode=text&id=" + ids_str;
+    cmd = "cd " + outdir + "; wget \""+fasta_url+"\" -O sequence.fasta";
+    fprintf(stderr, "FINAL %s\n", cmd.c_str());
+    system(cmd.c_str());
+
+    _chromosome_chunk_fasta(zdxstream, assembly, outdir+"/sequence.fasta", true);
+  }
+  //clean up the sequence.fasta file
+  cmd = "rm " + outdir + "/sequence.fasta";
+  fprintf(stderr, "%s\n", cmd.c_str());
+  system(cmd.c_str());
   
-  return zdxpeer;
+  if(chroms.empty()) {
+    //the assembly_report method did not work so try the genomic.fna.gz file
+    fprintf(stderr, "\nassembly_report empty so try _genomic.fna.gz\n");
+    EEDB::Metadata* md1 = assembly->metadataset()->find_metadata("FtpPath_GenBank", "");
+    if(md1) {
+      fprintf(stderr, "FtpPath_GenBank[%s]\n", md1->data().c_str());
+      string fasta_name = md1->data();
+      std::size_t p2 = fasta_name.rfind("/");
+      if(p2!=std::string::npos) {
+        fasta_name.erase(0, p2+1);
+      }
+      fasta_name += "_genomic.fna.gz";
+      fprintf(stderr, "fasta_name[%s]\n", fasta_name.c_str());
+      //string cmd = "cd " + outdir + "; wget "+md1->data()+"/*genomic.fna.gz";
+      //string fasta_name = assembly->ncbi_assembly_accession()+"_"+assembly->ncbi_version()+"_genomic.fna.gz";
+      string cmd = "cd " + outdir + "; wget "+md1->data()+"/"+fasta_name;
+      fprintf(stderr, "%s\n", cmd.c_str());
+      system(cmd.c_str());
+
+      string path = outdir+"/"+fasta_name;
+      _fasta_create_chromosomes(zdxstream, assembly, path, true);
+      _chromosome_chunk_fasta(zdxstream, assembly, path, true);
+    }
+  }
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  fprintf(stderr, "loaded chromosome sequence from NCBI [%s] in %1.6f sec \n", assembly->display_desc().c_str(), (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+
+  return true;
 }
 
 
@@ -1605,7 +1784,9 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_genome_from_NCBI(string search_ter
 //#
 //##################################################################
 
-bool EEDB::JobQueue::UploadFile::load_entrez_genes_from_NCBI(MQDB::Database *entrezDB, string assembly_name) {
+bool EEDB::JobQueue::UploadFile::load_entrez_genes_from_NCBI(ZDXdb* zdxdb, MQDB::Database *entrezDB, string assembly_name) {
+  if(_upload_parameters["skip_entrez"] == "true") { return true; }
+
   fprintf(stderr, "UploadFile::load_entrez_genes_from_NCBI\n");
   struct timeval                 starttime,endtime,difftime;
   gettimeofday(&starttime, NULL);
@@ -1619,7 +1800,24 @@ bool EEDB::JobQueue::UploadFile::load_entrez_genes_from_NCBI(MQDB::Database *ent
   _entrez_assembly = EEDB::Assembly::fetch_by_name(entrezDB, assembly_name);
   if(!_entrez_assembly) { fprintf(stderr, "error fetching assembly [%s]\n", assembly_name.c_str());  return false; }
   fprintf(stderr, "%s\n", _entrez_assembly->xml().c_str());
-  
+
+  //check if chroms are loaded
+  vector<DBObject*> chrs = EEDB::Chrom::fetch_all_by_assembly(_entrez_assembly);
+  if(chrs.empty()) {
+    fprintf(stderr, "entrezDB is missing chromosomes: copy from zdx\n");
+    //read the chroms from zdx and store again into the entrezDB
+    vector<EEDB::Chrom*> chroms = EEDB::ZDX::ZDXsegment::fetch_all_chroms(zdxdb);
+    fprintf(stderr,"zdx has %ld chroms\n", chroms.size());
+    vector<EEDB::Chrom*>::iterator chr_it;
+    long count=0;
+    for(chr_it=chroms.begin(); chr_it!=chroms.end(); chr_it++) {
+      EEDB::Chrom *chrom = (*chr_it);
+      chrom->store(entrezDB);
+      count++;
+      if(count%1000==0) { fprintf(stderr, "%ld chroms copied\n", count); }
+    }
+  }
+
   string fsrc_name = "Entrez_gene_" + _entrez_assembly->ucsc_name();
   _entrez_source = EEDB::FeatureSource::fetch_by_category_name(entrezDB, "gene", fsrc_name);
   if(!_entrez_source) {
@@ -1627,9 +1825,10 @@ bool EEDB::JobQueue::UploadFile::load_entrez_genes_from_NCBI(MQDB::Database *ent
     _entrez_source->category("gene");
     _entrez_source->name(fsrc_name);
     _entrez_source->import_source("NCBI Entrez Gene");
+    _entrez_source->create_date(time(NULL));
     _entrez_source->is_active("y");
     _entrez_source->is_visible("y");
-    _entrez_source->metadataset()->add_tag_data("import_url", "http://www.ncbi.nlm.nih.gov/sites/entrez?db=gene");
+    _entrez_source->metadataset()->add_tag_data("import_url", "https://www.ncbi.nlm.nih.gov/sites/entrez?db=gene");
     //Norway Rat (Rattus norvegicus) Rnor_6.0 / GCF_000001895.5 / rn6 entrez genes downloaded from NCBI
     _entrez_source->metadataset()->add_tag_data("description",
                                                _entrez_assembly->common_name() + " (" +_entrez_assembly->genus()+" "+_entrez_assembly->species()+") "+
@@ -1660,27 +1859,33 @@ bool EEDB::JobQueue::UploadFile::load_entrez_genes_from_NCBI(MQDB::Database *ent
 
   
   //get the list of all current gene EntrezID for this taxon
+  string url    = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi";
+  string params = "db=gene&retmax=300000&retmode=text&term="+
+                   l_to_string(_entrez_assembly->taxon_id())+"[taxid] AND gene_all[filter]";
+  //string url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=gene&retmax=300000&term="+
+  //             l_to_string(_entrez_assembly->taxon_id())+"[taxid] AND gene_all[filter]";
+  //fprintf(stderr, "POST [%s]\n", url.c_str());
+  fprintf(stderr, "URL: %s\n", url.c_str());
+  fprintf(stderr, "PARAMS: %s\n", params.c_str());
+  sleep(2);
+  
   struct RSS_curl_buffer  chunk;
   chunk.memory = NULL;  // will be grown as needed
   chunk.size = 0;    // no data at this point
   chunk.alloc_size = 0;    // no data at this point
-  
-  string url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=gene&retmax=300000&term="+
-               l_to_string(_entrez_assembly->taxon_id())+"[taxid]\%20AND\%20gene_all[filter]";
-  fprintf(stderr, "POST [%s]\n", url.c_str());
-  
+
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
   curl_easy_setopt(curl, CURLOPT_POST, 1);
-  //curl_easy_setopt(curl, CURLOPT_POSTFIELDS, paramXML.c_str());
-  //curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, paramXML.length());
-  
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, params.c_str());
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, params.length());
+
   struct curl_slist *slist = NULL;
-  slist = curl_slist_append(NULL, "Content-Type: text/xml; charset=utf-8"); // or whatever charset your XML is really using...
+  slist = curl_slist_append(NULL, "application/x-www-form-urlencoded");
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, slist);
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, rss_curl_writeMemoryCallback);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
   curl_easy_setopt(curl, CURLOPT_USERAGENT, "libcurl-agent/1.0");
-  
+
   curl_easy_perform(curl);
   if(slist) { curl_slist_free_all(slist); }
   curl_easy_cleanup(curl);
@@ -1691,6 +1896,7 @@ bool EEDB::JobQueue::UploadFile::load_entrez_genes_from_NCBI(MQDB::Database *ent
 
   char *start_ptr = strstr(chunk.memory, "<eSearchResult");
   if(!start_ptr) { free(chunk.memory); return false; }
+  fprintf(stderr, "returned ID list\n");
   doc.parse<rapidxml::parse_declaration_node | rapidxml::parse_no_data_nodes>(start_ptr);
   
   root_node = doc.first_node();
@@ -1803,7 +2009,7 @@ void  EEDB::JobQueue::UploadFile::_sync_entrez_gene_from_webservice(MQDB::Databa
   CURL *curl = curl_easy_init();
   if(!curl) { return; }
   
-  string url    = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi";
+  string url    = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi";
   string params = "db=gene&retmode=text&id=";
   vector<long>::iterator it1;
   for(it1=_entrez_gene_id_buffer.begin(); it1!=_entrez_gene_id_buffer.end(); it1++) {
@@ -1991,7 +2197,8 @@ void  EEDB::JobQueue::UploadFile::_add_matching_loc_hist_XML_to_feature(rapidxml
     //fprintf(stderr,"check asmAccVer assembly [%s]\n", _entrez_assembly->ncbi_assembly_acc());
     if(_entrez_assembly->ncbi_assembly_accession() == asmAccVer) {
       //fprintf(stderr, "^ ^ ^ found LocationHistType for requested assembly [%s]\n", _entrez_assembly->ncbi_assembly_accession().c_str());
-      EEDB::Chrom *chrom = EEDB::Chrom::fetch_by_assembly_ncbi_chrom_accession(_entrez_assembly, chrAccVer);
+      //EEDB::Chrom *chrom = EEDB::Chrom::fetch_by_assembly_ncbi_chrom_accession(_entrez_assembly, chrAccVer);
+      EEDB::Chrom *chrom = _entrez_assembly->get_chrom(chrAccVer.c_str());
       if(chrom) {
         //fprintf(stderr, "  found matching ncbi_chrom_acc\n");
         feature->chrom(chrom);
@@ -1999,6 +2206,7 @@ void  EEDB::JobQueue::UploadFile::_add_matching_loc_hist_XML_to_feature(rapidxml
         feature->chrom_end(chrStop);
       } else {
         //if($debug) { fprintf(stderr,"did not find a matching ncbi asembly [$chrAccVer] chrom[$chrAccVer] record\n"); }
+        fprintf(stderr,"did not find chrom[%s]\n", chrAccVer.c_str());
       }
     }
     locHistNode = locHistNode->next_sibling("LocationHistType");

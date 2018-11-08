@@ -1,4 +1,4 @@
-/* $Id: NormalizeByFactor.cpp,v 1.7 2014/11/26 09:12:57 severin Exp $ */
+/* $Id: NormalizeByFactor.cpp,v 1.8 2017/01/16 11:10:21 severin Exp $ */
 
 /***
 
@@ -204,7 +204,7 @@ void  EEDB::SPStreams::NormalizeByFactor::_get_experiment_factor(EEDB::Experimen
   EEDB::MetadataSet  *mdset = experiment->metadataset();
   EEDB::Metadata     *md = mdset->find_metadata(_experiment_metadata_tag, "");
   if(!md) { 
-    fprintf(stderr, "WARN NormalizeByFactor %s no tag [%s]\n", experiment->db_id().c_str(), _experiment_metadata_tag.c_str());
+    //fprintf(stderr, "WARN NormalizeByFactor %s no tag [%s]\n", experiment->db_id().c_str(), _experiment_metadata_tag.c_str());
     return; 
   }
   
@@ -228,7 +228,7 @@ void  EEDB::SPStreams::NormalizeByFactor::_process_expression(EEDB::Expression *
     _get_experiment_factor(source);
   }
   if(_experiment_factors.find(exp->db_id()) == _experiment_factors.end()) { 
-    fprintf(stderr, "WARN NormalizeByFactor unable to access factor %s [%s]\n", exp->db_id().c_str(), _experiment_metadata_tag.c_str());
+    //fprintf(stderr, "WARN NormalizeByFactor unable to access factor %s [%s]\n", exp->db_id().c_str(), _experiment_metadata_tag.c_str());
     return; 
   }
   

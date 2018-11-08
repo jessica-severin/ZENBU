@@ -31,7 +31,7 @@
 // * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 var eedbWebRoot="/zenbu";
-var zenbuVersion="2.11.0";
+var zenbuVersion="2.11.2";
 
 //gLyphs
 var eedbDefaultAssembly = "hg19";

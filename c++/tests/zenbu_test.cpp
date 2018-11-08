@@ -115,13 +115,14 @@ void test_oscdb3();
 void test_oscdb4();
 void test_oscdb5(vector<EEDB::Peer*> seedpeers);
 void test_region_server();
+void test_region_server2();
+void test_region_server3();
 void test_search_server();
 void upgrade_oscdbs(vector<EEDB::Peer*> seedpeers);
 void upgrade_oscdbs_v2();
 void test_lsarchive();
 void test_paraclu();
 void test_upload_server();
-void test_region_server2();
 void test_remote_server1();
 void zdx_write_test1();
 void zdx_write_test2();
@@ -177,6 +178,7 @@ int main() {
   seedpeers.push_back(EEDB::Peer::new_from_url("sqlite:///zenbu/dbs/zenbu_main_registry.sqlite"));
   seedpeers.push_back(EEDB::Peer::new_from_url("sqlite:///eeDB/dbs/eedb_fantom46_registry2.sqlite"));
 
+  test_region_server3(); exit(0);
   //fantom6_bam_links(); exit(0);
 
   //check_duplicate_uploads(); exit(0);
@@ -6162,4 +6164,41 @@ void fantom6_bam_links() {
     printf("\n");
   }
 }
+
+void test_region_server3() {
+  struct timeval                        starttime,endtime,difftime;
+  EEDB::WebServices::RegionServer      *webservice = new EEDB::WebServices::RegionServer();
+
+  gettimeofday(&starttime, NULL);
+
+  printf("\n== test_region_server3\n");
+  webservice->parse_config_file("/etc/zenbu/zenbu.conf");
+  //webservice->parse_config_file("/eeDB_intweb1/dbs/fantom5_release009/eedb_server_config.xml");
+  //webservice->parse_config_file("/eeDB/dbs/fantom5_release009/eedb_server_config.xml");
+
+  gettimeofday(&endtime, NULL); timersub(&endtime, &starttime, &difftime);
+  printf("  after parse %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+
+string post_data ="<zenbu_query><trackcache>9e229d1bf9e3281d908346abd07b8487c12f7960cea7967b918d3fdcdc7bfe</trackcache><track_title>FANTOM5 CAGE phase 1and2 human tracks pooled (q20 filtered TPM, hg38)</track_title> <view_uuid>m31gAA3yJtRuEfYuLigxEC</view_uuid> <exptype>q20_tpm</exptype> <asm>hg38</asm> <loc>chr10:102431883..102439529</loc> <mode>region</mode> <source_outmode>full_feature</source_outmode> <display_width>970</display_width> <expression_visualize/> <format>fullxml</format> </zenbu_query>";
+
+  webservice->init_service_request();
+
+  webservice->set_post_data(post_data);
+
+  webservice->process_xml_parameters();
+  gettimeofday(&endtime, NULL); timersub(&endtime, &starttime, &difftime);
+  printf("  after process_xml_parameters %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+
+  webservice->postprocess_parameters();
+  gettimeofday(&endtime, NULL); timersub(&endtime, &starttime, &difftime);
+  printf("  after postprocess_parameters %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+
+  webservice->execute_request();
+  gettimeofday(&endtime, NULL); timersub(&endtime, &starttime, &difftime);
+  printf("  after execute_request %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+
+  webservice->disconnect();
+  //sleep(100);
+}
+
 

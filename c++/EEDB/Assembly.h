@@ -1,4 +1,4 @@
-/* $Id: Assembly.h,v 1.27 2016/05/13 08:51:02 severin Exp $ */
+/* $Id: Assembly.h,v 1.28 2016/11/11 09:08:38 severin Exp $ */
 
 /****
 NAME - EEDB::Assembly
@@ -112,7 +112,7 @@ class Assembly : public EEDB::Taxon {
     Assembly(void *xml_node); // constructor using a rapidxml node
    ~Assembly();               // destructor
     void init();              // initialization method
-
+  
     //get atribute
     string  ncbi_version() { return _ncbi_name; }
     string  ncbi_assembly_accession() { return _ncbi_assembly_acc; }
@@ -130,7 +130,7 @@ class Assembly : public EEDB::Taxon {
     void    release_date(time_t value);
     void    sequence_loaded(bool value);
 
-    EEDB::Chrom*          get_chrom(const char* chrom_name);
+    EEDB::Chrom*          get_chrom(string chrom_name);
     vector<EEDB::Chrom*>  get_chroms();
     void                  all_chroms(vector<EEDB::Chrom*> &chroms);
     void                  add_chrom(EEDB::Chrom* chrom);
@@ -160,6 +160,11 @@ class Assembly : public EEDB::Taxon {
   
     static vector<Assembly*> fetch_from_NCBI_by_search(string search_term); //ex: GCF_000001895.5 or rn6 or rat
   
+  public:  //global cache system to allow random access from anywhere in the code
+    static EEDB::Assembly*  cache_get_assembly(string name);
+    static void             add_to_assembly_cache(EEDB::Assembly* assembly);
+    static void             clear_assembly_cache();
+
   protected:
     string           _ncbi_name;
     string           _ncbi_assembly_acc;
@@ -170,6 +175,9 @@ class Assembly : public EEDB::Taxon {
 
     map<string, EEDB::Chrom*>  _chroms_map;
     EEDB::Chrom               *_last_chrom;
+  
+    static map<string, EEDB::Assembly*>  _global_assembly_cache;
+    static void                          _named_add_to_assembly_cache(string name, EEDB::Assembly* assembly);
 
 
   //internal API used for callback functions, should not be considered open API

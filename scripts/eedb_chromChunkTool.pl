@@ -235,7 +235,7 @@ sub chromosome_chunk_fasta {
         if($nm1 =~ /^gi\|(.*)\|(.*)\|(.*)\|/) {
           $name = $3;
         } else {
-          $nm1 =~ /(\w*)/;
+          $nm1 =~ /([\w-.]*)/;
           $name = $1; #first word no spaces
         }
       }
@@ -248,7 +248,7 @@ sub chromosome_chunk_fasta {
         $chrom->assembly($assembly);
         $chrom->description($description);
         $chrom->store($eeDB) if($store);
-        printf("need to create chromosome ::");
+        printf("  need to create chromosome ::");
       }
       #reset variables
       $seq = '';

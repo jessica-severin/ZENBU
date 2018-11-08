@@ -1,4 +1,4 @@
-/*  $Id: ZDXsegment.cpp,v 1.86 2016/05/19 10:31:48 severin Exp $ */
+/*  $Id: ZDXsegment.cpp,v 1.87 2016/11/11 09:08:38 severin Exp $ */
 
 /*******
 
@@ -491,8 +491,11 @@ int64_t  EEDB::ZDX::ZDXsegment::create_chrom(EEDB::Chrom* chrom) {
     bzero(&ctable, sizeof(zdx_chrom_table));
     memcpy(ctable.assembly_name, asm_name.c_str(), asm_name.size());
     
-    strncpy(ctable.chroms[0].name, chrom_name.c_str(), 64);
-    strncpy(ctable.chroms[0].ncbi_accession, chrom->ncbi_accession().c_str(), 64);
+    strncpy(ctable.chroms[0].name, chrom_name.c_str(), 63);
+    strncpy(ctable.chroms[0].ncbi_accession, chrom->ncbi_accession().c_str(), 31);
+    strncpy(ctable.chroms[0].refseq_accession, chrom->refseq_accession().c_str(), 31);
+    strncpy(ctable.chroms[0].ncbi_name, chrom->ncbi_chrom_name().c_str(), 31);
+    strncpy(ctable.chroms[0].name_alt1, chrom->chrom_name_alt1().c_str(), 31);
     ctable.chroms[0].chrom_length = chrom_length;
     ctable.chroms[0].segment_size = 100000; //100kb
     
@@ -544,8 +547,11 @@ int64_t  EEDB::ZDX::ZDXsegment::create_chrom(EEDB::Chrom* chrom) {
           //means I have not found chrom yet, and I should create one here
           //printf("create [%d] new chrom [%s[ [%s] %ld\n", c_idx, asm_name.c_str(), chrom_name.c_str(), chrom_length);
 
-          strncpy(ctable.chroms[c_idx].name, chrom_name.c_str(), 64);
-          strncpy(ctable.chroms[c_idx].ncbi_accession, chrom->ncbi_accession().c_str(), 64);
+          strncpy(ctable.chroms[c_idx].name, chrom_name.c_str(), 63);
+          strncpy(ctable.chroms[c_idx].ncbi_accession, chrom->ncbi_accession().c_str(), 31);
+          strncpy(ctable.chroms[c_idx].refseq_accession, chrom->refseq_accession().c_str(), 31);
+          strncpy(ctable.chroms[c_idx].ncbi_name, chrom->ncbi_chrom_name().c_str(), 31);
+          strncpy(ctable.chroms[c_idx].name_alt1, chrom->chrom_name_alt1().c_str(), 31);
           ctable.chroms[c_idx].chrom_length = chrom_length;
           ctable.chroms[c_idx].segment_size = 100000; //100kb
           if(!_create_segments_array(ctable.chroms[c_idx])) { 
@@ -595,8 +601,11 @@ int64_t  EEDB::ZDX::ZDXsegment::create_chrom(EEDB::Chrom* chrom) {
       bzero(&new_ctable, sizeof(zdx_chrom_table));
       memcpy(new_ctable.assembly_name, asm_name.c_str(), asm_name.size());
       
-      strncpy(new_ctable.chroms[0].name, chrom_name.c_str(), 64);
-      strncpy(new_ctable.chroms[0].ncbi_accession, chrom->ncbi_accession().c_str(), 64);
+      strncpy(new_ctable.chroms[0].name, chrom_name.c_str(), 63);
+      strncpy(new_ctable.chroms[0].ncbi_accession, chrom->ncbi_accession().c_str(), 31);
+      strncpy(new_ctable.chroms[0].refseq_accession, chrom->refseq_accession().c_str(), 31);
+      strncpy(new_ctable.chroms[0].ncbi_name, chrom->ncbi_chrom_name().c_str(), 31);
+      strncpy(new_ctable.chroms[0].name_alt1, chrom->chrom_name_alt1().c_str(), 31);
       new_ctable.chroms[0].chrom_length = chrom_length;
       new_ctable.chroms[0].segment_size = 100000; //100kb
 
@@ -988,6 +997,9 @@ vector<EEDB::Chrom*>  EEDB::ZDX::ZDXsegment::fetch_all_chroms(ZDXdb* zdxdb) {
       chrom->assembly_name(ctable.assembly_name);
       chrom->chrom_name(zchrom->name);
       chrom->ncbi_accession(zchrom->ncbi_accession);
+      chrom->refseq_accession(zchrom->refseq_accession);
+      chrom->ncbi_chrom_name(zchrom->ncbi_name);
+      chrom->chrom_name_alt1(zchrom->name_alt1);
       chrom->chrom_length(zchrom->chrom_length);
       
       chroms.push_back(chrom);
@@ -1023,10 +1035,17 @@ EEDB::Chrom*  EEDB::ZDX::ZDXsegment::fetch_chrom(ZDXdb* zdxdb, string asm_name, 
         if(zchrom->segments_offset == 0) { break; }
         
         if((strncmp(ctable.chroms[c_idx].name, chrom_name.c_str(), 64) == 0) ||
-           (strncmp(ctable.chroms[c_idx].ncbi_accession, chrom_name.c_str(), 64) == 0)) {
+           (strncmp(ctable.chroms[c_idx].ncbi_accession, chrom_name.c_str(), 32) == 0) ||
+           (strncmp(ctable.chroms[c_idx].refseq_accession, chrom_name.c_str(), 32) == 0) ||
+           (strncmp(ctable.chroms[c_idx].name_alt1, chrom_name.c_str(), 32) == 0) ||
+           (strncmp(ctable.chroms[c_idx].ncbi_name, chrom_name.c_str(), 32) == 0)) {
           EEDB::Chrom* chrom = new EEDB::Chrom();
           chrom->assembly_name(ctable.assembly_name);
           chrom->chrom_name(zchrom->name);
+          chrom->ncbi_accession(zchrom->ncbi_accession);
+          chrom->refseq_accession(zchrom->refseq_accession);
+          chrom->ncbi_chrom_name(zchrom->ncbi_name);
+          chrom->ncbi_chrom_name(zchrom->name_alt1);
           chrom->chrom_length(zchrom->chrom_length);
           return chrom;
         }        

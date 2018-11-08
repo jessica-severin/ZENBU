@@ -1,4 +1,4 @@
-/* $Id: Chrom.cpp,v 1.79 2016/04/13 08:47:54 severin Exp $ */
+/* $Id: Chrom.cpp,v 1.80 2016/11/11 09:08:38 severin Exp $ */
 
 /******
 
@@ -185,8 +185,23 @@ void  EEDB::Chrom::chrom_name(string value) {
   _xml_cache.clear();
 }
 
+void  EEDB::Chrom::ncbi_chrom_name(string value) {
+  _ncbi_chrom_name = value;
+  _xml_cache.clear();
+}
+
+void  EEDB::Chrom::chrom_name_alt1(string value) {
+  _chrom_name_alt1 = value;
+  _xml_cache.clear();
+}
+
 void  EEDB::Chrom::ncbi_accession(string value) {
   _ncbi_accession = value;
+  _xml_cache.clear();
+}
+
+void  EEDB::Chrom::refseq_accession(string value) {
+  _refseq_accession = value;
   _xml_cache.clear();
 }
 
@@ -246,6 +261,24 @@ void EEDB::Chrom::_xml(string &xml_buffer) {
     if(!_ncbi_accession.empty()) {
       _xml_cache.append(" ncbi_chrom_acc=\"");
       _xml_cache.append(html_escape(_ncbi_accession));
+      _xml_cache.append("\"");
+    }
+
+    if(!_ncbi_chrom_name.empty()) {
+      _xml_cache.append(" ncbi_chrom_name=\"");
+      _xml_cache.append(html_escape(_ncbi_chrom_name));
+      _xml_cache.append("\"");
+    }
+
+    if(!_chrom_name_alt1.empty()) {
+      _xml_cache.append(" chrom_name_alt1=\"");
+      _xml_cache.append(html_escape(_chrom_name_alt1));
+      _xml_cache.append("\"");
+    }
+
+    if(!_refseq_accession.empty()) {
+      _xml_cache.append(" refseq_chrom_acc=\"");
+      _xml_cache.append(html_escape(_refseq_accession));
       _xml_cache.append("\"");
     }
 
@@ -315,7 +348,10 @@ EEDB::Chrom::Chrom(void *xml_node) {
   if((attr = root_node->first_attribute("length")))      { _chrom_length = strtol(attr->value(), NULL, 10); }
   if((attr = root_node->first_attribute("asm")))         { _assembly_name = attr->value(); }
   if((attr = root_node->first_attribute("description"))) { _description = attr->value(); }
-  if((attr = root_node->first_attribute("ncbi_chrom_acc"))) { _ncbi_accession = attr->value(); }
+  if((attr = root_node->first_attribute("ncbi_chrom_acc")))   { _ncbi_accession = attr->value(); }
+  if((attr = root_node->first_attribute("refseq_chrom_acc"))) { _refseq_accession = attr->value(); }
+  if((attr = root_node->first_attribute("ncbi_chrom_name")))  { _ncbi_chrom_name = attr->value(); }
+  if((attr = root_node->first_attribute("chrom_name_alt1")))  { _chrom_name_alt1 = attr->value(); }
 }
 
 
@@ -440,42 +476,6 @@ EEDB::Chrom*  EEDB::Chrom::fetch_by_id(MQDB::Database *db, long int id) {
 }
 
 
-EEDB::Chrom*  EEDB::Chrom::fetch_by_name(MQDB::Database *db, string assembly_name, string chrom_name) {
-  const char* sql =  "SELECT * FROM chrom JOIN assembly USING(assembly_id) \
-  WHERE chrom_name=? and (ncbi_version=? or ucsc_name=?)";
-  return (EEDB::Chrom*) MQDB::fetch_single(EEDB::Chrom::create, db, sql, 
-                                           "sss", chrom_name.c_str(), assembly_name.c_str(), assembly_name.c_str());
-}
-
-
-EEDB::Chrom*  EEDB::Chrom::fetch_by_assembly_ncbi_chrom_accession(EEDB::Assembly *assembly, string chrom_accession) {
-  if(chrom_accession.empty()) { return NULL; }
-  if(assembly == NULL) { return NULL; }
-  if(assembly->database() == NULL) { return NULL; }
-  Database *db = assembly->database();
-  const char* sql =  "SELECT * FROM chrom WHERE ncbi_chrom_acc=? and assembly_id=?";
-  return (EEDB::Chrom*) MQDB::fetch_single(EEDB::Chrom::create, db, sql,
-                                           "sd", chrom_accession.c_str(), assembly->primary_id());
-}
-
-
-EEDB::Chrom*  EEDB::Chrom::fetch_by_name_assembly_id(MQDB::Database *db, string chrom_name, int assembly_id) {
-  const char* sql = "SELECT * FROM chrom WHERE chrom_name=? and assembly_id=?";
-  return (EEDB::Chrom*) MQDB::fetch_single(EEDB::Chrom::create, db, sql, 
-                                           "sd", chrom_name.c_str(), assembly_id);
-}
-
-
-EEDB::Chrom*  EEDB::Chrom::fetch_by_assembly_chrname(Assembly * assembly, string chrom_name) {
-  if(assembly == NULL) { return NULL; }
-  if(assembly->database() == NULL) { return NULL; }
-  Database *db = assembly->database();
-  const char *sql = "SELECT * FROM chrom WHERE chrom_name=? and assembly_id=?";
-  return (EEDB::Chrom*) MQDB::fetch_single(EEDB::Chrom::create, db, sql, 
-                                           "sd", chrom_name.c_str(), assembly->primary_id());
-}
-
-
 vector<DBObject*>  EEDB::Chrom::fetch_all(MQDB::Database *db) {
   const char *sql = "SELECT * FROM chrom ORDER BY chrom_length";
   return MQDB::fetch_multiple(EEDB::Chrom::create, db, sql, "");
@@ -491,14 +491,6 @@ vector<DBObject*>  EEDB::Chrom::fetch_all_by_assembly(Assembly *assembly) {
   vector<DBObject*> chroms = MQDB::fetch_multiple(EEDB::Chrom::create, db, sql, "d", assembly->primary_id());
   for(unsigned int i=0; i<chroms.size(); i++) { ((EEDB::Chrom*)(chroms[i]))->assembly(assembly); }
   return chroms;
-}
-
-
-vector<DBObject*>  EEDB::Chrom::fetch_all_by_assembly_name(Database *db, string assembly_name) {
-  const char *sql = "SELECT * FROM chrom JOIN assembly USING(assembly_id) \
-  WHERE (ncbi_version=? or ucsc_name=?) ORDER BY chrom_length";
-  return MQDB::fetch_multiple(EEDB::Chrom::create, db, sql, 
-                              "ss", assembly_name.c_str(), assembly_name.c_str());
 }
 
 
@@ -519,9 +511,10 @@ bool EEDB::Chrom::store(MQDB::Database *db) {
   if(db==NULL) { return false; }
   if(check_exists_db(db)) { return true; }
   
-  db->do_sql("INSERT ignore INTO chrom (chrom_name, chrom_type, description, ncbi_chrom_acc, assembly_id, chrom_length) \
-             VALUES(?,?,?,?,?,?)", "ssssdd",
-             _chrom_name.c_str(), _chrom_type.c_str(), _description.c_str(), _ncbi_accession.c_str(), assembly_id(), _chrom_length);
+  db->do_sql("INSERT ignore INTO chrom (chrom_name, chrom_type, description, ncbi_chrom_acc, ncbi_chrom_name, chrom_name_alt1, refseq_chrom_acc, assembly_id, chrom_length) \
+             VALUES(?,?,?,?,?,?,?,?,?)", "sssssssdd",
+             _chrom_name.c_str(), _chrom_type.c_str(), _description.c_str(), _ncbi_accession.c_str(),
+             _ncbi_chrom_name.c_str(), _chrom_name_alt1.c_str(), _refseq_accession.c_str(), assembly_id(), _chrom_length);
              
   return check_exists_db(db);  //checks the database and sets the id
 }
@@ -572,8 +565,14 @@ void  EEDB::Chrom::init_from_row_map(map<string, dynadata> &row_map) {
   _chrom_name      = row_map["chrom_name"].i_string;
   _chrom_type      = row_map["chrom_type"].i_string;
   _description     = row_map["description"].i_string;
+  if(row_map["ncbi_chrom_name"].type == MQDB::STRING) {
+    _ncbi_accession = row_map["ncbi_chrom_name"].i_string;
+  }
   if(row_map["ncbi_chrom_acc"].type == MQDB::STRING) {
     _ncbi_accession = row_map["ncbi_chrom_acc"].i_string;
+  }
+  if(row_map["refseq_chrom_acc"].type == MQDB::STRING) {
+    _ncbi_accession = row_map["refseq_chrom_acc"].i_string;
   }
 
   _assembly_id     = row_map["assembly_id"].i_int;

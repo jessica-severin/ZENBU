@@ -1,4 +1,4 @@
-/*  $Id: ZDXstream.cpp,v 1.56 2016/04/19 06:39:33 severin Exp $ */
+/*  $Id: ZDXstream.cpp,v 1.57 2016/11/30 10:30:02 severin Exp $ */
 
 /*******
 
@@ -1531,7 +1531,7 @@ bool  EEDB::ZDX::ZDXstream::build_feature_name_index() {
     offset_total += cnt;
     double discrimination = (double)cnt/znode_count;
     if(discrimination > 0.9) {
-      fprintf(stderr, "non-discriminating mdkey [%s] %1.2f\n", mdkey_str.c_str(), discrimination);
+      //fprintf(stderr, "non-discriminating mdkey [%s] %1.2f\n", mdkey_str.c_str(), discrimination);
       discrimination_effect += cnt;
       (*it1).second.clear();
     }
