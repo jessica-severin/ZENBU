@@ -44,6 +44,7 @@ echo $ZENBU_SRC_DIR
 #copy the perl lib objects to /usr/share/zenbu/src/ZENBU/lib
 mkdir /usr/share/zenbu/src/ZENBU
 cp -r $ZENBU_SRC_DIR/lib /usr/share/zenbu/src/ZENBU/
+cp -r $ZENBU_SRC_DIR/sql /usr/share/zenbu/src/ZENBU/
 
 cd $ZENBU_SRC_DIR/c++
 make
