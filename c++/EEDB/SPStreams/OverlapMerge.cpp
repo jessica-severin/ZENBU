@@ -1,4 +1,4 @@
-/* $Id: OverlapMerge.cpp,v 1.3 2016/08/09 06:32:51 severin Exp $ */
+/* $Id: OverlapMerge.cpp,v 1.4 2017/02/22 07:34:23 severin Exp $ */
 
 /***
 
@@ -487,6 +487,7 @@ EEDB::Feature* EEDB::SPStreams::OverlapMerge::_process_object(MQDB::DBObject* ob
   */
   
   if(finished_cluster) {
+    finished_cluster->primary_id(-1); //unlink from original object
     finished_cluster->calc_significance(_expression_mode);
     //printf STDERR "finished %s\n", $finished_cluster->display_desc;
     return finished_cluster;
@@ -517,7 +518,7 @@ void EEDB::SPStreams::OverlapMerge::_merge_cluster(EEDB::Feature* cluster, EEDB:
   cluster->metadataset()->merge_metadataset(mdset);
   cluster->metadataset()->remove_duplicates();
   string name2 = feature->primary_name();
-  cluster->metadataset()->add_metadata("alt_name", name2);
+  cluster->metadataset()->add_metadata("merge_alt_names", name2);
 
   //merge expression
   vector<EEDB::Expression*>  expression = feature->expression_array();

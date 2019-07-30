@@ -1,4 +1,4 @@
-/* $Id: Metadata.cpp,v 1.96 2016/04/13 08:49:26 severin Exp $ */
+/* $Id: Metadata.cpp,v 1.97 2018/08/13 03:44:03 severin Exp $ */
 
 /***
 NAME - EEDB::Metadata
@@ -370,6 +370,12 @@ vector<DBObject*>  EEDB::Metadata::fetch_all(MQDB::Database *db) {
   return MQDB::fetch_multiple(EEDB::Metadata::create, db, sql, "");
 }
 
+vector<DBObject*>  EEDB::Metadata::fetch_all_by_assembly_id(MQDB::Database *db, long int id) {
+  const char *sql = "SELECT m.* FROM metadata m join assembly_2_metadata using(metadata_id) WHERE assembly_id=?";
+  //$sql .= sprintf(" AND data_type=\"%s\"", $type) if($type);
+  return MQDB::fetch_multiple(EEDB::Metadata::create, db, sql, "d", id);
+}
+
 vector<DBObject*>  EEDB::Metadata::fetch_all_by_feature_id(MQDB::Database *db, long int id) {
   const char *sql = "SELECT m.* FROM metadata m join feature_2_metadata using(metadata_id) WHERE feature_id=?";
   //$sql .= sprintf(" AND data_type=\"%s\"", $type) if($type);
@@ -422,6 +428,8 @@ vector<DBObject*>  EEDB::Metadata::fetch_all_by_track_cache_id(MQDB::Database *d
 }
 
 vector<DBObject*>  EEDB::Metadata::fetch_all_by_configuration_id(MQDB::Database *db, long int id) {
+  //if(!db) { fprintf(stderr, "Metadata::fetch_all_by_configuration_id no db\n"); }
+  //fprintf(stderr, "Metadata::fetch_all_by_configuration_id %ld\n", id);
   const char *sql = "SELECT m.* FROM metadata m join configuration_2_metadata using(metadata_id) where configuration_id = ?";
   return MQDB::fetch_multiple(EEDB::Metadata::create, db, sql, "d", id);
 }
@@ -433,6 +441,18 @@ vector<DBObject*>  EEDB::Metadata::fetch_all_by_configuration_id(MQDB::Database 
 //
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
+bool EEDB::Metadata::store_link_to_assembly(EEDB::Assembly *obj) {
+  if(obj==NULL) { return false; }
+  if(obj->database() == NULL) { return false; }
+  if(obj->primary_id() == -1) { return false; }
+  
+  MQDB::Database *db = obj->database();
+  if(!check_exists_db(db)) { if(!store(db)) { return false; } }
+  
+  db->do_sql("INSERT ignore INTO assembly_2_metadata (assembly_id, metadata_id) VALUES(?,?)", "dd",
+             obj->primary_id(), _primary_db_id);
+  return true;
+}
 
 bool EEDB::Metadata::store_link_to_feature(EEDB::Feature *obj) {
   if(obj==NULL) { return false; }
@@ -580,6 +600,7 @@ bool EEDB::Metadata::store_link_to_track_cache(EEDB::TrackCache *obj) {
 //
 ////////////////////////////////////////////////////////////////////////////////////////////
 
+//TODO: unlink methods are all stubs, need to implement
 bool EEDB::Metadata::unlink_from_feature(EEDB::Feature *obj) {
   return false;
 }

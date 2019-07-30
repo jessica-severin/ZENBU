@@ -1,4 +1,4 @@
-/* $Id: User.cpp,v 1.79 2016/10/05 08:52:58 severin Exp $ */
+/* $Id: User.cpp,v 1.80 2018/08/13 03:36:20 severin Exp $ */
 
 /***
 
@@ -103,6 +103,7 @@ void EEDB::User::init() {
   _email_identity.clear();
   _nickname.clear();
   _hmac_secretkey.clear();
+  _status.clear();
   _user_registry = NULL;
   _metadataset = NULL;
   _private_collaboration = NULL;
@@ -160,13 +161,14 @@ bool EEDB::User::match(string user_identity) {
 
 
 void EEDB::User::_xml_start(string &xml_buffer) {
-  xml_buffer.append("<eedb_user nickname=\"");
-  xml_buffer.append(html_escape(_nickname));
+  xml_buffer += "<eedb_user nickname=\"" + _nickname +"\"";
   if(!_email_identity.empty()) {
-    xml_buffer.append("\" valid_email=\"");
-    xml_buffer.append(html_escape(_email_identity));
+    xml_buffer += " valid_email=\"" + _email_identity + "\"";
   }
-  xml_buffer.append("\" >");
+  if(!_status.empty()) {
+    xml_buffer += " status=\"" + _status + "\"";
+  }
+  xml_buffer.append(" >");
   
   if(!_has_password) { xml_buffer.append("<no_password/>"); }
 }
@@ -250,6 +252,7 @@ string    EEDB::User::uuid() { return _uuid; }
 string    EEDB::User::nickname() { return _nickname; }
 string    EEDB::User::hmac_secretkey() { return _hmac_secretkey; }
 string    EEDB::User::email_identity() { return _email_identity; }
+string    EEDB::User::status() { return _status; }
 
 void EEDB::User::generate_hmac_secretkey() {
   if(database() == NULL) { return; }
@@ -636,6 +639,9 @@ void  EEDB::User::init_from_row_map(map<string, dynadata> &row_map) {
   
   _has_password = true;
   if(row_map["password_hash"].i_string.empty()) { _has_password = false; }
+
+  if(row_map["member_status"].type == MQDB::STRING) { _status = row_map["member_status"].i_string; }
+  if(row_map["editor_status"].type == MQDB::STRING) { _status = row_map["editor_status"].i_string; }
 }
 
 vector<DBObject*>  EEDB::User::fetch_all(MQDB::Database *db) {

@@ -1,4 +1,4 @@
-/* $Id: OSCFileParser.h,v 1.48 2013/04/09 08:34:02 severin Exp $ */
+/* $Id: OSCFileParser.h,v 1.58 2019/02/07 07:19:15 severin Exp $ */
 
 /***
 
@@ -75,7 +75,9 @@ typedef enum {SIMPLE_FEATURE, SIMPLE_EXPRESSION, SUBFEATURE, SKIPMETADATA, SKIPE
 
 namespace Tools {
 
-typedef enum {IGNORE, FEATURE, GENOMIC, METADATA, EXPRESSION } t_oscnamespace;
+typedef enum {IGNORE, FEATURE, GENOMIC, METADATA, EXPRESSION, EDGE } t_oscnamespace;
+
+typedef enum { UNDEF, BASE0, BASE1, EDGES } t_coordinates;
 
 class OSC_column {
   public:
@@ -101,11 +103,12 @@ class OSC_column {
    
    string osc_namespace() {
      switch(oscnamespace) {
-       case IGNORE:      return "";
+       case IGNORE:      return "ignore";
        case FEATURE:     return "feature";
        case GENOMIC:     return "genomic";
        case METADATA:    return "metadata";
        case EXPRESSION:  return "expression";
+       case EDGE      :  return "edge";
        default:          return "";
      }
    }
@@ -136,24 +139,30 @@ class OSCFileParser : public MQDB::DBObject {
     bool     init_from_xml_file(string path);
 
     static void  load_source_metadata(bool value) { _load_source_metadata = value; }
+    static void  sparse_expression(bool value) { _sparse_expression = value; }
+    static void  sparse_metadata(bool value) { _sparse_metadata = value; }
 
     EEDB::Feature*             convert_dataline_to_feature(char* line, 
                                                         t_outputmode outputmode,
                                                         map<string, EEDB::Datatype*> &datatypes,
                                                         map<string, bool> &sourceid_filter
                                                        );
+    EEDB::Edge*                convert_dataline_to_edge(char* line);
+    EEDB::Edge*                convert_segmented_columns_to_edge();
     string                     output_current_dataline();
     
     void                       display_info();
     string                     display_desc();
+    string                     error_message();
     
     string                     oscheader();  //generates oscheader data for configuration
     string                     default_assembly_name();
     EEDB::Assembly*            default_assembly();
     EEDB::FeatureSource*       primary_feature_source();
+    EEDB::EdgeSource*          primary_edge_source();
     EEDB::Peer*                peer() { return _peer; }
     vector<EEDB::DataSource*>  datasources() { return _data_sources; }
-    
+    t_coordinates              coordinate_system() { return _coordinate_system; }
     
     void                       get_genomic_column_indexes(int &chrom_idx, int &start_idx, int &end_idx, int &strand_idx);
     vector<OSC_column*>        get_expression_columns();
@@ -163,15 +172,23 @@ class OSCFileParser : public MQDB::DBObject {
     void                       remove_ignore_columns();
     void                       reset_to_oscdb();
 
-    bool                       sort_input_file();
+    string                     sort_input_file();
 
+    EEDB::EdgeSource*          get_edgesource(string category);
+
+    //low level interface for external object creation
+    bool                       segment_line(char* line); //for external parsing
+    vector<OSC_column>*        columns();
+  
 
   //internal variables and methods, should not be considered open API
   private:
     vector<EEDB::DataSource*>               _data_sources;
     map<string, EEDB::DataSource*>          _sources_cache;
     EEDB::FeatureSource*                    _primary_feature_source;
+    EEDB::EdgeSource*                       _primary_edge_source;
     map<string, EEDB::FeatureSource*>       _category_featuresources;
+    map<string, EEDB::EdgeSource*>          _category_edgesources;
     EEDB::EdgeSource*                       _subfeature_edgesource;
     EEDB::Assembly*                         _default_assembly;
     map<string, EEDB::Assembly*>            _assemblies;
@@ -182,17 +199,19 @@ class OSCFileParser : public MQDB::DBObject {
     map<string,string>               _column_descriptions;
     vector<OSC_column>               _columns;
     enum { OSCTAB, OSCSPACE }        _segment_mode;
-    enum { UNDEF, BASE0, BASE1 }     _coordinate_system;
-    bool                             _sparse_expression;
+    t_coordinates                    _coordinate_system;
+    static bool                      _sparse_expression;
+    static bool                      _sparse_metadata;
     static bool                      _load_source_metadata;
 
     int                              _idx_asm, _idx_chrom, _idx_start, _idx_end, _idx_strand;
     int                              _idx_name, _idx_fid, _idx_score, _idx_fsrc_category, _idx_fsrc_id;
-    int                              _idx_mapcount;
+    int                              _idx_mapcount, _idx_demux_fsrc, _idx_demux_exp;
     int                              _idx_bed_block_count, _idx_bed_block_sizes, _idx_bed_block_starts;
     int                              _idx_bed_thickstart, _idx_bed_thickend;
     int                              _idx_sam_flag, _idx_cigar, _idx_sam_opt;
     int                              _idx_ctg_cigar, _idx_gff_attributes;
+    int                              _idx_edge_f1, _idx_edge_f2;
 
     void                             _parse_column_names(vector<string> &columns);
     void                             _process_column(OSC_column *colobj);
@@ -200,7 +219,6 @@ class OSCFileParser : public MQDB::DBObject {
     void                             _get_experiment(OSC_column *colobj);
     void                             _parse_OSCheader_metadata_line(char* line);
     void                             _parse_OSCheader_experiment_metadata(char* line);
-    bool                             _segment_line(char* line);
     void                             _transfer_parameters_to_source(EEDB::DataSource* source);
     EEDB::FeatureSource*             _get_category_featuresource(string category);
     EEDB::Chrom*                     _get_chrom(const char* chrom_name);
@@ -217,6 +235,7 @@ class OSCFileParser : public MQDB::DBObject {
   //used for callback functions, should not be considered open API
   public:    
     void    _xml(string &xml_buffer);
+    bool    _segment_line(char* line); //for external parsing
 
   
   //for testing and debug

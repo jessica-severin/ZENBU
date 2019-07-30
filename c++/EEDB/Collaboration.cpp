@@ -1,4 +1,4 @@
-/* $Id: Collaboration.cpp,v 1.106 2016/10/06 05:17:31 severin Exp $ */
+/* $Id: Collaboration.cpp,v 1.108 2019/02/07 07:15:16 severin Exp $ */
 
 /***
 
@@ -223,10 +223,6 @@ string EEDB::Collaboration::min_xml() {
 
 
 void EEDB::Collaboration::_xml_start(string &xml_buffer) {
-  char buffer[2048];
-
-  _load_members();
-  
   xml_buffer.append("<collaboration name=\"");
   xml_buffer.append(html_escape(_display_name));
   xml_buffer.append("\" uuid=\"");
@@ -237,9 +233,6 @@ void EEDB::Collaboration::_xml_start(string &xml_buffer) {
   xml_buffer.append(html_escape(_member_status));
   xml_buffer.append("\" ");
   
-  snprintf(buffer, 2040, "member_count=\"%ld\" ", _members.size());
-  xml_buffer.append(buffer);
-
   if(open_to_public()) { xml_buffer += "open_to_public=\"y\" "; }
 
   xml_buffer.append(">");
@@ -265,7 +258,8 @@ void EEDB::Collaboration::_xml(string &xml_buffer) {
   xml_buffer.append("\n");
 
   char buffer[2048];
-  if((_members.size()>0) && (_member_status == "OWNER" || _member_status == "MEMBER" || _member_status == "ADMIN")) {
+  if(_member_status == "OWNER" || _member_status == "MEMBER" || _member_status == "ADMIN") {
+    _load_members();
     snprintf(buffer, 2040, "<member_users count=\"%d\" >\n" , (int)_members.size());
     xml_buffer.append(buffer);
     for(unsigned int i=0; i<_members.size(); i++) {
@@ -336,7 +330,8 @@ string EEDB::Collaboration::desc_xml() {
   xml_buffer.append("\n");
 
   char buffer[2048];
-  if((_members.size()>0) && (_member_status == "OWNER" || _member_status == "MEMBER" || _member_status == "ADMIN")) {
+  if(_member_status == "OWNER" || _member_status == "MEMBER" || _member_status == "ADMIN") {
+    _load_members();
     snprintf(buffer, 2040, "<member_users count=\"%d\" >\n" , (int)_members.size());
     xml_buffer.append(buffer);
     for(unsigned int i=0; i<_members.size(); i++) {
@@ -348,29 +343,29 @@ string EEDB::Collaboration::desc_xml() {
   if(_member_status == "OWNER" || _member_status == "ADMIN") {
     metadataset()->xml(xml_buffer);
 
-    vector<MQDB::DBObject*> requests = EEDB::User::fetch_requested_users_by_collaboration(this);
-    if(requests.size()>0) {
-      snprintf(buffer, 2040, "<user_requests count=\"%d\" >" , (int)requests.size());
-      xml_buffer.append(buffer);
-      for(unsigned int i=0; i<requests.size(); i++) {
-        EEDB::User *user = (EEDB::User*)requests[i];
-        user->simple_xml(xml_buffer);
-        user->release();
-      }
-      xml_buffer.append("</user_requests>\n");
-    }
+    //vector<MQDB::DBObject*> requests = EEDB::User::fetch_requested_users_by_collaboration(this);
+    //if(requests.size()>0) {
+    //  snprintf(buffer, 2040, "<user_requests count=\"%d\" >" , (int)requests.size());
+    //  xml_buffer.append(buffer);
+    //  for(unsigned int i=0; i<requests.size(); i++) {
+    //    EEDB::User *user = (EEDB::User*)requests[i];
+    //    user->simple_xml(xml_buffer);
+    //    user->release();
+    //  }
+    //  xml_buffer.append("</user_requests>\n");
+    //}
 
-    vector<MQDB::DBObject*> invites = EEDB::User::fetch_invited_users_by_collaboration(this);
-    if(invites.size()>0) {
-      snprintf(buffer, 2040, "<user_invitations count=\"%d\" >" , (int)invites.size());
-      xml_buffer.append(buffer);
-      for(unsigned int i=0; i<invites.size(); i++) {
-        EEDB::User *user = (EEDB::User*)invites[i];
-        user->simple_xml(xml_buffer);
-        user->release();
-      }
-      xml_buffer.append("</user_invitations>\n");
-    }    
+    //vector<MQDB::DBObject*> invites = EEDB::User::fetch_invited_users_by_collaboration(this);
+    //if(invites.size()>0) {
+    //  snprintf(buffer, 2040, "<user_invitations count=\"%d\" >" , (int)invites.size());
+    //  xml_buffer.append(buffer);
+    //  for(unsigned int i=0; i<invites.size(); i++) {
+    //    EEDB::User *user = (EEDB::User*)invites[i];
+    //    user->simple_xml(xml_buffer);
+    //    user->release();
+    //  }
+    //  xml_buffer.append("</user_invitations>\n");
+    //}    
   } else if(_member_status == "MEMBER") {
     metadataset()->xml(xml_buffer);
   } else {
@@ -498,7 +493,7 @@ bool  EEDB::Collaboration::validate_user(EEDB::User* user) {
 }
 
 string EEDB::Collaboration::member_status(EEDB::User* user) {
-  //used for non-database created collaborations (like the curated_collaboration)
+  //loads members from database and confirms status but does not set internal _member_status
   string status = "not_member";
   if(!user) { return status; }
   _load_members();
@@ -524,6 +519,7 @@ EEDB::MetadataSet* EEDB::Collaboration::metadataset() {
       _metadataset->add_metadata(mdata);
     }
     _metadataset->remove_metadata_like("eedb:sharedb_peer_uuid", "");  //old system
+    _metadataset->remove_metadata_like("keyword", "");  //old system
     _metadataset->remove_duplicates();
   }
   return _metadataset;

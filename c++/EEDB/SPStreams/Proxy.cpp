@@ -1,4 +1,4 @@
-/* $Id: Proxy.cpp,v 1.6 2013/04/08 07:39:12 severin Exp $ */
+/* $Id: Proxy.cpp,v 1.7 2019/03/26 07:09:13 severin Exp $ */
 
 /***
 
@@ -171,6 +171,11 @@ void EEDB::SPStreams::Proxy::_xml(string &xml_buffer) {
   xml_buffer.append("\" name=\"");
   xml_buffer.append(proxy_name());
   xml_buffer.append("\">");
+  //if(_proxy_stream) {  
+  //  xml_buffer.append("<proxy_stream>");
+  //  _proxy_stream->xml(xml_buffer);
+  //  xml_buffer.append("</proxy_stream>");
+  //}
   _xml_end(xml_buffer);  //from superclass
 }
 

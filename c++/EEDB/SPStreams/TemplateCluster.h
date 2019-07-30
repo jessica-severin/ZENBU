@@ -1,4 +1,4 @@
-/* $Id: TemplateCluster.h,v 1.20 2013/11/26 08:45:52 severin Exp $ */
+/* $Id: TemplateCluster.h,v 1.21 2019/02/07 07:08:07 severin Exp $ */
 
 /***
 
@@ -101,6 +101,7 @@ class TemplateCluster : public EEDB::SPStreams::MergeStreams {
     bool                         _skip_empty_templates;
     bool                         _template_stream_empty;
     bool                         _overlap_check_subfeatures;
+    long int                     _overlap_distance;
     map<string,bool>             _subfeat_filter_categories;
     deque<EEDB::Feature*>        _template_buffer;
     deque<EEDB::Feature*>        _completed_templates;

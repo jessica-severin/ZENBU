@@ -151,6 +151,8 @@ int main(int argc, char *argv[]) {
     if(arg == "-missing_sources") { 
       _parameters["mode"] = "missing_sources";
     }
+    if(arg == "-share_collab")    { _parameters["share_collab"] = argvals[0]; }
+    if(arg == "-share_missing")   { _parameters["share_missing"] = "true"; }
     
   }
   
@@ -183,6 +185,8 @@ void usage() {
   printf("  -loadxml <xml_file>       : load configurations from XML file\n");
   printf("  -ignore_collab            :   ignore collaboration when loading (makes private)\n");
   printf("  -missing_sources          : show missing sources from configuration(s)\n");
+  printf("    -share_collab <uuid>    :   test sharing for this collaboration\n");
+  printf("    -share_missing          :   share the missing sources to share_collab collaboration\n");
   printf("zenbu_config_manager v%s\n", EEDB::WebServices::WebBase::zenbu_version);
   exit(1);  
 }
@@ -211,18 +215,27 @@ bool  get_cmdline_user() {
   config_text = (char*)malloc(cfg_len+1);
   memset(config_text, 0, cfg_len+1);
   read(fildes, config_text, cfg_len);
-  char* email = strtok(config_text, " \t\n");
-  char* secret = strtok(NULL, " \t\n");
-  
-  fprintf(stderr, "[%s] -> [%s]\n", email, secret);
-  
-  _user_profile = new EEDB::User();
-  if(email)  { _user_profile->email_address(email); }
-  if(secret) { _user_profile->hmac_secretkey(secret); }
-  
+
+  string email = strtok(config_text, " \t\n");
+  string secret = strtok(NULL, " \t\n");
+
   free(config_text);
   close(fildes);
-  
+
+  printf("user [%s] -> [%s]\n", email.c_str(), secret.c_str());
+
+  MQDB::Database *userDB = NULL;
+  if(_userDB) { userDB = _userDB; }
+  else if(_webservice) { userDB = _webservice->userDB(); }
+
+  EEDB::User *user = EEDB::User::fetch_by_email(userDB, email);
+  if(user && user->hmac_secretkey() == secret) {
+    _user_profile = user;
+    fprintf(stderr, "%s\n", user->xml().c_str());
+    _webservice->set_user_profile(_user_profile);
+    return true;
+  }
+
   return true;
 }
 
@@ -374,8 +387,35 @@ void missing_sources() {
   } else {
     configs = configservice->get_configs_search();
   }
-  
-  printf("<missing_sources>\n");
+
+  MQDB::Database *userDB = NULL;
+  if(_userDB) { userDB = _userDB; }
+  else if(_webservice) { userDB = _webservice->userDB(); }
+
+  EEDB::Collaboration *share_collab = NULL;
+  if(!_parameters["share_collab"].empty()) {
+    if(_user_profile) {
+      share_collab = EEDB::Collaboration::fetch_by_uuid(_user_profile, _parameters["share_collab"]);
+    } else {
+      share_collab = EEDB::Collaboration::fetch_by_uuid(userDB, _parameters["share_collab"]);
+    }
+    if(!share_collab) {
+      printf("WARNING can not find share collaboration [%s]\n", _parameters["share_collab"].c_str());
+    } else {
+      printf("share missing into %s\n", share_collab->simple_xml().c_str());
+    }
+  }
+
+  EEDB::WebServices::WebBase *public_webservice = new EEDB::WebServices::WebBase();
+  public_webservice->parse_config_file("/etc/zenbu/zenbu.conf");
+  public_webservice->init_service_request();
+  for(param = _parameters.begin(); param != _parameters.end(); param++) {
+    public_webservice->set_parameter((*param).first, (*param).second);
+  }
+  public_webservice->postprocess_parameters();
+
+
+  //printf("<missing_sources>\n");
   long total_configs=0;
   for(unsigned i=0; i<configs.size(); i++) {
     EEDB::Configuration *config = (EEDB::Configuration*)configs[i];
@@ -390,19 +430,32 @@ void missing_sources() {
     printf("  ====== missing sources =======\n");
     
     map<string, EEDB::DataSource*> sources = config->get_all_data_sources();
-    printf("%ld sources\n", sources.size());
+    printf("configuration has %ld total sources.. search for missing....\n", sources.size());
 
-    EEDB::SPStreams::FederatedSourceStream* stream = configservice->secured_federated_source_stream();
+    EEDB::SPStreams::FederatedSourceStream* public_stream = public_webservice->secured_federated_source_stream();
+    EEDB::SPStreams::FederatedSourceStream* stream2 = configservice->secured_federated_source_stream();
 
     map<string, EEDB::DataSource*>::iterator it1;
     for(it1=sources.begin(); it1!=sources.end(); it1++) {
       if((*it1).second) { continue; }
       string dbid = (*it1).first;
-      stream->add_source_id_filter(dbid);
+      public_stream->add_source_id_filter(dbid);
+      stream2->add_source_id_filter(dbid);
     }
     
-    stream->stream_data_sources();  
-    while(EEDB::DataSource* source = (EEDB::DataSource*)stream->next_in_stream()) {
+    //if there is share_collab, also add the collab into the public "compare against" search space
+    if(share_collab) {
+      public_stream->add_seed_peer(share_collab->group_registry());
+    }
+    
+    //stream peers from my space to make sure they are in cache
+    stream2->stream_peers();
+    while(EEDB::Peer *peer = (EEDB::Peer*)stream2->next_in_stream()) {
+      if(peer->classname() != EEDB::Peer::class_name) { continue; }
+    }
+
+    public_stream->stream_data_sources();
+    while(EEDB::DataSource* source = (EEDB::DataSource*)public_stream->next_in_stream()) {
       if((source->classname() != EEDB::Experiment::class_name) &&
          (source->classname() != EEDB::FeatureSource::class_name)) { continue; }
       
@@ -418,16 +471,29 @@ void missing_sources() {
       if((*it1).second) { continue; }
       string dbid = (*it1).first;
       //printf("  %s\n", dbid.c_str());
-      printf("%s,", dbid.c_str());
+      printf("  missing %s ", dbid.c_str());
+
+      if(share_collab && (_parameters["share_missing"]=="true")) {
+        string   uuid, objClass;
+        long int objID;
+        MQDB::unparse_dbid(dbid, uuid, objID, objClass);
+        EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
+        if(!peer) { printf("  error can't find peer %s", uuid.c_str()); }
+        else {
+          string error = share_collab->share_peer_database(peer);
+          if(!error.empty()) { printf("  error: %s", error.c_str()); }
+          else { printf(" shared to : %s", share_collab->display_name().c_str()); }
+        }
+      }
+      printf("\n");
       miss_count++;
     }
-    printf("\n%ld missing\n", miss_count);
+    printf("\ntotal %ld missing\n", miss_count);
     printf("  ==============================\n");
-    
     
     printf("</configuration>\n");
   }
-  printf("</missing_sources>\n");
+  //printf("</missing_sources>\n");
   
   fprintf(stderr,"fetched configs = %ld\n", total_configs);
 }
@@ -440,6 +506,7 @@ void missing_sources() {
 
 bool load_from_xmlfile() {
   MQDB::Database *userDB = NULL;
+  rapidxml::xml_attribute<> *attr;
   
   if(_userDB) { userDB = _userDB; }
   else if(_webservice) { userDB = _webservice->userDB(); }
@@ -483,51 +550,59 @@ bool load_from_xmlfile() {
   }
   
   //configurations
-  long count=0;
+  long total_count=0, load_count=0;;
   rapidxml::xml_node<> *node = root_node->first_node("configuration");
   while(node) {   
+    total_count++;
+    string uuid;
+    if((attr = node->first_attribute("uuid"))) { uuid = attr->value(); }
     EEDB::Configuration *config = new EEDB::Configuration(node);
-    if(!config) { printf("ERROR parsing config node\n"); }
-    else {
-      //printf("%s\n", config->simple_xml().c_str());
+    if(!config || !(config->metadataset()->has_metadata_like("configXML",""))) { 
+      printf("ERROR parsing configuration [%s]\n", uuid.c_str()); 
+      node = node->next_sibling("configuration");
+      continue;
+    }
+
+    //printf("%s\n", config->simple_xml().c_str());
+    
+    EEDB::Configuration *cfg2 = EEDB::Configuration::fetch_by_uuid(userDB, config->uuid());
+    if(cfg2) { 
+      //printf("config already loaded [%s] %s -- %s\n", config->uuid().c_str(), config->display_name().c_str(), config->owner()->email_identity().c_str());
+      cfg2->release();
+      node = node->next_sibling("configuration");
+      continue;
+    }
       
-      EEDB::Configuration *cfg2 = EEDB::Configuration::fetch_by_uuid(userDB, config->uuid());
-      if(cfg2) { 
-        printf("config already loaded [%s] \n", config->uuid().c_str());
-        cfg2->release();
+    EEDB::MetadataSet *mdset = config->metadataset();
+    mdset->remove_duplicates();
+    mdset->extract_keywords();
+      
+    if(config->owner()) {
+      EEDB::User *user = EEDB::User::fetch_by_email(userDB, config->owner()->email_identity());
+      if(!user) { 
+        printf("can not find user [%s]\n", config->owner()->email_identity().c_str());
         node = node->next_sibling("configuration");
         continue;
       }
+      if(user) { config->owner(user); }
+    } else {
+      printf("config missing owner\n");
+      node = node->next_sibling("configuration");
+      continue;
+    }
       
-      count++;
-
-      EEDB::MetadataSet *mdset = config->metadataset();
-      mdset->remove_duplicates();
-      mdset->extract_keywords();
+    printf("load [%s] -- %s\n", config->uuid().c_str(), config->display_name().c_str());
+    config->store(userDB);
+    load_count++;
       
-      if(config->owner()) {
-        EEDB::User *user = EEDB::User::fetch_by_email(userDB, config->owner()->email_identity());
-        if(!user) { 
-          printf("can not find user [%s]-- need to create\n", config->owner()->email_identity().c_str());
-          //TODO: create user?
-        }
-        if(user) { config->owner(user); }
-      } else {
-        printf("config missing owner\n");
+    if(_import_collaboration && config->collaboration()) {
+      EEDB::Collaboration *collab = EEDB::Collaboration::fetch_by_uuid(userDB, config->collaboration()->group_uuid());
+      if(!collab) { 
+        printf("WARNING can not find collaboration [%s]-- need to create\n", config->collaboration()->group_uuid().c_str());
+        //TODO: create collaboration?
       }
-      
-      printf("load [%s] -- %s\n", config->uuid().c_str(), config->display_name().c_str());
-      config->store(userDB);
-      
-     if(_import_collaboration && config->collaboration()) {
-        EEDB::Collaboration *collab = EEDB::Collaboration::fetch_by_uuid(userDB, config->collaboration()->group_uuid());
-        if(!collab) { 
-          printf("can not find collaboration [%s]-- need to create\n", config->collaboration()->group_uuid().c_str());
-          //TODO: create collaboration?
-        }
-        if(collab) { 
-          config->link_to_collaboration(collab);
-        }
+      if(collab) { 
+        config->link_to_collaboration(collab);
       }
     }
 
@@ -536,7 +611,7 @@ bool load_from_xmlfile() {
   
   free(config_text);
   doc.clear();
-  fprintf(stderr, "loaded %ld configs\n",count);
+  fprintf(stderr, "loaded %ld / %ld configs\n",load_count, total_count);
   return true;
 }
 

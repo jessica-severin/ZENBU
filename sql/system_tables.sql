@@ -115,6 +115,17 @@ CREATE TABLE `collaboration_2_user` (
   PRIMARY KEY  (`collaboration_id`,`user_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
+--
+-- Table structure for table `collaboration_2_configuration`
+--
+
+CREATE TABLE `collaboration_2_configuration` (
+  `collaboration_id` int(11) NOT NULL default '0',
+  `configuration_id` int(11) NOT NULL default '0',
+  PRIMARY KEY  (`collaboration_id`,`configuration_id`),
+  KEY `collaboration_id` (`collaboration_id`),
+  KEY `configuration_id` (`configuration_id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
 --
 -- Table structure for table `sessions`
@@ -260,6 +271,7 @@ CREATE TABLE `configuration` (
   `configuration_id` int(11) NOT NULL auto_increment,
   `user_id`          int(11) default -1,
   `uuid`             char(64) NOT NULL default '',
+  `fixed_id`         varchar(128),
   `config_type`      enum('VIEW','TRACK','SCRIPT','AUTOSAVE') NOT NULL default 'VIEW',
   `collaboration_id` int(11) default -1,
   `access_count`     int(11)  NOT NULL default 1,
@@ -267,7 +279,8 @@ CREATE TABLE `configuration` (
   `last_access`      timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
   PRIMARY KEY  (`configuration_id`),
   KEY `config_type` (`config_type`),
-  UNIQUE KEY `uniq_uuid` (`uuid`)
+  UNIQUE KEY `uniq_uuid` (`uuid`),
+  UNIQUE KEY `fixed_id` (`fixed_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 
@@ -285,6 +298,21 @@ CREATE TABLE `configuration_2_symbol` (
   KEY `symbol_id` (`symbol_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
+CREATE TABLE `configuration_fixed_editors` (
+  `fixed_id` varchar(128) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `editor_status` enum('OWNER','EDITOR') NOT NULL default 'EDITOR',
+  KEY `fixed_id` (`fixed_id`),
+  KEY `user_id` (`user_id`),
+  UNIQUE 'editor' (fixed_id, user_id)
+);
+
+CREATE TABLE `configuration_fixed_history` (
+  `fixed_id`         varchar(128) NOT NULL,
+  `configuration_id` int(11) NOT NULL,
+  KEY `fixed_id` (`fixed_id`),
+  KEY `configuration_id` (`configuration_id`)
+);
 
 --
 -- Table structure for job queueing system

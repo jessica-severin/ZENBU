@@ -20,7 +20,7 @@ all:	samtools
 
 clean:
 	rm -f *.o zenbu_test
-	rm -rf samtools-1.2
+	rm -rf samtools-1.5
 	$(MAKE) -C lz4 clean
 	$(MAKE) -C EEDB clean
 	$(MAKE) -C MQDB clean
@@ -31,8 +31,8 @@ clean:
 	$(MAKE) -C tests clean
 
 samtools:
-	if [ ! -d samtools-1.2 ] ; then  tar xjf samtools-1.2.tar.bz2 ; fi
-	$(MAKE) -C samtools-1.2
+	if [ ! -d samtools-1.5 ] ; then  tar xjf samtools-1.5.tar.bz2 ; fi
+	$(MAKE) -C samtools-1.5
 
 cleanobj :
 	rm *.o

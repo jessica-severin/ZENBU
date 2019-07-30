@@ -1,4 +1,4 @@
-/* $Id: Symbol.cpp,v 1.64 2013/04/08 05:47:52 severin Exp $ */
+/* $Id: Symbol.cpp,v 1.65 2018/04/12 05:33:07 severin Exp $ */
 
 /***
 
@@ -321,6 +321,7 @@ bool EEDB::Symbol::store_link_to_configuration(EEDB::Configuration *obj) {
 //
 ////////////////////////////////////////////////////////////////////////////////////////////
 
+//TODO: unlink methods are all stubs, need to implement
 bool EEDB::Symbol::unlink_from_feature(EEDB::Feature *obj) {
   return true;
 }

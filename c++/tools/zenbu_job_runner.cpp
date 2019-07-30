@@ -1,4 +1,4 @@
-/* $Id: zenbu_job_runner.cpp,v 1.16 2016/08/29 05:56:51 severin Exp $ */
+/* $Id: zenbu_job_runner.cpp,v 1.19 2018/09/20 06:00:59 severin Exp $ */
 
 /****
  
@@ -115,6 +115,8 @@ void  run_job_from_queue();
 void  run_job_id(long jobid);
 bool  check_overload();
 void  get_worker_stats();
+void  reset_zombie_jobs();
+bool check_pid_running(long pid);
 
 int main(int argc, char *argv[]) {
 
@@ -148,36 +150,10 @@ int main(int argc, char *argv[]) {
     
     if(arg == "-mode")          { _parameters["mode"] = argvals[0]; }
 
-    if(arg == "-file")          { _parameters["_input_file"] = argvals[0]; }
-    if(arg == "-f")             { _parameters["_input_file"] = argvals[0]; }
-    if(arg == "-hashkey")       { _parameters["hashkey"] = argvals[0]; }
-    if(arg == "-buildtime")     { _parameters["buildtime"] = argvals[0]; }
     if(arg == "-jobid")         { _parameters["jobid"] = argvals[0]; _parameters["mode"] = "jobid"; }
     
-    if(arg == "-assembly")      { _parameters["asmb"] = argvals[0]; }
-    if(arg == "-asm")           { _parameters["asmb"] = argvals[0]; }
-    if(arg == "-asmb")          { _parameters["asmb"] = argvals[0]; }
-    if(arg == "-assembly_name") { _parameters["asmb"] = argvals[0]; }
-    if(arg == "-chr")           { _parameters["chrom"] = argvals[0]; }
-    if(arg == "-chrom")         { _parameters["chrom"] = argvals[0]; }
-    if(arg == "-chrom_name")    { _parameters["chrom"] = argvals[0]; }
-    if(arg == "-start")         { _parameters["start"] = argvals[0]; }
-    if(arg == "-end")           { _parameters["end"] = argvals[0]; }
-
-    if(arg == "-sources")       { _parameters["mode"] = "sources"; }
-    if(arg == "-experiments")   { _parameters["mode"] = "sources"; _parameters["source"] = "Experiment"; }
-    if(arg == "-fsrc")          { _parameters["mode"] = "sources"; _parameters["source"] = "FeatureSource"; }
-    if(arg == "-chroms")        { _parameters["mode"] = "chroms"; }
-    if(arg == "-repair")        { _parameters["mode"] = "repair"; }
-    if(arg == "-resetclaims")   { _parameters["mode"] = "resetclaims"; }
-    if(arg == "-format")        { _parameters["format"] = argvals[0]; }
-    if(arg == "-filter")        { _parameters["filter"] = argvals[0]; }
-    
-    if(arg == "-status")        { _parameters["mode"] = "zdxstatus"; }
-    if(arg == "-fullstatus")    { _parameters["mode"] = "zdxstatus"; _parameters["show"] = "true"; }
-    if(arg == "-showclaims")    { _parameters["mode"] = "showclaims"; }
-
     if(arg == "-run")           { _parameters["mode"] = "run_job"; }
+    if(arg == "-reset_zombies") { _parameters["mode"] = "reset_jobs"; }
   }
 
   webservice = new EEDB::WebServices::WebBase();
@@ -185,13 +161,18 @@ int main(int argc, char *argv[]) {
   
   //execute the mode
   if(_parameters["mode"] == "run_job") {
+    reset_zombie_jobs();
     run_job_from_queue();
+  } else if(_parameters["mode"] == "reset_jobs") {
+    reset_zombie_jobs();
   } else if(_parameters["mode"] == "jobid") {
-    long jobid = strtol(_parameters["jobid"] .c_str(), NULL, 10);
+    long jobid = strtol(_parameters["jobid"].c_str(), NULL, 10);
     run_job_id(jobid);
   } else {
     usage();
   }
+
+  webservice->release();
   
   exit(1);
 }
@@ -206,6 +187,7 @@ void usage() {
   printf("  -help                     : printf(this help\n");
   printf("  -run                      : autorun next job from queue system\n");
   printf("  -jobid <db_id>            : run specified job by database id (adminstrator)\n");
+  printf("  -reset_zombies            : find and reset zombie jobs\n");
   printf("zenbu_job_runner v%s\n", EEDB::WebServices::WebBase::zenbu_version);
   
   exit(1);  
@@ -245,7 +227,7 @@ void  run_job_from_queue() {
   }
   long job_id = jobXML.i_int;
   
-  sql = "UPDATE job SET status='RUN', host=?, process_id=? WHERE job_id=?";
+  sql = "UPDATE job SET status='RUN', host=?, process_id=?, starttime=NOW() WHERE job_id=?";
   userDB->do_sql(sql, "sdd", host, pid, job_id);
   
   bool rtn=false;
@@ -263,7 +245,7 @@ void  run_job_from_queue() {
   
   
   if(rtn) {
-    sql = "UPDATE job SET status='DONE', completed=NOW() WHERE job_id=?";
+    sql = "UPDATE job SET status='DONE', completed=NOW(), runtime=UNIX_TIMESTAMP()-UNIX_TIMESTAMP(starttime) WHERE job_id=?";
     userDB->do_sql(sql, "d", job_id);
   } else {
     sql = "UPDATE job SET status='FAILED', completed=NOW() WHERE job_id=?";
@@ -278,6 +260,7 @@ void  run_job_id(long job_id) {
   if(!userDB) { return; }
   
   string claim_uuid = uuid_hexstring();
+  fprintf(stderr, "claim [%s]\n", claim_uuid.c_str());
   
   char host[1024];
   bzero(host, 1024);
@@ -286,7 +269,7 @@ void  run_job_id(long job_id) {
   pid_t pid = getpid();
 
   //forces job to reset and run
-  const char *sql = "UPDATE job SET job_claim=?, status='RUN', host=?, process_id=? WHERE job_id=?";
+  const char *sql = "UPDATE job SET job_claim=?, status='RUN', host=?, process_id=?, starttime=NOW() WHERE job_id=?";
   userDB->do_sql(sql, "ssdd", claim_uuid.c_str(), host, pid, job_id);
     
   bool rtn=false;
@@ -304,14 +287,106 @@ void  run_job_id(long job_id) {
   
   
   if(rtn) {
-    sql = "UPDATE job SET status='DONE', completed=NOW() WHERE job_id=?";
+    sql = "UPDATE job SET status='DONE', completed=NOW(), runtime=UNIX_TIMESTAMP()-UNIX_TIMESTAMP(starttime) WHERE job_id=?";
     userDB->do_sql(sql, "d", job_id);
   } else {
     sql = "UPDATE job SET status='FAILED' WHERE job_id=?";
     userDB->do_sql(sql, "d", job_id);
   }
-  
+  fprintf(stderr, "finished run_job_id [%ld]\n", job_id);
 }
+
+
+void reset_zombie_jobs() {
+  //perform checks for JOB which died (claimed RUNNING) but really failed
+  //gets lists of potential zombie jobs and then checks for PID
+
+  MQDB::Database *userDB = webservice->userDB();
+  if(!userDB) { return; }
+
+  char host[1024];
+  bzero(host, 1024);
+  gethostname(host, 1024);
+
+  check_pid_running(92489);
+
+  //get list of potential zombie jobs, this host and running for >5min
+  vector<dynadata>   row_vector;
+  long newCount=0;
+  long updateCount=0;
+  long deprecateCount=0;
+  vector<long> job_ids;
+
+
+  const char *sql = "";
+  void *stmt;
+  if(_parameters.find("jobid") != _parameters.end()) {
+    sql = "select job_id, host, process_id, starttime from job where job_id=?";
+    long jobid = strtol(_parameters["jobid"] .c_str(), NULL, 10);
+    stmt = userDB->prepare_fetch_sql(sql, "d", jobid);
+  } else {
+    sql = "select job_id, host, process_id, starttime from (select *, (UNIX_TIMESTAMP() - UNIX_TIMESTAMP(starttime)) tm from job where host=? and status =\"RUN\")t where tm > 60*5;";
+    stmt = userDB->prepare_fetch_sql(sql, "s", host);
+  }
+  //void *stmt = userDB->prepare_fetch_sql(sql, "s", host);
+  long rowcount=0;
+  while(userDB->fetch_next_row_vector(stmt, row_vector)) {
+    rowcount++;
+    long jobID       = row_vector[0].i_int;
+    string job_host  = row_vector[1].i_string;
+    long processID   = row_vector[2].i_int;
+
+    string date_string = row_vector[3].i_string;
+    long starttime = MQDB::seconds_from_epoch(date_string);
+
+    if(row_vector[3].type == MQDB::STRING) {
+      date_string = row_vector[3].i_string;
+      starttime = MQDB::seconds_from_epoch(date_string);
+    }
+    if(row_vector[3].type == MQDB::TIMESTAMP) {
+      starttime = row_vector[3].i_timestamp;
+      if(starttime>0) {
+        time_t t_update = starttime;
+        char *ct_value = ctime(&t_update);
+        if(ct_value != NULL) {
+          int len = strlen(ct_value);
+          if(len>0) {
+            ct_value[len-1] = '\0';
+            date_string = ct_value;
+          }
+        }
+      }
+    }
+
+    fprintf(stderr, "host[%s]  pid[%ld]  start[%s %ld]  job_id[%ld]  ", job_host.c_str(), processID, date_string.c_str(), starttime, jobID);
+    //TODO: if zombie reset
+    if(!check_pid_running(processID)) {
+      fprintf(stderr, "DEAD reset ZOMBIE\n");
+      job_ids.push_back(jobID);
+    } else {
+      fprintf(stderr,"running\n");
+    }
+  }
+  //userDB->finalize_stmt(stmt);
+
+  vector<long>::iterator  it2;
+  for(it2=job_ids.begin(); it2!=job_ids.end(); it2++) {
+    long jobID = *it2;
+    fprintf(stderr, "reset jobID %ld\n", jobID);
+
+    sql = "SELECT retry_count FROM job WHERE job_id=?";
+    dynadata value = userDB->fetch_col_value(sql, "d", jobID);
+    if((value.type == MQDB::INT) && (value.i_int >=5)) { 
+      fprintf(stderr, "job [%ld] retry exceeded max (%ld >= 5), FAILING\n",  jobID, value.i_int);
+      sql = "UPDATE job SET status='FAILED', completed=NOW() WHERE job_id=?";
+      userDB->do_sql(sql, "d", jobID);
+    } else {
+      sql = "UPDATE job SET status='READY', job_claim='', retry_count=retry_count+1 where job_id=?";
+      userDB->do_sql(sql, "d", jobID);
+    }
+  }
+}
+
 
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -359,6 +434,15 @@ bool check_overload() {
 }
 
 
+bool check_pid_running(long pid) {
+  char buf[2048];
+  sprintf(buf, "ps up %ld  | grep %ld | grep zenbu", pid, pid);
+  string str1 = exec_cmd(buf);
+  if(str1.empty()) { return false; }
+  return true;
+}
+
+
 //////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -370,3 +454,4 @@ void get_worker_stats() {
   gethostname(host, 1024);
   printf("zenbu_job_runner host [%s]\n", host);
 }
+

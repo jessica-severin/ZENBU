@@ -1,4 +1,4 @@
-/* $Id: ConfigServer.h,v 1.30 2014/05/07 06:48:19 severin Exp $ */
+/* $Id: ConfigServer.h,v 1.31 2018/03/11 00:50:10 severin Exp $ */
 
 /***
 
@@ -104,6 +104,11 @@ class ConfigServer : public WebBase {
     void    show_user_last_config();
     void    delete_config_xml();
     void    move_config_collaboration();
+  
+    void    validate_uuid();
+    void    show_fixed_id_editors();
+    void    change_fixed_id_editor_mode();
+    void    change_fixed_id_editor(string mode);
 
     EEDB::Configuration*          get_config_uuid(string uuid);
     EEDB::FeatureSource*          get_config_source(string collab_uuid, string configtype);
@@ -123,6 +128,7 @@ class ConfigServer : public WebBase {
     void                  _register_track_config();
     void                  _register_script_config();
     void                  _register_user_annotation();
+    void                  _register_reports_config();
     string                _create_date_string();
     void                  _print_config_xml(EEDB::Feature *feature);
 

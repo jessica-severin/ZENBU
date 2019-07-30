@@ -1,4 +1,4 @@
-/* $Id: ZenDB.cpp,v 1.28 2016/09/16 06:59:26 severin Exp $ */
+/* $Id: ZenDB.cpp,v 1.29 2017/07/07 07:43:15 severin Exp $ */
 
 /***
 
@@ -1020,6 +1020,7 @@ EEDB::Experiment*  EEDB::SPStreams::ZenDB::_create_experiment() {
   for(unsigned int i=0; i<mdlist.size(); i++) {
     EEDB::Metadata *md = mdlist[i];
     source->metadataset()->add_metadata(md);
+    md->retain(); //add_metadata does not perform a retain
   }
   
   _add_datasource(source);  

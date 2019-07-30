@@ -1,4 +1,4 @@
-/* $Id: Peer.h,v 1.38 2016/06/20 06:37:46 severin Exp $ */
+/* $Id: Peer.h,v 1.39 2019/03/26 07:10:59 severin Exp $ */
 
 /***
 
@@ -123,7 +123,6 @@ class Peer : public MQDB::MappedQuery {
     
     bool             is_valid();
     bool             retest_is_valid();
-    bool             test_peer_database_is_valid();
    
     EEDB::Peer*      find_peer(string uuid, int max_depth);
     bool             find_peers(map<string,EEDB::Peer*> &uuid_peers, int max_depth);

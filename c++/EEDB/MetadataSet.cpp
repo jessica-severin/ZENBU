@@ -1,4 +1,4 @@
-/* $Id: MetadataSet.cpp,v 1.80 2016/05/13 08:53:49 severin Exp $ */
+/* $Id: MetadataSet.cpp,v 1.82 2018/10/05 05:21:21 severin Exp $ */
 
 /****
 NAME - EEDB::MetadataSet
@@ -126,19 +126,11 @@ void EEDB::MetadataSet::init_from_xml(void *xml_node) {
 
 
 
-/*
-void EEDB::MetadataSet::copy {
-  my $self = shift;
- 
-  my $copy = $self->SUPER::copy();
-  
-  //don't want to share a pointer to the internal symbol hash
-  //so create new hash and fill it.
-  $copy->{'metadata'} = [];
-  $copy->add_metadata(@{$self->metadata_list});
-  return $copy;
+EEDB::MetadataSet* EEDB::MetadataSet::copy() {
+  EEDB::MetadataSet *mdset2 = new EEDB::MetadataSet();
+  mdset2->merge_metadataset(this); //does shallow copy (shares mdata and increases retain count)
+  return mdset2;
 }
-*/
 
 
 ////////////////////////////////////
@@ -543,15 +535,10 @@ bool EEDB::MetadataSet::check_by_filter_logic(string filter) {
     else { return false; }
   }  
 
-  //multi word phrases like "brain cortex", translates as an implied "and"
-  p1 = filter.find(" ");
-  if(p1!=string::npos) { 
-    //process " " phrases, any false makes it false
-    phrase1 = filter.substr(0, p1);
-    phrase2 = filter.substr(p1+1);
-    if(check_by_filter_logic(phrase1) and check_by_filter_logic(phrase2)) { return true; }
-    else { return false; }
-  }  
+  //2017-2-6 changed logic, now := and ~= requires () to isolate, but now allows spaces in key and value
+  //ex: (oligo_info.target_gene_name:=negative control: scrambled antisense)
+  //now everything before := ~= is key and everything after is value 
+  //so only way to isolate is with ( ), not with " "
 
   //check for "key:=value" logic
   string key;
@@ -578,8 +565,17 @@ bool EEDB::MetadataSet::check_by_filter_logic(string filter) {
     if(has_metadata_like(key, filter)) { return true; }
     else { return false; }
   }  
-  
-  
+
+  //multi word phrases like "brain cortex", translates as an implied "and"
+  p1 = filter.find(" ");
+  if(p1!=string::npos) { 
+    //process " " phrases, any false makes it false
+    phrase1 = filter.substr(0, p1);
+    phrase2 = filter.substr(p1+1);
+    if(check_by_filter_logic(phrase1) and check_by_filter_logic(phrase2)) { return true; }
+    else { return false; }
+  }  
+
   //OK this is a bare keyword now
   //check for !<key>
   bool invert_keyword = false;

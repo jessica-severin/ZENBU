@@ -1,4 +1,4 @@
-/* $Id: MergeStreams.cpp,v 1.52 2014/11/25 09:35:16 severin Exp $ */
+/* $Id: MergeStreams.cpp,v 1.53 2019/02/15 04:36:20 severin Exp $ */
 
 /***
 
@@ -95,6 +95,14 @@ MQDB::DBObject* _spstream_mergestreams_fetch_object_by_id_func(EEDB::SPStream* n
   }
   return NULL;
 }
+  
+bool _spstream_mergestreams_fetch_features_func(EEDB::SPStream* node, map<string, EEDB::Feature*> &fid_hash) {
+  EEDB::SPStream* t_side_stream = node->side_stream();
+  bool rtn=true;
+  if(node->source_stream() != NULL) { rtn = rtn && node->source_stream()->fetch_features(fid_hash); }
+  if(t_side_stream != NULL)         { rtn = rtn && t_side_stream->fetch_features(fid_hash); }
+  return rtn;
+}
 
 void _spstream_mergestreams_stream_features_by_metadata_search_func(EEDB::SPStream* node, string search_logic) {
   EEDB::SPStream* t_side_stream = node->side_stream();
@@ -102,8 +110,20 @@ void _spstream_mergestreams_stream_features_by_metadata_search_func(EEDB::SPStre
   if(t_side_stream != NULL)         { t_side_stream->stream_features_by_metadata_search(search_logic); }
 }
 
+void _spstream_mergestreams_stream_all_features_func(EEDB::SPStream* node) {
+  EEDB::SPStream* t_side_stream = node->side_stream();
+  if(node->source_stream() != NULL) { node->source_stream()->stream_all_features(); }
+  if(t_side_stream != NULL)         { t_side_stream->stream_all_features(); }
+}
+
 bool _spstream_mergestreams_stream_by_named_region_func(EEDB::SPStream* node, string assembly_name, string chrom_name, long int start, long int end) {
   return ((EEDB::SPStreams::MergeStreams*)node)->_stream_by_named_region(assembly_name, chrom_name, start, end);  
+}
+
+void _spstream_mergestreams_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash) {
+  EEDB::SPStream* t_side_stream = node->side_stream();
+  if(node->source_stream() != NULL) { node->source_stream()->stream_edges(fid_hash); }
+  if(t_side_stream != NULL)         { t_side_stream->stream_edges(fid_hash); }
 }
 
 void _spstream_mergestreams_stream_data_sources_func(EEDB::SPStream* node, string classname, string filter_logic) {
@@ -197,6 +217,9 @@ void EEDB::SPStreams::MergeStreams::init() {
   _funcptr_reload_stream_data_sources         = _spstream_mergestreams_reload_stream_data_sources_func;
   _funcptr_reset_stream_node                  = _spstream_mergestreams_reset_stream_node_func;
   _funcptr_get_proxies_by_name                = _spstream_mergestreams_get_proxies_by_name;
+  _funcptr_stream_all_features                = _spstream_mergestreams_stream_all_features_func;
+  _funcptr_fetch_features                     = _spstream_mergestreams_fetch_features_func;
+  _funcptr_stream_edges                       = _spstream_mergestreams_stream_edges_func;
 }
 
 

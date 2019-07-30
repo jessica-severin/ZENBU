@@ -1,4 +1,4 @@
-/* $Id: CutoffFilter.h,v 1.6 2013/04/08 07:37:12 severin Exp $ */
+/* $Id: CutoffFilter.h,v 1.7 2018/11/16 07:54:45 severin Exp $ */
 
 /***
 
@@ -88,6 +88,7 @@ class CutoffFilter : public EEDB::SPStream {
     bool             _apply_min_cutoff;
     bool             _apply_max_cutoff;
     bool             _filter_by_experiment;
+    enum { FEATURE, EXPERIMENT} _filter_mode;
     
 
   //used for callback functions, should not be considered open API

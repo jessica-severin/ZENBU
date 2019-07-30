@@ -1,4 +1,4 @@
-/* $Id: UploadServer.cpp,v 1.51 2016/09/16 03:23:20 severin Exp $ */
+/* $Id: UploadServer.cpp,v 1.52 2018/08/10 09:15:53 severin Exp $ */
 
 /***
 
@@ -165,8 +165,8 @@ bool EEDB::WebServices::UploadServer::execute_request() {
     prepare_file_upload();
   } else if(_parameters["mode"] == string("queuestatus")) {
     show_queue_status();
-  //} else if(_parameters["mode"] == string("runqueue")) {
-  //  execute_job_from_queue();
+  } else if(_parameters["mode"] == string("clear_failed_jobs")) {
+    clear_failed_jobs();
   } else if(_parameters["mode"] == string("delete")) {
     delete_uploaded_database();
   } else if(_parameters["mode"] == string("redirect")) {
@@ -883,6 +883,50 @@ void  EEDB::WebServices::UploadServer::redirect_to_mydata() {
   }
   */
 }
+
+
+void  EEDB::WebServices::UploadServer::clear_failed_jobs() {
+  printf("Content-type: text/xml\r\n\r\n");
+  /*
+   if($self->{'session'}) {
+   my $cookie = $cgi->cookie($SESSION_NAME => $self->{'session'}->{'id'});
+   print $cgi->header(-cookie=>$cookie, -type => "text/xml", -charset=> "UTF8");
+   } else {
+   print $cgi->header(-type => "text/xml", -charset=> "UTF8");
+   }  
+   */
+  //printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
+  printf("<upload_queue>\n");
+  printf("<clear_failed_jobs>true</clear_failed_jobs>\n");
+  
+  if(_user_profile) { 
+    printf("%s", _user_profile->simple_xml().c_str()); 
+    
+    vector<DBObject*> jobs = EEDB::JobQueue::Job::fetch_all_by_user(_user_profile);
+    for(unsigned int i=0; i<jobs.size(); i++) {
+      EEDB::JobQueue::Job *job = (EEDB::JobQueue::Job*)jobs[i];
+      if(job->status() != "FAILED") { continue; }
+      if(_parameters["format_mode"] == "simplexml") {
+        printf("%s", job->simple_xml().c_str());
+      } else { 
+        printf("%s", job->xml().c_str()); 
+      }
+    }
+    
+    const char* sql ="update job set starttime=0 where status='FAILED' and (UNIX_TIMESTAMP()-UNIX_TIMESTAMP(starttime))/(24*60*60)<=1.0 and user_id=?";
+    _userDB->do_sql(sql, "d", _user_profile->primary_id());
+
+  }
+  
+  struct timeval       endtime, time_diff;
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &_starttime, &time_diff);
+  double   runtime  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+  printf("<process_summary processtime_sec=\"%1.6f\" />\n", runtime);
+  printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
+  printf("</upload_queue>\n");
+}
+
 
 
 ///////////////////////////////////////////////////////

@@ -1,4 +1,4 @@
-/* $Id: zenbu_track_builder.cpp,v 1.74 2016/12/01 06:16:26 severin Exp $ */
+/* $Id: zenbu_track_builder.cpp,v 1.75 2018/12/13 07:33:43 severin Exp $ */
 
 /****
  
@@ -118,7 +118,7 @@ void show_zdx_status();
 void access_check_trackcache(string hashkey);
 void repair_trackcache(string hashkey);
 bool check_overload();
-void clear_rogue_claims();
+//void clear_rogue_claims();
 void show_claims();
 void get_worker_stats();
 void show_zdx_buildstats();
@@ -203,6 +203,12 @@ int main(int argc, char *argv[]) {
     if(arg == "-build")         { _parameters["mode"] = "build_track"; }
     if(arg == "-test")          { _parameters["mode"] = "build_track"; _parameters["testbuild"] = "true"; }
     if(arg == "-configXML")     { _parameters["mode"] = "zdxstatus"; _parameters["configXML"] = "true"; }
+
+    if(arg == "-export_subfeatures")           { _parameters["export_subfeatures"] = "true"; }
+    if(arg == "-export_experiment_metadata")   { _parameters["export_experiment_metadata"] = "true"; }
+    if(arg == "-export_osc_metadata")          { _parameters["export_osc_metadata"] = "true"; }
+    if(arg == "-export_feature_metadata")      { _parameters["export_feature_metadata"] = "true"; }
+    if(arg == "-exptype")                      { _parameters["exptype"] = argvals[0]; }
   }
 
   if(_parameters.find("mode") == _parameters.end() && 
@@ -228,7 +234,8 @@ int main(int argc, char *argv[]) {
     repair_trackcache(_parameters["hashkey"]);
   }
   if(_parameters["mode"] == "resetclaims") {
-    clear_rogue_claims();
+    //clear_rogue_claims();
+    show_claims();
   }
   if(_parameters["mode"] == "showclaims") {
     show_claims();
@@ -270,6 +277,10 @@ void usage() {
   printf("  -resetclaims              : clear 'rougue' claims for failed workers\n");
   printf("  -repair                   : repair a trackcache, build segments and load missing sources\n");
   printf("  -region <chrom_loc>       : make region query into cache/zdx-file\n");
+  printf("    -export_subfeatures      : region query output subfeatures\n");
+  printf("    -export_experiment_metadata : region query output experiment metadata in OSC header\n");
+  printf("    -export_osc_metadata     : region query output osc metadata\n");
+  printf("    -export_feature_metadata : region query output feature metadata\n");
   printf("  -format <type>            : display output in : fullxml, simplexml, gff, bed, osc\n");
   printf("zenbu_track_builder v%s\n", EEDB::WebServices::WebBase::zenbu_version);
   
@@ -690,7 +701,18 @@ void show_zdx_status() {
     
     if(_parameters.find("configXML") != _parameters.end()) {
       string configXML = trackcache->track_configxml();
-      printf("%s\n", configXML.c_str());
+      printf("-------\n%s\n-------\n", configXML.c_str());
+
+      //use rapidxml to parse and prettyprint
+      int   xml_len  = configXML.size();
+      char* xml_text = (char*)malloc(xml_len+1);
+      memset(xml_text, 0, xml_len+1);
+      memcpy(xml_text, configXML.c_str(), xml_len);  
+      rapidxml::xml_document<>  doc;
+      doc.parse<rapidxml::parse_declaration_node | rapidxml::parse_no_data_nodes>(xml_text);
+      rapidxml::print(std::cout, doc, 0);   //Print to stream using print function, specifying printing flags. 0 means default printing flags
+      printf("-------\n");
+      free(xml_text);
     }
     if(_parameters.find("segstatus") != _parameters.end()) {
       trackcache_segment_stats(zdxdb);
@@ -1002,10 +1024,16 @@ void show_zdx_region() {
   if(format.find("bed") != string::npos) { format = "bed"; }
  
   if(_parameters.find("chrom_loc") != _parameters.end()) { 
+    string chrom_loc = _parameters["chrom_loc"];
     size_t   p1;
-    if((p1 = _parameters["chrom_loc"].find(":")) != string::npos) {
-      chrom_name = _parameters["chrom_loc"].substr(0,p1);
-      string tstr = _parameters["chrom_loc"].substr(p1+1);
+    if((p1 = chrom_loc.find("::")) != string::npos) {
+      assembly_name = chrom_loc.substr(0,p1);
+      chrom_loc = chrom_loc.substr(p1+2);
+      fprintf(stderr, "loc[%s]\n", chrom_loc.c_str());
+    }
+    if((p1 = chrom_loc.find(":")) != string::npos) {
+      chrom_name = chrom_loc.substr(0,p1);
+      string tstr = chrom_loc.substr(p1+1);
       if((p1 = tstr.find("..")) != string::npos) {
         start = strtol(tstr.substr(0,p1).c_str(), NULL, 10);
         end   = strtol(tstr.substr(p1+2).c_str(), NULL, 10);
@@ -1045,7 +1073,7 @@ void show_zdx_region() {
     return;
   }
 
-  fprintf(stderr, "== show_zdx_region %s %s:%ld..%ld\n", assembly_name.c_str(), chrom_name.c_str(), start, end);
+  fprintf(stderr, "== show_zdx_region asm[%s] %s:%ld..%ld\n", assembly_name.c_str(), chrom_name.c_str(), start, end);
   string _output_buffer;
 
   EEDB::Tools::OSCTableGenerator* _osctable_generator = new EEDB::Tools::OSCTableGenerator;
@@ -1081,12 +1109,19 @@ void show_zdx_region() {
     EEDB::Expression *expression = NULL;
     if(obj->classname() == EEDB::Feature::class_name) { feature = (EEDB::Feature*)obj; }
     if(feature == NULL) { obj->release(); continue; }
+
+    feature->metadataset()->remove_metadata_like("keyword","");
      
     if(format == "bed") {
       _output_buffer += feature->bed_description(_parameters["format"]) + "\n";
     }
     
-    if(format == "gff") { _output_buffer += feature->gff_description(false) + "\n"; }
+    if(format == "gff") { 
+      bool show_mdata = false;
+      if(_parameters["export_feature_metadata"] == "true") { show_mdata = true; }
+      _output_buffer += feature->gff_description(show_mdata) + "\n"; 
+    }
+
     if(format == "osc" && (_osctable_generator!=NULL))  { 
       _output_buffer += _osctable_generator->osctable_feature_output(feature) + "\n"; 
     }
@@ -1128,7 +1163,7 @@ void show_zdx_region() {
 
 //////////////////////////////////////////////////////////////////////////////////////
 
-           
+/*
 void clear_rogue_claims() {
   //find an claimed segment and clear them
   struct timeval      starttime,endtime,difftime;
@@ -1183,7 +1218,7 @@ void clear_rogue_claims() {
     zdxdb->disconnect();
   }
 }
-
+*/
 
 bool trackcache_access_sort_func(EEDB::TrackCache *a, EEDB::TrackCache *b) { 
   // < function
@@ -1202,7 +1237,12 @@ void show_claims() {
   bool debug=false;
   if(_parameters["debug"] == "true") { debug=true; }
 
-  fprintf(stderr, "== show_claims\n");
+  char host[1024], strbuf[2048];
+  bzero(host, 1024);
+  gethostname(host, 1024);
+
+  if(_parameters["mode"] == "resetclaims") { fprintf(stderr, "== show_reset_claims\n"); }
+  else { fprintf(stderr, "== show_claims\n"); }
 
   EEDB::WebServices::WebBase  *webservice = new EEDB::WebServices::WebBase();
   webservice->parse_config_file("/etc/zenbu/zenbu.conf");
@@ -1254,9 +1294,30 @@ void show_claims() {
     vector<EEDB::ZDX::ZDXsegment*> claim_segs = EEDB::ZDX::ZDXsegment::fetch_claimed_segments(zdxdb);
     for(unsigned j=0; j<claim_segs.size(); j++) {
       EEDB::ZDX::ZDXsegment* zseg = claim_segs[j];
-      printf("  seg %s pid:%d :: %s %s:%ld..%ld\n", 
+      printf("  seg %s pid:%d :: %s %s:%ld..%ld",
         zseg->builder_host().c_str(), zseg->builder_pid(),
         zseg->assembly_name().c_str(), zseg->chrom_name().c_str(), zseg->chrom_start(), zseg->chrom_end());
+      
+      if(zseg->builder_host() != host) {
+        printf("\t -- host does not match, can't check process");
+      } else {
+        printf("\t -- host matches");
+        //check PID against ps aux
+        sprintf(strbuf, "ps aux | grep zenbu_track_builder | grep -v grep | grep %ld | wc -l", zseg->builder_pid());
+        string str3 = exec_result(strbuf);
+        long builders = strtol(str3.c_str(), NULL, 10);
+        if(builders >= 1) { printf("\t -- running"); }
+
+        //if PID not found then reset this segment
+        if(builders == 0) {
+          printf("\t -- process lost");
+          if(_parameters["mode"] == "resetclaims") {
+            printf("\t -- RESET");
+            zseg->clear_claim();
+          }
+        }
+      }
+      printf("\n");
     }
     zdxdb->disconnect();
   }

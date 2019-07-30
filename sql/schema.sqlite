@@ -5,14 +5,22 @@
 CREATE TABLE assembly (
   assembly_id integer PRIMARY KEY AUTOINCREMENT,
   taxon_id integer default NULL,
-  assembly_name varchar(64) default NULL,
-  ncbi_version varchar(32) default NULL,
-  ncbi_assembly_acc varchar(128) default NULL,
-  ucsc_name varchar(32) default NULL,
+  assembly_name varchar(64) default '',
+  ncbi_version varchar(32) default '',
+  ncbi_assembly_acc varchar(128) default '',
+  ucsc_name varchar(32) default '',
   release_date date default NULL,
-  taxon_name varchar(255) default NULL,
+  taxon_name varchar(255) default '',
+  sequence_loaded varchar(1) NOT NULL default '',
   UNIQUE (taxon_id,ncbi_version,ucsc_name)
 );
+
+CREATE TABLE assembly_2_metadata (
+  assembly_id integer default NULL,
+  metadata_id integer default NULL
+);
+CREATE INDEX a2m_aid on assembly_2_metadata (assembly_id);
+CREATE INDEX a2m_mid on assembly_2_metadata (metadata_id);
 
 --
 -- Table structure for table chrom
@@ -23,12 +31,12 @@ CREATE TABLE chrom (
   chrom_name char(64) default NULL,
   assembly_id integer default NULL,
   chrom_length integer default NULL,
-  chrom_type char(64) default NULL,
-  ncbi_chrom_name char(64) default NULL,
-  ncbi_chrom_acc char(64) default NULL,
-  refseq_chrom_acc char(64) default NULL,
-  chrom_name_alt1 char(64) default NULL,
-  description char(255) default NULL,
+  chrom_type char(64) default '',
+  ncbi_chrom_name char(64) default '',
+  ncbi_chrom_acc char(64) default '',
+  refseq_chrom_acc char(64) default '',
+  chrom_name_alt1 char(64) default '',
+  description char(255) default '',
   UNIQUE (chrom_name,assembly_id)
 );
 
@@ -73,7 +81,7 @@ CREATE TABLE feature_source (
   import_source varchar(255) default NULL,
   import_date date default NULL,
   feature_count integer default NULL,
-  owner_openid text NOT NULL default '',
+  owner_identity text NOT NULL default '',
   last_update timestamp NOT NULL default CURRENT_TIMESTAMP,
   UNIQUE (name)
 );
@@ -189,7 +197,7 @@ CREATE TABLE experiment (
   series_point float default NULL,
   is_active char(1) NOT NULL default 'y',
   is_visible char(1) NOT NULL default 'y',
-  owner_openid text NOT NULL default '',
+  owner_identity text NOT NULL default '',
   last_update timestamp NOT NULL default CURRENT_TIMESTAMP,
   UNIQUE (exp_accession)
 );
@@ -280,9 +288,10 @@ CREATE TABLE edge_source (
   is_active char(1) NOT NULL default 'y',
   is_visible char(1) NOT NULL default 'y',
   create_date date default NULL,
-  f1_ext_peer varchar(255)  default NULL,
-  f2_ext_peer varchar(255)  default NULL,
-  owner_openid text NOT NULL default '',
+  featuresource1 varchar(255)  default NULL,
+  featuresource2 varchar(255)  default NULL,
+  edge_count integer default NULL,
+  owner_identity text NOT NULL default '',
   last_update timestamp NOT NULL default CURRENT_TIMESTAMP,
   UNIQUE (name)
 );

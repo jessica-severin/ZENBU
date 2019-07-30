@@ -1,4 +1,4 @@
-# $Id: Chrom.pm,v 1.41 2015/03/11 05:39:50 severin Exp $
+# $Id: Chrom.pm,v 1.42 2017/11/07 11:47:59 severin Exp $
 =head1 NAME - EEDB::Chrom
 
 =head1 SYNOPSIS
@@ -651,8 +651,8 @@ sub fetch_by_chrom_acc_assembly_id {
     if(defined($chrom)) { return $chrom; }
   }
   
-  my $sql = "SELECT * FROM chrom WHERE ncbi_chrom_acc=? and assembly_id=?";
-  return $class->fetch_single($db, $sql, $chrom_acc, $assembly_id);
+  my $sql = "SELECT * FROM chrom WHERE (ncbi_chrom_acc=? or refseq_chrom_acc=?) and assembly_id=?";
+  return $class->fetch_single($db, $sql, $chrom_acc, $chrom_acc, $assembly_id);
 }
 
 sub fetch_by_name {

@@ -1,4 +1,4 @@
-/* $Id: Peer.cpp,v 1.151 2016/06/20 06:37:46 severin Exp $ */
+/* $Id: Peer.cpp,v 1.153 2019/03/26 07:10:59 severin Exp $ */
 
 /***
 
@@ -541,12 +541,8 @@ void  EEDB::Peer::free_source_stream() {
 //
 //////////////////////////////////////////////////////////////////////
 
-bool EEDB::Peer::is_valid() {
-  if(test_peer_database_is_valid()) { return true; }
-  return false;
-}
 
-
+/*
 bool EEDB::Peer::retest_is_valid() {
   if(_driver == "oscdb") {
     EEDB::SPStreams::OSCFileDB *oscdb = (EEDB::SPStreams::OSCFileDB*)source_stream();
@@ -556,10 +552,11 @@ bool EEDB::Peer::retest_is_valid() {
     EEDB::SPStreams::BAMDB *bamdb = (EEDB::SPStreams::BAMDB*)source_stream();
     if(!bamdb) { return false; }
   }   
+  if(_driver == "zdx") {
+    EEDB::SPStreams::ZDX *zdxdb = (EEDB::SPStreams::ZDXDB*)source_stream();
+    if(!zdxdb) { return false; }
+  }   
   
-  if(_database_is_valid == 1) {  return true; }
-  //TODO retest is still broken with fcgi
-
   //fprintf(stderr, "retest_is_valid[%s]\n", uuid());
   if(_database_is_valid == 1) { 
     MQDB::Database *db = peer_database();
@@ -571,9 +568,18 @@ bool EEDB::Peer::retest_is_valid() {
   _database_is_valid   = -1;
   return is_valid();
 }
+*/
+
+bool EEDB::Peer::retest_is_valid() {
+  return true;
+  //disconnect(); 
+  //_connect_to_source_stream();
+  //if(_database_is_valid == 1) { return true; }
+  //return false;
+}
 
 
-bool EEDB::Peer::test_peer_database_is_valid() {
+bool EEDB::Peer::is_valid() {
   //_database_is_valid == -1 means not tested yet
   //_database_is_valid == 0  means tested but failed
   //_database_is_valid == 1  means tested and OK
@@ -627,7 +633,8 @@ void EEDB::Peer::_connect_to_source_stream() {
   if(_driver == "bamdb" and _connect_via_bamdb()) { return; }
   if(((_driver == "mysql") or (_driver == "sqlite")) and _connect_via_mqdb()) { return; }  
   if(((_driver == "http") or (_driver == "zenbu")) and _connect_via_remote_stream()) { return; }  
-  if(_driver == "zdx") { if(_connect_via_zdx()) { return; } else { fprintf(stderr, "zdx FAILED INIT [%s] %s\n", _peer_uuid, _db_url.c_str()); } }
+  if(_driver == "zdx") { if(_connect_via_zdx()) { return; } else { /*fprintf(stderr, "zdx FAILED INIT [%s] %s\n", _peer_uuid, _db_url.c_str());*/ } }
+  if(_driver == "zdx") { if(_connect_via_zdx()) { return; } /* else { fprintf(stderr, "zdx FAILED INIT [%s] %s\n", _peer_uuid, _db_url.c_str()); }*/ }
 
   _database_is_valid = 0;  //fell through so no valid database connection
 }

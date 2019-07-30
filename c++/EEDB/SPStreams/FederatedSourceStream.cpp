@@ -1,4 +1,4 @@
-/* $Id: FederatedSourceStream.cpp,v 1.89 2016/03/01 10:27:49 severin Exp $ */
+/* $Id: FederatedSourceStream.cpp,v 1.91 2017/07/24 04:21:33 severin Exp $ */
 
 /***
 
@@ -123,6 +123,19 @@ void _spstream_federatedsourcestream_stream_features_by_metadata_search_func(EED
   EEDB::SPStream* stream = ((EEDB::SPStreams::FederatedSourceStream*)node)->_build_source_stream();
   if(stream != NULL) { stream->stream_features_by_metadata_search(search_logic); }
 }
+void _spstream_federatedsourcestream_stream_all_features_func(EEDB::SPStream* node) {
+  EEDB::SPStream* stream = ((EEDB::SPStreams::FederatedSourceStream*)node)->_build_source_stream();
+  if(stream != NULL) { stream->stream_all_features(); }
+}
+bool _spstream_federatedsourcestream_fetch_features_func(EEDB::SPStream* node, map<string, EEDB::Feature*> &fid_hash) {
+  EEDB::SPStream* stream = ((EEDB::SPStreams::FederatedSourceStream*)node)->_build_source_stream();
+  if(stream != NULL) { return stream->fetch_features(fid_hash); }
+  return false;
+}
+void _spstream_federatedsourcestream_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash) {
+  EEDB::SPStream* stream = ((EEDB::SPStreams::FederatedSourceStream*)node)->_build_source_stream();
+  if(stream != NULL) { return stream->stream_edges(fid_hash); }
+}
 void _spstream_federatedsourcestream_disconnect_func(EEDB::SPStream* node) {
   ((EEDB::SPStreams::FederatedSourceStream*)node)->_disconnect_stream();
 }
@@ -158,6 +171,9 @@ void EEDB::SPStreams::FederatedSourceStream::init() {
   _funcptr_stream_clear                       = _spstream_federatedsourcestream_stream_clear_func;
   _funcptr_stream_by_named_region             = _spstream_federatedsourcestream_stream_by_named_region_func;
   _funcptr_stream_features_by_metadata_search = _spstream_federatedsourcestream_stream_features_by_metadata_search_func;
+  _funcptr_stream_all_features                = _spstream_federatedsourcestream_stream_all_features_func;
+  _funcptr_fetch_features                     = _spstream_federatedsourcestream_fetch_features_func;
+  _funcptr_stream_edges                       = _spstream_federatedsourcestream_stream_edges_func;
   _funcptr_stream_data_sources                = _spstream_federatedsourcestream_stream_data_sources_func;
   _funcptr_get_dependent_datasource_ids       = _spstream_federatedsourcestream_get_dependent_datasource_ids_func;
   _funcptr_reload_stream_data_sources         = _spstream_federatedsourcestream_reload_stream_data_sources_func;

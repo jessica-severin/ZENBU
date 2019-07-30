@@ -1,9 +1,9 @@
-/assembly_chrom_data.sql/1.8/Fri Sep 13 08:58:26 2013//
-/assembly_data.sql/1.2/Fri Sep 13 09:16:14 2013//
-/schema_patch_2.9.1.sql/1.1/Fri Mar 13 04:56:35 2015//
-/eedb_template.sqlite/1.22/Wed Apr  6 06:08:17 2016//
-/schema.sql/1.38/Thu Nov  8 09:00:25 2018//
-/schema.sqlite/1.18/Thu Nov  8 09:00:47 2018//
-/system_tables.sql/1.14/Thu Nov  8 09:01:08 2018//
-/schema_patch_2.11.3.sql/1.1/Wed Feb 22 07:43:50 2017//
+/assembly_chrom_data.sql/1.8/Tue Jul 30 08:57:27 2019//
+/assembly_data.sql/1.2/Tue Jul 30 08:57:27 2019//
+/eedb_template.sqlite/1.22/Tue Jul 30 08:57:27 2019//
+/schema.sql/1.40/Tue Jul 30 08:57:45 2019//
+/schema.sqlite/1.20/Tue Jul 30 08:57:45 2019//
+/schema_patch_2.11.3.sql/1.1/Tue Jul 30 08:57:27 2019//
+/schema_patch_2.9.1.sql/1.1/Tue Jul 30 08:57:27 2019//
+/system_tables.sql/1.15/Tue Jul 30 08:57:45 2019//
 D

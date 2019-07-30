@@ -1,4 +1,4 @@
-/* $Id: TemplateCluster.cpp,v 1.53 2016/08/09 05:33:51 severin Exp $ */
+/* $Id: TemplateCluster.cpp,v 1.54 2019/02/07 07:08:07 severin Exp $ */
 
 /***
 
@@ -119,6 +119,7 @@ void EEDB::SPStreams::TemplateCluster::init() {
   _skip_empty_templates  = true;
   _stream_features_mode  = false;;
   _overlap_check_subfeatures = false; //extend overlap logic to require subfeature overlap
+  _overlap_distance      = 0;
 
   _completed_templates.clear();
   _template_buffer.clear();
@@ -281,7 +282,7 @@ bool EEDB::SPStreams::TemplateCluster::_stream_by_named_region(string assembly_n
   if(!cluster) { return true; }
   
   //check if first side-feature starts outside region, if so then done before we start
-  if((_region_end>0) and (cluster->chrom_start() > _region_end)) {
+  if((_region_end>0) and (cluster->min_start() > _region_end)) {
     fprintf(stderr, "TemplateCluster::_stream_by_named_region -- done before we start\n");
     cluster->release();
     _stream_clear();
@@ -295,7 +296,7 @@ bool EEDB::SPStreams::TemplateCluster::_stream_by_named_region(string assembly_n
   
   //now slave the primary stream to the first cluster start and stream it
   //open-ended until the end of the templates  
-  return source_stream()->stream_by_named_region(assembly_name, chrom_name, cluster->chrom_start(), -1);
+  return source_stream()->stream_by_named_region(assembly_name, chrom_name, cluster->min_start(), -1);
 }
 
 //
@@ -316,7 +317,7 @@ EEDB::Feature* EEDB::SPStreams::TemplateCluster::_process_object(MQDB::DBObject*
   //
   if(!_template_buffer.empty()) {
     cluster = _template_buffer.front();
-    while((cluster!=NULL) and (cluster->chrom_end() < in_feature->chrom_start())) { 
+    while((cluster!=NULL) and (cluster->max_end() < in_feature->chrom_start())) { 
       _template_buffer.pop_front();
       _calc_template_significance(cluster);
       if(_skip_empty_templates and (cluster->significance() <= 0.0)) { 
@@ -338,7 +339,7 @@ EEDB::Feature* EEDB::SPStreams::TemplateCluster::_process_object(MQDB::DBObject*
     //fprintf(stderr, "in_feature%s", in_feature->simple_xml().c_str());
     //fprintf(stderr, "_template_buffer.empty [region %ld .. %ld]\n", _region_start, _region_end);
     cluster = _extend_template_buffer();
-    while((cluster!=NULL) and (cluster->chrom_end() < in_feature->chrom_start())) {
+    while((cluster!=NULL) and (cluster->max_end() < in_feature->chrom_start())) {
       skips++;
       cluster = _template_buffer.front();
       _template_buffer.pop_front();
@@ -359,7 +360,7 @@ EEDB::Feature* EEDB::SPStreams::TemplateCluster::_process_object(MQDB::DBObject*
   //
   if(!_template_buffer.empty()) { 
     cluster = _template_buffer.back();
-    while(cluster and (cluster->chrom_start() <= in_feature->chrom_end())) {
+    while(cluster and (cluster->min_start() <= in_feature->chrom_end())) {
       cluster = _extend_template_buffer();
     }
   }
@@ -419,7 +420,7 @@ EEDB::Feature*  EEDB::SPStreams::TemplateCluster::_extend_template_buffer() {
   }
 
   EEDB::Feature *feature = (EEDB::Feature*)obj;
-  if((obj!=NULL) and (_region_end>0) and (feature->chrom_start() > _region_end)) {
+  if((obj!=NULL) and (_region_end>0) and (feature->min_start() > _region_end)) {
     //template is outside query region so can stop
     obj->release();
     obj = NULL;
@@ -497,6 +498,10 @@ void EEDB::SPStreams::TemplateCluster::_modify_ends(EEDB::Feature *feature) {
     if(feature->strand() == '-') { feature->chrom_end(start); }
     if(feature->strand() == ' ') { feature->chrom_start(end); }
   }
+  if(_overlap_distance > 0) {
+    feature->chrom_start(feature->chrom_start() - _overlap_distance);
+    feature->chrom_end(feature->chrom_end() + _overlap_distance);
+  }
 }
 
 
@@ -542,6 +547,7 @@ void EEDB::SPStreams::TemplateCluster::_cluster_add_expression(EEDB::Feature *cl
   //fprintf(stderr, "    merged v=%f d=%f\n", expr->value(), expr->duplication());
 }
 
+
 /*****************************************************************************************/
 
 void EEDB::SPStreams::TemplateCluster::_xml(string &xml_buffer) {
@@ -559,6 +565,11 @@ void EEDB::SPStreams::TemplateCluster::_xml(string &xml_buffer) {
     xml_buffer.append(_overlap_mode);
     xml_buffer.append("</overlap_mode>"); 
   }
+  if(_overlap_distance > 0) {
+    char buffer[256];
+    snprintf(buffer, 256, "<distance>%ld</distance>", _overlap_distance);
+    xml_buffer.append(buffer);        
+  }  
 
   if(_overlap_check_subfeatures) { xml_buffer.append("<overlap_subfeatures>true</overlap_subfeatures>"); }
   else { xml_buffer.append("<overlap_subfeatures>false</overlap_subfeatures>"); }
@@ -608,7 +619,12 @@ EEDB::SPStreams::TemplateCluster::TemplateCluster(void *xml_node) {
     if(mode == "mean")  { _expression_mode = CL_MEAN; }
     if(mode == "none")  { _expression_mode = CL_NONE; }
   }
-  
+
+  if((node = root_node->first_node("distance")) != NULL) {
+    _overlap_distance = strtol(node->value(), NULL, 10);
+    if(_overlap_distance<0) { _overlap_distance = 0; }
+  }
+
   _skip_empty_templates = true;
   if((node = root_node->first_node("skip_empty_templates")) != NULL) { 
     if(string(node->value()) == "false") { _skip_empty_templates=false; }

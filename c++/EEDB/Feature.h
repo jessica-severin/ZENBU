@@ -1,4 +1,4 @@
-/* $Id: Feature.h,v 1.73 2016/08/09 05:33:07 severin Exp $ */
+/* $Id: Feature.h,v 1.80 2019/02/07 07:03:17 severin Exp $ */
 
 /***
 
@@ -105,6 +105,9 @@ class Feature : public MQDB::MappedQuery {
     long int             chrom_start();
     long int             chrom_end();
     char                 strand();
+    long int             min_start(); //for resized features, checks subfeatures
+    long int             max_end();
+    
     
     string               chrom_location();
     double               significance();
@@ -158,6 +161,7 @@ class Feature : public MQDB::MappedQuery {
     bool store_metadata();
     bool update_metadata();
     bool update_location();
+    bool store_expression();
 
     //
     // static member function each subclass must implement this code
@@ -171,12 +175,15 @@ class Feature : public MQDB::MappedQuery {
     // static member functions for object retrieval from database
     //
     static Feature*           fetch_by_id(MQDB::Database *db, long int id);
+    static vector<DBObject*>  fetch_all_by_ids(MQDB::Database *db, vector<long int> &fids);
+    static Feature*           fetch_by_source_primary_name(EEDB::FeatureSource* source, string name);
     static vector<DBObject*>  fetch_all_by_sources(MQDB::Database *db, vector<long int> &fsrc_ids);
     static vector<DBObject*>  fetch_all_by_source(EEDB::FeatureSource* source);
     static long int           get_count_symbol_search(MQDB::Database *db, string value, string type);
     static vector<DBObject*>  fetch_all_with_keywords(MQDB::Database *db, vector<long int> &fsrc_ids, vector<string> &keywords);
     static vector<DBObject*>  fetch_all_by_primary_name(MQDB::Database *db, vector<long int> &fsrc_ids, string name);
-    static vector<DBObject*>  fetch_all_by_source_symbol(EEDB::FeatureSource* source, string sym_type, string sym_value);
+    static vector<DBObject*>  fetch_all_by_source_primary_name(EEDB::FeatureSource* source, string name);
+    static vector<DBObject*>  fetch_all_by_source_metadata(EEDB::FeatureSource* source, string type, string value);
 
     static void               stream_by_named_region(MQDB::DBStream *dbstream, vector<long int> &fsrc_ids, 
                                               string assembly_name, string chrom_name, long int chrom_start, long int chrom_end);
@@ -193,7 +200,7 @@ class Feature : public MQDB::MappedQuery {
     //eg:    EEDB::Feature *obj = EEDB::Feature::realloc();  //to 'new'
     //       obj->release();  //to 'delete' 
     static EEDB::Feature*  realloc();
-    static void            realloc(EEDB::Feature *obj);  
+    static void            dealloc(EEDB::Feature *obj);  
 
   protected:
     EEDB::FeatureSource*       _feature_source;
@@ -230,6 +237,7 @@ class Feature : public MQDB::MappedQuery {
     void   _dealloc();  //to fake delete    
     void   _xml(string &xml_buffer);
     void   _simple_xml(string &xml_buffer);
+    void   _mdata_xml(string &xml_buffer, map<string,bool> tags);
     void   _xml_start(string &xml_buffer);
     void   _xml_end(string &xml_buffer);
     void   _xml_subfeatures(string &xml_buffer);

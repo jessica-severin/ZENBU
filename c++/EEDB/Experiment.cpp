@@ -1,4 +1,4 @@
-/*  $Id: Experiment.cpp,v 1.116 2016/09/16 06:58:41 severin Exp $ */
+/*  $Id: Experiment.cpp,v 1.118 2018/12/05 00:35:20 severin Exp $ */
 
 /***
 NAME - EEDB::Experiment
@@ -72,6 +72,9 @@ EEDB::Experiment::~Experiment() {
 void _eedb_experiment_delete_func(MQDB::DBObject *obj) { 
   delete (EEDB::Experiment*)obj;
 }
+EEDB::DataSource* _eedb_experiment_copy_func(EEDB::DataSource *obj) { 
+  return ((EEDB::Experiment*)obj)->_copy(NULL);
+}
 string _eedb_experiment_display_desc_func(MQDB::DBObject *obj) { 
   //_funcptr_display_desc = _dbobject_default_display_desc_func;
   return ((EEDB::Experiment*)obj)->_display_desc();
@@ -103,10 +106,24 @@ void EEDB::Experiment::init() {
   _funcptr_xml               = _eedb_experiment_xml_func;
   _funcptr_simple_xml        = _eedb_experiment_simple_xml_func;
   _funcptr_mdata_xml         = _eedb_experiment_mdata_xml_func;
+  _funcptr_copy              = _eedb_experiment_copy_func;
 
   _series_point              = 0.0;
 }
 
+
+EEDB::DataSource* EEDB::Experiment::_copy(EEDB::DataSource* copy) {
+  if(!copy) { copy = new EEDB::Experiment; }
+
+  EEDB::DataSource::_copy(copy);
+
+  EEDB::Experiment *exp = (EEDB::Experiment*)copy;
+  exp->_platform          = _platform;
+  exp->_series_name       = _series_name;
+  exp->_series_point      = _series_point;
+  
+  return copy;
+}
 
 ////////////////////////////////////////////////////
 
@@ -129,6 +146,7 @@ bool EEDB::Experiment::sort_func (EEDB::Experiment *a, EEDB::Experiment *b) {
   if(a->display_name() < b->display_name()) { return true; }
   return false;
 }
+
 
 
 ////////////////////////////////////////////////////
@@ -167,24 +185,28 @@ string EEDB::Experiment::display_contents() {
 void EEDB::Experiment::_xml_start(string &xml_buffer) {
   char    buffer[2048];
 
-  xml_buffer.append("<experiment id=\"");
-  xml_buffer.append(db_id());
-  xml_buffer.append("\" platform=\"");
-  xml_buffer.append(html_escape(_platform));
-  xml_buffer.append("\" name=\"");
-  xml_buffer.append(html_escape(display_name()));
-  xml_buffer.append("\" exp_acc=\"");
-  xml_buffer.append(html_escape(_name));
-  xml_buffer.append("\" ");
+  xml_buffer += "<experiment id=\"" + db_id() + "\" ";
+  xml_buffer += "name=\"" + html_escape(display_name()) + "\" ";
+  if(_name != display_name()) { xml_buffer += "exp_acc=\"" + html_escape(_name) + "\" "; }
 
+  if(!_platform.empty()) {
+    xml_buffer.append(" platform=\"");
+    xml_buffer.append(html_escape(_platform));
+    xml_buffer.append("\" ");
+  }
   if(!_series_name.empty()) { 
     xml_buffer.append(" series_name=\"");
     xml_buffer.append(html_escape(_series_name));
     xml_buffer.append("\" ");
   }
+  if(_series_point!=0) {
+    snprintf(buffer, 2040, " series_point=\"%1.3f\"", _series_point);
+    xml_buffer.append(buffer);
+  }
   
-  snprintf(buffer, 2040, " series_point=\"%1.3f\"", _series_point);
-  xml_buffer.append(buffer);
+  if(!_demux_key.empty()) { 
+    xml_buffer.append(" demux_key=\"" + _demux_key + "\" ");
+  }
 
   if(_create_date>0) {
     xml_buffer += " create_date=\""+ create_date_string() +"\"";
@@ -209,6 +231,7 @@ void EEDB::Experiment::_simple_xml(string &xml_buffer) {
 }
 
 void EEDB::Experiment::_xml(string &xml_buffer) {
+  char    cbuf[2048];
   if(_xml_cache.empty()) {
     _xml_start(_xml_cache);
     _xml_cache.append("\n");
@@ -222,15 +245,56 @@ void EEDB::Experiment::_xml(string &xml_buffer) {
       (*it).second->xml(_xml_cache);
     }
 
+    if(!_subsource_hash.empty()) {
+      snprintf(cbuf, 2040, "\n  <subsources count=\"%ld\">\n", _subsource_hash.size());
+      _xml_cache.append(cbuf);
+      map<string, EEDB::DataSource*>::iterator it1;
+      vector<Metadata*> mdlist1 = mdset->metadata_list();
+      for(it1 = _subsource_hash.begin(); it1 != _subsource_hash.end(); it1++) {
+        if((*it1).second == NULL) { continue; }
+        EEDB::DataSource *subsrc = (*it1).second;
+
+        string xml_buffer;
+        xml_buffer = "    <experiment id=\"" + subsrc->db_id() + "\" ";
+        if(subsrc->display_name() != display_name()) { xml_buffer += "name=\"" + html_escape(subsrc->display_name()) + "\" "; }
+        if(subsrc->name() != name()) { xml_buffer += "exp_acc=\"" + html_escape(subsrc->name()) + "\" "; }
+        
+        if(!subsrc->demux_key().empty()) { xml_buffer.append(" demux_key=\"" + subsrc->demux_key() + "\" "); }
+
+        if(subsrc->create_date() != create_date()) {
+          xml_buffer += " create_date=\""+ subsrc->create_date_string() +"\"";
+          snprintf(cbuf, 2040, " create_timestamp=\"%ld\"", subsrc->create_date());
+          xml_buffer.append(cbuf);
+        }
+        xml_buffer += ">";
+        
+        //logic to only show subsource metadata which is not present in the parent
+        EEDB::MetadataSet *mdset2 = subsrc->metadataset()->copy();
+        mdset2->remove_metadata(mdlist1);
+        if(mdset2->size()>0) { mdset2->xml(xml_buffer); }
+        
+        //TODO: might need similar logic for subsource datatypes
+        
+        xml_buffer += "</experiment>\n";
+  
+        _xml_cache += xml_buffer;
+        //_xml_cache += "    ";
+        //(*it1).second->simple_xml(_xml_cache);
+      }
+      _xml_cache.append("  </subsources>\n");
+    }
+    
     _xml_end(_xml_cache);
   }
   xml_buffer.append(_xml_cache);
 }
 
 void EEDB::Experiment::_mdata_xml(string &xml_buffer, map<string,bool> mdtags) {
+  char    cbuf[2048];
   _xml_start(xml_buffer);
   
-  vector<EEDB::Metadata*> mdlist = metadataset()->all_metadata_with_tags(mdtags);
+  EEDB::MetadataSet *mdset = metadataset();
+  vector<EEDB::Metadata*> mdlist = mdset->all_metadata_with_tags(mdtags);
   vector<EEDB::Metadata*>::iterator it1;
   for(it1=mdlist.begin(); it1!=mdlist.end(); it1++) {
     (*it1)->xml(xml_buffer);
@@ -249,7 +313,48 @@ void EEDB::Experiment::_mdata_xml(string &xml_buffer, map<string,bool> mdtags) {
   mdata = metadataset()->find_metadata("zenbu:proxy_id", "");
   if(mdata) { mdata->xml(xml_buffer); }
   */
+
+  expression_datatypes(); //to lazy load if needed
+  map<string, EEDB::Datatype*>::iterator it;
+  for(it=_datatypes.begin(); it!=_datatypes.end(); it++) {
+    (*it).second->xml(xml_buffer);
+  }
+
+  if(!_subsource_hash.empty()) {
+    snprintf(cbuf, 2040, "\n  <subsources count=\"%ld\">\n", _subsource_hash.size());
+    xml_buffer.append(cbuf);
+    map<string, EEDB::DataSource*>::iterator it1;
+    vector<Metadata*> mdlist1 = mdset->metadata_list();
+    for(it1 = _subsource_hash.begin(); it1 != _subsource_hash.end(); it1++) {
+      if((*it1).second == NULL) { continue; }
+      EEDB::DataSource *subsrc = (*it1).second;
+
+      xml_buffer += "    <experiment id=\"" + subsrc->db_id() + "\" ";
+      if(subsrc->display_name() != display_name()) { xml_buffer += "name=\"" + html_escape(subsrc->display_name()) + "\" "; }
+      if(subsrc->name() != name()) { xml_buffer += "exp_acc=\"" + html_escape(subsrc->name()) + "\" "; }
       
+      if(!subsrc->demux_key().empty()) { xml_buffer.append(" demux_key=\"" + subsrc->demux_key() + "\" "); }
+
+      if(subsrc->create_date() != create_date()) {
+        xml_buffer += " create_date=\""+ subsrc->create_date_string() +"\"";
+        snprintf(cbuf, 2040, " create_timestamp=\"%ld\"", subsrc->create_date());
+        xml_buffer.append(cbuf);
+      }
+      xml_buffer += ">";
+      
+      //logic to only show subsource metadata which is not present in the parent
+      EEDB::MetadataSet *mdset2 = subsrc->metadataset()->copy();
+      mdset2->remove_metadata(mdlist1);
+      if(mdset2->size()>0) { mdset2->xml(xml_buffer); }
+      
+      //TODO: might need similar logic for subsource datatypes
+      
+      xml_buffer += "</experiment>\n";
+    }
+    xml_buffer.append("  </subsources>\n");
+  }
+  
+  
   _xml_end(xml_buffer);
 }
 
@@ -267,9 +372,10 @@ EEDB::Experiment::Experiment(void *xml_node, bool load_metadata) {
   if((attr = root_node->first_attribute("platform")))       { _platform = attr->value(); }
   if((attr = root_node->first_attribute("exp_acc")))        { _name = attr->value(); }
   if((attr = root_node->first_attribute("series_name")))    { _series_name = attr->value(); }
+  if((attr = root_node->first_attribute("demux_key")))      { _demux_key = attr->value(); }
   if((attr = root_node->first_attribute("owner_openid")))   { _owner_identity = attr->value(); } //backward compatibility
   if((attr = root_node->first_attribute("owner_identity"))) { _owner_identity = attr->value(); }
-  
+
   if((attr = root_node->first_attribute("id"))) {
     string   uuid, objClass;
     long int objID;
@@ -315,6 +421,35 @@ EEDB::Experiment::Experiment(void *xml_node, bool load_metadata) {
       node = node->next_sibling("datatype");
     }    
   }
+  
+  //subsources
+  rapidxml::xml_node<>      *subsources_node = root_node->first_node("subsources");
+  if(subsources_node != NULL) {
+    node = subsources_node->first_node("experiment");
+    while(node) {
+      EEDB::Experiment *subsource = new EEDB::Experiment(node, load_metadata);
+      if(subsource && !(subsource->demux_key().empty())) {
+        _subsource_hash[subsource->demux_key()] = subsource;
+
+        /*
+        //copy the parent metadata and dtypes into the subsource
+        //hmm this is not that fast. might need to do differently and not at load time (adds 2sec for 122,000 subsources)
+        subsource->_metadata_loaded = _metadata_loaded;
+        subsource->_metadataset.merge_metadataset(&_metadataset);
+        subsource->_metadataset.remove_duplicates();
+        
+        expression_datatypes(); //need to lazy load these before copy
+        map<string, EEDB::Datatype*>::iterator it;
+        for(it=_datatypes.begin(); it!=_datatypes.end(); it++) {
+          EEDB::Datatype* dtype = (*it).second;
+          subsource->_datatypes[dtype->type()] = dtype;
+        }
+        */
+      }
+      node = node->next_sibling("experiment");
+    }    
+  }
+
 }
 
 
@@ -438,7 +573,13 @@ void  EEDB::Experiment::init_from_row_map(map<string, dynadata> &row_map) {
   _platform          = row_map["platform"].i_string;
   _series_name       = row_map["series_name"].i_string;
   _series_point      = row_map["series_point"].i_double;
-  _owner_identity    = row_map["owner_openid"].i_string;
+
+  if(row_map["owner_openid"].type == MQDB::STRING) {
+    _owner_identity = row_map["owner_openid"].i_string;
+  }
+  if(row_map["owner_identity"].type == MQDB::STRING) {
+    _owner_identity = row_map["owner_identity"].i_string;
+  }
 
   if(row_map["is_active"].i_string == string("y"))  { _is_active=true;} else { _is_active=false; }
   if(row_map["is_visible"].i_string == string("y")) { _is_visible=true;} else { _is_visible=false; }
@@ -512,19 +653,20 @@ bool EEDB::Experiment::store(MQDB::Database *db) {
   if(db==NULL) { return false; }
   if(check_exists_db(db)) { return true; }
   
-  const char *visible_char="", *active_char="";
-  
+  const char *active_char="";
+  //const char *visible_char="";  
   if(_is_active)  { active_char  = "y"; }
-  if(_is_visible) { visible_char = "y"; }
+  //if(_is_visible) { visible_char = "y"; }
 
   db->do_sql("INSERT ignore INTO experiment \
-             (exp_accession, display_name, platform, series_name, series_point, is_active) \
-             VALUES(?,?,?,?,?,?)", "ssssfs", 
+             (exp_accession, display_name, platform, series_name, series_point, owner_identity, is_active) \
+             VALUES(?,?,?,?,?,?,?)", "ssssfss", 
              name().c_str(),
              display_name().c_str(),
              _platform.c_str(),
              _series_name.c_str(),
              _series_point,
+             _owner_identity.c_str(),
              active_char
             );
              
@@ -532,6 +674,19 @@ bool EEDB::Experiment::store(MQDB::Database *db) {
 
   //now do the symbols and metadata  
   store_metadata();
+
+  //datatypes
+  expression_datatypes(); //make sure loaded
+  map<string, EEDB::Datatype*>::iterator it;
+  for(it=_datatypes.begin(); it!=_datatypes.end(); it++) {
+    EEDB::Datatype* dtype = it->second;
+
+    db->do_sql("INSERT ignore INTO expression_datatype (datatype) VALUES(?)", "s", dtype->type().c_str());
+
+    db->do_sql("INSERT ignore INTO experiment_2_datatype (experiment_id,datatype_id) \
+                SELECT ?, datatype_id FROM expression_datatype WHERE datatype =?", "ds",
+                 primary_id(), dtype->type().c_str());
+  }
   
   _xml_cache.clear();
   _simple_xml_cache.clear();

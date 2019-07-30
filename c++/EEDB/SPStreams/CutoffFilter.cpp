@@ -1,4 +1,4 @@
-/* $Id: CutoffFilter.cpp,v 1.11 2013/04/08 07:37:12 severin Exp $ */
+/* $Id: CutoffFilter.cpp,v 1.12 2018/11/16 07:54:45 severin Exp $ */
 
 /***
 
@@ -109,6 +109,7 @@ void EEDB::SPStreams::CutoffFilter::init() {
   _apply_min_cutoff = false;
   _apply_max_cutoff = false;
   _filter_by_experiment = false; //filter based on feature.significance not individual experiments
+  _filter_mode = FEATURE;
 }
 
 
@@ -122,6 +123,9 @@ void EEDB::SPStreams::CutoffFilter::_xml(string &xml_buffer) {
   _xml_start(xml_buffer);  //from SPStream superclass
   
   char buffer[256];
+
+  if(_filter_mode == EXPERIMENT) { xml_buffer.append("<filter_mode>experiment</filter_mode>"); }
+
   if(_apply_min_cutoff) {
     snprintf(buffer, 256, "<min_cutoff>%f</min_cutoff>", _min_cutoff);
     xml_buffer.append(buffer);
@@ -164,6 +168,11 @@ EEDB::SPStreams::CutoffFilter::CutoffFilter(void *xml_node) {
       _filter_by_experiment=true;
     }
   }  
+
+  _filter_mode = FEATURE;
+  if((node = root_node->first_node("filter_mode")) != NULL) { 
+    if(string(node->value()) == "experiment") { _filter_mode = EXPERIMENT; }
+  }  
 }
 
 string EEDB::SPStreams::CutoffFilter::_display_desc() {
@@ -193,7 +202,18 @@ MQDB::DBObject* EEDB::SPStreams::CutoffFilter::_next_in_stream() {
     EEDB::Feature *feature = (EEDB::Feature*)obj;
     
     bool ok=true;
-    if(_filter_by_experiment) {
+    if(_filter_mode == EXPERIMENT) {
+      //filter on experiment expression. apply to the experiment/expression by zero-out the expression value
+      vector<EEDB::Expression*>  expression = feature->expression_array();
+      for(unsigned int i=0; i<expression.size(); i++) {
+        //maybe do a datatype filter here
+        double expr = expression[i]->value();        
+        if(_apply_min_cutoff && expr < _min_cutoff) { expression[i]->value(0); }
+        if(_apply_max_cutoff && expr > _max_cutoff) { expression[i]->value(0); }
+      }
+      feature->calc_significance(CL_SUM);
+    }
+    if((_filter_mode == FEATURE) && _filter_by_experiment) {
       //filter on experiment expression. at least one experiment/expression must be OK
       vector<EEDB::Expression*>  expression = feature->expression_array();
       for(unsigned int i=0; i<expression.size(); i++) {
@@ -204,7 +224,8 @@ MQDB::DBObject* EEDB::SPStreams::CutoffFilter::_next_in_stream() {
         if(_apply_max_cutoff && expr > _max_cutoff) { ok=false; }
         if(ok) { break; }  //found first valid experiment/expression so features is OK
       }
-    } else {
+    }
+    if((_filter_mode == FEATURE) && !_filter_by_experiment) {
       //filter on feature significance
       ok=true;
       if(_apply_min_cutoff && (feature->significance() < _min_cutoff)) { ok=false; }
