@@ -1,4 +1,4 @@
-/*  $Id: ZDXstream.cpp,v 1.57 2016/11/30 10:30:02 severin Exp $ */
+/*  $Id: ZDXstream.cpp,v 1.58 2018/04/25 05:28:59 severin Exp $ */
 
 /*******
 
@@ -1108,7 +1108,7 @@ bool  EEDB::ZDX::ZDXstream::rebuild_feature_index() {
         fprintf(stderr, "zdx error reading chrom segment\n");
         break;
       }
-      
+      fprintf(stderr, "  chrom:%s  numsegs:%ld\n", zchrom->name, num_segs);
       
       for(long seg=0; seg<num_segs; seg++) {
         if(segments[seg].znode > 100) { 

@@ -1,4 +1,4 @@
-/* $Id: Chrom.cpp,v 1.80 2016/11/11 09:08:38 severin Exp $ */
+/* $Id: Chrom.cpp,v 1.82 2018/08/13 03:38:17 severin Exp $ */
 
 /******
 
@@ -475,6 +475,16 @@ EEDB::Chrom*  EEDB::Chrom::fetch_by_id(MQDB::Database *db, long int id) {
   return obj;
 }
 
+EEDB::Chrom*   EEDB::Chrom::fetch_by_assembly_chrom_name_acc(Assembly *assembly, string name_acc) {
+  if(assembly == NULL) { return NULL; }
+  if(assembly->database() == NULL) { return NULL; }
+  Database *db = assembly->database();
+  
+  const char *sql = "SELECT * FROM chrom WHERE assembly_id=? AND (chrom_name=? or ncbi_chrom_acc=? or refseq_chrom_acc=?)";
+  EEDB::Chrom *chrom = (EEDB::Chrom*) MQDB::fetch_single(EEDB::Chrom::create, db, sql, "dsss", assembly->primary_id(),
+                                                         name_acc.c_str(), name_acc.c_str(), name_acc.c_str());
+  return chrom;
+}
 
 vector<DBObject*>  EEDB::Chrom::fetch_all(MQDB::Database *db) {
   const char *sql = "SELECT * FROM chrom ORDER BY chrom_length";
@@ -520,32 +530,15 @@ bool EEDB::Chrom::store(MQDB::Database *db) {
 }
 
 
-/**** 
-  update
+void EEDB::Chrom::update() {
+  if((_database==NULL) || (_primary_db_id == -1)) { return; }
 
-  Description  : updates the data of this instance. require the Chrom to have been
-                 fetched from database. It must have database() and primary_id()
-  Returntype   : $self
-  Exceptions   : none
+  const char *sql = "UPDATE chrom SET chrom_type=?, description=?, ncbi_chrom_acc=?, ncbi_chrom_name=?, chrom_name_alt1=?, refseq_chrom_acc=?, chrom_length=? WHERE chrom_id=?";
 
-***/
-
-/*
-sub EEDB::Chrom::update {
-  my $self = shift;
-  
-  return undef unless($self->database and $self->id);
-  
-  my $dbh = $self->database->get_connection;  
-  my $sql = "UPDATE chrom set chrom_length=?, description=?, chrom_type=? where chrom_id=?";
-  my $sth = $dbh->prepare($sql);
-  $sth->execute($self->chrom_length, 
-                $self->description,
-                $self->chrom_type,
-                $self->id);
-  return $self;
+  _database->do_sql(sql, "ssssssdd", _chrom_type.c_str(), _description.c_str(), _ncbi_accession.c_str(), _ncbi_chrom_name.c_str(),
+                    _chrom_name_alt1.c_str(), _refseq_accession.c_str(), _chrom_length, _primary_db_id);
 }
-*/
+
 
 ////////// DBObject instance override methods //////////
 

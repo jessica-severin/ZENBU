@@ -1,4 +1,4 @@
-/*  $Id: Assembly.cpp,v 1.61 2017/02/09 07:37:53 severin Exp $ */
+/*  $Id: Assembly.cpp,v 1.65 2019/03/26 07:06:56 severin Exp $ */
 
 /*******
 
@@ -96,6 +96,9 @@ void _eedb_assembly_mdata_xml_func(MQDB::DBObject *obj, string &xml_buffer, map<
 string _eedb_assembly_display_desc_func(MQDB::DBObject *obj) {
   return ((EEDB::Assembly*)obj)->_display_desc();
 }
+void _eedb_assembly_load_metadata_func(EEDB::DataSource *obj) {
+  ((EEDB::Assembly*)obj)->_load_metadata();
+}
 
 EEDB::Taxon::Taxon() {
   init();
@@ -165,33 +168,51 @@ bool EEDB::Taxon::fetch_NCBI_taxonomy_info() {
   rapidxml::xml_document<>       doc;
   rapidxml::xml_node<>           *root_node;
   
-  CURL *curl = curl_easy_init();
-  if(!curl) { return false; }
+  //curl_global_init(CURL_GLOBAL_DEFAULT);
+
+  //CURL *curl = curl_easy_init();
+  //if(!curl) { return false; }
   
   struct RSS_curl_buffer  chunk;
   chunk.memory = NULL;  // will be grown as needed
   chunk.size = 0;    // no data at this point
   chunk.alloc_size = 0;    // no data at this point
   
-  string url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&retmode=xml&id="+l_to_string(_taxon_id);
+  string url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&usehistory=n&retmode=xml&id="+l_to_string(_taxon_id);
   fprintf(stderr, "POST [%s]\n", url.c_str());
   
+  /*
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
   curl_easy_setopt(curl, CURLOPT_POST, 1);
+
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+
   //curl_easy_setopt(curl, CURLOPT_POSTFIELDS, paramXML.c_str());
   //curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, paramXML.length());
   
-  struct curl_slist *slist = NULL;
-  slist = curl_slist_append(NULL, "Content-Type: text/xml; charset=utf-8"); // or whatever charset your XML is really using...
-  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, slist);
+  //struct curl_slist *slist = NULL;
+  //slist = curl_slist_append(NULL, "Content-Type: text/xml; charset=utf-8"); // or whatever charset your XML is really using...
+  //curl_easy_setopt(curl, CURLOPT_HTTPHEADER, slist);
   
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, rss_curl_writeMemoryCallback);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
-  curl_easy_setopt(curl, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+  //curl_easy_setopt(curl, CURLOPT_USERAGENT, "libcurl-agent/1.0");
   
+  fprintf(stderr, "before curl_easy_perform\n");
   curl_easy_perform(curl);
-  if(slist) { curl_slist_free_all(slist); }
+  fprintf(stderr, "after curl_easy_perform\n");
+  //if(slist) { curl_slist_free_all(slist); }
   curl_easy_cleanup(curl);
+  */
+
+  string cmd = "curl \"" + url + "\"";
+  fprintf(stderr, "cmd : %s\n", cmd.c_str());
+  string str1 = exec_result(cmd);
+  if(str1.empty()) { return false; }
+  
+  chunk.memory = (char*)calloc(str1.length()+10, 1);
+  memcpy(chunk.memory, str1.c_str(), str1.length());
   
   //fprintf(stderr, "%s\n", chunk.memory);
   char *start_ptr = strstr(chunk.memory, "<TaxaSet");
@@ -281,6 +302,7 @@ void EEDB::Assembly::init() {
   _funcptr_xml               = _eedb_assembly_xml_func;
   _funcptr_simple_xml        = _eedb_assembly_simple_xml_func;
   _funcptr_mdata_xml         = _eedb_assembly_mdata_xml_func;
+  //_funcptr_load_metadata     = _eedb_assembly_load_metadata_func;
   _taxon_id                  = -1;
   _release_date              = 0;
   _sequence_loaded           = false;
@@ -376,10 +398,21 @@ void  EEDB::Assembly::sequence_loaded(bool value) {
   _xml_cache.clear();
 }
 
+void  EEDB::Assembly::_load_metadata() {
+  if(_database == NULL) { return; }  
+  vector<DBObject*> mdata = EEDB::Metadata::fetch_all_by_assembly_id(_database, _primary_db_id);
+  _metadataset.add_metadata(mdata);
+}
+
+
 ////////////////////////////////////////////////////////////////
 
 EEDB::Chrom*  EEDB::Assembly::get_chrom(string chrom_name) {
   if(chrom_name.empty()) { return NULL; }
+  //TODO: when adding edges might want to make create 'unmapped' chrom object
+  //if(chrom_name.empty()) { chrom_name="unmapped"; }
+  //if(chrom_name == "*")  { chrom_name="unmapped"; }
+
   if(_last_chrom!=NULL and (_last_chrom->chrom_name() == chrom_name)) { return _last_chrom; }
   
   if(_chroms_map.empty() && (_database!=NULL)) {
@@ -484,6 +517,7 @@ void EEDB::Assembly::_xml_start(string &xml_buffer) {
     snprintf(buffer, 2040, "create_timestamp=\"%ld\" ", _create_date);
     xml_buffer.append(buffer);
   }
+  if(!_owner_identity.empty()) { xml_buffer += "owner_identity=\""+_owner_identity+"\" "; }
 
   xml_buffer.append(">");
 }
@@ -560,6 +594,7 @@ EEDB::Assembly::Assembly(void *xml_node) {
   if((attr = root_node->first_attribute("create_timestamp"))) {
     _create_date = strtol(attr->value(), NULL, 10);
   }
+  if((attr = root_node->first_attribute("owner_identity"))) { _owner_identity = attr->value(); }
 
   //metadata
   if((node = root_node->first_node("mdata")) != NULL) {
@@ -626,7 +661,7 @@ bool EEDB::Assembly::store(MQDB::Database *db) {
   
   db->do_sql("INSERT ignore INTO assembly (taxon_id, assembly_name, ncbi_version, ncbi_assembly_acc, ucsc_name, release_date) \
              VALUES(?,?,?,?,?,?)", "dsssss",
-             _taxon_id, _assembly_name.c_str(), _ncbi_name.c_str(), _ncbi_assembly_acc.c_str(), _ucsc_name.c_str(), release_date_string().c_str());
+             _taxon_id, assembly_name().c_str(), _ncbi_name.c_str(), _ncbi_assembly_acc.c_str(), _ucsc_name.c_str(), release_date_string().c_str());
 
   db->do_sql("INSERT ignore INTO taxon (taxon_id, genus, species, common_name, classification) \
              VALUES(?,?,?,?,?)", "dssss",
@@ -748,8 +783,8 @@ vector<EEDB::Assembly*>  EEDB::Assembly::fetch_from_NCBI_by_search(string search
   rapidxml::xml_document<>       doc;
   rapidxml::xml_node<>           *root_node;
   
-  CURL *curl = curl_easy_init();
-  if(!curl) { return assembly_array; }
+  //CURL *curl = curl_easy_init();
+  ////if(!curl) { return assembly_array; }
   
   struct RSS_curl_buffer  chunk;
   struct curl_slist *slist = NULL;
@@ -762,6 +797,7 @@ vector<EEDB::Assembly*>  EEDB::Assembly::fetch_from_NCBI_by_search(string search
   string url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=assembly&term=" + search_term;
   fprintf(stderr, "POST [%s]\n", url.c_str());
   
+  /*
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
   curl_easy_setopt(curl, CURLOPT_POST, 1);
   
@@ -775,6 +811,15 @@ vector<EEDB::Assembly*>  EEDB::Assembly::fetch_from_NCBI_by_search(string search
   curl_easy_perform(curl);
   if(slist) { curl_slist_free_all(slist); }
   curl_easy_cleanup(curl); //deletes curl
+  */
+
+  string cmd = "curl \"" + url + "\"";
+  fprintf(stderr, "cmd : %s\n", cmd.c_str());
+  string str1 = exec_result(cmd);
+  if(str1.empty()) { return assembly_array; }
+  chunk.memory = (char*)calloc(str1.length()+10, 1);
+  memcpy(chunk.memory, str1.c_str(), str1.length());
+
   
   //fprintf(stderr, "%s\n", chunk.memory);
   char *start_ptr = strstr(chunk.memory, "<eSearchResult");
@@ -796,11 +841,10 @@ vector<EEDB::Assembly*>  EEDB::Assembly::fetch_from_NCBI_by_search(string search
   }
   if(id_list.empty()) { return assembly_array; }
   
-  curl = curl_easy_init();
-  if(!curl) { return assembly_array; }
+  //curl = curl_easy_init();
+  //if(!curl) { return assembly_array; }
   
   free(chunk.memory);
-  bzero(chunk.memory, sizeof(chunk.memory));
   chunk.memory = NULL;  // will be grown as needed
   chunk.size = 0;    // no data at this point
   chunk.alloc_size = 0;    // no data at this point
@@ -810,6 +854,7 @@ vector<EEDB::Assembly*>  EEDB::Assembly::fetch_from_NCBI_by_search(string search
   url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=assembly&retmode=xml&id=" + id_list;
   fprintf(stderr, "POST [%s]\n", url.c_str());
   
+  /*
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
   curl_easy_setopt(curl, CURLOPT_POST, 1);
   
@@ -822,7 +867,15 @@ vector<EEDB::Assembly*>  EEDB::Assembly::fetch_from_NCBI_by_search(string search
   curl_easy_perform(curl);
   if(slist) { curl_slist_free_all(slist); }
   curl_easy_cleanup(curl);
+  */
   
+  cmd = "curl \"" + url + "\"";
+  fprintf(stderr, "cmd : %s\n", cmd.c_str());
+  str1 = exec_result(cmd);
+  if(str1.empty()) { return assembly_array; }
+  chunk.memory = (char*)calloc(str1.length()+10, 1);
+  memcpy(chunk.memory, str1.c_str(), str1.length());
+
   //fprintf(stderr, "%s\n", chunk.memory);
   start_ptr = strstr(chunk.memory, "<eSummaryResult");
   if(!start_ptr) { free(chunk.memory); return assembly_array; }

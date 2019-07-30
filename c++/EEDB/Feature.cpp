@@ -1,4 +1,4 @@
-/* $Id: Feature.cpp,v 1.305 2016/12/01 06:10:07 severin Exp $ */
+/* $Id: Feature.cpp,v 1.317 2019/03/20 07:13:11 severin Exp $ */
 
 /***
 
@@ -89,11 +89,14 @@ void _eedb_feature_xml_func(MQDB::DBObject *obj, string &xml_buffer) {
 void _eedb_feature_simple_xml_func(MQDB::DBObject *obj, string &xml_buffer) { 
   ((EEDB::Feature*)obj)->_simple_xml(xml_buffer);
 }
+void _eedb_feature_mdata_xml_func(MQDB::DBObject *obj, string &xml_buffer, map<string,bool> tags) {
+  ((EEDB::Feature*)obj)->_mdata_xml(xml_buffer, tags);
+}
 string _eedb_feature_display_desc_func(MQDB::DBObject *obj) { 
   return ((EEDB::Feature*)obj)->_display_desc();
 }
 void _eedb_feature_delete_func(MQDB::DBObject *obj) { 
-  EEDB::Feature::realloc((EEDB::Feature*)obj);  //fake delete
+  EEDB::Feature::dealloc((EEDB::Feature*)obj);  //fake delete
 }
 
 
@@ -134,6 +137,10 @@ void  EEDB::Feature::_dealloc() {
   }
   _expression_array.clear();
   _expression_hash.clear();
+
+  _peer_uuid = NULL;
+  _db_id.clear();
+  init();
 }
 
 
@@ -150,7 +157,7 @@ EEDB::Feature*  EEDB::Feature::realloc() {
 }    
 
 
-void  EEDB::Feature::realloc(EEDB::Feature *obj) {
+void  EEDB::Feature::dealloc(EEDB::Feature *obj) {
   if(_realloc_idx < 1000) {
     obj->_dealloc();  //releases internal object references
     _realloc_idx++;
@@ -167,6 +174,7 @@ void EEDB::Feature::init() {
   _funcptr_delete       = _eedb_feature_delete_func;
   _funcptr_xml          = _eedb_feature_xml_func;
   _funcptr_simple_xml   = _eedb_feature_simple_xml_func;
+  _funcptr_mdata_xml    = _eedb_feature_mdata_xml_func;
   _funcptr_display_desc = _eedb_feature_display_desc_func;
 
   _metadata_loaded    = false;
@@ -477,7 +485,7 @@ void EEDB::Feature::_xml_start(string &xml_buffer) {
     xml_buffer.append("\"");
   }
   
-  //if(feature_source()) { xml_buffer += " fsrc_id=\"" + _feature_source->db_id() + "\""; }
+  if(feature_source()) { xml_buffer += " source_id=\"" + _feature_source->db_id() + "\""; }
   
   xml_buffer.append(" >");
   
@@ -497,6 +505,17 @@ void EEDB::Feature::_xml_end(string &xml_buffer) {
 
 void EEDB::Feature::_simple_xml(string &xml_buffer) {
   _xml_start(xml_buffer);
+  _xml_end(xml_buffer);
+}
+
+
+void EEDB::Feature::_mdata_xml(string &xml_buffer, map<string,bool> mdtags) {
+  _xml_start(xml_buffer);
+  vector<EEDB::Metadata*> mdlist = metadataset()->all_metadata_with_tags(mdtags);
+  vector<EEDB::Metadata*>::iterator it1;
+  for(it1=mdlist.begin(); it1!=mdlist.end(); it1++) {
+    (*it1)->xml(xml_buffer);
+  }
   _xml_end(xml_buffer);
 }
 
@@ -524,7 +543,7 @@ bool _subfeature_sort_func (EEDB::Feature *a, EEDB::Feature *b) {
 
 void EEDB::Feature::_xml(string &xml_buffer) {
   _xml_start(xml_buffer);
-  xml_buffer.append("\n"); 
+  //xml_buffer.append("\n"); 
 
   //if(feature_source()) { _feature_source->simple_xml(xml_buffer); }
 
@@ -646,7 +665,7 @@ void EEDB::Feature::_xml_expression(string &xml_buffer) {
   load_expression(); //lazy load if needed
   for(unsigned int i=0; i<_expression_array.size(); i++) {
     EEDB::Expression *expr = _expression_array[i];
-    if(expr->value() == 0.0) { continue; } 
+    //if(expr->value() == 0.0) { continue; } 
     expr->simple_xml(xml_buffer);
   }
 }
@@ -733,7 +752,10 @@ bool EEDB::Feature::init_from_xml(void *xml_node) {
           subfeat->chrom(chrom());
           add_subfeature(subfeat);
           subfeat->release(); //retained by feature
-        } else { subfeat->release(); }
+        } else { 
+          fprintf(stderr, "failed to init xml subfeature\n");
+          subfeat->release(); 
+        }
         node = node->next_sibling("feature");
       }
     }
@@ -885,9 +907,10 @@ string   EEDB::Feature::bed_description(string format) {
     for(unsigned int i=0; i<_subfeature_array.size(); i++) { 
       //minimalized subfeature info
       EEDB::Feature *subfeat = _subfeature_array[i];      
+      if(!subfeat) { continue; }
       EEDB::FeatureSource *fsrc = subfeat->feature_source();
       
-      if(fsrc->category() == "3utr") {
+      if(fsrc && (fsrc->category() == "3utr")) {
         if((subfeat->strand() == '+') and (thickEnd > subfeat->chrom_start())) {
           thickEnd   = subfeat->chrom_start() - 1; 
         }
@@ -895,7 +918,7 @@ string   EEDB::Feature::bed_description(string format) {
           thickStart = subfeat->chrom_end(); 
         }
       }
-      else if(fsrc->category() == "5utr") {
+      else if(fsrc && (fsrc->category() == "5utr")) {
         if((subfeat->strand() == '+') and (thickStart < subfeat->chrom_end())) {
           thickStart = subfeat->chrom_end();
         }
@@ -1032,6 +1055,25 @@ long int    EEDB::Feature::chrom_end()    { return _chrom_end; }
 char        EEDB::Feature::strand()       { return _strand; }
 double      EEDB::Feature::significance() { return _significance; }
 time_t      EEDB::Feature::last_update()  { return _last_update; }
+
+long int  EEDB::Feature::min_start() { 
+  //for resized features, checks subfeatures
+  long int start = _chrom_start;
+  for(unsigned int i=0; i<_subfeature_array.size(); i++) {
+    EEDB::Feature *subfeat = _subfeature_array[i];
+    if(subfeat->chrom_start() < start) { start = subfeat->chrom_start(); }
+  }
+  return start;
+}
+
+long int  EEDB::Feature::max_end() {
+  long int end = _chrom_end;
+  for(unsigned int i=0; i<_subfeature_array.size(); i++) {
+    EEDB::Feature *subfeat = _subfeature_array[i];
+    if(subfeat->chrom_end() > end) { end = subfeat->chrom_end(); }
+  }
+  return end;
+}
 
 string      EEDB::Feature::chrom_location() {
   char buffer[2048];
@@ -1449,6 +1491,25 @@ EEDB::Feature*  EEDB::Feature::fetch_by_id(MQDB::Database *db, long int id) {
 }
 
 
+vector<DBObject*>  EEDB::Feature::fetch_all_by_ids(MQDB::Database *db, vector<long int> &fids) {
+  vector<DBObject*>  t_result;
+  if(db==NULL) { return t_result; }
+  if(fids.empty()) { return t_result; }
+  
+  string sql = "SELECT * FROM feature WHERE feature_id in(";
+  //loop on feature_ids
+  char    buffer[64];
+  vector<long int>::iterator  it2;
+  for(it2=fids.begin(); it2!=fids.end(); it2++) {
+    if(it2 != fids.begin()) { sql += ","; }
+    snprintf(buffer, 63, "%ld", (*it2));
+    sql += buffer;
+  }
+  sql += ")";
+  return MQDB::fetch_multiple(EEDB::Feature::create, db, sql.c_str(), "");
+}
+
+
 vector<DBObject*>  EEDB::Feature::fetch_all_by_sources(MQDB::Database *db, vector<long int> &fsrc_ids) {
   vector<DBObject*>  t_result;
   if(db==NULL) { return t_result; }
@@ -1466,7 +1527,7 @@ vector<DBObject*>  EEDB::Feature::fetch_all_by_sources(MQDB::Database *db, vecto
       sql += buffer;          
     }
     sql += ")";
-  }      
+  }
   
   return MQDB::fetch_multiple(EEDB::Feature::create, db, sql.c_str(), "");
 }
@@ -1495,22 +1556,34 @@ vector<DBObject*> EEDB::Feature::fetch_all_with_keywords(MQDB::Database *db, vec
   vector<DBObject*>  t_result;
   if(keywords.empty()) { return t_result; }
   
-  string sql = "SELECT * FROM feature JOIN (SELECT distinct feature_id FROM feature_2_symbol JOIN (";
-  
+  string sql = "SELECT * FROM feature JOIN (";
+
+  sql += "SELECT distinct feature_id FROM feature_2_symbol JOIN (";
   //loop on keywords
   vector<string>::iterator  it1;
   for(it1=keywords.begin(); it1!=keywords.end(); it1++) {
     if(it1 != keywords.begin()) { sql += " UNION "; }
     sql += "SELECT symbol_id FROM symbol WHERE sym_value like \"" + (*it1) + "%\""; 
   }
+  sql += ")s1 using(symbol_id) ";
+
+  //now union with metadata
+  sql += " UNION ";
+  sql += "SELECT distinct feature_id FROM feature_2_metadata JOIN (";
+  //loop on keywords
+  for(it1=keywords.begin(); it1!=keywords.end(); it1++) {
+    if(it1 != keywords.begin()) { sql += " UNION "; }
+    sql += "SELECT metadata_id FROM metadata WHERE data like \"" + (*it1) + "%\""; 
+  }
+  sql += ")m1 using(metadata_id) ";
   
-  sql += ")s1 using(symbol_id) )f1 using(feature_id)";
+  sql += ")f1 using(feature_id)";
   
   //loop on feature_source_ids
   if(!fsrc_ids.empty()) {
     char    buffer[64];
     vector<long int>::iterator  it2;
-    sql += "WHERE feature_source_id in(";
+    sql += " WHERE feature_source_id in(";
     for(it2=fsrc_ids.begin(); it2!=fsrc_ids.end(); it2++) {
       if(it2 != fsrc_ids.begin()) { sql += ","; }
       snprintf(buffer, 63, "%ld", (*it2));
@@ -1518,6 +1591,19 @@ vector<DBObject*> EEDB::Feature::fetch_all_with_keywords(MQDB::Database *db, vec
     }
     sql += ")";
   }      
+
+/*
+  string sql = "SELECT * FROM feature JOIN ((SELECT distinct feature_id FROM feature_2_symbol JOIN symbol using(symbol_id) WHERE sym_value like ?";
+  if(!type.empty()) { sql += " AND sym_type='"+type+"'"; }
+  sql += ") UNION ";
+  sql += "(SELECT distinct feature_id FROM feature_2_metadata JOIN metadata using(metadata_id) where data like ?";
+  if(!type.empty()) { sql += " AND data_type='"+type+"'"; }
+  sql += "))t1 using(feature_id) where feature_source_id = ?";
+
+  //fprintf(stderr, "%s\n", sql.c_str());
+  return MQDB::fetch_multiple(EEDB::Feature::create, db, sql.c_str(), "ssd", value.c_str(), value.c_str(), source->primary_id());
+*/
+
   /*
    SELECT * FROM feature JOIN 
    (select distinct feature_id FROM feature_2_symbol JOIN 
@@ -1528,6 +1614,8 @@ vector<DBObject*> EEDB::Feature::fetch_all_with_keywords(MQDB::Database *db, vec
    )f1 using(feature_id ) 
    WHERE feature_source_id in(31);
    */
+
+  //fprintf(stderr, "%s\n", sql.c_str());
   return MQDB::fetch_multiple(EEDB::Feature::create, db, sql.c_str(), "");
 }
 
@@ -1673,7 +1761,7 @@ vector<DBObject*>  EEDB::Feature::fetch_all_by_primary_name(MQDB::Database *db, 
   if(!fsrc_ids.empty()) {
     char    buffer[64];
     vector<long int>::iterator  it2;
-    sql += "WHERE feature_source_id in(";
+    sql += "AND feature_source_id in(";
     for(it2=fsrc_ids.begin(); it2!=fsrc_ids.end(); it2++) {
       if(it2 != fsrc_ids.begin()) { sql += ","; }
       snprintf(buffer, 63, "%ld", (*it2));
@@ -1682,7 +1770,7 @@ vector<DBObject*>  EEDB::Feature::fetch_all_by_primary_name(MQDB::Database *db, 
     sql += ")";
   }
   sql += " ORDER BY feature_id";
-  
+
   return MQDB::fetch_multiple(EEDB::Feature::create, db, sql.c_str(), "s", name.c_str());
 }
 
@@ -1698,23 +1786,54 @@ vector<DBObject*>  EEDB::Feature::fetch_all_by_source(EEDB::FeatureSource* sourc
 }
 
 
-vector<DBObject*>  EEDB::Feature::fetch_all_by_source_symbol(EEDB::FeatureSource* source, string sym_type, string sym_value) {
+vector<DBObject*>  EEDB::Feature::fetch_all_by_source_primary_name(EEDB::FeatureSource* source, string name) {
   vector<DBObject*>  t_result;
   if(source==NULL) { return t_result; }
   MQDB::Database *db = source->database();
   if(!db) { return t_result; }
-  if(sym_value.empty()) { return t_result; }
+  if(name.empty()) { return t_result; }
+
+  string sql = "SELECT * FROM feature WHERE primary_name like ? AND feature_source_id = ?";
+  sql += " ORDER BY chrom_start, chrom_end, feature_id";
+
+  return MQDB::fetch_multiple(EEDB::Feature::create, db, sql.c_str(), "sd", name.c_str(), source->primary_id());
+}
+
+
+vector<DBObject*>  EEDB::Feature::fetch_all_by_source_metadata(EEDB::FeatureSource* source, string type, string value) {
+  vector<DBObject*>  t_result;
+  if(source==NULL) { return t_result; }
+  MQDB::Database *db = source->database();
+  if(!db) { return t_result; }
+  if(value.empty()) { return t_result; }
   
   //$sym_value =~ s/\"/\\\"/g;
   //$sym_value =~ s/\'/\\\'/g;  #'
-  
-  string sql = "SELECT * from (SELECT f.* FROM feature f JOIN feature_2_symbol using(feature_id) JOIN symbol using(symbol_id) \
-                WHERE sym_value = ?";
-  if(!sym_type.empty()) { sql += " AND sym_type='"+sym_type+"'"; }
-  sql += " )t ";
-  sql += " WHERE feature_source_id=? GROUP BY feature_id";
+ 
+//select * from feature join ((SELECT distinct feature_id FROM feature_2_symbol JOIN symbol using(symbol_id) where sym_value like "ENSG00000223546%") UNION (SELECT distinct feature_id FROM feature_2_metadata JOIN metadata using(metadata_id) where data like "ENSG00000223546%"))t1 using(feature_id) where feature_source_id in(9);
+
+  //value += "%"; //to force it into a prefix like search
+
+  string sql = "SELECT * FROM feature JOIN ((SELECT distinct feature_id FROM feature_2_symbol JOIN symbol using(symbol_id) WHERE sym_value like ?";
+  if(!type.empty()) { sql += " AND sym_type='"+type+"'"; }
+  sql += ") UNION ";
+  sql += "(SELECT distinct feature_id FROM feature_2_metadata JOIN metadata using(metadata_id) where data like ?";
+  if(!type.empty()) { sql += " AND data_type='"+type+"'"; }
+  sql += "))t1 using(feature_id) where feature_source_id = ?";
+
   //fprintf(stderr, "%s\n", sql.c_str());
-  return MQDB::fetch_multiple(EEDB::Feature::create, db, sql.c_str(), "sd", sym_value.c_str(), source->primary_id());
+  return MQDB::fetch_multiple(EEDB::Feature::create, db, sql.c_str(), "ssd", value.c_str(), value.c_str(), source->primary_id());
+}
+
+
+EEDB::Feature*  EEDB::Feature::fetch_by_source_primary_name(EEDB::FeatureSource* source, string name) {
+  if(source==NULL) { return NULL; }
+  MQDB::Database *db = source->database();
+  if(!db) { return NULL; }
+  
+  string sql = "SELECT * from feature WHERE feature_source_id=? and primary_name=? ORDER BY feature_id LIMIT 1";
+  //fprintf(stderr, "%s\n", sql.c_str());
+  return (EEDB::Feature*) MQDB::fetch_single(EEDB::Feature::create, db, sql.c_str(), "ds", source->primary_id(), name.c_str());
 }
 
 
@@ -2120,4 +2239,19 @@ bool EEDB::Feature::update_location() {
   db->do_sql(sql, "sdddcd", _primary_name.c_str(), chrom_id(), _chrom_start, _chrom_end, _strand, primary_id());
   return true;
 }
+
+
+bool EEDB::Feature::store_expression() {
+  if(database() == NULL) { return false; }
+  if(primary_id() == -1) { return false; }
+
+  load_expression(); //lazy load if needed
+  for(unsigned int i=0; i<_expression_array.size(); i++) {
+    EEDB::Expression *expr = _expression_array[i];
+    //if(expr->value() == 0.0) { continue; } 
+    expr->store(this);
+  }
+  return true;
+}
+
 

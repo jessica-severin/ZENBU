@@ -1,4 +1,4 @@
-/* $Id: BAMDB.cpp,v 1.64 2016/11/30 04:51:17 severin Exp $ */
+/* $Id: BAMDB.cpp,v 1.66 2017/07/07 07:45:47 severin Exp $ */
 
 /***
 
@@ -257,13 +257,14 @@ string  EEDB::SPStreams::BAMDB::create_new(string filepath) {
   }    
   
   // try to Create index
+  bool index_failed = false;
   string bai_path = filepath + ".bai";
   fprintf(stderr, "create index %s.bai\n", filepath.c_str());
   cmd = "samtools index " + filepath;
   fprintf(stderr, "%s\n", cmd.c_str());
-  system(cmd.c_str());
+  if(system(cmd.c_str()) != 0) { index_failed = true; }
 
-  if(stat(bai_path.c_str(), &statbuf) != 0) {
+  if(index_failed || (stat(bai_path.c_str(), &statbuf) != 0)) {
     fprintf(stderr, "failed to make index so sort and index\n");
 
     // sort bam file
@@ -317,17 +318,18 @@ string  EEDB::SPStreams::BAMDB::create_new(string filepath) {
     if(((*p_it).first == "eedb:display_name") or ((*p_it).first == "display_name")) {
       if(mdset->has_metadata_like("eedb:display_name", "")) { continue; }
       mdset->add_tag_data("eedb:display_name", (*p_it).second);
+      continue;
     }
     
     if(((*p_it).first == "eedb:description") or ((*p_it).first == "description")) {
       if(mdset->has_metadata_like("description", "")) { continue; }
       if(mdset->has_metadata_like("eedb:description", "")) { continue; }
       mdset->add_tag_data("description", (*p_it).second);
+      continue;
     }    
 
-    if(((*p_it).first == "orig_filename") or ((*p_it).first == "upload_unique_name")) {
-      mdset->add_tag_data((*p_it).first, (*p_it).second);
-    }
+    //add everything else
+    mdset->add_tag_data((*p_it).first, (*p_it).second);
   }
   if(!mdset->has_metadata_like("eedb:display_name", "")) { 
     mdset->add_tag_data("eedb:display_name", _parameters["_filename"]);

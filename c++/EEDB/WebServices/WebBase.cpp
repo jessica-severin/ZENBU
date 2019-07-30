@@ -1,4 +1,4 @@
-/* $Id: WebBase.cpp,v 1.213 2017/01/17 05:39:44 severin Exp $ */
+/* $Id: WebBase.cpp,v 1.222 2018/12/05 01:11:30 severin Exp $ */
 
 /***
 
@@ -78,6 +78,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <EEDB/SPStreams/MultiMergeStream.h>
 #include <EEDB/SPStreams/RemoteServerStream.h>
 #include <EEDB/SPStreams/CachePoint.h>
+#include <EEDB/Tools/OSCFileParser.h>
 #include <EEDB/WebServices/WebBase.h>
 #include <EEDB/WebServices/MetaSearch.h>
 
@@ -89,7 +90,7 @@ using namespace MQDB;
 
 const char*     EEDB::WebServices::WebBase::class_name = "EEDB::WebServices::WebBase";
 
-const char*     EEDB::WebServices::WebBase::zenbu_version = "2.11.2";
+const char*     EEDB::WebServices::WebBase::zenbu_version = "2.11.3";
 
 map<string,string>  EEDB::WebServices::WebBase::global_parameters;
 
@@ -107,6 +108,18 @@ string  unescape_parameter(string data) {
 }
 
 
+/*
+void check_over_memory() {
+  double vm_usage, resident_set;
+  MQDB::process_mem_usage(vm_usage, resident_set);
+  //fprintf(stderr, "process_mem_usage %1.3fMB res\n", resident_set/1024.0);
+  if(resident_set > 4*1024*1024) { //4GB
+    fprintf(stderr, "self destruct, using %f MB memory\n", resident_set/1024.0);
+    throw(17);
+  }
+}
+*/
+
 
 EEDB::WebServices::WebBase::WebBase() {
   init();
@@ -114,11 +127,11 @@ EEDB::WebServices::WebBase::WebBase() {
 
 EEDB::WebServices::WebBase::~WebBase() {
   disconnect();
-  if(_source_stream == NULL) { _source_stream->release(); }
+  if(_source_stream != NULL) { _source_stream->release(); }
 }
 
 void _eedb_webbase_delete_func(MQDB::DBObject *obj) { 
-  delete (EEDB::WebServices::WebBase*)obj;
+  if(obj) { delete (EEDB::WebServices::WebBase*)obj; }
 }
 
 void EEDB::WebServices::WebBase::init() {
@@ -137,6 +150,8 @@ void EEDB::WebServices::WebBase::init() {
   _curated_collaboration = NULL;
   _collaboration_filter = "all";
   _source_stream = NULL;
+  _autobuild_cache_on_region_query = false;;
+  _cross_domain_access_origins = "";
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -391,7 +406,6 @@ void  EEDB::WebServices::WebBase::postprocess_parameters() {
       _filter_peer_ids[uuid] = true;
     }
   }
-  
   
   if(_parameters.find("source_ids")!=_parameters.end()) {
     char* buf = (char*)malloc(_parameters["source_ids"].size()+2);
@@ -709,6 +723,12 @@ bool EEDB::WebServices::WebBase::parse_config_file(string path) {
   if(node) { _smtp_server_passwd = node->value(); }
   node = root_node->first_node("smtp_from");
   if(node) { _smtp_from = node->value(); }
+
+  node = root_node->first_node("autobuild_cache_on_region_query");
+  if(node && (node->value()==string("true"))) { _autobuild_cache_on_region_query = true; }
+
+  node = root_node->first_node("cross_domain_access_origins");
+  if(node) { _cross_domain_access_origins = node->value(); }
   
   //seed peers
   rapidxml::xml_node<> *seed_root = root_node->first_node("federation_seeds");
@@ -996,6 +1016,12 @@ void EEDB::WebServices::WebBase::get_session_user() {
     node = node->next_sibling();
   }
   free(session_text);
+
+  //update the last_access time for this session
+  _userDB->do_sql("update sessions set last_access = NOW() WHERE id=?", "s", _session_data["id"].c_str());
+
+  //remove old sessions
+  //mysql> delete  from sessions where last_access < DATE_SUB(NOW(), INTERVAL 1 DAY) and a_session not like "%zenbu_login_user_identity%" ;
 
   //see if session is over 1 week, logout and make new session
   /*
@@ -1535,6 +1561,79 @@ void  EEDB::WebServices::WebBase::set_federation_seeds(EEDB::SPStream*  spstream
 }
 
 
+void  EEDB::WebServices::WebBase::set_superuser_federation_seeds(EEDB::SPStream*  spstream) {
+  if(spstream == NULL) { return; }
+  
+  if(spstream->classname() == EEDB::SPStreams::SourceStream::class_name) { return; }
+  if(spstream->classname() == EEDB::SPStreams::StreamBuffer::class_name) { return; }
+  
+  //walking back up now
+  if(spstream->classname() == EEDB::SPStreams::FederatedSourceStream::class_name) {
+    fprintf(stderr, "set_superuser_federation_seeds %ld [%s]\n", (long)spstream, spstream->classname());
+    EEDB::SPStreams::FederatedSourceStream  *fstream = (EEDB::SPStreams::FederatedSourceStream*)spstream;
+    
+    fstream->set_peer_search_depth(_peer_search_depth);
+    fstream->allow_full_federation_search(false);
+    fstream->clone_peers_on_build(true);
+    
+    //first clear any previous seed settings
+    fstream->clear_seed_peers();
+    
+    //next the local seeds
+    vector<EEDB::Peer*>::iterator  it;
+    for(it = _seed_peers.begin(); it != _seed_peers.end(); it++) {
+      EEDB::Peer* peer = (*it);
+      if(_known_remote_peers.find(peer->uuid()) == _known_remote_peers.end()) {
+        fstream->add_seed_peer(peer);
+      }
+    }
+    
+    if(_curated_collaboration) {
+      fstream->add_seed_peer(_curated_collaboration->group_registry());
+    }
+    if(_public_collaboration) {
+      fstream->add_seed_peer(_public_collaboration->group_registry());
+    }
+    
+    //all user registries
+    vector<DBObject*> all_users = EEDB::User::fetch_all(_userDB);
+    for(unsigned i=0; i<all_users.size(); i++) {
+      EEDB::User* user = (EEDB::User*)all_users[i];
+      if(user->user_registry()) {
+        fstream->add_seed_peer(user->user_registry());
+      }
+    }
+    
+    //all collaboration registries
+    vector<DBObject*> all_collabs = EEDB::Collaboration::fetch_all(_userDB);
+    for(unsigned i=0; i<all_collabs.size(); i++) {
+      EEDB::Collaboration* collab = (EEDB::Collaboration*)all_collabs[i];
+      if(collab->group_registry()) {
+        fstream->add_seed_peer(collab->group_registry());
+      }
+    }
+    
+    //last the remote peers
+    map<string, EEDB::Peer*>::iterator it2;
+    for(it2 = _known_remote_peers.begin(); it2 != _known_remote_peers.end(); it2++) {
+      fstream->add_seed_peer((*it2).second);
+    }
+    return;
+  }
+  
+  //recurse down
+  if(spstream->source_stream()) {
+    EEDB::SPStream* source_stream = spstream->source_stream();
+    set_superuser_federation_seeds(source_stream); //recurse
+  }
+  
+  if(spstream->side_stream()) {
+    EEDB::SPStream* side_stream = spstream->side_stream();
+    set_superuser_federation_seeds(side_stream); //recurse
+  }
+}
+
+
 //helper function
 EEDB::Assembly*  _peer_find_assembly(EEDB::Peer* peer, string assembly_name) {
   if(!peer) { return NULL; }
@@ -1547,7 +1646,9 @@ EEDB::Assembly*  _peer_find_assembly(EEDB::Peer* peer, string assembly_name) {
     if(!assembly->sequence_loaded()) { continue; }
     if((boost::algorithm::to_lower_copy(assembly->assembly_name()) != assembly_name) and
        (boost::algorithm::to_lower_copy(assembly->ncbi_version()) != assembly_name) and
+       (boost::algorithm::to_lower_copy(assembly->ncbi_assembly_accession()) != assembly_name) and
        (boost::algorithm::to_lower_copy(assembly->ucsc_name()) != assembly_name)) { continue; }
+    EEDB::Assembly::add_to_assembly_cache(assembly);
     return assembly; //found it
   }
   return NULL;
@@ -1564,7 +1665,10 @@ EEDB::Assembly*  _registry_find_assembly(EEDB::Peer* peer, string assembly_name)
     if(peer2->driver() == string("oscdb")) { continue; }
     if(peer2->driver() == string("bamdb")) { continue; }
     assembly = _peer_find_assembly(peer2, assembly_name);
-    if(assembly) { return assembly; }
+    if(assembly) { 
+      EEDB::Assembly::add_to_assembly_cache(assembly);
+      return assembly; 
+    }
   }
   return NULL;
 }
@@ -1692,6 +1796,8 @@ void EEDB::WebServices::WebBase::show_single_object() {
 
   if(_user_profile) { printf("%s", _user_profile->simple_xml().c_str()); } 
 
+  EEDB::Tools::OSCFileParser::sparse_expression(false);
+
   stream = source_stream();
   
   obj = stream->fetch_object_by_id(_parameters["id"]);
@@ -1713,6 +1819,7 @@ void EEDB::WebServices::WebBase::show_single_object() {
   printf("<process_summary processtime_msec=\"%1.6f\" />\n", runtime);
   printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
   printf("</objects>\n");
+  EEDB::Tools::OSCFileParser::sparse_expression(true);
 }
 
 
@@ -1727,6 +1834,8 @@ void EEDB::WebServices::WebBase::show_objects() {
   long int                  total = 0;
   long int                  result_count = 0;
   vector<string>::iterator  it;
+
+  EEDB::Tools::OSCFileParser::sparse_expression(false);
 
   EEDB::SPStreams::FederatedSourceStream *stream = source_stream();
     
@@ -1743,7 +1852,7 @@ void EEDB::WebServices::WebBase::show_objects() {
   printf("<process_summary processtime_sec=\"%1.6f\" />\n", runtime);
   printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
   printf("</objects>\n");
- 
+  EEDB::Tools::OSCFileParser::sparse_expression(true);
 }
 
 
@@ -1844,7 +1953,7 @@ void EEDB::WebServices::WebBase::show_chromosomes() {
   string assembly_name = _parameters["assembly_name"];
   string chrom_name    = _parameters["chrom_name"];
 
-  if(assembly_name.empty()) {
+  if(assembly_name.empty()) { //either want to show from peers, or a global list
     EEDB::SPStreams::FederatedSourceStream *stream = source_stream();
     stream->set_peer_search_depth(2); //only search the seeds
 
@@ -2015,7 +2124,7 @@ void EEDB::WebServices::WebBase::show_system_load() {
         }
       }
 
-      printf("<access_stats date=\"%s\" count=\"%ld\" user_count=\"%ld\"></access_stats>\n",
+      printf("<access_stats date=\"%s\" count=\"%lld\" user_count=\"%lld\"></access_stats>\n",
              time_str.c_str(), row_vector[1].i_int64, row_vector[2].i_int64);
       //printf("<req_stats>\n");
       //for(unsigned j=0; j<row_vector.size(); j++) {

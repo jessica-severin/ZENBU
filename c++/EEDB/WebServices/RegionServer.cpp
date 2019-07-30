@@ -1,4 +1,4 @@
-/* $Id: RegionServer.cpp,v 1.260 2017/01/17 05:41:18 severin Exp $ */
+/* $Id: RegionServer.cpp,v 1.264 2019/03/26 07:05:39 severin Exp $ */
 
 /***
 
@@ -80,6 +80,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <EEDB/SPStreams/StreamBuffer.h>
 #include <EEDB/SPStreams/FeatureEmitter.h>
 #include <EEDB/SPStreams/TemplateCluster.h>
+#include <EEDB/SPStreams/AppendExpression.h>
 #include <EEDB/SPStreams/Proxy.h>
 #include <EEDB/SPStreams/RemoteServerStream.h>
 #include <EEDB/WebServices/RegionServer.h>
@@ -137,7 +138,7 @@ void check_script_for_proxy_datasources(EEDB::SPStream* spstream, map<string,boo
   if(spstream->classname() == EEDB::SPStreams::Proxy::class_name) { 
     EEDB::SPStreams::Proxy *proxy = (EEDB::SPStreams::Proxy*) spstream;
     proxy_hash[proxy->proxy_name()] = true;
-    //fprintf(stderr, "found proxy name [%s]\n", proxy->proxy_name().c_str());
+    //fprintf(stderr, "check_script_for_proxy_datasources: found proxy name [%s]\n", proxy->proxy_name().c_str());
   }  
   
   if(spstream->source_stream()) {
@@ -170,6 +171,22 @@ EEDB::TrackDef::~TrackDef() {
 void EEDB::TrackDef::init() {
   MQDB::DBObject::init();
   _classname  = EEDB::TrackDef::class_name;  
+}
+
+string EEDB::TrackDef::xml() {
+  string configXML = "<datastream name=\"" + name +"\"";
+  if(!source_outmode.empty()) { configXML += " source_outmode=\"" + source_outmode +"\""; }
+  if(!expression_datatype.empty()) { configXML += " datatype=\"" + expression_datatype +"\""; }
+  //if(!track_uuid.empty()) { configXML += " track_uuid=\"" + track_uuid +"\""; }
+  configXML +=">";
+
+  map<string, bool>::iterator it2;
+  for(it2 = source_ids.begin(); it2 != source_ids.end(); it2++) {
+    configXML += "<source id=\"" + (*it2).first +"\"/>";
+  }
+  configXML += "</datastream>";
+
+  return configXML;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -288,7 +305,10 @@ void EEDB::WebServices::RegionServer::show_api() {
   */
 
   printf("Content-type: text/html\r\n");
-  printf("Access-Control-Allow-Origin: *\r\n");
+  if(!_cross_domain_access_origins.empty()) {
+    printf("Access-Control-Allow-Origin: %s\r\n", _cross_domain_access_origins.c_str()); 
+    printf("Access-Control-Allow-Credentials: true\r\n");
+  }
   printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
   printf("\r\n");
   printf("<!DOCTYPE html  PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n");
@@ -343,7 +363,7 @@ void EEDB::WebServices::RegionServer::show_api() {
     map<string,string>::iterator it1;
     for(it1=_parameters.begin(); it1!=_parameters.end(); it1++) {
       if((*it1).first.empty() || (*it1).second.empty()) { continue; }
-      printf("%s = [%s]<br>", (*it1).first.c_str(), (*it1).second.c_str());
+      printf("%s = [%s]<br>\n", (*it1).first.c_str(), (*it1).second.c_str());
     }
     printf("<hr/>\n");
   }
@@ -460,6 +480,7 @@ void EEDB::WebServices::RegionServer::process_xml_parameters() {
   if((node = root_node->first_node("expfilter")) != NULL) { _parameters["filter"] = node->value(); }
   if((node = root_node->first_node("strandless")) != NULL) { _parameters["strandless"] = node->value(); }
   if((node = root_node->first_node("overlap_check_subfeatures")) != NULL) { _parameters["overlap_check_subfeatures"] = node->value(); }
+  if((node = root_node->first_node("add_count_expression")) != NULL) { _parameters["add_count_expression"] = node->value(); }
 
   if((node = root_node->first_node("export_subfeatures")) != NULL) { _parameters["export_subfeatures"] = node->value(); }
   if((node = root_node->first_node("export_feature_metadata")) != NULL) { _parameters["export_feature_metadata"] = node->value(); }
@@ -483,6 +504,7 @@ void EEDB::WebServices::RegionServer::process_xml_parameters() {
     if((attr = node->first_attribute("overlap_mode"))) { _parameters["overlap_mode"] = attr->value(); }
     if((attr = node->first_attribute("binning"))) { _parameters["binning"] = attr->value(); }
     if((attr = node->first_attribute("strandless"))) { _parameters["strandless"] = attr->value(); }
+    if((attr = node->first_attribute("add_count_expression"))) { _parameters["add_count_expression"] = attr->value(); }
     if((attr = node->first_attribute("binsize"))) { _parameters["bin_size"] = attr->value(); }
     if((attr = node->first_attribute("bin_size"))) { _parameters["bin_size"] = attr->value(); }
     if((attr = node->first_attribute("subfeatures"))) { _parameters["overlap_check_subfeatures"] = attr->value(); }
@@ -631,7 +653,7 @@ void  EEDB::WebServices::RegionServer::postprocess_parameters() {
 
 
 bool  EEDB::WebServices::RegionServer::init_from_track_cache(string track_hashkey) {
-  //fprintf(stderr, "init_from_track_cache [%s]\n", track_uuid.c_str());
+  //fprintf(stderr, "init_from_track_cache [%s]\n", track_hashkey.c_str());
   if(!_userDB) { return false; }
   
   _track_cache = EEDB::TrackCache::fetch_by_hashkey(_userDB, track_hashkey);
@@ -748,6 +770,7 @@ bool  EEDB::WebServices::RegionServer::init_from_track_configXML(string configXM
       if((attr = node2->first_attribute("overlap_mode"))) { _parameters["overlap_mode"] = attr->value(); }
       if((attr = node2->first_attribute("binning"))) { _parameters["binning"] = attr->value(); }
       if((attr = node2->first_attribute("strandless"))) { _parameters["strandless"] = attr->value(); }
+      if((attr = node2->first_attribute("add_count_expression"))) { _parameters["add_count_expression"] = attr->value(); }
       if((attr = node2->first_attribute("binsize"))) { _parameters["bin_size"] = attr->value(); }
       if((attr = node2->first_attribute("bin_size"))) { _parameters["bin_size"] = attr->value(); }
       if((attr = node2->first_attribute("subfeatures"))) { _parameters["overlap_check_subfeatures"] = attr->value(); }
@@ -901,6 +924,8 @@ void  EEDB::WebServices::RegionServer::parse_processing_stream(void *xml_node) {
     if((attr = datastream->first_attribute("output"))) {
       track->source_outmode = attr->value();
     }
+
+    //fprintf(stderr, "created datastream %s\n", track->xml().c_str());
   }
 }
 
@@ -976,17 +1001,20 @@ vector<string>  EEDB::WebServices::RegionServer::_get_track_uuid_datasource_ids(
 
 
 void  EEDB::WebServices::RegionServer::_proxy_setup_processing_stream() {
+  //fprintf(stderr, "RegionServer::_proxy_setup_processing_stream\n");
   if((_stream_processing_head == NULL) || (_stream_processing_tail == NULL)) { return; }
   if(_processing_datastreams.empty()) { return; }
-  
+
   map<string, EEDB::TrackDef*>::iterator   datasrc;
   for(datasrc=_processing_datastreams.begin(); datasrc!=_processing_datastreams.end(); datasrc++) {
     EEDB::TrackDef*   track = (*datasrc).second;
+    //fprintf(stderr, "setup %s\n", track->xml().c_str());
 
     //next get proxies in the processing stream and replace them
     vector<EEDB::SPStream*>            proxies;
     vector<EEDB::SPStream*>::iterator  it1;
     _stream_processing_head->get_proxies_by_name(track->name, proxies);
+    //fprintf(stderr, "for name[%s] found %ld proxies\n", track->name.c_str(), proxies.size());
     
     for(it1=proxies.begin(); it1!=proxies.end(); it1++) {
       EEDB::SPStreams::Proxy  *proxy = (EEDB::SPStreams::Proxy*)(*it1);
@@ -1010,6 +1038,7 @@ void  EEDB::WebServices::RegionServer::_proxy_setup_processing_stream() {
       }
     }
   }
+  //fprintf(stderr, "after proxy setup stream_processing_head: %s\n", _stream_processing_head->xml().c_str());
 }
 
 
@@ -1194,6 +1223,13 @@ EEDB::SPStream*  EEDB::WebServices::RegionServer::_append_expression_histogram_b
   //
   // use FeatureEmitter and TemplateCluster to create the expression histogram binning
   //
+  if(_parameters["add_count_expression"] == "true") {
+    fprintf(stderr, "AppendExpression to express-binning\n");
+    EEDB::SPStreams::AppendExpression *addExpr = new EEDB::SPStreams::AppendExpression();
+    addExpr->source_stream(stream);
+    stream = addExpr;
+  }
+
   EEDB::SPStreams::FeatureEmitter *emitter = new EEDB::SPStreams::FeatureEmitter;
   emitter->overlap(0);
   emitter->fixed_grid(true);
@@ -1228,8 +1264,8 @@ EEDB::SPStream*  EEDB::WebServices::RegionServer::_append_expression_histogram_b
   if(_parameters["overlap_check_subfeatures"] == "true") {
     cluster->overlap_check_subfeatures(true);
   }
-
   stream = cluster;
+
   return stream;
 }
 
@@ -1318,7 +1354,10 @@ EEDB::SPStream*  EEDB::WebServices::RegionServer::region_stream() {
 
 void EEDB::WebServices::RegionServer::show_debug() {  
   printf("Content-type: text/xml\r\n");
-  printf("Access-Control-Allow-Origin: *\r\n");
+  if(!_cross_domain_access_origins.empty()) {
+    printf("Access-Control-Allow-Origin: %s\r\n", _cross_domain_access_origins.c_str()); 
+    printf("Access-Control-Allow-Credentials: true\r\n");
+  }
   printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
@@ -1397,6 +1436,8 @@ void  EEDB::WebServices::RegionServer::_direct_show_region() {
   string               chrom_name = _parameters["chrom_name"];
   map<string, bool>    dep_ids;
 
+  find_assembly(assembly); //to load into cache
+
   EEDB::SPStream* stream = region_stream();
   check_over_memory();
 
@@ -1431,7 +1472,7 @@ void  EEDB::WebServices::RegionServer::_direct_show_region() {
 
     if(_track_cache) {
       _track_cache->log_location(_user_profile, assembly, chrom_name, _region_start, _region_end);
-      _track_cache->xml(_output_buffer);
+      _track_cache->simple_xml(_output_buffer);
     }
   }
   check_over_memory();
@@ -1532,7 +1573,7 @@ void  EEDB::WebServices::RegionServer::_direct_show_region() {
     _output_buffer_send(true);
   }
   _raw_count = _raw_objcounter->count();
-  stream->stream_clear();
+  //stream->stream_clear();
 
   //add all the sources and dependant sources that appeared in the features that streamed
   if(_parameters["format"] == "xml") {
@@ -1544,12 +1585,20 @@ void  EEDB::WebServices::RegionServer::_direct_show_region() {
       fstream->add_source_id_filter((*it1).first);
       //fprintf(stderr, "dependent %s\n", (*it1).first.c_str());
     }
+    stream = fstream;
+
+    //add the script in case dynamic sources were created
+    if(_stream_processing_head != NULL) {
+       _output_buffer += "<note>added script for streaming of sources</note>";
+      _stream_processing_tail->source_stream(fstream);
+      stream = _stream_processing_head; //replace the previous stream
+    }
 
     _output_buffer += "<sources>\n";
     if(_parameters.find("filter")!=_parameters.end()) { _output_buffer += "<filter>"+_parameters["filter"]+"</filter>\n"; }
     long int experiment_count=0, fsrc_count=0;
-    fstream->stream_data_sources();
-    while(EEDB::DataSource *source = (EEDB::DataSource*)fstream->next_in_stream()) {
+    stream->stream_data_sources();
+    while(EEDB::DataSource *source = (EEDB::DataSource*)stream->next_in_stream()) {
       //source->simple_xml(_output_buffer);
       EEDB::DataSource::add_to_sources_cache(source);
       if(source->classname() == EEDB::FeatureSource::class_name) {
@@ -1645,7 +1694,7 @@ bool  EEDB::WebServices::RegionServer::_trackcache_show_region() {
              _parameters["exptype"].c_str(), _parameters["source_outmode"].c_str());
     _output_buffer.append(buffer);
 
-    _track_cache->xml(_output_buffer);
+    _track_cache->simple_xml(_output_buffer);
     if(_track_cache->is_remote()) { _output_buffer.append("<remote_sync>ok</remote_sync>\n"); }
 
     //_output_buffer += "<trackcache>" + _track_cache->track_hashkey() + "</trackcache>\n";
@@ -1755,7 +1804,10 @@ bool  EEDB::WebServices::RegionServer::_trackcache_show_region() {
 
 void  EEDB::WebServices::RegionServer::send_trackcache_zdx() {
   printf("Content-type: text/plain\r\n");
-  printf("Access-Control-Allow-Origin: *\r\n");
+  if(!_cross_domain_access_origins.empty()) {
+    printf("Access-Control-Allow-Origin: %s\r\n", _cross_domain_access_origins.c_str()); 
+    printf("Access-Control-Allow-Credentials: true\r\n");
+  }
   printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
   printf("\r\n");
   //printf("Content-type: application/octet-stream\r\n\r\n");  
@@ -1831,7 +1883,10 @@ void  EEDB::WebServices::RegionServer::show_region_stats() {
 void EEDB::WebServices::RegionServer::show_source_stream() {
   //used for debugging and stream coordination, shows XML description of current stream setup
   printf("Content-type: text/xml\r\n");
-  printf("Access-Control-Allow-Origin: *\r\n");
+  if(!_cross_domain_access_origins.empty()) {
+    printf("Access-Control-Allow-Origin: %s\r\n", _cross_domain_access_origins.c_str()); 
+    printf("Access-Control-Allow-Credentials: true\r\n");
+  }
   printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
@@ -1857,7 +1912,10 @@ void EEDB::WebServices::RegionServer::show_source_stream() {
 void EEDB::WebServices::RegionServer::show_region_sequence() {
   //used for debugging and stream coordination, shows XML description of current stream setup
   printf("Content-type: text/xml\r\n");
-  printf("Access-Control-Allow-Origin: *\r\n");
+  if(!_cross_domain_access_origins.empty()) {
+    printf("Access-Control-Allow-Origin: %s\r\n", _cross_domain_access_origins.c_str()); 
+    printf("Access-Control-Allow-Credentials: true\r\n");
+  }
   printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
@@ -1915,7 +1973,10 @@ void EEDB::WebServices::RegionServer::show_region_sequence() {
 
 void EEDB::WebServices::RegionServer::show_datasources() {  
   printf("Content-type: text/xml\r\n");
-  printf("Access-Control-Allow-Origin: *\r\n");
+  if(!_cross_domain_access_origins.empty()) {
+    printf("Access-Control-Allow-Origin: %s\r\n", _cross_domain_access_origins.c_str());
+    printf("Access-Control-Allow-Credentials: true\r\n");
+  }
   printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
@@ -2172,7 +2233,10 @@ void  EEDB::WebServices::RegionServer::_output_header(EEDB::SPStream* stream) {
       printf("Content-type: text/plain\r\n");
     }
     //printf("Content-Encoding: gzip\r\n");
-    printf("Access-Control-Allow-Origin: *\r\n");
+    if(!_cross_domain_access_origins.empty()) {
+      printf("Access-Control-Allow-Origin: %s\r\n", _cross_domain_access_origins.c_str()); 
+      printf("Access-Control-Allow-Credentials: true\r\n");
+    }
     printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
     printf("\r\n");
 
@@ -2212,7 +2276,10 @@ void  EEDB::WebServices::RegionServer::_output_header(EEDB::SPStream* stream) {
       printf("Content-type: text/plain\r\n");
     }
     //printf("Content-Encoding: gzip\r\n");
-    printf("Access-Control-Allow-Origin: *\r\n");
+    if(!_cross_domain_access_origins.empty()) {
+      printf("Access-Control-Allow-Origin: %s\r\n", _cross_domain_access_origins.c_str()); 
+      printf("Access-Control-Allow-Credentials: true\r\n");
+    }
     printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
     printf("\r\n");
 
@@ -2237,7 +2304,10 @@ void  EEDB::WebServices::RegionServer::_output_header(EEDB::SPStream* stream) {
       printf("Content-type: text/plain\r\n");
     }
     //printf("Content-Encoding: gzip\r\n");
-    printf("Access-Control-Allow-Origin: *\r\n");
+    if(!_cross_domain_access_origins.empty()) {
+      printf("Access-Control-Allow-Origin: %s\r\n", _cross_domain_access_origins.c_str()); 
+      printf("Access-Control-Allow-Credentials: true\r\n");
+    }
     printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
     printf("\r\n");
     /*
@@ -2254,16 +2324,22 @@ void  EEDB::WebServices::RegionServer::_output_header(EEDB::SPStream* stream) {
 
   else if(_parameters["format"] == "xml") {
     if(_parameters["savefile"] == "true") {
-      printf("Content-type: text/plain\r\n");
+      printf("Content-type: application/xml\r\n");
       printf("Content-Disposition: attachment; filename=%s.xml;\r\n", filename.c_str());
       //printf("Content-Encoding: gzip\r\n");
-      printf("Access-Control-Allow-Origin: *\r\n");
+      if(!_cross_domain_access_origins.empty()) {
+        printf("Access-Control-Allow-Origin: %s\r\n", _cross_domain_access_origins.c_str()); 
+        printf("Access-Control-Allow-Credentials: true\r\n");
+      }
       printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
       printf("\r\n");
     } else {
       printf("Content-type: text/xml\r\n");
       //printf("Content-Encoding: gzip\r\n");
-      printf("Access-Control-Allow-Origin: *\r\n");
+      if(!_cross_domain_access_origins.empty()) {
+        printf("Access-Control-Allow-Origin: %s\r\n", _cross_domain_access_origins.c_str()); 
+        printf("Access-Control-Allow-Credentials: true\r\n");
+      }
       printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
       printf("\r\n");
       printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
@@ -2291,13 +2367,19 @@ void  EEDB::WebServices::RegionServer::_output_header(EEDB::SPStream* stream) {
     if(_parameters["savefile"] == "true") {
       printf("Content-type: text/plain\r\n");
       printf("Content-Disposition: attachment; filename=%s.xml;\r\n", filename.c_str());
-      printf("Access-Control-Allow-Origin: *\r\n");
+      if(!_cross_domain_access_origins.empty()) {
+        printf("Access-Control-Allow-Origin: %s\r\n", _cross_domain_access_origins.c_str()); 
+        printf("Access-Control-Allow-Credentials: true\r\n");
+      }
       printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
       //printf("Content-Encoding: gzip\r\n");
       printf("\r\n");
     } else {
       printf("Content-type: text/xml\r\n");
-      printf("Access-Control-Allow-Origin: *\r\n");
+      if(!_cross_domain_access_origins.empty()) {
+        printf("Access-Control-Allow-Origin: %s\r\n", _cross_domain_access_origins.c_str());
+        printf("Access-Control-Allow-Credentials: true\r\n");
+      }
       printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
       //printf("Content-Encoding: gzip\r\n");
       printf("\r\n");
@@ -2322,7 +2404,10 @@ void  EEDB::WebServices::RegionServer::_output_header(EEDB::SPStream* stream) {
     } else {
       printf("Content-type: text/plain\r\n");
     }
-    printf("Access-Control-Allow-Origin: *\r\n");
+    if(!_cross_domain_access_origins.empty()) {
+      printf("Access-Control-Allow-Origin: %s\r\n", _cross_domain_access_origins.c_str()); 
+      printf("Access-Control-Allow-Credentials: true\r\n");
+    }
     printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
     printf("\r\n");
     /*
@@ -2342,7 +2427,10 @@ void  EEDB::WebServices::RegionServer::_output_header(EEDB::SPStream* stream) {
   } 
   else {
     printf("Content-type: text/plain\r\n");
-    printf("Access-Control-Allow-Origin: *\r\n");
+    if(!_cross_domain_access_origins.empty()) {
+      printf("Access-Control-Allow-Origin: %s\r\n", _cross_domain_access_origins.c_str()); 
+      printf("Access-Control-Allow-Credentials: true\r\n");
+    }
     printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
     printf("\r\n");
   }
@@ -2510,6 +2598,9 @@ string  EEDB::WebServices::RegionServer::_generate_configXML(EEDB::SPStream* scr
     if(_parameters.find("strandless")!=_parameters.end()) {
       configXML += " strandless=\"" + _parameters["strandless"] +"\"";
     }
+    if(_parameters.find("add_count_expression")!=_parameters.end()) {
+      configXML += " add_count_expression=\"" + _parameters["add_count_expression"] +"\"";
+    }
     if(_parameters.find("bin_size")!=_parameters.end()) {
       configXML += " bin_size=\"" + _parameters["bin_size"] +"\"";
     }
@@ -2606,9 +2697,12 @@ bool  EEDB::WebServices::RegionServer::check_track_cache(string assembly_name, s
   }
 
   unbuilt = numsegs-numbuilt-numclaimed;
-  if(unbuilt>0) {  
+  if(_autobuild_cache_on_region_query && _user_profile && unbuilt>0) {  
+    fprintf(stderr, "store autobuild track-request\n");
     EEDB::TrackRequest* buildrequest = new EEDB::TrackRequest();
     buildrequest->assembly_name(assembly_name);
+    //buildrequest->user_id(_user_profile->primary_id());
+    if(_user_profile && (_parameters["anonymous"] != "true")) { buildrequest->user_id(_user_profile->primary_id()); }
     buildrequest->chrom_name(chrom_name); 
     buildrequest->chrom_start(start);
     buildrequest->chrom_end(end);
@@ -2758,7 +2852,10 @@ void EEDB::WebServices::RegionServer::show_securecheck() {
   long int total_count = source_hash.size();
 
   printf("Content-type: text/xml\r\n");
-  printf("Access-Control-Allow-Origin: *\r\n");
+  if(!_cross_domain_access_origins.empty()) {
+    printf("Access-Control-Allow-Origin: %s\r\n", _cross_domain_access_origins.c_str());
+    printf("Access-Control-Allow-Credentials: true\r\n");
+  }
   printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
   printf("\r\n");
   //printf header(-type => "text/xml", -charset=> "UTF8");
@@ -2807,7 +2904,7 @@ bool  EEDB::WebServices::RegionServer::_build_trackcache_chroms() {
   //
   string asmb = _parameters["assembly_name"];
   boost::algorithm::to_lower(asmb);
-  fprintf(stderr, "build trackcache chroms [%s] ... ", asmb.c_str());
+  fprintf(stderr, "build trackcache chroms [%s] zdx:%s\n", asmb.c_str(), zdxdb->path().c_str());
 
   EEDB::Assembly *assembly = find_assembly(asmb);
   if(assembly) {
@@ -2839,7 +2936,7 @@ void  EEDB::WebServices::RegionServer::show_trackcache_stats() {
     
     ZDXdb* zdxdb = _track_cache->zdxstream()->zdxdb();
 
-    _track_cache->xml(_output_buffer);
+    _track_cache->simple_xml(_output_buffer);
          
     long numsegs, numbuilt, numclaimed, seg_start;
     EEDB::ZDX::ZDXsegment::build_stats(zdxdb, assembly_name, chrom_name, _region_start, _region_end,
