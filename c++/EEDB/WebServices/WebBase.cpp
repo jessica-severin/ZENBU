@@ -1,4 +1,4 @@
-/* $Id: WebBase.cpp,v 1.222 2018/12/05 01:11:30 severin Exp $ */
+/* $Id: WebBase.cpp,v 1.223 2019/07/30 09:57:29 severin Exp $ */
 
 /***
 
@@ -90,7 +90,7 @@ using namespace MQDB;
 
 const char*     EEDB::WebServices::WebBase::class_name = "EEDB::WebServices::WebBase";
 
-const char*     EEDB::WebServices::WebBase::zenbu_version = "2.11.3";
+const char*     EEDB::WebServices::WebBase::zenbu_version = "3.0.0";
 
 map<string,string>  EEDB::WebServices::WebBase::global_parameters;
 
