@@ -152,6 +152,7 @@ void migrate_f5_sRNA_data();
 void check_view_collaboration_security_sharing();
 void check_duplicate_uploads();
 void fantom6_bam_links();
+bool zdx_patch_assembly();
 
 EEDB::User* get_cmdline_user();
 
@@ -177,6 +178,8 @@ int main() {
 
   seedpeers.push_back(EEDB::Peer::new_from_url("sqlite:///zenbu/dbs/zenbu_main_registry.sqlite"));
   seedpeers.push_back(EEDB::Peer::new_from_url("sqlite:///eeDB/dbs/eedb_fantom46_registry2.sqlite"));
+
+  zdx_patch_assembly(); exit(0);
 
   test_region_server3(); exit(0);
   //fantom6_bam_links(); exit(0);
@@ -6202,3 +6205,42 @@ string post_data ="<zenbu_query><trackcache>9e229d1bf9e3281d908346abd07b8487c12f
 }
 
 
+bool zdx_patch_assembly() {
+  struct timeval      starttime,endtime,difftime;
+  long                count=0;
+  char                strbuffer[8192];
+  string              _error_msg;
+  MQDB::DBObject*                 obj;
+
+  fprintf(stderr, "\n== zdx_patch_assembly\n");
+
+  //open the ZDX file
+  gettimeofday(&starttime, NULL); //reset timer
+  const char *path = "/zenbu/users/zenbu_genome-9031-NCBI-GCF_000002315.4-Gallus_gallus-5.0/assembly.zdx";
+  EEDB::ZDX::ZDXstream *zdxstream = EEDB::ZDX::ZDXstream::open(path);
+  EEDB::Peer* peer1 = zdxstream->self_peer();
+  fprintf(stderr, "%s\n", peer1->xml().c_str());
+  
+  ZDXdb* zdxdb = zdxstream->zdxdb();
+  long numchroms =  EEDB::ZDX::ZDXsegment::num_chroms(zdxdb);
+  fprintf(stderr, "zdx loaded %ld chroms\n", numchroms);
+  if(zdxstream->genome_sequence_loaded()) { fprintf(stderr, "genome_sequence_loaded\n"); }
+  zdxstream->reload_stream_data_sources();
+
+  zdxstream->stream_data_sources("Assembly", "");
+  while((obj = zdxstream->next_in_stream())) {
+    if(obj->classname() != EEDB::Assembly::class_name) { continue; }
+    EEDB::Assembly *assembly = (EEDB::Assembly*)obj;
+    if(assembly->assembly_name() != "Gallus_gallus-5.0") { continue; }
+    assembly->assembly_name("galGal5");
+    assembly->ucsc_name("galGal5");
+    assembly->metadataset()->remove_metadata_like("ucsc_name","");
+    assembly->metadataset()->add_metadata("ucsc_name","galGal5");
+    fprintf(stderr, "%s\n", assembly->xml().c_str());
+  }
+
+  zdxstream->write_source_section();
+
+  zdxstream->release();
+  return true;
+}
