@@ -1,4 +1,4 @@
-/* $Id: OSCFileParser.cpp,v 1.223 2019/02/07 07:19:15 severin Exp $ */
+/* $Id: OSCFileParser.cpp,v 1.224 2019/07/31 06:59:15 severin Exp $ */
 
 /***
 
@@ -54,6 +54,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <iostream>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include <string>
 #include <stdarg.h>
 #include <sys/stat.h>

@@ -8,6 +8,8 @@
 #include <sys/time.h>
 #include <sys/dir.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include <pwd.h>
 #include <curl/curl.h>

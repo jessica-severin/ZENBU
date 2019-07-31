@@ -1,4 +1,4 @@
-/* $Id: RegionServer.cpp,v 1.264 2019/03/26 07:05:39 severin Exp $ */
+/* $Id: RegionServer.cpp,v 1.265 2019/07/31 06:59:15 severin Exp $ */
 
 /***
 
@@ -56,6 +56,9 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <string>
 #include <stdarg.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/time.h>
 #include <sys/mman.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost
 #include <boost/algorithm/string.hpp>

@@ -1,4 +1,4 @@
-/* $Id: DownloadServer.cpp,v 1.2 2016/06/20 06:32:41 severin Exp $ */
+/* $Id: DownloadServer.cpp,v 1.3 2019/07/31 06:59:15 severin Exp $ */
 
 /***
 
@@ -56,8 +56,10 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <string>
 #include <stdarg.h>
 #include <sys/types.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/time.h>
+#include <sys/mman.h>
 //#include <yaml.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost
 #include <boost/algorithm/string.hpp>

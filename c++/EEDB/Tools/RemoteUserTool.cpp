@@ -1,4 +1,4 @@
-/* $Id: RemoteUserTool.cpp,v 1.7 2016/01/29 04:34:22 severin Exp $ */
+/* $Id: RemoteUserTool.cpp,v 1.8 2019/07/31 06:59:15 severin Exp $ */
 
 /***
 
@@ -64,6 +64,8 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <sys/time.h>
 #include <sys/dir.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <pwd.h>
 #include <curl/curl.h>
 #include <openssl/hmac.h>

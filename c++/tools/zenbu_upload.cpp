@@ -1,4 +1,4 @@
-/* $Id: zenbu_upload.cpp,v 1.22 2017/11/07 11:38:43 severin Exp $ */
+/* $Id: zenbu_upload.cpp,v 1.23 2019/07/31 07:03:48 severin Exp $ */
 
 /****
  
@@ -62,6 +62,8 @@
 #include <sys/time.h>
 #include <sys/dir.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include <pwd.h>
 #include <curl/curl.h>

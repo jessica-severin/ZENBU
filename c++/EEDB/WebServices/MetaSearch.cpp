@@ -1,4 +1,4 @@
-/* $Id: MetaSearch.cpp,v 1.93 2019/04/10 09:44:07 severin Exp $ */
+/* $Id: MetaSearch.cpp,v 1.94 2019/07/31 06:59:15 severin Exp $ */
 
 /***
 
@@ -55,7 +55,10 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <iostream>
 #include <string>
 #include <stdarg.h>
+#include <sys/stat.h>
 #include <sys/types.h>
+#include <fcntl.h>
+#include <sys/time.h>
 #include <sys/mman.h>
 //#include <yaml.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost

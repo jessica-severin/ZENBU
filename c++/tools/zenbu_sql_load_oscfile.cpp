@@ -3,6 +3,9 @@
 #include <math.h>
 #include <sys/time.h>
 #include <sys/dir.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <fcntl.h>
 #include <pwd.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost
 #include <rapidxml_print.hpp>  //rapidxml must be include before boost

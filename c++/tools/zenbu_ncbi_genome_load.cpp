@@ -1,4 +1,4 @@
-/* $Id: zenbu_ncbi_genome_load.cpp,v 1.5 2018/09/20 06:01:28 severin Exp $ */
+/* $Id: zenbu_ncbi_genome_load.cpp,v 1.6 2019/07/31 07:03:48 severin Exp $ */
 
 /****
  
@@ -58,6 +58,8 @@
 #include <sys/time.h>
 #include <sys/dir.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <pwd.h>
 #include <curl/curl.h>
 #include <openssl/hmac.h>

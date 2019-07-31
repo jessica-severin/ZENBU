@@ -1,4 +1,4 @@
-/* $Id: UploadFile.cpp,v 1.45 2018/09/04 08:33:09 severin Exp $ */
+/* $Id: UploadFile.cpp,v 1.46 2019/07/31 06:59:15 severin Exp $ */
 
 /***
 
@@ -60,6 +60,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 //#include <yaml.h>
 #include <math.h>
 #include <sys/time.h>

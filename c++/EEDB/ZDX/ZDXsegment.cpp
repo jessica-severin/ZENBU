@@ -1,4 +1,4 @@
-/*  $Id: ZDXsegment.cpp,v 1.88 2018/04/25 05:31:25 severin Exp $ */
+/*  $Id: ZDXsegment.cpp,v 1.89 2019/07/31 06:59:15 severin Exp $ */
 
 /*******
 
@@ -53,6 +53,8 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <iostream>
 #include <string>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <fcntl.h>
 #include <sys/time.h>
 #include <zlib.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost

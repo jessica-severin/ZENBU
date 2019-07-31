@@ -1,4 +1,4 @@
-/* $Id: UploadServer.cpp,v 1.52 2018/08/10 09:15:53 severin Exp $ */
+/* $Id: UploadServer.cpp,v 1.53 2019/07/31 06:59:15 severin Exp $ */
 
 /***
 
@@ -56,8 +56,10 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <string>
 #include <stdarg.h>
 #include <sys/types.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/time.h>
+#include <sys/mman.h>
 //#include <yaml.h>
 #include <openssl/hmac.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost

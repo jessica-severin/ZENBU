@@ -1,4 +1,4 @@
-/* $Id: MannWhitneyRanksum.cpp,v 1.6 2016/02/24 06:27:15 severin Exp $ */
+/* $Id: MannWhitneyRanksum.cpp,v 1.7 2019/07/31 06:59:15 severin Exp $ */
 
 /***
 
@@ -56,6 +56,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <string.h>
 #include <string>
 #include <stdarg.h>
+#include <sys/time.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost
 #include <boost/algorithm/string.hpp>
 #include <EEDB/Experiment.h>

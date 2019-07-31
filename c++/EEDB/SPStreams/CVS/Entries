@@ -2,7 +2,6 @@
 /AddLinkedMetadata.h/1.1/Tue Jul 30 09:41:24 2019//
 /AppendExpression.cpp/1.4/Tue Jul 30 09:41:24 2019//
 /AppendExpression.h/1.3/Tue Jul 30 09:41:24 2019//
-/BAMDB.cpp/1.66/Tue Jul 30 09:41:24 2019//
 /BAMDB.h/1.25/Tue Jul 30 09:41:24 2019//
 /CAGECorrection.cpp/1.2/Tue Jul 30 09:41:24 2019//
 /CAGECorrection.h/1.1/Tue Jul 30 09:41:24 2019//
@@ -36,14 +35,12 @@
 /FilterSubfeatures.h/1.3/Tue Jul 30 09:41:24 2019//
 /FlipStrand.cpp/1.3/Tue Jul 30 09:41:24 2019//
 /FlipStrand.h/1.1/Tue Jul 30 09:41:24 2019//
-/FoldChange.cpp/1.2/Tue Jul 30 09:41:24 2019//
 /FoldChange.h/1.1/Tue Jul 30 09:41:24 2019//
 /IDFilter.cpp/1.5/Tue Jul 30 09:41:24 2019//
 /IDFilter.h/1.2/Tue Jul 30 09:41:24 2019//
 /MakeStrandless.cpp/1.2/Tue Jul 30 09:41:24 2019//
 /MakeStrandless.h/1.2/Tue Jul 30 09:41:24 2019//
 /Makefile/1.26/Tue Jul 30 09:41:24 2019//
-/MannWhitneyRanksum.cpp/1.6/Tue Jul 30 09:41:24 2019//
 /MannWhitneyRanksum.h/1.5/Tue Jul 30 09:41:24 2019//
 /MergeStreams.cpp/1.53/Tue Jul 30 09:41:24 2019//
 /MergeStreams.h/1.13/Tue Jul 30 09:41:24 2019//
@@ -61,9 +58,7 @@
 /NormalizePerMillion.h/1.2/Tue Jul 30 09:41:24 2019//
 /NormalizeRPKM.cpp/1.6/Tue Jul 30 09:41:24 2019//
 /NormalizeRPKM.h/1.3/Tue Jul 30 09:41:24 2019//
-/OSCFileDB.cpp/1.276/Tue Jul 30 09:41:24 2019//
 /OSCFileDB.h/1.55/Tue Jul 30 09:41:24 2019//
-/ObjectCount.cpp/1.7/Tue Jul 30 09:41:24 2019//
 /ObjectCount.h/1.4/Tue Jul 30 09:41:24 2019//
 /OverlapAnnotate.cpp/1.7/Tue Jul 30 09:41:24 2019//
 /OverlapAnnotate.h/1.5/Tue Jul 30 09:41:24 2019//
@@ -103,6 +98,11 @@
 /TopHits.h/1.2/Tue Jul 30 09:41:25 2019//
 /UniqueFeature.cpp/1.13/Tue Jul 30 09:41:25 2019//
 /UniqueFeature.h/1.8/Tue Jul 30 09:41:25 2019//
-/ZenDB.cpp/1.29/Tue Jul 30 09:41:25 2019//
 /ZenDB.h/1.7/Tue Jul 30 09:41:25 2019//
+/BAMDB.cpp/1.67/Wed Jul 31 06:59:33 2019//
+/FoldChange.cpp/1.3/Wed Jul 31 06:59:33 2019//
+/MannWhitneyRanksum.cpp/1.7/Wed Jul 31 06:59:33 2019//
+/OSCFileDB.cpp/1.277/Wed Jul 31 06:59:33 2019//
+/ObjectCount.cpp/1.8/Wed Jul 31 06:59:33 2019//
+/ZenDB.cpp/1.30/Wed Jul 31 06:59:33 2019//
 D

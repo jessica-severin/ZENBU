@@ -1,4 +1,4 @@
-/* $Id: FoldChange.cpp,v 1.2 2017/09/13 06:28:36 severin Exp $ */
+/* $Id: FoldChange.cpp,v 1.3 2019/07/31 06:59:15 severin Exp $ */
 
 /***
 
@@ -56,6 +56,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <iostream>
 #include <string>
 #include <stdarg.h>
+#include <sys/time.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost
 #include <boost/algorithm/string.hpp>
 #include <EEDB/Experiment.h>

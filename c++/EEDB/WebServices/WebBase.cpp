@@ -1,4 +1,4 @@
-/* $Id: WebBase.cpp,v 1.223 2019/07/30 09:57:29 severin Exp $ */
+/* $Id: WebBase.cpp,v 1.224 2019/07/31 06:59:15 severin Exp $ */
 
 /***
 
@@ -55,7 +55,10 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <iostream>
 #include <string>
 #include <stdarg.h>
+#include <sys/stat.h>
 #include <sys/types.h>
+#include <fcntl.h>
+#include <sys/time.h>
 #include <sys/mman.h>
 #include <openssl/hmac.h>
 //#include <yaml.h>
