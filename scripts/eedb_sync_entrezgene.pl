@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w 
 BEGIN{
-    unshift(@INC, "/zenbu/src/ZENBU_2.9.1/lib");
+    unshift(@INC, "/zenbu/src/ZENBU_2.11.3/lib");
 }
 
 =head1 NAME - eedb_sync_entrezgene.pl 
@@ -79,9 +79,10 @@ my $assembly_name = undef;
 my $url = undef;
 my $skip_deprecate = undef;
 my $skip_update = undef;
+my $skip_new = undef;
 my $fsrc_name = undef;
 my $debug = 0;
-my $store = 1;
+my $nostore = 0;
 
 my $genecount=0;
 my $locmove_count=0;
@@ -94,10 +95,11 @@ GetOptions(
     'v'            =>  \$debug,
     'assembly:s'   =>  \$assembly_name,
     'asm:s'        =>  \$assembly_name,
+    'skip_new'     =>  \$skip_new,
     'skip_deprecate' =>  \$skip_deprecate,
     'skip_update'  =>  \$skip_update,
     'pass:s'       =>  \$passwd,
-    'nostore'      =>  \$store,
+    'nostore'      =>  \$nostore,
     'help'         =>  \$help
     );
 
@@ -125,7 +127,7 @@ unless($entrez_source) {
   $entrez_source->is_active("y");
   $entrez_source->is_visible("y");
   $entrez_source->metadataset->add_tag_data("import_url", "http://www.ncbi.nlm.nih.gov/sites/entrez?db=gene");
-  $entrez_source->store($eeDB);
+  unless($nostore) { $entrez_source->store($eeDB); }
   printf("Needed to create:: %s\n", $entrez_source->display_desc);
 }
 unless($entrez_source) { printf("error Entrez feature_source [%s]\n\n", $fsrc_name); usage(); }
@@ -172,8 +174,10 @@ sub usage {
   print "  -url <url>         : URL to database\n";
   print "  -assembly <name>   : name of species/assembly (eg hg18 or mm9)\n";
   print "  -entrezID <id>     : synchronize specific entrez gene\n";
+  print "  -skip_new          : do not load new genes since last update\n";
   print "  -skip_update       : do not perform the update process on previously loaded genes\n";
   print "  -skip_deprecate    : do not perform the update process on deprecated genes\n";
+  print "  -nostore           : perform dry run without storing changes in database\n";
   print "eedb_sync_entrezgene.pl v1.1\n";
 
   exit(1);
@@ -209,7 +213,7 @@ sub update_from_webservice {
   #into:: new, deprecated, and update
   my $sql = "select sym_value from symbol join feature_2_symbol using (symbol_id) ".
      "JOIN feature using(feature_id) ".
-     "WHERE sym_type='EntrezID' AND feature_source_id=?";
+     "WHERE sym_type='EntrezID' AND feature_source_id=? ORDER BY last_update";
   my $loadedEntrezIDs = MQdb::MappedQuery->fetch_col_array($eeDB, $sql, $entrez_source->id);
   my $eIDhash = {};
   my $newCount=0;
@@ -233,19 +237,24 @@ sub update_from_webservice {
   sleep(5);
       
   #first add new genes
-  for my $geneID (keys(%$eIDhash)) {
-    next unless($eIDhash->{$geneID} eq 'new');
-    fetch_gene_from_webservice($geneID);
+  unless($skip_new) {
+    for my $geneID (keys(%$eIDhash)) {
+      next unless($eIDhash->{$geneID} eq 'new');
+      fetch_gene_from_webservice($geneID);
+    }
   }
   fetch_gene_from_webservice();  #flushes the buffer
   
   #then the updates
   unless($skip_update) {
-    for my $geneID (keys(%$eIDhash)) {
+    foreach my $geneID (@$loadedEntrezIDs) { 
+      #printf("%s ", $geneID);
+      #for my $geneID (keys(%$eIDhash)) {
       next unless($eIDhash->{$geneID} eq 'update');
       fetch_gene_from_webservice($geneID);
     }
   }
+  fetch_gene_from_webservice();  #flushes the buffer
   
   #last deprecate
   unless($skip_deprecate) {
@@ -339,7 +348,7 @@ sub extract_gene_summaryXML {
     }
     elsif($type eq "Summary") {
       my $mdata = $mdataset->add_tag_data('Summary', $value);
-      $mdataset->merge_metadataset($mdata->extract_keywords);
+      #$mdataset->merge_metadataset($mdata->extract_keywords);
     }
     elsif($type eq "Mim") {
       my $mims = $value->{"int"};
@@ -364,7 +373,7 @@ sub extract_gene_summaryXML {
       foreach my $alias (@aliases) {
         $alias =~ s/^\s*//g; #remove any leading space
         my $mdata = $mdataset->add_tag_data('alt_description', $alias); 
-        $mdataset->merge_metadataset($mdata->extract_keywords);
+        #$mdataset->merge_metadataset($mdata->extract_keywords);
       }
     }
     elsif($type eq "LocationHist") {
@@ -378,7 +387,7 @@ sub extract_gene_summaryXML {
   if($desc) { #there should only be one description for a gene
     if($organism) { $desc .= " [" . $organism . "]"; } 
     my $mdata = $mdataset->add_tag_data("description", $desc);
-    $mdataset->merge_metadataset($mdata->extract_keywords);
+    #$mdataset->merge_metadataset($mdata->extract_keywords);
   }
   if($debug) { printf("new_feature before update ====\n%s\n===========\n", $new_feature->simple_xml()); }
 
@@ -412,14 +421,14 @@ sub add_matching_loc_hist_XML_to_feature {
 
     my $asmAccVer = $locHistXML->{"AssemblyAccVer"};
     my $chrAccVer = $locHistXML->{"ChrAccVer"};
-    my $chrStart = $locHistXML->{"ChrStart"};
-    my $chrStop = $locHistXML->{"ChrStop"};
+    my $chrStart = $locHistXML->{"ChrStart"} + 1;
+    my $chrStop = $locHistXML->{"ChrStop"} + 1;
 
-    if($debug) { printf("asm[%s] chrAcc[[%s] start[%ld] stop[%ld]\n", $chrAccVer, $chrAccVer, $chrStart, $chrStop); }
+    if($debug) { printf("asm[%s] chrAcc[[%s] start[%ld] stop[%ld]\n", $asmAccVer, $chrAccVer, $chrStart, $chrStop); }
 
     #printf("check $asmAccVer assembly [%s]\n", $assembly->ncbi_assembly_acc());
     if($assembly->ncbi_assembly_acc() ne $asmAccVer) { next; }
-    #printf("found LocationHistType for requested assembly [%s]\n", $assembly->ncbi_assembly_acc());
+    if($debug) { printf("found LocationHistType for requested assembly [%s]\n", $assembly->ncbi_assembly_acc()); }
     
     my $chrom = EEDB::Chrom->fetch_by_chrom_acc_assembly_id($eeDB,$chrAccVer,$assembly->id);
     if($chrom) {
@@ -539,7 +548,11 @@ sub dbcompare_update_newfeature {
   my ($entrez_feature) = @{EEDB::Feature->fetch_all_by_source_symbol($eeDB,
                              $entrez_source, $entrezID->data, 'EntrezID')};
   unless($entrez_feature) {
-    $new_feature->store($eeDB);
+    #unless($new_feature->chrom_location()) { 
+    #  printf("[%9s] NEW-SKIP_no_loc:: %30s : %33s : %s\n", $entrezID->data, $new_feature->primary_name(), $new_feature->chrom_location(), $new_feature->db_id());
+    #  return $new_feature;
+    #}
+    unless($nostore) { $new_feature->store($eeDB); }
     $changed=1;
     #printf("[%s] NEW:: %s\n", $entrezID->data, $new_feature->simple_display_desc);
     printf("[%9s] NEW:: %30s : %33s : %s\n", $entrezID->data, $new_feature->primary_name(), $new_feature->chrom_location(), $new_feature->db_id());
@@ -564,7 +577,7 @@ sub dbcompare_update_newfeature {
     foreach my $nameSym (@$syms) { 
       if($new_feature->primary_name ne $nameSym->data) {
         printf("[%s] UNLINK MDATA:: %s\n", $entrezID->data, $nameSym->display_contents);
-        $nameSym->unlink_from_feature($entrez_feature); 
+        unless($nostore) { $nameSym->unlink_from_feature($entrez_feature); }
       }
     }
     $entrez_feature->metadataset->add_tag_symbol('Entrez_synonym', $entrez_feature->primary_name);
@@ -610,7 +623,7 @@ sub dbcompare_update_newfeature {
   }
 
   if($changed) { #primary_name or location has changed
-    $entrez_feature->update_location();
+    unless($nostore) { $entrez_feature->update_location(); }
   }
 
   #
@@ -645,10 +658,12 @@ sub dbcompare_update_newfeature {
   foreach my $mdata (@$mdata_list) {
     if(!defined($mdata->primary_id)) { 
       # this is a newly loaded metadata so it needs storage and linking
-      if(!$mdata->check_exists_db($eeDB)) { #not turned on by default but what this behaviour here
-        $mdata->store($eeDB);
+      unless($nostore) {
+        if(!$mdata->check_exists_db($eeDB)) { #not turned on by default but what this behaviour here
+          $mdata->store($eeDB);
+        }
+        $mdata->store_link_to_feature($entrez_feature);
       }
-      $mdata->store_link_to_feature($entrez_feature);
       $changed=1;
       printf("[%s] ADD MDATA:: %s -> %s\n", $entrezID->data,
             $entrez_feature->primary_name,
@@ -691,7 +706,7 @@ sub unique_metadata_by_type {
             $mdata->display_contents);
       $mds->add_tag_data($alt_type, $mdata->data);  #put the data back but with new alt type            
       $mds->remove_metadata($mdata);
-      $mdata->unlink_from_feature($feature);
+      unless($nostore) { $mdata->unlink_from_feature($feature); }
     }
   }
 }
