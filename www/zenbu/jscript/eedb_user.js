@@ -41,6 +41,8 @@ function eedbUserInitContents() {
   if(!browserCompatibilityCheck()) {
     window.location ="../browser_upgrade.html";
   }
+  //zenbuGeneralWarn("Due to server room power maintenance at the RIKEN Yokohama campus, all ZENBU webservers will be shutdown from Aug 17 17:00 JST to Aug 21 20:00 JST.<br>"+
+  //                  "We appologize for the inconvenience to ZENBU users, but we will restore services as soon as possible.");
 
   dhtmlHistory.initialize();
 
@@ -95,6 +97,7 @@ function eedbUserInitContents() {
 
   userview.collaborations = new Object;
   userview.collaborations.uuid_hash = new Object();
+  userview.collaborations.loaded = false;
 
   eedbUserXMLHttp=GetXmlHttpObject();
   eedbUserXMLHttp2=GetXmlHttpObject();
@@ -111,7 +114,9 @@ function eedbUserInitContents() {
   eedbUserShowSubmenu();
   //eedbUserReloadContentsData();
   eedbUserShowContents();
-  zenbuRegisterCurrentURL();
+  //zenbuRegisterCurrentURL();
+
+  eedbUserReloadCollaborations("async"); //make sure list of collaborations are loading in the background
 }
 
 
@@ -345,7 +350,7 @@ function eedbUserProfilePanel() {
 
   div1 = main_div.appendChild(document.createElement('div'));
   label1 = div1.appendChild(document.createElement('label'));
-  label1.setAttribute("style", "font-weight:none; color:black;");
+  label1.setAttribute("style", "font-weight:normal; color:black;");
   label1.innerHTML ="email identity: ";
   name_span = div1.appendChild(document.createElement('span'));
   if(userview.user.email) {
@@ -353,7 +358,7 @@ function eedbUserProfilePanel() {
     name_span.innerHTML = userview.user.email;
 
     button = div1.appendChild(new Element('button'));
-    button.setAttribute("style", "font-size:11px; font-family:arial,helvetica,sans-serif; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+    button.setAttribute("style", "font-size:11px; font-family:arial,helvetica,sans-serif; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
     button.setAttribute("type", "button");
     button.setAttribute("onclick", "zenbuUserResetPasswordPanel();");
     button.innerHTML ="change password";
@@ -368,7 +373,7 @@ function eedbUserProfilePanel() {
   div1 = form1.appendChild(document.createElement('div'));
   div1.setAttribute('style', "margin: 5px 0px 5px 0px;");
   label1 = div1.appendChild(document.createElement('label'));
-  label1.setAttribute("style", "font-weight:none; color:black;");
+  label1.setAttribute("style", "font-weight:normal; color:black;");
   label1.innerHTML = "nickname: ";
   input1 = div1.appendChild(document.createElement('input'));
   input1.id  = "eedb_user_profile_nickname";
@@ -378,7 +383,7 @@ function eedbUserProfilePanel() {
   if(userview.user.nickname) { input1.setAttribute("value", userview.user.nickname); }
 
   button = div1.appendChild(new Element('button'));
-  button.setAttribute("style", "font-size:11px; font-family:arial,helvetica,sans-serif; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.setAttribute("style", "font-size:11px; font-family:arial,helvetica,sans-serif; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
   button.setAttribute("type", "button");
   button.setAttribute("onclick", "eedbUserSubmitProfileUpdate();");
   button.innerHTML ="update nickname";
@@ -390,7 +395,7 @@ function eedbUserProfilePanel() {
   div1 = form1.appendChild(document.createElement('div'));
   div1.setAttribute('style', "margin: 5px 0px 5px 0px;");
   label1 = div1.appendChild(document.createElement('label'));
-  label1.setAttribute("style", "font-weight:none; color:black; align:top;");
+  label1.setAttribute("style", "font-weight:normal; color:black;");
   label1.innerHTML = "hmac key: ";
   input1 = div1.appendChild(document.createElement('input'));
   input1.id  = "eedb_user_profile_hmac";
@@ -400,7 +405,7 @@ function eedbUserProfilePanel() {
   if(userview.user.hmackey) { input1.setAttribute("value", userview.user.hmackey); }
 
   button = div1.appendChild(new Element('button'));
-  button.setAttribute("style", "font-size:11px; font-family:arial,helvetica,sans-serif; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.setAttribute("style", "font-size:11px; font-family:arial,helvetica,sans-serif; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
   button.setAttribute("type", "button");
   button.setAttribute("onclick", "eedbUserGenerateHmacKey();");
   button.innerHTML ="generate random hmac key";
@@ -408,7 +413,7 @@ function eedbUserProfilePanel() {
   //------------------------------------------------------------------------------
   div1 = main_div.appendChild(document.createElement('div'));
   label1 = div1.appendChild(document.createElement('label'));
-  label1.setAttribute("style", "font-weight:none; color:black;");
+  label1.setAttribute("style", "font-weight:normal; color:black;");
   label1.innerHTML ="openIDs: ";
   for(var j=0; j<userview.user.openid_array.length; j++) {
     name_span = div1.appendChild(document.createElement('div'));
@@ -593,7 +598,7 @@ function zenbuUserResetPasswordPanel() {
   var div1, form, label1, input1, text1, span1;
 
   var table1 = divFrame.appendChild(document.createElement('table'));
-  table1.setAttribute("style", "font-weight:none; color:black;");
+  table1.setAttribute("style", "font-weight:normal; color:black;");
 
   tr1 = table1.appendChild(document.createElement('tr'));
   td1 = tr1.appendChild(document.createElement('td'));
@@ -604,7 +609,7 @@ function zenbuUserResetPasswordPanel() {
 
   tr1 = table1.appendChild(document.createElement('tr'));
   td1 = tr1.appendChild(document.createElement('td'));
-  td1.setAttribute("style", "font-weight:none; color:black;");
+  td1.setAttribute("style", "font-weight:normal; color:black;");
   td1.innerHTML = "new password: ";
   td2 = tr1.appendChild(document.createElement('td'));
   input1 = td2.appendChild(document.createElement('input'));
@@ -615,12 +620,12 @@ function zenbuUserResetPasswordPanel() {
   td2 = tr1.appendChild(document.createElement('td'));
   div2 = td2.appendChild(new Element('div'));
   div2.id = "zenbu_user_reset_password_strength"; 
-  div2.setAttribute("style", "width:130px; font-size:12px; padding: 1px 10px; border-radius: 0px; border: solid 1px #000000; background:#FF0000; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  div2.setAttribute("style", "width:130px; font-size:12px; padding: 1px 10px; border-radius: 0px; border: solid 1px #000000; background:#FF0000; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
   div2.innerHTML ="too short &#9734;&#9734;&#9734;&#9734;&#9734;";
  
   tr1 = table1.appendChild(document.createElement('tr'));
   td1 = tr1.appendChild(document.createElement('td'));
-  td1.setAttribute("style", "font-weight:none; color:black;");
+  td1.setAttribute("style", "font-weight:normal; color:black;");
   td1.innerHTML = "retype password: ";
   td2 = tr1.appendChild(document.createElement('td'));
   input1 = td2.appendChild(document.createElement('input'));
@@ -636,7 +641,7 @@ function zenbuUserResetPasswordPanel() {
   div1 = divFrame.appendChild(document.createElement('div'));
   button = div1.appendChild(new Element('button'));
   button.id  = "zenbu_user_reset_password_button";
-  button.setAttribute("style", "width:300px; font-size:12px; padding: 1px 4px; margin:10px 0px 15px 100px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.setAttribute("style", "width:300px; font-size:12px; padding: 1px 4px; margin:10px 0px 15px 100px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
   button.setAttribute("type", "button");
   button.setAttribute("disabled", "disabled");
   button.setAttribute("onclick", "zenbuSubmitPasswordReset();");
@@ -769,8 +774,8 @@ function eedbUserNewUploadPanel() {
   upload_panel.setAttribute('style', "position:absolute; background-color:#e0f0ec; text-align:left; "+
 //background-color: #e0f0ec  aleTurquoise
                              "border:inset; border-width:3px; padding: 3px 7px 3px 7px; "+
-                             "z-index:1; top:180px; width:700px;"+
-                             "left:" + ((winW/2)-350) +"px; "
+                             "z-index:1; top:180px; width:860px;"+
+                             "left:" + ((winW/2)-430) +"px; "
                            );
   upload_panel.innerHTML = "";
 
@@ -779,9 +784,11 @@ function eedbUserNewUploadPanel() {
   userview.upload.display_name = "";
   userview.upload.description = "";
   userview.upload.datatype = "";
+  userview.upload.edgemode = "node";
+  userview.upload.strict_edge_linking = true;
   userview.upload.file_format = null;
   userview.upload.file_path = null;
-
+  
   // title
   var tdiv = upload_panel.appendChild(document.createElement('div'));
   tdiv.setAttribute('style', "font-size:14px; font-weight:bold; margin-top:5px; ");
@@ -809,10 +816,10 @@ function eedbUserNewUploadPanel() {
   div1 = upload_panel.appendChild(document.createElement('div'));
   div1.setAttribute('style', "margin: 10px 0px 10px 0px; text-decoration:none; font-size:14px;");
   div1.innerHTML="currently ZENBU supports ";
-  div1.innerHTML +="<a href='http://genome.ucsc.edu/FAQ/FAQformat.html#format1'>BED</a>";
-  div1.innerHTML +=", <a href='http://samtools.sourceforge.net/SAM1.pdf'>BAM</a>";
-  div1.innerHTML +=", <a href='http://www.sanger.ac.uk/resources/software/gff/spec.html'>GFF/GFF2/GTF</a>";
-  div1.innerHTML +=", and <a href='http://fantom.gsc.riken.jp/download/Tables/doc/090703-osctable.rtf'>OSC</a> ";
+  div1.innerHTML +="<a target='_blank' href='https://zenbu-wiki.gsc.riken.jp/zenbu/wiki/index.php/BED'>BED</a>";
+  div1.innerHTML +=", <a target='_blank' href='https://zenbu-wiki.gsc.riken.jp/zenbu/wiki/index.php/BAM'>BAM</a>";
+  div1.innerHTML +=", <a target='_blank' href='https://zenbu-wiki.gsc.riken.jp/zenbu/wiki/index.php/GFF_and_GTF_file_support'>GFF/GFF2/GTF</a>";
+  div1.innerHTML +=", and <a target='_blank' href='https://zenbu-wiki.gsc.riken.jp/zenbu/wiki/index.php/OSCtable'>OSC</a> ";
   div1.innerHTML +=" files for upload. <br>Texted based files can be gzip (.gz) compressed prior to upload";
 
   form = upload_panel.appendChild(document.createElement('form'));
@@ -859,7 +866,7 @@ function eedbUserNewUploadPanel() {
   tcheck.setAttribute("onclick", "eedbUserReconfigParam('bedscore-express', this.checked);");
   if(userview.upload.bedscore_express) {tcheck.setAttribute("checked", "checked"); }
   tspan2 = bedscore_div.appendChild(document.createElement('span'));
-  tspan2.innerHTML = " BED.score column has experimental signal values";
+  tspan2.innerHTML = " score column has experimental signal values";
 
   tdiv2 = bedscore_div.appendChild(document.createElement('div'));
   tdiv2.id = "eedb_user_upload_datatype_div";
@@ -891,6 +898,7 @@ function eedbUserNewUploadPanel() {
   tdiv2.innerHTML = "Count each line of file as expression of 1 tagcount (no correction for 'multi-mapping' locations).";
 
   /* still buggy for bed files */
+  /*
   tdiv = express_options.appendChild(document.createElement('div'));
   tcheck = tdiv.appendChild(document.createElement('input'));
   tcheck.setAttribute('style', "margin: 0px 1px 0px 0px;");
@@ -900,6 +908,7 @@ function eedbUserNewUploadPanel() {
   if(userview.upload.build_feature_name_index) {tcheck.setAttribute("checked", "checked"); }
   tspan2 = tdiv.appendChild(document.createElement('span'));
   tspan2.innerHTML = "Build name indexing for annotation features (eg genes, transcripts)";
+  */
 
 
   //-------- data file uploads name/description --------
@@ -909,12 +918,32 @@ function eedbUserNewUploadPanel() {
 
   div1 = namedesc_div.appendChild(document.createElement('div'));
   div1.setAttribute('style', "margin: 20px 0px 0px 0px;");
-  var assembly_span = eedbUserCreateAssemblySelect(true);
-  div1.appendChild(assembly_span);
+  var genomeWidget = eedbUserCreateAssemblySelect(true);
+  userview.upload.genomeWidget = genomeWidget;
+  div1.appendChild(genomeWidget);
   zenbuGenomeSelectUpdate();
 
+  //node-edge options
+  node_edge_options = namedesc_div.appendChild(document.createElement('div'));
+  node_edge_options.setAttribute("style", "display:none;");
+  node_edge_options.id = "eedb_user_upload_node_edge_options";
+  
+  var fsrc1 = form.appendChild(document.createElement('input'));
+  fsrc1.id  = "eedb_upload_edge_fsrc1";
+  fsrc1.setAttribute("type", "hidden");
+  fsrc1.setAttribute("name", "featuresource1");
+  fsrc1.setAttribute("value", "");
+  var fsrc2 = form.appendChild(document.createElement('input'));
+  fsrc2.id  = "eedb_upload_edge_fsrc2";
+  fsrc2.setAttribute("type", "hidden");
+  fsrc2.setAttribute("name", "featuresource2");
+  fsrc2.setAttribute("value", "");
+
+  //----------  
   //var platform_span = eedbUserCreatePlatformSelect();
   //div1.appendChild(platform_span);
+
+  namedesc_div.appendChild(document.createElement('hr'));
 
   div1 = namedesc_div.appendChild(document.createElement('div'));
   div1.setAttribute('style', "margin: 5px 0px 5px 0px;");
@@ -967,14 +996,21 @@ function eedbUserNewUploadPanel() {
   input1.setAttribute("size", "20");
   input1.setAttribute("onkeypress", "eedbUserReconfigParam('upload-genome_name', this.value);");
 
+
   //-------- upload button --------
   div1 = form.appendChild(document.createElement('div'));
   var input2 = div1.appendChild(document.createElement('input'));
   input2.id = "eedb_user_upload_button";
   input2.setAttribute("style", "width:300px; margin:12px 0px 10px 50px; ");
-  input2.setAttribute("type", "submit");
+  //input2.setAttribute("type", "submit");
+  input2.setAttribute("type", "button");
   input2.setAttribute("disabled", "disabled");
   input2.setAttribute("value", "Copy file and Queue upload");
+  input2.setAttribute("onmousedown", "eedbUserReconfigParam('upload-submit', '');");
+
+  div1 = upload_panel.appendChild(document.createElement('div'));
+  div1.id = "eedb_user_upload_send_message";
+  div1.innerHTML = "";
 }
 
 
@@ -994,7 +1030,7 @@ function eedbUserNewUploadPanelRefresh() {
   }
   var button = document.getElementById("eedb_user_upload_button");
   if(button) {
-    if(!userview.upload.assembly || !userview.upload.file_path) { button.setAttribute("disabled", "disabled"); }
+    if(!userview.upload.assembly || !userview.upload.file_path || userview.upload.file_sent) { button.setAttribute("disabled", "disabled"); }
     else { button.removeAttribute("disabled"); }
   } 
   var filetype = document.getElementById("eedb_upload_filetype");
@@ -1005,12 +1041,18 @@ function eedbUserNewUploadPanelRefresh() {
       //filetype.innerHTML +=" <br><span style='color:red; font-size:10px; font-weight:normal;'>Note that BAM files must include a valid <a target='_blank' href='http://samtools.github.io/hts-specs/SAMv1.pdf'>header</a>. Check with samtools -H [file] prior to upload if you are uncertain.</span>";
     }
   }
-
-  if(userview.upload.assembly) {
-    current_genome.name = userview.upload.assembly;
-    zenbuGenomeSelectUpdate();
+  var sendmsg = document.getElementById("eedb_user_upload_send_message");
+  if(sendmsg && userview.upload.file_sent) {
+    sendmsg.innerHTML = "File is now copying to server. Please wait....";
   }
 
+  if(userview.upload.assembly) { current_genome.name = userview.upload.assembly; }
+  if(userview.upload.genomeWidget) {
+    if(userview.upload.file_format == "OSC") { userview.upload.genomeWidget.setAttribute("allow_non_genomic", "true"); }
+    else { userview.upload.genomeWidget.setAttribute("allow_non_genomic", "false"); }
+  }
+  zenbuGenomeSelectUpdate();
+  
   /*
   var assemblySelect = document.getElementById("_assemblySelect");
   if(assemblySelect) {
@@ -1026,6 +1068,7 @@ function eedbUserNewUploadPanelRefresh() {
   var bedscore_options = document.getElementById("eedb_user_upload_bedscore_div");
   var namedesc_options = document.getElementById("eedb_user_upload_namedesc_div");
   var genome_options   = document.getElementById("eedb_user_upload_genome_div");
+  var edge_options     = document.getElementById("eedb_user_upload_node_edge_options");
   var datatype_div     = document.getElementById("eedb_user_upload_datatype_div");
   var datatype_input   = document.getElementById("eedb_user_upload_datatype");
 
@@ -1033,6 +1076,7 @@ function eedbUserNewUploadPanelRefresh() {
   namedesc_options.setAttribute("style", "display:none;");
   bedscore_options.setAttribute("style", "display:none;");
   genome_options.setAttribute("style", "display:none;");
+  edge_options.setAttribute("style", "display:none;");
 
   if(userview.upload.file_format) { 
     if(userview.upload.file_format == "GENOME") {
@@ -1049,7 +1093,7 @@ function eedbUserNewUploadPanelRefresh() {
         bedscore_options.setAttribute("style", "display:none;");
         datatype_div.setAttribute("style", "display:none;");
 
-        if(userview.upload.file_format == "BED") {
+        if((userview.upload.file_format == "BED") || (userview.upload.file_format == "OSC")) {
           bedscore_options.setAttribute("style", "display:block;");
           if(userview.upload.bedscore_express) { datatype_div.setAttribute("style", "margin-left:15px; display:block;"); } 
           else { datatype_div.setAttribute("style", "display:none;"); }
@@ -1058,6 +1102,95 @@ function eedbUserNewUploadPanelRefresh() {
       }
     }
   }
+  
+  if(userview.upload.assembly == "non-genomic") {
+    edge_options.setAttribute("style", "display:block;");
+    edge_options.innerHTML = "";
+  
+    tdiv = edge_options.appendChild(document.createElement('div'));
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "margin:0px 3px 0px 5px;");
+    tspan.innerHTML = "non-genomic data type:";
+
+    var radio1 = tdiv.appendChild(document.createElement('input'));
+    radio1.setAttribute("type", "radio");
+    radio1.setAttribute("value", "node");
+    radio1.setAttribute("onchange", "eedbUserReconfigParam('upload-edge-mode', this.value);");
+    if(userview.upload.edgemode == "node") { radio1.setAttribute("checked", "checked"); }
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.innerHTML = "nodes";
+
+    var radio2 = tdiv.appendChild(document.createElement('input'));
+    radio2.setAttribute("style", "margin-left:20px;");
+    radio2.setAttribute("type", "radio");
+    radio2.setAttribute("value", "edge");
+    if(userview.upload.edgemode == "edge") { radio2.setAttribute("checked", "checked"); }
+    radio2.setAttribute("onchange", "eedbUserReconfigParam('upload-edge-mode', this.value);");
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.innerHTML = "edges";
+
+    if(userview.upload.edgemode == "edge") {
+      var strict_edge_linking = tdiv.appendChild(document.createElement('input'));  //to right of the above radios
+      strict_edge_linking.style.marginLeft = "35px";
+      strict_edge_linking.setAttribute("type", "checkbox");
+      strict_edge_linking.setAttribute("name", "strict_edge_linking");
+      //strict_edge_linking.setAttribute("value", "true");
+      strict_edge_linking.setAttribute("onclick", "eedbUserReconfigParam('upload-strict_edge_linking', this.checked);");
+      if(userview.upload.strict_edge_linking) { strict_edge_linking.setAttribute("checked", "checked"); }
+      tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.innerHTML = "strict edge-node linking";
+      var msg = "<div style='text-align:left;'>strict linking <b>enabled</b>: if it's unable to finding a matching node for any edgef1/edgef2 lookup, it will cause an upload parsing error and FAIL the upload.<p><b>disabled</b>: failure to find a matching node will cause that edge to be skipped but loading will continue</div>"; 
+      strict_edge_linking.setAttribute("onmouseover", "eedbMessageTooltip(\""+msg+"\",300);");
+      strict_edge_linking.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+      tspan.setAttribute("onmouseover", "eedbMessageTooltip(\""+msg+"\",300);");
+      tspan.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+
+      
+      //-----
+      tdiv = edge_options.appendChild(document.createElement('div'));
+      tdiv.setAttribute('style', "margin:3px 0px 3px 5px;");
+      //tspan = tdiv.appendChild(document.createElement('span'));
+      //tspan.setAttribute('style', "margin-right:3px;");
+      //tspan.innerHTML = "options for setting the featuresource1 and featuresource2 here";
+      
+      var tdiv2 = tdiv.appendChild(document.createElement('div'));
+      tdiv2.setAttribute("style", "font-size:12px; font-family:arial,helvetica,sans-serif; font-weight:bold;");
+      tdiv2.innerHTML ="Edge left-node featuresource:";
+      var dsi1 = zenbuDatasourceInterface();
+      dsi1.edit_datasource_query = true;
+      dsi1.allowChangeDatasourceMode = false;
+      dsi1.enableResultFilter = false;
+      dsi1.allowMultipleSelect = false;
+      dsi1.datasource_mode = "feature";
+      dsi1.style.marginLeft = "5px";
+      tdiv.appendChild(dsi1);
+      userview.upload.dsi1 = dsi1;
+      
+      var tdiv2 = tdiv.appendChild(document.createElement('div'));
+      tdiv2.setAttribute("style", "font-size:12px; font-family:arial,helvetica,sans-serif; font-weight:bold; margin-top:7px;");
+      tdiv2.innerHTML ="Edge right-node featuresource:";
+      var dsi2 = zenbuDatasourceInterface();
+      dsi2.edit_datasource_query = true;
+      dsi2.allowChangeDatasourceMode = false;
+      dsi2.enableResultFilter = false;
+      dsi2.allowMultipleSelect = false;
+      dsi2.datasource_mode = "feature";
+      dsi2.style.marginLeft = "5px";
+      tdiv.appendChild(dsi2);
+      userview.upload.dsi2 = dsi2;
+      
+      //dsi1.source_ids = "D905615F-C6AA-41D5-A0C4-6F4F61705A80::1:::FeatureSource"; //just for testing interface code
+      //dsi2.source_ids = "CCFED83C-F889-43DC-BA41-7843FCB90095::17:::FeatureSource";
+
+      dsi1.updateCallOutFunction = eedbUserEdgeDSIUpdate;
+      dsi2.updateCallOutFunction = eedbUserEdgeDSIUpdate;
+      
+      zenbuDatasourceInterfaceUpdate(dsi1.id);
+      zenbuDatasourceInterfaceUpdate(dsi2.id);
+    }
+   
+  }
+  
 }
 
 
@@ -1071,6 +1204,33 @@ function eedbUserCloseNewUploadPanel() {
   eedbUserReloadQueueStatus(); //to restart the refresh if needed
 }
 
+
+function eedbUserEdgeDSIUpdate(uniqID, mode) {
+  var zenbuDSI = zenbuDatasourceInterface_hash[uniqID];
+  if(zenbuDSI == null) { return; }
+
+  console.log("eedbUserEdgeDSIUpdate "+uniqID+" mode:"+mode);
+
+  if(mode=="select_source") {
+    var fsrc1_input = document.getElementById("eedb_upload_edge_fsrc1");
+    var fsrc2_input = document.getElementById("eedb_upload_edge_fsrc2");
+
+    console.log("new source_ids: " + zenbuDSI.newconfig.source_ids);
+    
+    if(userview.upload.dsi1.id == zenbuDSI.id) {
+      console.log("coming from DSI_1");
+      fsrc1_input.value = zenbuDSI.newconfig.source_ids
+    }
+    if(userview.upload.dsi2.id == zenbuDSI.id) {
+      console.log("coming from DSI_2");
+      fsrc2_input.value = zenbuDSI.newconfig.source_ids;
+    }
+    
+    
+  }
+  //zenbuDatasourceInterfaceUpdate(uniqID); //refresh
+  //zenbuDatasourceInterfaceToggleSubpanel(uniqID, 'refresh'); //refresh
+}
 
 //---------------------------------------------------------------------------
 //
@@ -1098,7 +1258,7 @@ function eedbCollaborationView() {
   div1.id = "eedb_user_collaboration_table_div";
   div1.innerHTML = "loading data...";
 
-  eedbUserReloadCollaborations(true);
+  if(!userview.collaborations.loaded) { eedbUserReloadCollaborations("async"); }
   eedbUserShowCollaborations();
 }
 
@@ -1211,9 +1371,9 @@ function eedbUserSubmitNewCollaboration() {
 
   var paramXML = "<zenbu_query>\n";
   paramXML += "<mode>create_group</mode>\n";
-  if(public_check && public_check.checked) {
-    paramXML += "<public_announce>true</public_announce>";
-  }
+  //if(public_check && public_check.checked) {
+  //  paramXML += "<public_announce>true</public_announce>";
+  //}
   if(name_input && name_input.value) {
     paramXML += "<display_name>"+ name_input.value +"</display_name>";
   }
@@ -1232,33 +1392,93 @@ function eedbUserSubmitNewCollaboration() {
   var alt_div = document.getElementById("eedb_user_altdiv");
   if(alt_div) { alt_div.innerHTML = ""; }
 
+  eedbUserReloadCollaborations("async"); //reload full list
   eedbCollaborationView();
 }
 
 //----------
 
+function eedbUserFullLoadCollaborations() {
+  if(userview.collaborations.loading) {
+    console.log("eedbUserFullLoadCollaborations : other loading async, just wait...");
+    return;
+  }
+  if(userview.collaborations.full_loading) {
+    console.log("eedbUserFullLoadCollaborations : already full_load started, just wait...");
+    return;
+  }
+  var need_full_loading = 0;
+  var last_fullload_uuid = "";
+  for (var uuid in userview.collaborations.uuid_hash) {
+    var collaboration = userview.collaborations.uuid_hash[uuid];
+    if(!collaboration) { continue; }
+    if(collaboration.full_load) { continue; }
+    //console.log("found collaboration for full_load: "+collaboration.name);
+    need_full_loading++;
+    last_fullload_uuid = collaboration.uuid;
+  }
+  if(need_full_loading==0) {
+    console.log("eedbUserFullLoadCollaborations : all collaborations full_loaded");
+    return;
+  }
+  if(need_full_loading==1) {
+    eedbUserReloadCollaborations("async", last_fullload_uuid);
+    return;
+  }
+
+  console.log("eedbUserFullLoadCollaborations");
+
+  var paramXML = "<zenbu_query><mode>collaborations</mode>";
+  paramXML += "<format>xml</format>"; //full_load
+  paramXML += "</zenbu_query>";
+  userview.collaborations.full_loading = true;
+
+  eedbUserXMLHttp3.onreadystatechange=eedbUserPrepareCollaborations;
+  eedbUserXMLHttp3.open("POST", eedbUserCGI, true); //async
+  eedbUserXMLHttp3.setRequestHeader("Content-Type", "application/xml; charset=UTF-8;");
+  eedbUserXMLHttp3.send(paramXML);
+}
+
+
 function eedbUserReloadCollaborations(async, collab_uuid) {
+  if(async=="async") { async=true; } else { async=false;}
+  if(async && userview.collaborations.loading) {
+    console.log("eedbUserReloadCollaborations already loading async, just wait...");
+    return;
+  }
+  console.log("eedbUserReloadCollaborations");
+
   userview.filters.platform = "";
 
   var collaborations = userview.collaborations;
 
-  if(!collab_uuid) {
-    collaborations.platforms = new Object;
-    collaborations.uuid_hash = new Object();
-  }
   if(async) { collaborations.loading = true; }
-
-  //userview.current_view_index = 0;
-
+ 
   var paramXML = "<zenbu_query><mode>collaborations</mode>";
-  paramXML += "<format>xml</format>"; //must keep as full xml
-  if((userview.filters.assembly != "") || (userview.filters.search != "")) {
-    paramXML += "<filter>"; 
-    if(userview.filters.assembly != "") { paramXML += " "+userview.filters.assembly; }
-    if(userview.filters.search != "") { paramXML += " "+userview.filters.search; }
-    paramXML += "</filter>"; 
+  if(collab_uuid) { 
+    paramXML += "<format>xml</format>"; //full_load
+    paramXML += "<collaboration_uuid>"+collab_uuid+"</collaboration_uuid>";
+    userview.collaborations.full_loading = true;
+  } else { 
+    paramXML += "<format>descxml</format>";
+    paramXML += "<submode>member</submode>";
+    if(userview.filters.search != "") {
+      paramXML += "<filter>"; 
+      paramXML += " "+userview.filters.search;
+      paramXML += "</filter>"; 
+    }
+    userview.collaborations.full_loading = false;
+
+    //TODO: might need some logic for removing collaborations from hash now that I don't clear and reload.
+    //but not sure how often this would arise without the user wanting to reload the page
+    //but here is an idea.
+    //reload of full list so set invalid flag existing collaborations, return will revalidate
+    for (var uuid in userview.collaborations.uuid_hash) {
+      var collaboration = userview.collaborations.uuid_hash[uuid];
+      if(!collaboration) { continue; }
+      //collaboration.is_valid = false;
+    }
   }
-  if(collab_uuid) { paramXML += "<collaboration_uuid>"+collab_uuid+"</collaboration_uuid>"; }
   paramXML += "</zenbu_query>";
 
   //var xhr=GetXmlHttpObject();
@@ -1303,17 +1523,27 @@ function eedbUserPrepareCollaborations() {
   var xmlCollaborations = xmlDoc.getElementsByTagName("collaboration");
   for(i=0; i<xmlCollaborations.length; i++) {
     var xmlCollaboration = xmlCollaborations[i];
-    var collaboration = eedbParseCollaborationData(xmlCollaboration);
+    if(!xmlCollaboration) { continue; }
+
+    var collab_uuid = xmlCollaboration.getAttribute("uuid");
+    var collaboration = userview.collaborations.uuid_hash[collab_uuid];
+
+    collaboration = eedbParseCollaborationData(xmlCollaboration, collaboration);
     userview.collaborations.uuid_hash[collaboration.uuid] = collaboration;
+    if(userview.collaborations.full_loading) { collaboration.full_load = true; }
+    if(collaboration.shared_peers.total_count > 0) { collaboration.full_load = true; }
+    collaboration.is_valid = true;
   }
   //document.getElementById("message").innerHTML = "finished loading collaborations";
 
   collaborations.total_count = xmlCollaborations.length;
   collaborations.filtered_count = xmlCollaborations.length;
+  collaborations.loaded = true;
+  userview.collaborations.full_loading = false;
 
   //eedbUserShowCollaborations();
   //if(userview.mode == "profile") { return eedbUserProfilePanel(); }
-  //if(userview.mode == "uploads") { return eedbUserShowUploads(); }
+  if(userview.mode == "uploads") { return eedbUserShowUploads(); }
   //if(userview.mode == "downloads") { return eedbUserDownloadsView(); }
   if(userview.mode == "collaborations") { return eedbUserShowCollaborations(); }
   //if(userview.mode == "validate") { return eedbUserProfilePanel(); }
@@ -1324,7 +1554,9 @@ function eedbUserFilteredCollaborationArray() {
   var array1 = new Array;
   for (var uuid in userview.collaborations.uuid_hash) {
     var collaboration = userview.collaborations.uuid_hash[uuid];
-    //たぶん do filtering here
+    if(!collaboration) { continue; }
+    if(!collaboration.is_valid) { continue; }
+    //maybe do additionl filtering here
     array1.push(collaboration);
   }
   return array1;
@@ -1345,6 +1577,8 @@ function eedbUserShowCollaborations() {
   var collaboration_array = eedbUserFilteredCollaborationArray();
   if(!collaboration_array) { return; }
   collaboration_array.sort(eedbUser_collaboration_sort_func);
+
+  var need_full_load = false;
 
   //
   // now display as table
@@ -1394,6 +1628,10 @@ function eedbUserShowCollaborations() {
     var td = tr.appendChild(new Element('td'));
     if(collaboration.shared_peers.total_count) {
       td.innerHTML = collaboration.shared_peers.total_count;
+    } else if(!collaboration.full_load) {
+      td.setAttribute('style', "color:darkgray;");
+      td.innerHTML = "loading...";
+      need_full_load = true;
     } else {
       td.innerHTML = "-";
     }
@@ -1415,7 +1653,7 @@ function eedbUserShowCollaborations() {
       a1.setAttribute("target", "top");
       a1.setAttribute("href", "./");
       a1.setAttribute("onclick", "eedbUserCollaborationUsersInfo(\"" +collaboration.uuid+ "\"); return false;");
-      a1.innerHTML = encodehtml(collaboration.member_count);
+      a1.innerHTML = collaboration.member_count;
       //if(collaboration.member_status == "OWNER") {
       //  var span2 = member_info_span.appendChild(new Element('span'));
       //  span2.innerHTML = "owner";
@@ -1440,25 +1678,30 @@ function eedbUserShowCollaborations() {
       span2.innerHTML = "request pending approval";
     } else if((collaboration.member_status == "OWNER") || (collaboration.member_status == "ADMIN")) {
       var button = span2.appendChild(new Element('button'));
-      button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; margin-right:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+      button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; margin-right:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
       button.setAttribute("onclick", "zenbuCollaborationUserManagementPanel(\""+ collaboration.uuid + "\");");
       button.setAttribute("onmouseover", "eedbMessageTooltip(\"add and remove users from collaboration\",100);");
       button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
       button.innerHTML = "manage users";
 
-      if(collaboration.pending_requests.length>0) { 
+      if(collaboration.open_to_public == "y") { 
         var div3 = span2.appendChild(new Element('div'));
-        div3.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; color:#4169E1;");
-        div3.innerHTML = "pending requests" ;
+        div3.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; color:#4169E1;"); //color:#4169E1 color:#B22222
+        div3.innerHTML = "open to public";
       }
+      //if(collaboration.pending_requests.length>0) { 
+      //  var div3 = span2.appendChild(new Element('div'));
+      //  div3.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; color:#4169E1;");
+      //  div3.innerHTML = "pending requests" ;
+      //}
     } else if(collaboration.member_status == "INVITED") {
       var button = span2.appendChild(new Element('button'));
-      button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+      button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
       button.setAttribute("onclick", "eedbUserAceptInvitation(\""+ collaboration.uuid + "\");");
       button.innerHTML ="accept invitation";
 
       var button = span2.appendChild(new Element('button'));
-      button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+      button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
       button.setAttribute("onclick", "eedbUserIgnoreCollaboration(\""+ collaboration.uuid + "\");");
       button.innerHTML ="ignore";
     }
@@ -1491,6 +1734,8 @@ function eedbUserShowCollaborations() {
     zenbuCollaborationUserManagementPanel(userview.active_collaboration_user_manager, false);
     userview.active_collaboration_user_manager = undefined;
   }
+ 
+  if(need_full_load) { eedbUserFullLoadCollaborations(); }
 }
 
 
@@ -1516,10 +1761,10 @@ function eedbUser_collaboration_sort_func(a,b) {
     if(a_status == "REQUEST") { return -1; }
     if(b_status == "REQUEST") { return 1; }
   }
-  if(a.public_announce != b.public_announce) { 
-    if(a.public_announce == "y") { return 1; }
-    if(b.public_announce == "y") { return -1; }
-  }
+  //if(a.public_announce != b.public_announce) { 
+  //  if(a.public_announce == "y") { return 1; }
+  //  if(b.public_announce == "y") { return -1; }
+  //}
 
   if(a.name < b.name) { return -1; }
   if(a.name > b.name) { return 1; }
@@ -1528,7 +1773,7 @@ function eedbUser_collaboration_sort_func(a,b) {
 }
 
 
-/*
+//Request join/ignore/accept is old system and deprecated but keeping code here
 function eedbUserRequestJoinCollaboration(uuid) {
   if(!uuid) { return; }
   var url = eedbUserCGI+"?mode=request_join_collaboration;collaboration_uuid="+uuid;
@@ -1538,11 +1783,10 @@ function eedbUserRequestJoinCollaboration(uuid) {
   singleFeatureSourceXMLHttp.send(null);
   //no need to parse response at this time
 
-  eedbUserReloadCollaborations();
+  eedbUserReloadCollaborations("sync", uuid);
   eedbUserShowCollaborations();
   return;
 }
-*/
 
 
 function eedbUserIgnoreCollaboration(uuid) {
@@ -1554,7 +1798,7 @@ function eedbUserIgnoreCollaboration(uuid) {
   xhr.send(null);
   //no need to parse response at this time
 
-  eedbUserReloadCollaborations(false);
+  eedbUserReloadCollaborations("sync", uuid);
   eedbUserShowCollaborations();
   return;
 }
@@ -1568,7 +1812,7 @@ function eedbUserAceptInvitation(uuid) {
   xhr.send(null);
   //no need to parse response at this time
 
-  eedbUserReloadCollaborations(false);
+  eedbUserReloadCollaborations("sync", uuid);
   eedbUserShowCollaborations();
   return;
 }
@@ -1827,11 +2071,11 @@ function zenbuCollaborationUserManagementPanel(uuid, reload) {
   img1.setAttribute("height", "16");
   img1.setAttribute("alt","close");
 
-  if(collaboration.public_announce == "y") { 
-    var div1 = divFrame.appendChild(new Element('div'));
-    div1.setAttribute('style', "margin: 0px 0px 0px 20px; color:#B22222; font-size:10px;");
-    div1.innerHTML = "open join request (public announce) style collaboration";
-  }
+  //if(collaboration.open_to_public == "y") { 
+  //  var div1 = tdiv.appendChild(new Element('div'));
+  //  div1.setAttribute('style', "margin: 0px 10px 0px 10px; color:#B22222; font-size:10px; float:right;");
+  //  div1.innerHTML = "open to public";
+  //}
 
   // --------
 
@@ -1848,10 +2092,25 @@ function zenbuCollaborationUserManagementPanel(uuid, reload) {
   input1.setAttribute("type", "text");
   input1.setAttribute("size", "50");
 
-  var button = div1.appendChild(new Element('button'));
-  button.setAttribute("type", "button");
+  var button = div1.appendChild(new Element('input'));
+  button.type = "button";
+  button.className = "medbutton";
   button.setAttribute("onclick", "zenbuCollaborationInviteUser(\""+ collaboration.uuid +"\");");
-  button.innerHTML ="add/invite";
+  button.value ="add/invite";
+
+  if(collaboration.open_to_public == "y") { 
+    var div2 = div1.appendChild(new Element('div'));
+    div2.setAttribute('style', "margin: 0px 10px 0px 10px; color:#B22222; font-size:10px;");
+    div2.innerHTML = "published collaboration: open to public";
+  } else {
+    //var div2 = div1.appendChild(new Element('div'));
+    //div2.setAttribute('style', "margin: 0px 10px 0px 10px; color:#B22222; font-size:10px;");
+    //var button = div2.appendChild(new Element('input'));
+    //button.type = "button";
+    //button.className = "slimbutton";
+    //button.setAttribute("onclick", "zenbuCollaborationInviteUser(\""+ collaboration.uuid +"\");");
+    //button.value ="publish collaboration : open all data and views to public";
+  }
 
   // --------
   divFrame.appendChild(new Element('hr'));
@@ -1861,7 +2120,7 @@ function zenbuCollaborationUserManagementPanel(uuid, reload) {
     div1.setAttribute('style', "margin: 0px 0px 0px 20px; color:#B22222; font-size:10px;");
     div1.innerHTML = "loading.........";
     userview.active_collaboration_user_manager = uuid;
-    eedbUserReloadCollaborations(true, uuid);
+    eedbUserReloadCollaborations("async", uuid);
     return;
   }
 
@@ -1910,7 +2169,7 @@ function zenbuCollaborationUserManagementPanel(uuid, reload) {
         td.setAttribute("style", "white-space:nowrap");
         var div2 = td.appendChild(new Element('div'));
         var button = div2.appendChild(new Element('button'));
-        button.setAttribute("style", "font-size:10px; color:#ff6600; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+        button.setAttribute("style", "font-size:10px; color:#ff6600; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
         button.setAttribute("onclick", "zenbuCollaborationRevokeAdminUser(\""+ collaboration.uuid +"\", \""+ user_ident+"\");");
         button.innerHTML ="revoke admin";
       } else {
@@ -1918,11 +2177,11 @@ function zenbuCollaborationUserManagementPanel(uuid, reload) {
         td.setAttribute("style", "white-space:nowrap");
         var div2 = td.appendChild(new Element('div'));
         var button = div2.appendChild(new Element('button'));
-        button.setAttribute("style", "font-size:10px; color:#B22222; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+        button.setAttribute("style", "font-size:10px; color:#B22222; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
         button.setAttribute("onclick", "zenbuCollaborationRemoveUser(\""+ collaboration.uuid +"\", \""+ user_ident+"\");");
         button.innerHTML ="remove user";
         var button = div2.appendChild(new Element('button'));
-        button.setAttribute("style", "font-size:10px; color:#B22222; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+        button.setAttribute("style", "font-size:10px; color:#B22222; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
         button.setAttribute("onclick", "zenbuCollaborationMakeAdminUser(\""+ collaboration.uuid +"\", \""+ user_ident+"\");");
         button.innerHTML ="make admin";
       }
@@ -1950,7 +2209,7 @@ function zenbuCollaborationUserManagementPanel(uuid, reload) {
     var td = tr.appendChild(new Element('td'));
     var div2 = td.appendChild(new Element('div'));
     var button = div2.appendChild(new Element('button'));
-    button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+    button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
     button.setAttribute("onclick", "zenbuCollaborationRemoveUser(\""+ collaboration.uuid +"\", \""+ user_ident+"\");");
     button.innerHTML ="cancel invite";
     row++;
@@ -1975,11 +2234,11 @@ function zenbuCollaborationUserManagementPanel(uuid, reload) {
     var td = tr.appendChild(new Element('td'));
     var div2 = td.appendChild(new Element('div'));
     var button = div2.appendChild(new Element('button'));
-    button.setAttribute("style", "font-size:10px; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+    button.setAttribute("style", "font-size:10px; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
     button.setAttribute("onclick", "eedbUserAcceptRequest(\""+ collaboration.uuid +"\", \""+ user.email+"\");");
     button.innerHTML ="accept";
     var button = div2.appendChild(new Element('button'));
-    button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+    button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
     button.setAttribute("onclick", "eedbUserRejectRequest(\""+ collaboration.uuid +"\", \""+ user.email+"\");");
     button.innerHTML ="reject";
     row++;
@@ -2002,6 +2261,9 @@ function eedbUserReloadMySourceData() {
   //also query the queuing system
   eedbUserReloadQueueStatus();
 
+  eedbUserFullLoadCollaborations();
+  //eedbUserReloadCollaborations("async"); //async //TODO: need new logic for sharing
+
   userview.filters.platform = "";
 
   var uploads = userview.uploads;
@@ -2014,16 +2276,16 @@ function eedbUserReloadMySourceData() {
 
   var paramXML = "<zenbu_query><mode>sources</mode><format>descxml</format>";
   paramXML += "<collab>" + current_collaboration.uuid + "</collab>";
-  if((userview.filters.assembly != "") || (userview.filters.search != "")) {
+  if(userview.filters.search != "") {
     paramXML += "<filter>";
-    if(userview.filters.assembly != "") { paramXML += " "+userview.filters.assembly; }
-    if(userview.filters.search != "") { paramXML += " "+userview.filters.search; }
+    paramXML += " "+userview.filters.search;
     paramXML += "</filter>";
   }
   paramXML += "</zenbu_query>";
 
   eedbUserXMLHttp.onreadystatechange=eedbUserPrepareMySourceData;
-  eedbUserXMLHttp.open("POST", eedbSearchFCGI, true); //async and not the fcgi
+  //eedbUserXMLHttp.open("POST", eedbSearchFCGI, true); 
+  eedbUserXMLHttp.open("POST", eedbSearchCGI, true); //async and not the fcgi
   eedbUserXMLHttp.setRequestHeader("Content-Type", "application/xml; charset=UTF-8;");
   //eedbUserXMLHttp.setRequestHeader("Content-length", paramXML.length);
   //eedbUserXMLHttp.setRequestHeader("Connection", "close");
@@ -2048,13 +2310,33 @@ function eedbUserPrepareMySourceData() {
     uploads.filtered_count  = xmlDoc.getElementsByTagName("result_count")[0].getAttribute("filtered") -0;
   }
 
+
+  var xmlPeers = new Array();
+  var xmlFeatureSources = new Array();
+  var xmlExperiments = new Array();
+  var xmlEdgeSources = new Array();
+  var xmlAssemblies = new Array();
+
+  var sources_children = xmlDoc.childNodes;
+  console.log("found sources block. has "+sources_children.length+" children");
+  for (var i = 0; i < sources_children.length; i++) {
+    var sourceDOM = sources_children[i];
+    if(sourceDOM.tagName == "peer")          { xmlPeers.push(sourceDOM); }
+    if(sourceDOM.tagName == "featuresource") { xmlFeatureSources.push(sourceDOM);  }
+    if(sourceDOM.tagName == "experiment")    { xmlExperiments.push(sourceDOM); }
+    if(sourceDOM.tagName == "edgesource")    { xmlEdgeSources.push(sourceDOM); }
+    if(sourceDOM.tagName == "assembly")      { xmlAssemblies.push(sourceDOM); }
+  }
+  console.log("sources children peer:"+(xmlPeers.length)+"  fsrc:"+xmlFeatureSources.length+"  exp:"+xmlExperiments.length+"  esrc:"+xmlEdgeSources.length+" asm:"+xmlAssemblies.length);
+
   //peers
-  var xmlPeers = xmlDoc.getElementsByTagName("peer");
+  //var xmlPeers = xmlDoc.getElementsByTagName("peer");
   for(i=0; i<xmlPeers.length; i++) {
     var peer = eedbParsePeerData(xmlPeers[i]);
     if(!uploads.peer_hash[peer.uuid]) {
       peer.name = peer.uuid;
       peer.featuresource_count = 0;
+      peer.edgesource_count = 0;
       peer.experiment_count = 0;
       peer.assembly_count = 0;
       peer.source_hash = new Object();
@@ -2063,7 +2345,7 @@ function eedbUserPrepareMySourceData() {
   }
 
   //feature sources
-  var xmlFeatureSources = xmlDoc.getElementsByTagName("featuresource");
+  //var xmlFeatureSources = xmlDoc.getElementsByTagName("featuresource");
   for(i=0; i<xmlFeatureSources.length; i++) {
     var xmlFeatureSource = xmlFeatureSources[i];
 
@@ -2100,8 +2382,32 @@ function eedbUserPrepareMySourceData() {
     if(peer.primary_source.objID > featuresource.objID) { peer.primary_source = featuresource; }
   }
 
+  //edge sources
+  //var xmlEdgeSources = xmlDoc.getElementsByTagName("edgesource");
+  for(var i=0; i<xmlEdgeSources.length; i++) {
+    var sourceDOM  = xmlEdgeSources[i];
+    var srcid   = sourceDOM.getAttribute("id");
+    //console.log("edgesource id["+srcid+"]");
+
+    var idx1 = srcid.indexOf("::");
+    if(idx1 == -1) { continue; }
+    var uuid = srcid.substring(0,idx1);
+    //console.log("edgesource uuid["+uuid+"]");
+    var peer = uploads.peer_hash[uuid];
+    if(!peer) {  continue; }
+    //console.log("have peer ["+peer.uuid+"]  ["+peer.db_url+"]");
+    peer.edgesource_count++;
+
+    var source = uploads.source_hash[srcid];
+    //if(source) { console.log("reparse source ["+srcid+"]"); } else { console.log("new source ["+srcid+"] to parse"); }
+    source = eedbParseEdgeSourceXML(sourceDOM, source);
+    peer.source_hash[source.id] = source;
+    if(!peer.primary_source) { peer.primary_source = source; }
+    if(peer.primary_source.objID > source.objID) { peer.primary_source = source; }
+  }
+
   //experiments
-  var xmlExperiments = xmlDoc.getElementsByTagName("experiment");
+  //var xmlExperiments = xmlDoc.getElementsByTagName("experiment");
   for(i=0; i<xmlExperiments.length; i++) {
     var xmlExperiment = xmlExperiments[i];
 
@@ -2127,7 +2433,7 @@ function eedbUserPrepareMySourceData() {
   }
 
   //assembly
-  var xmlAssemblies = xmlDoc.getElementsByTagName("assembly");
+  //var xmlAssemblies = xmlDoc.getElementsByTagName("assembly");
   for(i=0; i<xmlAssemblies.length; i++) {
     var assembly = eedbParseAssemblyData(xmlAssemblies[i]);
 
@@ -2142,8 +2448,17 @@ function eedbUserPrepareMySourceData() {
 
   uploads.loading = false;
 
-  eedbUserReloadCollaborations(false);
-  eedbUserShowUploads();
+  if(userview.mode == "uploads") { return eedbUserShowUploads(); }
+}
+
+
+function eedbUserClearFailedJobs() {
+  var url = eedbUploadCGI + "?mode=clear_failed_jobs";
+  var clearFailsXMLHttp=GetXmlHttpObject();
+  clearFailsXMLHttp.open("GET", url, false);
+  clearFailsXMLHttp.send(null);
+
+  eedbUserReloadQueueStatus();
 }
 
 
@@ -2243,6 +2558,10 @@ function eedbUserFilteredPeerArray() {
     if(!primary_source) { continue; }
 
     if(userview.filters.only_my_uploads && (userview.user.email != primary_source.owner_identity)) { continue; }
+    
+    if(userview.filters.assembly) {
+      if((primary_source.assembly != userview.filters.assembly) && (primary_source.assembly_name != userview.filters.assembly)) { continue; }
+    }
 
     filter_array.push(peer);
   }
@@ -2265,10 +2584,11 @@ function eedbUserShowUploads() {
     var uploadButton = master_div.appendChild(document.createElement('div'));
     uploadButton.id = "eedb_user_new_upload_button";
     uploadButton.setAttribute("style", "margin-bottom:5px;");
-    button = uploadButton.appendChild(new Element('button'));
-    button.setAttribute("type", "button");
+    button = uploadButton.appendChild(new Element('input'));
+    button.type = "button";
+    button.className = "largebutton";
     button.setAttribute("onclick", "eedbUserNewUploadPanel();");
-    button.innerHTML ="upload new data file into ZENBU";
+    button.value ="upload new data file into ZENBU";
   }
 
   // upload queue section
@@ -2283,7 +2603,8 @@ function eedbUserShowUploads() {
   eedbUserRefreshSearchControls();  
 
   // main container for table of my uploaded datasets
-  if(!main_div) { 
+  if(!main_div) {
+    console.log("showUploads need to create new uploads_main_div");
     main_div = master_div.appendChild(document.createElement('div'));
     main_div.id = "eedb_user_uploads_maindiv";
   }
@@ -2300,16 +2621,26 @@ function eedbUserShowUploads() {
   var queue_array = userview.uploads.queue_array;
 
   //perform check if peer has been shared
-  //eedbUserReloadCollaborations(false);
+  if(!userview.collaborations.loaded) { eedbUserReloadCollaborations("async"); }
+  eedbUserFullLoadCollaborations(); //performs full_load of shared-dbs if needed
   var collaboration_array = eedbUserFilteredCollaborationArray();
-  if(collaboration_array.length == 0) {
-    eedbUserReloadCollaborations(false);
-    collaboration_array = eedbUserFilteredCollaborationArray();
+
+  var need_full_loading = false;
+  for (var uuid in userview.collaborations.uuid_hash) {
+    var collaboration = userview.collaborations.uuid_hash[uuid];
+    if(!collaboration) { continue; }
+    if(collaboration.full_load) { continue; }
+    need_full_loading = true;
   }
+  if(collaboration_array.length == 0) { need_full_loading = true; }
+
   for(var i=0; i<peer_array.length; i++) {
     var peer = peer_array[i];
     peer.shared = false;
     peer.shared_count = 0;
+    peer.public = "";
+    if(need_full_loading) { peer.shared_count = -1; }
+    if(collaboration_array.length == 0) { peer.shared_count = -1; }
     for(var j=0; j<collaboration_array.length; j++) {
       collaboration = collaboration_array[j]
       if((collaboration.member_status != "OWNER") && (collaboration.member_status != "ADMIN") && (collaboration.member_status != "MEMBER")) { continue; }
@@ -2407,8 +2738,9 @@ function eedbUserShowUploads() {
       primary_source = new Object;
       primary_source.name = peer.uuid;
       primary_source.description = peer.db_url;
+      primary_source.assembly = "";
     }
-
+    
     var tr = tbody.appendChild(new Element('tr'));
     if(i%2 == 0) { tr.addClassName('odd') } else { tr.addClassName('even') } 
     //if(i%4 == 0) { tr.setAttribute("style", "background:#FAFAEE;"); }
@@ -2428,6 +2760,12 @@ function eedbUserShowUploads() {
       div2.setAttribute('style', "font-size:10px; font-family:arial,helvetica,sans-serif; margin: 0px 0px 0px 0px;");
       div2.setAttribute("onclick", "eedbUserShowUploadSourcesPanel(\"" +peer.uuid+ "\"); return false;");
       div2.innerHTML = peer.featuresource_count + " annotation sources ";
+    }
+    if(peer.edgesource_count>0) {
+      var div2 = a1.appendChild(new Element('div'));
+      div2.setAttribute('style', "font-size:10px; font-family:arial,helvetica,sans-serif; margin: 0px 0px 0px 0px;");
+      div2.setAttribute("onclick", "eedbUserShowUploadSourcesPanel(\"" +peer.uuid+ "\"); return false;");
+      div2.innerHTML = peer.edgesource_count + " edge sources ";
     }
     if(peer.experiment_count>0) {
       var div2 = a1.appendChild(new Element('div'));
@@ -2469,7 +2807,12 @@ function eedbUserShowUploads() {
     //sharing interface
     var td1 = tr.appendChild(new Element('td'));
     //td1.setAttribute('nowrap', "nowrap");
-    if(userview.user.email == primary_source.owner_identity) {
+    if(peer.shared_count < 0) { 
+      var div2 = td1.appendChild(new Element('div'));
+      div2.setAttribute('style', "font-size:10px; font-family:arial,helvetica,sans-serif; margin: 0px 0px 0px 0px; color:darkgray;");
+      div2.innerHTML = "loading..."; 
+    }
+    else if((userview.user.email == primary_source.owner_identity) && (peer.shared_count >= 0)) { 
       var a1 = td1.appendChild(document.createElement('a'));
       a1.setAttribute("target", "eeDB_featuresource_view");
       a1.setAttribute("href", "./");
@@ -2479,6 +2822,10 @@ function eedbUserShowUploads() {
       if(peer.shared_count == 0) { 
         a1.setAttribute('style', "color:DarkCyan;");
         div2.innerHTML = "not shared"; 
+      }
+      else if(peer.shared_count < 0) { 
+        a1.setAttribute('style', "color:DarkCyan;");
+        div2.innerHTML = "loading..."; 
       }
       else { 
         a1.setAttribute('style', "color:Brown;");
@@ -2556,6 +2903,13 @@ function eedbUserShowMydataQueue() {
   button.setAttribute("onclick", "eedbUserReloadMySourceData();");
   button.innerHTML ="update job queue status";
 
+  var clearFailedButton = queue_div.appendChild(new Element('button'));
+  clearFailedButton.style.marginLeft = "10px";
+  clearFailedButton.style.display = "none";
+  clearFailedButton.setAttribute("type", "button");
+  clearFailedButton.setAttribute("onclick", "eedbUserClearFailedJobs();");
+  clearFailedButton.innerHTML ="clear failed jobs";
+
   var div1 = queue_div.appendChild(new Element('div'));
   div1.setAttribute('style', "width:100%;");
   var my_table = new Element('table');
@@ -2595,31 +2949,45 @@ function eedbUserShowMydataQueue() {
 
     (tr.appendChild(new Element('td'))).innerHTML = encodehtml(job.import_date);
     (tr.appendChild(new Element('td'))).innerHTML = job.status;
+    if(job.status == "FAILED") { clearFailedButton.style.display = "initial"; }
   }
-
   queue_div.appendChild(new Element('hr'));
 }
 
 
-function eedbUserShowSourceInfo(id) {
+function eedbUserShowSourceInfo(id, peer_uuid) {
+  if(peer_uuid && userview.uploads && userview.uploads.peer_hash) {
+    var peer = userview.uploads.peer_hash[peer_uuid];
+    if(peer) {
+      var source = peer.source_hash[id];
+      if(source) {  
+        if(!source.full_load) { source.request_full_load = true; }
+        eedbDisplaySourceInfo(source); 
+      }
+    }
+  }
+
+  /*
   var object = eedbReloadObject(id);
   if(!object) { return false; }
 
   object.finishFunction = eedbUserReloadSource;
 
+  if(object.classname == "EdgeSource") { eedbDisplaySourceInfo(object); }
   if(object.classname == "FeatureSource") { eedbDisplaySourceInfo(object); }
   if(object.classname == "Experiment") { eedbDisplaySourceInfo(object); }
+  */
 }
 
 
-function eedbUserReloadSource(source) {
-  //document.getElementById("message").innerHTML = "user edit metadata finished";
-  if(!source) { return; }
-  delete userview.uploads.source_hash[source.id];
-  eedbUserReloadContentsData();
-  eedbUserReloadCollaborations(false);
-  eedbUserShowUploads();
-}
+//function eedbUserReloadSource(source) {
+//  //document.getElementById("message").innerHTML = "user edit metadata finished";
+//  if(!source) { return; }
+//  delete userview.uploads.source_hash[source.id];
+//  eedbUserReloadContentsData();
+//  eedbUserReloadCollaborations(false);
+//  eedbUserShowUploads();
+//}
 
 //------------------------------------------------------------------------
 // multiple select code
@@ -2785,7 +3153,7 @@ function eedbUserSelectedPeersPanel(mode) {
       tr.appendChild(new Element('td').update(i+1));  //row
       tr.appendChild(new Element('td').update(encodehtml(collaboration.name)));
       tr.appendChild(new Element('td').update(encodehtml(collaboration.description)));
-      if(collaboration.member_count>0) { tr.appendChild(new Element('td').update(encodehtml(collaboration.member_count))); } 
+      if(collaboration.member_count>0) { tr.appendChild(new Element('td').update(collaboration.member_count)); } 
       else { tr.appendChild(new Element('td').update("-")); }
 
       if((collaboration.uuid== "public") || (collaboration.uuid == "curated")) {
@@ -2794,7 +3162,7 @@ function eedbUserSelectedPeersPanel(mode) {
 
       var td = tr.appendChild(new Element('td'));
       var button = td.appendChild(document.createElement("button"));
-      button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+      button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
       //button.setAttribute("onclick", "eedbUserShareDatabaseWithCollaboration(\""+ source_id +"\", \""+collaboration.uuid+"\");");
       button.setAttribute("onclick", "eedbUserShareMultipleDatabases(\""+collaboration.uuid+"\");");
       button.setAttribute("onmouseover", "eedbMessageTooltip(\"share data source to this collaboration\",100);");
@@ -3001,7 +3369,7 @@ function eedbUserShareDatabasePanel(source_id) {
     tr.appendChild(new Element('td').update(i+1));  //row
     tr.appendChild(new Element('td').update(encodehtml(collaboration.name)));
     tr.appendChild(new Element('td').update(encodehtml(collaboration.description)));
-    if(collaboration.member_count>0) { tr.appendChild(new Element('td').update(encodehtml(collaboration.member_count))); } 
+    if(collaboration.member_count>0) { tr.appendChild(new Element('td').update(collaboration.member_count)); } 
     else { tr.appendChild(new Element('td').update("-")); }
 
     if((collaboration.uuid== "public") || (collaboration.uuid == "curated")) {
@@ -3016,7 +3384,7 @@ function eedbUserShareDatabasePanel(source_id) {
       div2.innerHTML ="sharing";
       div2 = td.appendChild(new Element('div'));
       var button = div2.appendChild(document.createElement("button"));
-      button.setAttribute("style", "font-size:8px; padding: 1px 4px; margin-left:auto;margin-right:auto; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+      button.setAttribute("style", "font-size:8px; padding: 1px 4px; margin-left:auto;margin-right:auto; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
       button.setAttribute("onclick", "eedbUserUnshareDatabaseWithCollaboration(\""+ source_id +"\", \""+collaboration.uuid+"\");");
       button.setAttribute("onmouseover", "eedbMessageTooltip(\"share data source to this collaboration\",100);");
       button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
@@ -3027,7 +3395,7 @@ function eedbUserShareDatabasePanel(source_id) {
       //button.setAttribute("onclick", "eedbUserShareDatabaseWithCollaboration(\""+ source_id +"\", \""+collaboration.uuid+"\");");
       //button.innerHTML ="share";
       var button = td.appendChild(document.createElement("button"));
-      button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+      button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
       button.setAttribute("onclick", "eedbUserShareDatabaseWithCollaboration(\""+ source_id +"\", \""+collaboration.uuid+"\");");
       button.setAttribute("onmouseover", "eedbMessageTooltip(\"share data source to this collaboration\",100);");
       button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
@@ -3095,7 +3463,7 @@ function eedbUserShareDatabaseWithCollaboration(source_id, collab_uuid) {
   //xhr.setRequestHeader("Connection", "close");
   xhr.send(paramXML);
 
-  eedbUserReloadCollaborations(false, collab_uuid);
+  eedbUserReloadCollaborations("sync", collab_uuid);
   eedbUserShareDatabasePanel(source_id);
   eedbUserShowUploads();
 }
@@ -3115,7 +3483,7 @@ function eedbUserUnshareDatabaseWithCollaboration(source_id, collab_uuid) {
   //xhr.setRequestHeader("Connection", "close");
   xhr.send(paramXML);
 
-  eedbUserReloadCollaborations(false, collab_uuid);
+  eedbUserReloadCollaborations("sync", collab_uuid);
   eedbUserShareDatabasePanel(source_id);
   eedbUserShowUploads();
 }
@@ -3209,7 +3577,7 @@ function eedbUserShowUploadSourcesPanel(peer_uuid) {
     var a1 = td.appendChild(document.createElement('a'));
     a1.setAttribute("target", "eeDB_featuresource_view");
     a1.setAttribute("href", "./");
-    a1.setAttribute("onclick", "eedbUserShowSourceInfo(\"" +source.id+ "\"); return false;");
+    a1.setAttribute("onclick", "eedbUserShowSourceInfo(\"" +source.id+ "\", \""+peer_uuid+"\"); return false;");
     a1.innerHTML = source.name;
 
     td = tr.appendChild(new Element('td'));
@@ -3258,6 +3626,7 @@ function eedbUserRefreshSearchControls() {
   td1.setAttribute("width", "1px");
   var input1 = td1.appendChild(document.createElement('input'));
   input1.id = "eedb_user_uploads_search_input";
+  input1.className = "sliminput";
   input1.setAttribute("type", "text");
   input1.setAttribute("autocomplete", "off");
   input1.setAttribute("size", "50");
@@ -3268,7 +3637,8 @@ function eedbUserRefreshSearchControls() {
   td1 = tr1.appendChild(document.createElement('td'));
   td1.setAttribute("width", "1px");
   input1 = td1.appendChild(document.createElement('input'));
-  input1.setAttribute("type", "button");
+  input1.type = "button";
+  input1.className = "medbutton";
   input1.setAttribute("value", "search");
   input1.setAttribute("onclick", "eedbUserSearchSubmit();");
 
@@ -3276,46 +3646,72 @@ function eedbUserRefreshSearchControls() {
   td1 = tr1.appendChild(document.createElement('td'));
   td1.setAttribute("width", "1px");
   input1 = td1.appendChild(document.createElement('input'));
-  input1.setAttribute("type", "button");
+  input1.type = "button";
+  input1.className = "medbutton";
   input1.setAttribute("value", "clear");
   input1.setAttribute("onclick", "eedbUserSearchClear('true')");
     
   td1 = tr1.appendChild(document.createElement('td'));
+  td1.setAttribute("nowrap", "nowrap");
   td1.setAttribute("width", "1px");
   td1.setAttribute("style", "padding-left:15px");
   var tdiv1 = td1.appendChild(document.createElement('div'));
   var collabWidget = eedbCollaborationSelectWidget("filter_search");
   tdiv1.appendChild(collabWidget);  
-  tdiv1 = td1.appendChild(document.createElement('div'));
   var tcheck = tdiv1.appendChild(document.createElement('input'));
-  tcheck.setAttribute('style', "margin-top: 2px;");
+  tcheck.setAttribute('style', "margin-left:7px;");
   tcheck.setAttribute('type', "checkbox");
   tcheck.setAttribute("onclick", "eedbUserReconfigParam('only_my_uploads', this.checked);");
   if(userview.filters.only_my_uploads) { tcheck.setAttribute("checked", "checked"); }
   tspan = tdiv1.appendChild(document.createElement('span'));
   tspan.innerHTML = "show only my uploads";
+  if(!search_div.genome_select) {
+    var genome_select = zenbuGenomeSelectWidget("filter_search", createUUID());
+    genome_select.style.marginLeft = "0px";
+    genome_select.callOutFunction = eedbUserSourcesGenomeFilter;
+    genome_select.allow_non_genomic = true;
+    if(userview.filters.assembly) { genome_select.name = userview.filters.assembly; }
+    search_div.genome_select = genome_select;
+    console.log("created new GenomeSelect with uuid["+genome_select.uniqID+"]");
+  }
+  var tdiv2 = td1.appendChild(document.createElement('div'));
+  tdiv2.appendChild(search_div.genome_select);
 
   td1 = tr1.appendChild(document.createElement('td'));
 
   td1 = tr1.appendChild(document.createElement('td'));
   td1.setAttribute("width", "1px");
-  var button = td1.appendChild(document.createElement("button"));
-  button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  var button = td1.appendChild(document.createElement("input"));
+  button.type = "button";
+  button.className = "medbutton";
   button.setAttribute("onclick", "eedbUserSelectedPeersPanel('share')");
-  button.setAttribute("onmouseover", "eedbMessageTooltip(\"share multi-selected data sources to collaboration\",100);");
+  button.setAttribute("onmouseover", "eedbMessageTooltip(\"share multi-selected data sources<br>to collaboration\",170);");
   button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-  button.innerHTML = "share";
+  button.value = "share";
 
   td1 = tr1.appendChild(document.createElement('td'));
   td1.setAttribute("width", "1px");
-  button = td1.appendChild(document.createElement("button"));
-  button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button = td1.appendChild(document.createElement("input"));
+  button.type = "button";
+  button.className = "medbutton";
   button.setAttribute("onclick", "eedbUserSelectedPeersPanel('delete')");
-  button.setAttribute("onmouseover", "eedbMessageTooltip(\"delete multi-selected data sources\",100);");
+  button.setAttribute("onmouseover", "eedbMessageTooltip(\"delete multi-selected data sources\",170);");
   button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-  button.innerHTML = "delete";
+  button.value = "delete";
     
 }  
+
+function eedbUserSourcesGenomeFilter(genomeWidget) {
+  if(!genomeWidget) { return; }  
+  //genomeWidget.name = name;
+  //genomeWidget.assembly = assembly;
+
+  var name = genomeWidget.name;
+  if(name == "all") { name = ""; }
+  userview.filters.assembly = name; 
+  
+  eedbUserShowUploads();
+}
 
 //---------------------------------------------------------------------------
 //
@@ -3458,59 +3854,19 @@ function eedbUserCreatePlatformSelect() {
 }
 
 
-/*
-function eedbUserCreateAssemblySelect(mustselect) {
-  var span1          = document.getElementById("_assemblySelectSpan");
-  var assemblySelect = document.getElementById("_assemblySelect");
-  if(!span1) {
-    span1 = document.createElement('span');
-    span1.id = "_assemblySelectSpan";
-    span1.setAttribute("style", "margin:2px 10px 2px 0px;");
-
-    var span2 = document.createElement('span');
-    span2.innerHTML = "genome:";
-    span1.appendChild(span2);
-
-    assemblySelect = document.createElement('select');
-    assemblySelect.setAttribute("name", "assembly");
-    assemblySelect.setAttribute('style', "margin: 1px 0px 1px 0px; font-size:10px; font-family:arial,helvetica,sans-serif; ");
-    assemblySelect.setAttribute("onchange", "eedbUserReconfigParam('assembly', this.value);");
-    assemblySelect.id = "_assemblySelect";
-    span1.appendChild(assemblySelect);
-  }
-  assemblySelect.innerHTML = ""; //to clear old content
-
-  var option = document.createElement('option');
-  option.setAttribute("value", "");
-  if(mustselect) { option.innerHTML = "please select genome assembly"; }
-  else { option.innerHTML = "all assemblies"; }
-  assemblySelect.appendChild(option);
-
-  for (var asm in userview.assemblies) {
-    var option = document.createElement('option');
-    var desc   = userview.assemblies[asm];
-    option.setAttribute("value", asm);
-    if(asm == userview.filters.assembly) { option.setAttribute("selected", "selected"); }
-    option.innerHTML = desc;
-    assemblySelect.appendChild(option);
-  }
-  return span1;
-}
-*/
-
-
 function eedbUserCreateAssemblySelect() {
-
-  current_genome.callOutFunction = eedbUserGenomeSelectCallout;
+  //current_genome.callOutFunction = eedbUserGenomeSelectCallout;
   if(userview.filters.assembly) { current_genome.name = userview.filters.assembly; }
 
   var genomeWidget = zenbuGenomeSelectWidget("upload");
-  //genomeWidget.setAttribute("style", "float:left;");
-
+  genomeWidget.style.marginLeft = "0px";
+  genomeWidget.callOutFunction = eedbUserGenomeSelectCallout;
+  
   return genomeWidget;
 }
 
 function eedbUserGenomeSelectCallout() {
+  //console.log("eedbUserGenomeSelectCallout");
   var name = current_genome.name;
   if(name == "all") { name = ""; }
   eedbUserReconfigParam('assembly', name);
@@ -3638,6 +3994,22 @@ function eedbUserReconfigParam(param, value) {
     eedbUserNewUploadPanelRefresh();
     //eedbUserGetNCBITaxonInfo(userview.upload.taxon_id);
   }
+   if(param == "upload-edge-mode") {  
+    userview.upload.edgemode  = value;
+    eedbUserNewUploadPanelRefresh();
+  }
+  if(param == "upload-strict_edge_linking") {  
+    userview.upload.strict_edge_linking = value;
+    edbUserNewUploadPanelRefresh();
+  }
+
+  if(param == "upload-submit") {  
+    userview.upload.file_sent  = true;
+    eedbUserNewUploadPanelRefresh();
+    var upload_form = document.getElementById("eedb_user_upload_form");
+    if(upload_form) { upload_form.submit(); }
+  }
+
   if(param == "only_my_uploads") {  
     userview.filters.only_my_uploads = value;
     //eedbUserSearchSubmit();
@@ -3684,7 +4056,7 @@ function eedbUserReconfigParam(param, value) {
     eedbUserShowSubmenu();
     dhtmlHistory.add("#section="+value);
     eedbUserShowContents();
-    zenbuRegisterCurrentURL();
+    //zenbuRegisterCurrentURL();
   }
   
   //--------------------------------------------------------
