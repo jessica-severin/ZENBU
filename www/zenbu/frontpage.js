@@ -60,6 +60,11 @@ function zenbuLoadViewConfig(id) {
   return 1;
 }
 
+function zenbuFrontPageInit() {
+  //zenbuGeneralWarn("Due to server room power maintenance at the RIKEN Yokohama campus, all ZENBU webservers will be shutdown from Aug 17 17:00 JST to Aug 21 20:00 JST.<br>"+
+  //                 "We appologize for the inconvenience to ZENBU users, but we will restore services as soon as possible.");
+}
+
 function zenbuFrontViewInfo(uuid) {
   var info_div = document.getElementById("zenbu_front_view_info");
   if(!info_div) { return; }
@@ -77,7 +82,7 @@ function zenbuFrontViewInfo(uuid) {
   info_div.setAttribute("style", "margin-left:5px; cursor:pointer;"); 
 
   var titlediv = info_div.appendChild(document.createElement("div"));
-  titlediv.setAttribute("style", "align:center; font-size:16px; font-weight:bold; color:black;");
+  titlediv.setAttribute("style", "font-size:16px; font-weight:bold; color:black;");
   titlediv.innerHTML = encodehtml(title);
 
   if(config.img_url) {
