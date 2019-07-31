@@ -82,6 +82,9 @@ sub process_url_request {
       if($self->{'build_feature_name_index'} eq "on") { $self->{'build_feature_name_index'} = "true"; }
     }
     if($cgi->param('taxon_id')) { $self->{'taxon_id'} = $cgi->param('taxon_id'); }
+    if($cgi->param('featuresource1')) { $self->{'featuresource1'} = $cgi->param('featuresource1'); }
+    if($cgi->param('featuresource2')) { $self->{'featuresource2'} = $cgi->param('featuresource2'); }
+    if($cgi->param('strict_edge_linking')) { $self->{'strict_edge_linking'} = $cgi->param('strict_edge_linking'); }
     if($cgi->param('upload_genome_name')) { 
       $self->{'upload_genome_name'} = $cgi->param('upload_genome_name'); 
       $self->{'display_name'} = $cgi->param('upload_genome_name'); 
@@ -329,11 +332,13 @@ sub upload_data {
   my $filename = $self->{'upload_file'};
   my $extension = "";
   #extract extension
-  if((my $p2=rindex($filename, ".gz")) != -1) {
+  #if((my $p2=rindex($filename, ".gz")) != -1) {
+  if((my $p2=rindex($filename, ".gz")) == length($filename)-3) {
     $filename = substr($filename, 0, $p2);
     $extension = ".gz";
   }
-  if((my $p2=rindex($filename, ".tar")) != -1) {
+  #if((my $p2=rindex($filename, ".tar")) != -1) {
+  if((my $p2=rindex($filename, ".tar")) == length($filename)-4) {
     $filename = substr($filename, 0, $p2);
     $extension = ".tar" . $extension;
   }
@@ -383,10 +388,12 @@ sub  write_upload_xmlinfo {
   my $input_file = $filename;
   
   #extract extension
-  if((my $p2=rindex($filename, ".gz")) != -1) {
+  #if((my $p2=rindex($filename, ".gz")) != -1) {
+  if((my $p2=rindex($filename, ".gz")) == length($filename)-3) {
     $filename = substr($filename, 0, $p2);
   }
-  if((my $p2=rindex($filename, ".tar")) != -1) {
+  #if((my $p2=rindex($filename, ".tar")) != -1) {
+  if((my $p2=rindex($filename, ".tar")) == length($filename)-4) {
     $filename = substr($filename, 0, $p2);
     $extension = ".tar";
   }
@@ -418,6 +425,9 @@ sub  write_upload_xmlinfo {
   if($self->{"upload_genome_name"})      { 
     printf(XMLFILE "    <upload_genome_name>%s</upload_genome_name>\n", $self->{"upload_genome_name"}); 
   }
+  if($self->{"featuresource1"}) { printf(XMLFILE "    <featuresource1>%s</featuresource1>\n", $self->{"featuresource1"}); }
+  if($self->{"featuresource2"}) { printf(XMLFILE "    <featuresource2>%s</featuresource2>\n", $self->{"featuresource2"}); }
+  if($self->{"strict_edge_linking"}) { printf(XMLFILE "    <strict_edge_linking>%s</strict_edge_linking>\n", $self->{"strict_edge_linking"}); }
   printf(XMLFILE  "  </parameters>\n");
   printf(XMLFILE  "</oscfile>\n");
   close XMLFILE;
