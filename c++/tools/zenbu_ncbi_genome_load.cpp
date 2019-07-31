@@ -1,4 +1,4 @@
-/* $Id: zenbu_ncbi_genome_load.cpp,v 1.3 2017/02/09 07:37:53 severin Exp $ */
+/* $Id: zenbu_ncbi_genome_load.cpp,v 1.5 2018/09/20 06:01:28 severin Exp $ */
 
 /****
  
@@ -136,7 +136,7 @@ int main(int argc, char *argv[]) {
   if(argc==1) { usage(); }
 
   _webservice = new EEDB::WebServices::MetaSearch();
-  _webservice->parse_config_file("/etc/zenbu/zenbudev_config.xml");
+  _webservice->parse_config_file("/etc/zenbu/zenbu.conf");
   _webservice->init_service_request();
 
   //get_cmdline_user();
@@ -190,6 +190,7 @@ void usage() {
   printf("  -registry <url>           : DB URL registry instance\n");
   printf("  -i                        : interactive interface\n");
   printf("  -name_mode <value>        : ucsc, ncbi, or ensembl naming convention\n");
+  printf("  -search <keywords>        : search for genomes via taxonID, keywords or accession numbers\n");
   printf("  -skip_seq                 : don't load the genome sequence\n");
   printf("  -skip_entrez              : don't load the NCBI entrez gene annoataions\n");
   exit(1);

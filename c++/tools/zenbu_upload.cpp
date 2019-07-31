@@ -1,4 +1,4 @@
-/* $Id: zenbu_upload.cpp,v 1.20 2017/01/05 08:51:27 severin Exp $ */
+/* $Id: zenbu_upload.cpp,v 1.22 2017/11/07 11:38:43 severin Exp $ */
 
 /****
  
@@ -71,6 +71,7 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include <MQDB/Database.h>
 #include <MQDB/MappedQuery.h>
@@ -131,7 +132,7 @@ bool  upload_file_send(string orig_filename);
 bool  bulk_upload_filelist();
 
 bool  delete_upload();
-bool  share_upload(string source_id);
+bool  share_uploads(map<string,bool> source_ids);
 
 void append_metadata_edit_command(string id_filter, string mode, string tag, string newvalue, string oldvalue);
 bool send_mdata_edit_commands();
@@ -171,6 +172,7 @@ int main(int argc, char *argv[]) {
     if(arg == "-list")          { _parameters["mode"] = "list_uploads"; continue; }
     if(arg == "-queue")         { _parameters["mode"] = "show_queue"; continue; }
     if(arg == "-collabs")       { _parameters["mode"] = "list_collaborations"; continue; }
+    if(arg == "-collaborations") { _parameters["mode"] = "list_collaborations"; continue; }
 
     if(arg == "-singletag_exp") { 
       if(argvals.empty()) {
@@ -333,7 +335,7 @@ void usage() {
   printf("zenbu_upload [options]\n");
   printf("  -help                         : print this help\n");
   printf("  -url <url>                    : http url for specified ZENBU server\n");
-  printf("  -collabs                      : show list of my collaborations\n");
+  printf("  -collaborations               : show list of my collaborations\n");
   printf("    -format <type>              : display format for listing collaborations (list, detail, xml, simplexml)\n");
   printf("  -queue                        : show list of users pending upload queue\n");
   printf("  -list                         : show list of previous uploads\n");
@@ -349,9 +351,13 @@ void usage() {
   printf("    -platform <text>            : platform metadata for upload data source(s)\n");
   printf("    -score_exp <datatype>       : use bed score column as expression value with <datatype>\n");
   printf("    -singletag_exp <datatype>   : each line of file gets expression value of 1 with <datatype>: default 'tagcount'\n");
-  printf("    -collab_uuid <uuid>         : share this uploaded data to specified collaboration\n");
+  //printf("    -collab_uuid <uuid>         : share this uploaded data to specified collaboration\n");
   printf("    -allow_duplicates           : do not perform the duplicate-uploads checks\n");
-  printf("  -filelist <control_file>      : bulk upload files. In control_file give fullpath list of files to upload. Takes same additional params as -file\n");
+  printf("  -filelist <control_file>      : bulk upload files. control_file is a 4 tab-column format. Takes same additional params as -file\n");
+  printf("                                    col 1- full path to file to upload\n");
+  printf("                                    col 2- display name - will default to the filename if empty column\n");
+  printf("                                    col 3- description - will fdeault to file if empty column\n");
+  printf("                                    col 4- GFF-attribute style metadata\n");
   printf("  -delete <safename/uuid>       : delete uploaded file via either the unique safe filename or peer_uuid\n");
   printf("  -mdedit <id/filter> <cmd> ... : edit metadata of specified source via id or search filter eg: \"encode rnaseq\"\n");
   printf("                                  <cmd> options are listed below with additional parameter options\n");
@@ -435,7 +441,8 @@ bool  get_cmdline_user() {
   _user_profile = new EEDB::User();
   if(email)  { _user_profile->email_address(email); }
   if(secret) { _user_profile->hmac_secretkey(secret); }
-  if(url)    { _parameters["_url"] = url; }
+
+  if(url && (_parameters.find("_url")==_parameters.end()))    { _parameters["_url"] = url; }
   
   free(config_text);
   close(fildes);
@@ -614,9 +621,9 @@ bool  upload_file_prep() {
     paramXML += "<check_duplicates>true</check_duplicates>";
   }
   
-  if(_parameters.find("_collab_uuid") != _parameters.end()) { 
-    paramXML += "<collaboration_uuid>"+_parameters["_collab_uuid"]+"</collaboration_uuid>";  
-  }
+  //if(_parameters.find("_collab_uuid") != _parameters.end()) { 
+  //  paramXML += "<collaboration_uuid>"+_parameters["_collab_uuid"]+"</collaboration_uuid>";  
+  //}
   //metadata
   if(!_mdata_edit_commands.empty()) {
     paramXML += "<mdata_commands>";
@@ -795,9 +802,9 @@ bool  bulk_upload_filelist() {
     paramXML += "<datatype>"+_parameters["singletagmap_expression"]+"</datatype>";
   }
   paramXML += "<check_duplicates>true</check_duplicates>";
-  if(_parameters.find("_collab_uuid") != _parameters.end()) {
-    paramXML += "<collaboration_uuid>"+_parameters["_collab_uuid"]+"</collaboration_uuid>";
-  }
+  //if(_parameters.find("_collab_uuid") != _parameters.end()) {
+  //  paramXML += "<collaboration_uuid>"+_parameters["_collab_uuid"]+"</collaboration_uuid>";
+  //}
   
   //
   while(gzgets(gz, _data_buffer, buflen) != NULL) {
@@ -1073,7 +1080,7 @@ bool list_uploads() {
   while(MQDB::DBObject* obj = stream->next_in_stream()) {
     if(obj->classname() == EEDB::Peer::class_name) { 
       EEDB::Peer *peer = (EEDB::Peer*)obj;
-      peer_map[peer->uuid()] = peer;
+      if(peer_map.find(peer->uuid()) == peer_map.end()) { peer_map[peer->uuid()] = peer; }
       continue; 
     }
     
@@ -1096,6 +1103,8 @@ bool list_uploads() {
   // show
   printf("-------------\n");
   long upload_count=0;
+
+  map<string, bool> share_ids;
 
   map<string, vector<EEDB::DataSource*> >::iterator it1;
   for(it1 = my_uploads.begin(); it1!=my_uploads.end(); it1++) {
@@ -1132,16 +1141,40 @@ bool list_uploads() {
     
     //collaboration sharing for peer uuid
     if(_parameters.find("_collab_uuid") != _parameters.end()) {
-      if(share_upload(sources[0]->db_id())) {
-        printf("  shared to collaboration [%s]\n", _parameters["_collab_uuid"].c_str());
-      }
+      share_ids[sources[0]->db_id()] = true;
+      //if(share_upload(sources[0]->db_id())) {
+      //  printf("  shared to collaboration [%s]\n", _parameters["_collab_uuid"].c_str());
+      //}
     }
 
   }
   printf("-------------\n");
   printf("%ld uploads --- %ld featuresources --- %ld experiments --- [%ld total sources]\n", upload_count, fsrc_count, exp_count, fsrc_count+exp_count);
+
+  //bulk share
+  if(_parameters.find("_collab_uuid") != _parameters.end()) {
+    printf("share %ld uploads TO collaboration [%s]\n", share_ids.size(), _parameters["_collab_uuid"].c_str());
+    share_uploads(share_ids);
+    //if(share_upload(sources[0]->db_id())) {
+    //  printf("  shared to collaboration [%s]\n", _parameters["_collab_uuid"].c_str());
+    //}
+  }
+
+  
   stream->disconnect();  
   return true;
+}
+
+
+bool collaboration_name_sort_func(EEDB::Collaboration* a, EEDB::Collaboration* b) {
+  if(a == NULL) { return false; }
+  if(b == NULL) { return true; }
+  string aname = a->display_name();
+  string bname = b->display_name();
+  boost::algorithm::to_lower(aname);
+  boost::algorithm::to_lower(bname);
+  if(aname < bname) { return true;}
+  else { return false; }
 }
 
 
@@ -1215,6 +1248,7 @@ bool list_collaborations() {
   root_node = doc.first_node();
   if(!root_node) { free(chunk.memory); return false; } 
   
+  vector<EEDB::Collaboration*> collab_list;
   long collab_count=0;
   long total_share=0;
   rapidxml::xml_node<> *node = NULL;
@@ -1223,29 +1257,38 @@ bool list_collaborations() {
       EEDB::Collaboration *collab = new EEDB::Collaboration(node);;
       if(collab) {
         collab_count++;
-        long share_count = collab->shared_data_peers().size();
-        total_share += share_count;
-
-        if(_parameters["format"] == "xml") {
-          printf("%s\n", collab->xml().c_str());
-        }
-        else if((_parameters["format"] == "simplexml") || (_parameters["format"] == "simple_xml")) {
-          printf("%s", collab->simple_xml().c_str());
-        }
-        else if(_parameters["format"] == "detail") {
-          printf("-------------\n");
-          printf("        uuid: %s\n", collab->group_uuid().c_str());
-          printf("        name: %s\n", collab->display_name().c_str());
-          printf("      status: %s\n", collab->member_status().c_str());
-          printf(" description: %s\n", collab->description().c_str());
-          printf(" shared data: %ld\n", share_count);
-        } else {
-          printf("%30s [%s] :: %ld shared uploads\n", collab->group_uuid().c_str(), collab->display_name().c_str(), share_count);
-        }        
+        collab_list.push_back(collab);
       }
       node = node->next_sibling("collaboration");
-    }    
-  } 
+    }
+  }
+
+  sort(collab_list.begin(), collab_list.end(), collaboration_name_sort_func);
+ 
+  vector<EEDB::Collaboration*>::iterator it2;
+  for(it2=collab_list.begin(); it2!=collab_list.end(); it2++) {
+    EEDB::Collaboration* collab = *it2;
+
+    long share_count = collab->shared_data_peers().size();
+    total_share += share_count;
+
+    if(_parameters["format"] == "xml") {
+      printf("%s\n", collab->xml().c_str());
+    }
+    else if((_parameters["format"] == "simplexml") || (_parameters["format"] == "simple_xml")) {
+      printf("%s", collab->simple_xml().c_str());
+    }
+    else if(_parameters["format"] == "detail") {
+      printf("-------------\n");
+      printf("        uuid: %s\n", collab->group_uuid().c_str());
+      printf("        name: %s\n", collab->display_name().c_str());
+      printf("      status: %s\n", collab->member_status().c_str());
+      printf(" description: %s\n", collab->description().c_str());
+      printf(" shared data: %ld\n", share_count);
+    } else {
+      printf("%30s [%s] :: %ld shared uploads\n", collab->group_uuid().c_str(), collab->display_name().c_str(), share_count);
+    }        
+  }
   printf("%ld collaborations --- [%ld total shared uploads]\n", collab_count, total_share);
   
   free(chunk.memory);
@@ -1372,7 +1415,7 @@ void show_upload_queue() {
 ////////////////////////////////////////////////////////////////////////////
 
 
-bool  share_upload(string source_id) {
+bool  share_uploads(map<string, bool> source_ids) {
   if(_parameters.find("_collab_uuid") == _parameters.end()) { return false; }              
   
   CURL *curl = curl_easy_init();
@@ -1383,6 +1426,7 @@ bool  share_upload(string source_id) {
   chunk.size = 0;       // no data at this point
   chunk.alloc_size = 0; // no data at this point
   
+  map<string,bool>::iterator it1;
   string paramXML = "<zenbu_query>";
   if(_user_profile) {
     paramXML += "<authenticate><email>"+ _user_profile->email_identity() +"</email>";
@@ -1393,10 +1437,15 @@ bool  share_upload(string source_id) {
     paramXML += "</authenticate>";
   }
   paramXML += "<mode>sharedb</mode>";
-  paramXML += "<sharedb>"+ source_id +"</sharedb>";  
   paramXML += "<collaboration_uuid>"+_parameters["_collab_uuid"]+"</collaboration_uuid>";  
+  //paramXML += "<sharedb>"+ source_id +"</sharedb>";  
+
+  paramXML += "<source_ids>";
+  for(it1=source_ids.begin(); it1!=source_ids.end(); it1++) { paramXML += it1->first + ","; }
+  paramXML += "</source_ids>";
+
   paramXML += "</zenbu_query>";  
-  //fprintf(stderr, "POST: %s\n", paramXML.c_str());
+  fprintf(stderr, "POST: %s ::: %s\n", _parameters["_url"].c_str(), paramXML.c_str());
   
   string url = _parameters["_url"] + "/cgi/eedb_user.cgi";  
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
@@ -1429,7 +1478,7 @@ bool  share_upload(string source_id) {
   if(slist) { curl_slist_free_all(slist); }
   curl_easy_cleanup(curl); 
   
-  //fprintf(stderr, "returned-----\n%s\n", chunk.memory);
+  fprintf(stderr, "returned-----\n%s\n", chunk.memory);
   char *start_ptr = strstr(chunk.memory, "<share_uploaded_database");
   if(!start_ptr) { 
     free(chunk.memory); 
