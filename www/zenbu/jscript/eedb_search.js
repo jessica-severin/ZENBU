@@ -41,7 +41,10 @@ var current_genome = new Object;
 current_genome.name = "";
 current_genome.uuid = "";
 current_genome.available_genomes = new Array;
+current_genome.genomeWidgets = new Object; //hash of allocated widgets
 current_genome.callOutFunction = null;
+current_genome.loading = false;
+
 
 function unparse_dbid(dbid) {
   var zobj = new Object;
@@ -310,6 +313,7 @@ function eedbSearchGetSearchTrack(searchID, searchSetID) {
   searchTrack.grid             = searchDiv.getAttribute("grid");
   searchTrack.multiselect      = searchDiv.getAttribute("multiselect");
   searchTrack.showAll          = searchDiv.getAttribute("showAll");
+  searchTrack.allowUnmapped    = searchDiv.getAttribute("allowUnmapped");
   searchTrack.selected_hash    = new Object;
   searchTrack.search_pending   = false;
   searchTrack.queue            = new Array();
@@ -410,7 +414,8 @@ function eedbSearchSubmitSearch(searchTrack) {
     paramXML += "<mode>feature_sources</mode><filter>"+query+"</filter><format>fullxml</format>\n";
   } else if(mode == "feature") {
     url = eedbSearchCGI;
-    paramXML += "<mode>search</mode><limit>1000</limit><skip_no_location>true</skip_no_location>\n";
+    paramXML += "<mode>search</mode><limit>1000</limit>\n";
+    if(!searchTrack.allowUnmapped) { paramXML += "<skip_no_location>true</skip_no_location>\n"; }
     paramXML += "<name>"+query+"</name>\n";
   } else if(mode == "eeDB_gLyphs_configs") {
     url = eedbConfigCGI;
@@ -730,8 +735,9 @@ function eedbMessageTooltip(message, width) {
   toolTipWidth=width;
   var object_html = "<div style=\"text-align:center; font-size:10px; font-family:arial,helvetica,sans-serif; "+
                     "width:"+width+"px; z-index:100; "+
-                    "background-color:lavender; border:groove; "+
-                    "opacity: 0.95; \">";
+                    //"box-sizing: border-box; border: 1px solid gray; border-radius: 4px; background-color:#E6E6E6; "+ //rgb(245,245,250); "+
+                    "box-sizing: border-box; border: 1px solid #808080; border-radius: 4px; background-color:#707070; color:#FDFDFD; "+
+                    "opacity: 0.90; \">";
   object_html += "<div>" + message +"</div>";
   object_html += "</div>";
 
@@ -956,6 +962,7 @@ function eedbReloadObject(id) {
   return eedbFetchObject(id);
 }
 
+
 function eedbFetchObject(id, obj) {
   if(!id) { return null; }
 
@@ -988,6 +995,7 @@ function eedbFetchObject(id, obj) {
 
   if(!obj) { obj = new Object; }
   obj.id = id;
+
   if(xmlDoc.getElementsByTagName("peer").length>0) {
     obj.peer = xmlDoc.getElementsByTagName("peer")[0];
   }
@@ -999,6 +1007,11 @@ function eedbFetchObject(id, obj) {
     var featureDOM = xmlDoc.getElementsByTagName("feature")[0];
     eedbParseFeatureData(featureDOM, obj);
   }
+  else if(xmlDoc.getElementsByTagName("edge").length > 0) {
+    obj.classname = "Edge";
+    var objectDOM = xmlDoc.getElementsByTagName("edge")[0];
+    eedbParseEdgeXML(objectDOM, obj);
+  } 
   else if(xmlDoc.getElementsByTagName("experiment").length >0) {
     obj.classname = "Experiment";
     var experimentDOM = xmlDoc.getElementsByTagName("experiment")[0];
@@ -1014,9 +1027,15 @@ function eedbFetchObject(id, obj) {
     var assemblyDOM = xmlDoc.getElementsByTagName("assembly")[0];
     eedbParseAssemblyData(assemblyDOM, obj);
   }
-
+  else if(xmlDoc.getElementsByTagName("edgesource").length > 0) {
+    obj.classname = "EdgeSource";
+    var fsourceDOM = xmlDoc.getElementsByTagName("edgesource")[0];
+    eedbParseEdgeSourceXML(fsourceDOM, obj);
+  } 
+  
   eedbSearchObjCache.unshift(obj);
-  while(eedbSearchObjCache.length > 500) { eedbSearchObjCache.pop(); }
+  while(eedbSearchObjCache.length > 100) { eedbSearchObjCache.pop(); }
+  obj.full_load = true;
   return obj;
 }
 
@@ -1030,6 +1049,71 @@ function eedbFullLoadObject(id, obj) {
   obj.full_load = true;
   return obj;
 }
+
+
+function eedbFullLoadCurrentSource() {
+  if(!current_source) { return; }
+  if(current_source.full_load) { return; }
+
+  current_source.request_full_load = false;
+
+  var sourceReloadXMLHttp = GetXmlHttpObject()
+  if(sourceReloadXMLHttp == null) { return; }
+  current_source.xhr = sourceReloadXMLHttp;
+
+  // XML POST query
+  var paramXML = "<zenbu_query><mode>sources</mode><format>fullxml</format><source_ids>"+(current_source.id)+"</source_ids></zenbu_query>";
+  console.log("eedbFullLoadCurrentSource : "+paramXML);
+
+  sourceReloadXMLHttp.onreadystatechange = eedbFullLoadCurrentSourceReply;
+  sourceReloadXMLHttp.open("POST", eedbSearchCGI, true);
+  sourceReloadXMLHttp.setRequestHeader("Content-Type", "application/xml; charset=UTF-8;");
+  sourceReloadXMLHttp.send(paramXML);
+}
+
+function eedbFullLoadCurrentSourceReply() {
+  if(!current_source) { return; }
+  var sourceReloadXMLHttp = current_source.xhr;
+  if(!sourceReloadXMLHttp) { return; }
+  if(sourceReloadXMLHttp.responseXML == null) { return; }
+  if(sourceReloadXMLHttp.readyState!=4) { return; }
+  if(sourceReloadXMLHttp.status!=200) { return; }
+
+  var xmlDoc=sourceReloadXMLHttp.responseXML.documentElement;
+  if(xmlDoc==null) { return; }
+
+  var currentSourceDOM = null;
+  var sources_children = xmlDoc.childNodes;
+  console.log("eedbFullLoadCurrentSourceReply sources block. has "+sources_children.length+" children");
+  for (var i = 0; i < sources_children.length; i++) {
+    var sourceDOM = sources_children[i];
+    if(!sourceDOM) { continue; }
+    if(!sourceDOM.tagName) { continue; }
+
+    var srcID =  sourceDOM.getAttribute("id");
+    if(current_source.id == srcID) {
+      console.log("found matching sourceDOM by id");
+      currentSourceDOM = sourceDOM;
+    }
+  }
+
+  if(currentSourceDOM) {
+    console.log("have currentSourceDOM tagName:", currentSourceDOM.tagName);
+    if(currentSourceDOM.tagName == "assembly")      { eedbParseAssemblyData(currentSourceDOM, current_source); } 
+    if(currentSourceDOM.tagName == "featuresource") { eedbParseFeatureSourceData(currentSourceDOM, current_source); }
+    if(currentSourceDOM.tagName == "experiment")    { eedbParseExperimentData(currentSourceDOM, current_source); }
+    if(currentSourceDOM.tagName == "edgesource")    { eedbParseEdgeSourceXML(currentSourceDOM, current_source); }
+    // eedbParseConfigurationData(xmlDoc, obj);
+  } else {
+    console.log("FAILED to find matching currentSourceDOM");
+    current_source.full_load_error = true;
+  }
+
+  current_source.full_load = true;
+
+  eedbDisplaySourceInfo(); //refresh current_source
+}
+
 
 
 function eedbParsePeerData(xmlPeer, peer) {
@@ -1052,29 +1136,40 @@ function eedbParseFeatureData(xmlFeature, feature) {
   feature.classname    = "Feature";
   feature.id           = xmlFeature.getAttribute("id");
   feature.source       = null; //object
-  feature.source_name  = xmlFeature.getAttribute("fsrc");
-  feature.category     = xmlFeature.getAttribute("category");
-  if(xmlFeature.getAttribute("fsrc_id")) { feature.fsrc_id = xmlFeature.getAttribute("fsrc_id"); }
-  if(xmlFeature.getAttribute("name")) { feature.name = xmlFeature.getAttribute("name"); }
-  if(xmlFeature.getAttribute("desc")) { feature.name = xmlFeature.getAttribute("desc"); }
-  feature.taxon_id     = xmlFeature.getAttribute("taxon_id");
-  feature.asm          = xmlFeature.getAttribute("asm");
-  feature.chrom        = xmlFeature.getAttribute("chr");
-  feature.strand       = xmlFeature.getAttribute("strand");
-  feature.start        = Math.round(xmlFeature.getAttribute("start"));
-  feature.end          = Math.round(xmlFeature.getAttribute("end"));
+  feature.taxon_id     = "";
+  feature.asm          = "";
+  feature.chrom        = "";
+  feature.strand       = " ";
+  feature.start        = -1;
+  feature.end          = -1;
   feature.description  = "";
   feature.gene_names   = "";
+  
+  if(xmlFeature.getAttribute("fsrc")) { feature.source_name = xmlFeature.getAttribute("fsrc"); }
+  if(xmlFeature.getAttribute("category")) { feature.category = xmlFeature.getAttribute("category"); }
+  if(xmlFeature.getAttribute("fsrc_id")) { feature.source_id = xmlFeature.getAttribute("fsrc_id"); }
+  if(xmlFeature.getAttribute("source_id")) { feature.source_id = xmlFeature.getAttribute("source_id"); }
+  if(xmlFeature.getAttribute("name")) { feature.name = xmlFeature.getAttribute("name"); }
+  if(xmlFeature.getAttribute("desc")) { feature.name = xmlFeature.getAttribute("desc"); }
+  if(xmlFeature.getAttribute("taxon_id")) { feature.taxon_id = xmlFeature.getAttribute("taxon_id"); }
+  if(xmlFeature.getAttribute("asm")) { feature.asm = xmlFeature.getAttribute("asm"); }
+  if(xmlFeature.getAttribute("chr")) { feature.chrom = xmlFeature.getAttribute("chr"); }
+  if(xmlFeature.getAttribute("strand")) { feature.strand = xmlFeature.getAttribute("strand"); }
+  if(xmlFeature.getAttribute("start")) { feature.start = Math.round(xmlFeature.getAttribute("start")); }
+  if(xmlFeature.getAttribute("end")) { feature.end = Math.round(xmlFeature.getAttribute("end")); }
+  if(xmlFeature.getAttribute("sig")) { feature.score  = parseFloat(xmlFeature.getAttribute('sig')); }
+  if(xmlFeature.getAttribute("score")) { feature.score  = parseFloat(xmlFeature.getAttribute('score')); }
 
   //if(xmlFeature.getAttribute("peer")) { feature.id = xmlFeature.getAttribute("peer") + "::"+ feature.id; }
 
+  //20180315, thinking about going back to source_id to reduce XML size, but will keep here for now
   if(xmlFeature.getElementsByTagName("featuresource")) {
     var xmlSource = xmlFeature.getElementsByTagName("featuresource")[0];
     if(xmlSource) { 
       feature.source = eedbParseFeatureSourceData(xmlSource); 
       feature.source_name = feature.source.name;
       feature.category = feature.source.category;
-      feature.fsrc_id = feature.source.id;
+      feature.source_id = feature.source.id;
     }
   }
   if(xmlFeature.getElementsByTagName("chrom")) {
@@ -1085,6 +1180,8 @@ function eedbParseFeatureData(xmlFeature, feature) {
       feature.chrom        = xmlChrom.getAttribute("chr");
     }
   }
+  feature.fsrc_id = feature.source_id; //backward compatability
+
   if(feature.chrom) {
     feature.chromloc = feature.asm.toLowerCase() +"::"+
                        feature.chrom+":"+ feature.start +".."+ feature.end+
@@ -1108,14 +1205,215 @@ function eedbParseFeatureData(xmlFeature, feature) {
   }
 
   eedbParseMetadata(xmlFeature, feature);
+  //post process metadata
+  if(feature.mdata["EntrezID"])  { feature.entrez_id = feature.mdata["EntrezID"][0]; }
+  if(feature.mdata["entrez_ID"]) { feature.entrez_id = feature.mdata["entrez_ID"][0]; }
+  if(feature.mdata["refseq_ID"]) { feature.refseq_id = feature.mdata["refseq_ID"][0]; }
+
   return feature;
+}
+
+
+function eedbParseFeatureFullXML(featureXML, feature) {
+  if(!featureXML) { return null; }
+  if(!feature) { feature = new Object; }
+
+  eedbParseFeatureData(featureXML, feature);
+
+  if(feature.mdata["bed:itemRgb"]) {
+    //maybe need to parse value to make sure it is valid
+    var value1 = feature.mdata["bed:itemRgb"][0]
+    var rgb_regex = /^(\d+)\,(\d+)\,(\d+)$/;
+    if(rgb_regex.exec(value1)) {
+      feature.color = "rgb("+value1+")";
+    }
+  }
+  if(feature.mdata["cytostain"]) { feature.cytostain = feature.mdata["cytostain"][0]; }
+
+  // subfeatures
+  var subfeats = featureXML.getElementsByTagName("feature");
+  if(subfeats && subfeats.length>0) {
+    //document.getElementById("message").innerHTML += fname + " has " + (subfeats.length) +" subfs; ";
+    var subfeatures_array = new Array();
+    feature.subfeatures = subfeatures_array;
+    for(var j=0; j<subfeats.length; j++) {
+      var subfeatureXML = subfeats[j];
+      var subf = eedbParseFeatureFullXML(subfeatureXML);
+      subfeatures_array.push(subf);
+    }
+  }
+
+  // expression  
+  var express = featureXML.getElementsByTagName("expression");
+  for(var j=0; j<express.length; j++) {
+    if(!feature.expression) { feature.expression = new Array(); }
+    if(!feature.expression_hash) { feature.expression_hash = new Object(); }
+    var expressXML = express[j];
+    var expID = expressXML.getAttribute("experiment_id");
+
+    expression = new Object();
+    expression.expID      = expID;
+    expression.datatype   = expressXML.getAttribute("datatype");
+    expression.count      = 1;
+    expression.dup        = 1;
+    expression.sense      = 0;
+    expression.antisense  = 0;
+    expression.total      = 0;
+    feature.expression.push(expression);
+
+    if(!(feature.expression_hash[expression.datatype])) { feature.expression_hash[expression.datatype] = new Array; }
+    feature.expression_hash[expression.datatype].push(expression);
+
+    if(expressXML.getAttribute("dup")) {
+      expression.dup = parseFloat(expressXML.getAttribute("dup"));
+    }
+
+    var expressValue = parseFloat(expressXML.getAttribute("value"));
+    expression.total = expressValue;
+
+    if(express[j].getAttribute("count")) { expression.count = parseInt(express[j].getAttribute("count")); }
+    if(feature.strand == "+") {
+      expression.sense      = expressValue
+      expression.total      = expressValue;
+    }
+    if(feature.strand == "-") {
+      expression.antisense  = expressValue;
+      expression.total      = expression.antisense;
+    }
+    if(feature.strand == " ") {
+      expression.total      = expressValue;
+      expression.sense      = expression.total;
+    }
+    //console.log("parse feature "+(feature.id)+" expression length "+(express.length)+" idx "+(feature.expression.length)+" dtype["+(expression.datatype)+"] val="+expressValue+"  total="+(expression.total));
+  }
+
+  return feature;
+}
+
+
+function eedbParseEdgeXML(edgeXML, edge) {
+  if(!edgeXML) { return; }
+
+  if(!edge) { edge = new Object; }
+
+  edge.classname      = "Edge";
+  edge.id             = edgeXML.getAttribute("id");
+  edge.source         = null; //object
+  edge.source_id      = edgeXML.getAttribute("esrc_id");
+  edge.dir            = edgeXML.getAttribute("dir");
+  edge.feature1       = null;
+  edge.feature2       = null;
+  edge.feature1_id    = edgeXML.getAttribute("f1id");
+  edge.feature2_id    = edgeXML.getAttribute("f2id");
+  edge.name  = "";
+  edge.category  = "";
+  edge.description  = "";
+
+  eedbParseMetadata(edgeXML, edge);
+
+  // edge_weight  
+  edge.weights = new Object();
+  var weights = edgeXML.getElementsByTagName("edgeweight");
+  for(var j=0; j<weights.length; j++) {
+    var weightXML = weights[j];
+
+    weight = new Object();
+    weight.source     = null //object;
+    weight.source_id  = weightXML.getAttribute("datasource_id");
+    weight.datatype   = weightXML.getAttribute("datatype");
+    weight.weight     = 0;
+    if(weightXML.getAttribute("weight")) {
+      weight.weight = parseFloat(weightXML.getAttribute("weight"));
+    }
+
+    if(!(edge.weights[weight.datatype])) { edge.weights[weight.datatype] = new Array; }
+    edge.weights[weight.datatype].push(weight);
+  }
+
+  return edge;
+}
+
+
+function eedbParseDataSourceXML(sourceXML, source) {
+  if(!sourceXML) { return; }
+
+  if(!source) { source = new Object; }
+
+  source.classname    = "DataSource";
+  source.id           = sourceXML.getAttribute("id");
+  source.name         = sourceXML.getAttribute("name");
+  source.category     = sourceXML.getAttribute("category");
+  source.platform     = sourceXML.getAttribute("platform");
+  source.series_point = sourceXML.getAttribute("series_point");
+  source.feature_count = 0;
+  source.platform     = '';
+  source.assembly     = '';
+  source.description  = "";
+  source.series_name  = "";
+  source.ev_terms     = '';
+  source.biosample    = '';
+  source.treatment    = "";
+
+  if(sourceXML.getAttribute("import_date")) {
+    source.import_date  = sourceXML.getAttribute("import_date");
+  }
+  if(sourceXML.getAttribute("create_date")) {
+    source.import_date  = sourceXML.getAttribute("create_date");
+  }
+  if(sourceXML.getAttribute("create_timestamp")) {
+    source.import_timestamp  = sourceXML.getAttribute("create_timestamp");
+  }
+  if(sourceXML.getAttribute("owner_identity")) {
+    source.owner_identity  = sourceXML.getAttribute("owner_identity");
+  }
+  if(sourceXML.getAttribute("feature_count")) {
+    source.feature_count  = parseInt(sourceXML.getAttribute("feature_count"));
+  }
+  source.platform     = '';
+  source.assembly     = '';
+  source.description  = "";
+  source.series_name  = "";
+  source.ev_terms     = '';
+  source.biosample    = '';
+  source.treatment    = "";
+  source.feature_count = 0;
+
+  if(source.id) {
+    var zobj = unparse_dbid(source.id);
+    if(zobj.uuid) {
+      source.uuid = zobj.uuid;
+      source.objID = zobj.objID;
+    }
+  }
+
+  eedbParseMetadata(sourceXML, source);
+
+  var desc = sourceXML.getElementsByTagName("description");
+  if(desc && desc.length>0) { source.description = desc[0].firstChild.nodeValue; }
+  if(source.name) { source.name = source.name.replace(/_/g, " "); }
+  if(source.treatment) { source.treatment = source.treatment.replace(/_/g, " "); }
+
+  return source;
+}
+
+
+function eedbParseEdgeSourceXML(sourceXML, source) {
+  source = eedbParseDataSourceXML(sourceXML, source);
+  source.classname    = "EdgeSource";
+  return source;
 }
 
 
 function eedbParseFeatureSourceData(xmlFeatureSource, featuresource) {
   if(!xmlFeatureSource) { return; }
 
-  if(!featuresource) { featuresource = new Object; }
+  if(!featuresource) { 
+    featuresource = new Object;
+    featuresource.name         = '';
+    featuresource.platform     = '';
+    featuresource.assembly     = '';
+    featuresource.description  = "";
+  }
 
   featuresource.classname    = "FeatureSource";
   featuresource.id           = xmlFeatureSource.getAttribute("id");
@@ -1138,9 +1436,6 @@ function eedbParseFeatureSourceData(xmlFeatureSource, featuresource) {
   if(xmlFeatureSource.getAttribute("feature_count")) {
     featuresource.feature_count  = parseInt(xmlFeatureSource.getAttribute("feature_count"));
   }
-  featuresource.platform     = '';
-  featuresource.assembly     = '';
-  featuresource.description  = "";
 
   if(featuresource.id) {
     var zobj = unparse_dbid(featuresource.id);
@@ -1158,13 +1453,23 @@ function eedbParseFeatureSourceData(xmlFeatureSource, featuresource) {
 function eedbParseExperimentData(xmlExperiment, experiment) {
   if(!xmlExperiment) { return; }
 
-  if(!experiment) { experiment = new Object; }
+  if(!experiment) { 
+    experiment = new Object;
+    experiment.name         = "";
+    experiment.series_name  = "";
+    experiment.ev_terms     = '';
+    experiment.assembly     = '';
+    experiment.biosample    = '';
+    experiment.treatment    = "";
+    experiment.description  = "";
+  }
 
   experiment.classname    = "Experiment";
-  experiment.id           = xmlExperiment.getAttribute("id");
-  experiment.name         = xmlExperiment.getAttribute("name");
-  experiment.platform     = xmlExperiment.getAttribute("platform");
-  experiment.series_point = xmlExperiment.getAttribute("series_point");
+  if(xmlExperiment.getAttribute("id")) { experiment.id = xmlExperiment.getAttribute("id"); }
+  if(xmlExperiment.getAttribute("name")) { experiment.name = xmlExperiment.getAttribute("name"); }
+  if(xmlExperiment.getAttribute("platform")) { experiment.platform = xmlExperiment.getAttribute("platform"); }
+  if(xmlExperiment.getAttribute("series_point")) { experiment.series_point = xmlExperiment.getAttribute("series_point"); }
+  if(xmlExperiment.getAttribute("demux_key")) { experiment.demux_key = xmlExperiment.getAttribute("demux_key"); }
 
   if(xmlExperiment.getAttribute("import_date")) {
     experiment.import_date  = xmlExperiment.getAttribute("import_date");
@@ -1181,17 +1486,42 @@ function eedbParseExperimentData(xmlExperiment, experiment) {
   if(xmlExperiment.getAttribute("owner_identity")) {
     experiment.owner_identity  = xmlExperiment.getAttribute("owner_identity");
   }
-  experiment.series_name  = "";
-  experiment.ev_terms     = '';
-  experiment.assembly     = '';
-  experiment.biosample    = '';
-  experiment.treatment    = "";
-  experiment.description  = "";
   eedbParseMetadata(xmlExperiment, experiment);
   var desc = xmlExperiment.getElementsByTagName("description");
   if(desc && desc.length>0) { experiment.description = desc[0].firstChild.nodeValue; }
   if(experiment.name) { experiment.name = experiment.name.replace(/_/g, " "); }
   if(experiment.treatment) { experiment.treatment = experiment.treatment.replace(/_/g, " "); }
+
+  var subsrc_node = xmlExperiment.getElementsByTagName("subsources");
+  if(subsrc_node && (subsrc_node.length>0)) {
+    subsrc_node = subsrc_node[0];
+    if(!experiment.subsources) { experiment.subsources = new Object(); } //hash
+    experiment.subsource_count = subsrc_node.getAttribute("count");
+
+    var children = subsrc_node.childNodes;
+    for (var j=0; j<children.length; j++) {
+      var subsrcDOM = children[j]
+      if(subsrcDOM.tagName != "experiment") { continue; }
+      var subID = subsrcDOM.getAttribute("id");
+      var subexp = experiment.subsources[subID];
+      if(!subexp) { //make new subsource as shallow-copy of parent first
+        subexp = new Object;
+        subexp.classname          = "Experiment";
+        subexp.id                 = subID
+        subexp.name               = experiment.name;
+        subexp.description        = experiment.description;
+        subexp.platform           = experiment.platform;
+        subexp.series_point       = experiment.series_point;
+        subexp.import_date        = experiment.import_date;
+        subexp.import_timestamp   = experiment.import_timestamp ;
+        subexp.owner_identity     = experiment.owner_identity;
+        subexp.parent_source      = experiment;
+        experiment.subsources[subexp.id] = subexp;
+      }
+      eedbParseExperimentData(subsrcDOM, subexp); //parse specific subsource xml
+      //eedbParseMetadata(xmlExperiment, subexp); //copy/parse the parent mdata into the child subsource. but this is really slow, need to rethink
+    }
+  }
 
   if(experiment.id) {
     var zobj = unparse_dbid(experiment.id);
@@ -1210,16 +1540,18 @@ function eedbParseMetadata(eedbXML, eedbObject) {
   if(!eedbObject) { return; }
 
   //eedbObject.id           = eedbXML.getAttribute("id");
-  eedbObject.ev_terms     = '';
-  eedbObject.biosample    = "";
-  eedbObject.treatment    = "";
-  eedbObject.description  = "";
-  eedbObject.gene_names   = "";
-  eedbObject.tissue       = "";
-  eedbObject.cell_type    = "";
-  eedbObject.cell_line    = "";
-  eedbObject.species_name = "";
-  eedbObject.mdata        = new Object;  //hash to concat string
+  if(!eedbObject.mdata) { 
+    eedbObject.mdata = new Object; //hash to concat string
+    eedbObject.ev_terms     = '';
+    eedbObject.biosample    = "";
+    eedbObject.treatment    = "";
+    eedbObject.description  = "";
+    eedbObject.gene_names   = "";
+    eedbObject.tissue       = "";
+    eedbObject.cell_type    = "";
+    eedbObject.cell_line    = "";
+    eedbObject.species_name = "";
+  }
 
   var syms = eedbXML.getElementsByTagName("symbol");
   var mdata = eedbXML.getElementsByTagName("mdata");
@@ -1236,40 +1568,11 @@ function eedbParseMetadata(eedbXML, eedbObject) {
     if(!(eedbObject.mdata[tag])) { eedbObject.mdata[tag] = new Array; }
     eedbObject.mdata[tag].push(value);
 
-    if(tag == "uuid") { eedbObject.uuid = syms[j].getAttribute("value"); }
-    if(tag == "zenbu:proxy_id") { eedbObject.proxy_id = syms[j].getAttribute("zenbu:proxy_id"); }
-    if(tag == "cell_line") { eedbObject.cell_line = syms[j].getAttribute("value"); }
-    if(tag == "eedb:cell_line") { eedbObject.cell_line = syms[j].getAttribute("value"); }
-    if(tag == "cell_type") { eedbObject.cell_type = syms[j].getAttribute("value"); }
-    if(tag == "library_name") { eedbObject.lib_name = syms[j].getAttribute("value"); }
-    if(tag == "eedb:series_name") { eedbObject.series_name = syms[j].getAttribute("value"); }
-    if(tag == "eedb:series_point") { eedbObject.series_point = syms[j].getAttribute("value"); }
-    if(tag == "osc:LSArchive_sample_tissue_type") { eedbObject.tissue = syms[j].getAttribute("value"); }
-    if(tag == "osc:LSArchive_sample_cell_type") { eedbObject.cell_type = syms[j].getAttribute("value"); }
-    if(tag == "osc:LSArchive_sample_organism") { eedbObject.species_name = syms[j].getAttribute("value"); }
-    if(tag == "osc:LSArchive_sample_experiment_condition") { eedbObject.treatment = syms[j].getAttribute("value"); }
-    if(tag == "experimental_condition") { eedbObject.treatment += syms[j].getAttribute("value")+" "; }
-    if(tag == "EV_term") { eedbObject.ev_terms += syms[j].getAttribute("value") + ", "; }
-    if(tag == "species_name") { eedbObject.species_name = syms[j].getAttribute("value"); }
-    if(tag == "eedb:assembly_name") { eedbObject.assembly = syms[j].getAttribute("value"); }
-    if(tag == "assembly_name") { eedbObject.assembly = syms[j].getAttribute("value"); }
-    if(tag == "eedb:category") { eedbObject.category = syms[j].getAttribute("value"); }
-    if(tag == "eedb:display_name") { eedbObject.name = syms[j].getAttribute("value"); }
-    if(tag == "display_name") { eedbObject.name = syms[j].getAttribute("value"); }
-    if(tag == "eedb:shared_in_collaboration") { 
-      if(!eedbObject.collaboration_id_hash) { eedbObject.collaboration_id_hash = new Object; }
-      var collaboration_uuid = syms[j].getAttribute("value"); 
-      eedbObject.collaboration_id_hash[collaboration_uuid] = new Object;
-    }
-    if(tag == "ILMN_hg6v2_key") { eedbObject.gene_names += syms[j].getAttribute("value") + " "; }
-    if(tag == "Entrez_synonym") { eedbObject.gene_names += syms[j].getAttribute("value") + " "; }
-    if(tag == "TFsymbol") { eedbObject.gene_names += syms[j].getAttribute("value") + " "; }
-    if((tag == "EntrezGene") && (eedbObject.name.toLowerCase != syms[j].getAttribute("value").toLowerCase)) {
-      eedbObject.gene_names += syms[j].getAttribute("value") + " "; 
-    }
-    if(tag == "EntrezID") { eedbObject.entrez_id = syms[j].getAttribute("value"); }
-    if(tag == "OMIM") { eedbObject.omim_id = syms[j].getAttribute("value"); }
-    if(tag == "GeneticLoc") { eedbObject.genloc = syms[j].getAttribute("value"); }
+    //if(tag == "eedb:shared_in_collaboration") { 
+    //  if(!eedbObject.collaboration_id_hash) { eedbObject.collaboration_id_hash = new Object; }
+    //  var collaboration_uuid = syms[j].getAttribute("value"); 
+    //  eedbObject.collaboration_id_hash[collaboration_uuid] = new Object;
+    //}
   }
   for(j=0; j<mdata.length; ++j) {
     if(!(mdata[j].firstChild)) { continue; }
@@ -1287,36 +1590,79 @@ function eedbParseMetadata(eedbXML, eedbObject) {
 
     if(!(eedbObject.mdata[tag])) { eedbObject.mdata[tag] = new Array; }
     eedbObject.mdata[tag].push(value);
+  }
 
-    if(tag == "eedb:category") { eedbObject.category = mdata[j].firstChild.nodeValue; }
-    if(tag == "eedb:display_name") { eedbObject.name = mdata[j].firstChild.nodeValue; }
-    if(tag == "display_name") { eedbObject.name = mdata[j].firstChild.nodeValue; }
-    if(tag == "assembly") { eedbObject.assembly = mdata[j].firstChild.nodeValue; }
-    if(tag == "assembly_name") { eedbObject.assembly = mdata[j].firstChild.nodeValue; }
-    if(tag == "eedb:assembly_name") { eedbObject.assembly = mdata[j].firstChild.nodeValue; }
-    if(tag == "genome") { eedbObject.assembly = mdata[j].firstChild.nodeValue; }
-    if(tag == "tissue") { eedbObject.tissue += mdata[j].firstChild.nodeValue+" "; }
-    if(tag == "tissue_type") { eedbObject.tissue += mdata[j].firstChild.nodeValue+" "; }
-    if(tag == "osc:LSArchive_sample_tissue_type") { eedbObject.tissue += mdata[j].firstChild.nodeValue+" "; }
-    if(tag == "eedb:cell_line") { eedbObject.cell_line = mdata[j].firstChild.nodeValue; }
-    if(tag == "cell_line") { eedbObject.cell_line = mdata[j].firstChild.nodeValue; }
-    if(tag == "cell_type") { eedbObject.cell_type = mdata[j].firstChild.nodeValue; }
-    if(tag == "osc:LSArchive_sample_cell_type") { eedbObject.cell_type = mdata[j].firstChild.nodeValue; }
-    if(tag == "species_name") { eedbObject.species_name = mdata[j].firstChild.nodeValue; }
-    if(tag == "osc:LSArchive_sample_organism") { eedbObject.species_name = mdata[j].firstChild.nodeValue; }
-    if(tag == "series_name") { eedbObject.series_name = mdata[j].firstChild.nodeValue; }
-    if(tag == "eedb:series_name") { eedbObject.series_name = mdata[j].firstChild.nodeValue; }
-    if(tag == "eedb:series_point") { eedbObject.series_point = mdata[j].firstChild.nodeValue; }
-    if(tag == "experimental_condition") { eedbObject.treatment += mdata[j].firstChild.nodeValue+" "; }
-    if(tag == "eedb:treatment") { eedbObject.treatment = mdata[j].firstChild.nodeValue+" "; }
-    if(tag == "osc:LSArchive_sample_experiment_condition") { eedbObject.treatment += mdata[j].firstChild.nodeValue+" "; }
-    if(tag == "description") { eedbObject.description = mdata[j].firstChild.nodeValue; }
-    if(tag == "Summary") { eedbObject.summary = mdata[j].firstChild.nodeValue; }
-    if(tag == "comments") { eedbObject.comments = mdata[j].firstChild.nodeValue; }
-    if(tag == "sam:description") { eedbObject.sam_desc = mdata[j].firstChild.nodeValue; }
-    if(tag == "zenbu:proxy_id") { eedbObject.proxy_id = mdata[j].firstChild.nodeValue; }
-    if(tag == "rgbcolor") { eedbObject.rgbcolor = mdata[j].firstChild.nodeValue; }
-    //if((tag == "eedb:owner_OpenID") && !eedbObject.owner_openID) { eedbObject.owner_openID = mdata[j].firstChild.nodeValue; }
+  //remove duplicates code
+  for(var tag in eedbObject.mdata) {
+    var value_array = eedbObject.mdata[tag];
+    var value_hash = new Object;
+    for(var idx1=0; idx1<value_array.length; idx1++) {
+      var value = value_array[idx1];
+      value_hash[value]= 1;
+    }
+    eedbObject.mdata[tag] = new Array;
+    for(var value in value_hash) {
+      eedbObject.mdata[tag].push(value);
+    }
+  }
+
+
+  //converted all the specific parsing into a general post-process, but some of these attributes are no longer used
+  //so at some point I want to go and clean this up a bit
+  eedbObject.tissue = "";
+  eedbObject.treatment = "";
+  eedbObject.gene_names = "";
+  for(var tag in eedbObject.mdata) {
+    var value_array = eedbObject.mdata[tag];
+    for(var idx1=0; idx1<value_array.length; idx1++) {
+      var value = value_array[idx1];
+
+      if(tag == "uuid") { eedbObject.uuid = value; }
+      if(tag == "library_name") { eedbObject.lib_name = value; }
+      if(tag == "EV_term") { eedbObject.ev_terms += value + ", "; }
+      if(tag == "ILMN_hg6v2_key") { eedbObject.gene_names += value + " "; }
+      if(tag == "Entrez_synonym") { eedbObject.gene_names += value + " "; }
+      if(tag == "TFsymbol") { eedbObject.gene_names += value + " "; }
+      if((tag == "EntrezGene") && (eedbObject.name.toLowerCase() != value.toLowerCase())) { eedbObject.gene_names += value + " "; }
+      if(tag == "EntrezID") { eedbObject.entrez_id = value; }
+      if(tag == "OMIM") { eedbObject.omim_id = value; }
+      if(tag == "GeneticLoc") { eedbObject.genloc = value; }
+
+      if(tag == "eedb:category") { eedbObject.category = value; }
+      if(tag == "eedb:display_name") { eedbObject.name = value; }
+      if(tag == "display_name") { eedbObject.name = value; }
+      if(tag == "assembly") { eedbObject.assembly = value; }
+      if(tag == "assembly_name") { eedbObject.assembly = value; }
+      if(tag == "eedb:assembly_name") { eedbObject.assembly = value; }
+      if(tag == "genome") { eedbObject.assembly = value; }
+      if(tag == "tissue") { eedbObject.tissue += value+" "; }
+      if(tag == "tissue_type") { eedbObject.tissue += value+" "; }
+      if(tag == "osc:LSArchive_sample_tissue_type") { eedbObject.tissue += value+" "; }
+      if(tag == "eedb:cell_line") { eedbObject.cell_line = value; }
+      if(tag == "cell_line") { eedbObject.cell_line = value; }
+      if(tag == "cell_type") { eedbObject.cell_type = value; }
+      if(tag == "osc:LSArchive_sample_cell_type") { eedbObject.cell_type = value; }
+      if(tag == "species_name") { eedbObject.species_name = value; }
+      if(tag == "osc:LSArchive_sample_organism") { eedbObject.species_name = value; }
+      if(tag == "series_name") { eedbObject.series_name = value; }
+      if(tag == "eedb:series_name") { eedbObject.series_name = value; }
+      if(tag == "eedb:series_point") { eedbObject.series_point = value; }
+      if(tag == "experimental_condition") { eedbObject.treatment += value+" "; }
+      if(tag == "eedb:treatment") { eedbObject.treatment = value+" "; }
+      if(tag == "osc:LSArchive_sample_experiment_condition") { eedbObject.treatment += value+" "; }
+      if(tag == "description") { eedbObject.description = value; }
+      if(tag == "Summary") { eedbObject.summary = value; }
+      if(tag == "comments") { eedbObject.comments = value; }
+      if(tag == "sam:description") { eedbObject.sam_desc = value; }
+      if(tag == "zenbu:proxy_id") { eedbObject.proxy_id = value; }
+      if(tag == "rgbcolor") { eedbObject.rgbcolor = value; }
+      if(tag == "enc:assay") { eedbObject.encAssay = value; }
+      if(tag == "enc:biosample") { eedbObject.encBiosample = value; }
+      if(tag == "enc:biosampleSynonyms") { eedbObject.encBiosampleSyms = value; }
+      if(tag == "enc:biosampleTreatments") { eedbObject.encBiosampleTreatments = value; }
+
+      //if((tag == "eedb:owner_OpenID") && !eedbObject.owner_openID) { eedbObject.owner_openID = value; }
+    }
   }
 
   if(!eedbObject.description && eedbObject.comments) { eedbObject.description = eedbObject.comments; }
@@ -1328,6 +1674,11 @@ function eedbParseMetadata(eedbXML, eedbObject) {
   if(eedbObject.cell_line)    { eedbObject.biosample += eedbObject.cell_line + " "; }
   if(eedbObject.cell_type)    { eedbObject.biosample += eedbObject.cell_type + " "; }
   if(eedbObject.tissue)       { eedbObject.biosample += eedbObject.tissue + " "; }
+  if(eedbObject.encBiosample) { eedbObject.biosample += eedbObject.encBiosample + " "; }
+  if(eedbObject.encBiosampleSyms) { eedbObject.biosample += eedbObject.encBiosampleSyms + " "; }
+
+  if(!eedbObject.platform && eedbObject.encAssay) { eedbObject.platform = eedbObject.encAssay; }
+  if(!eedbObject.treatment && eedbObject.encBiosampleTreatments) { eedbObject.treatment = eedbObject.encBiosampleTreatments; }
 
   eedbObject.description += "";
 }
@@ -1388,11 +1739,12 @@ function eedbParseCollaborationData(xmlCollaboration, collaboration) {
   collaboration.pending_invites  = new Array;
   collaboration.shared_peers     = new Object;
   collaboration.members          = new Array;
+  collaboration.member_count     = 0;
   collaboration.uuid             = xmlCollaboration.getAttribute("uuid");
   collaboration.name             = xmlCollaboration.getAttribute("name");
-  collaboration.member_count     = xmlCollaboration.getAttribute("member_count");
   collaboration.member_status    = xmlCollaboration.getAttribute("member_status");
   collaboration.public_announce  = xmlCollaboration.getAttribute("public_announce");
+  collaboration.open_to_public   = xmlCollaboration.getAttribute("open_to_public");
   collaboration.description      = "";
   collaboration.owner_nickname   = "";
   collaboration.selected         = false;
@@ -1469,6 +1821,7 @@ function eedbParseCollaborationData(xmlCollaboration, collaboration) {
       //else { user.member_status = "member"; } 
       collaboration.members.push(user);
     }
+    collaboration.member_count = collaboration.members.length;
   }
   //collaboration.members.sort(eedb_collab_members_sort_func);
   
@@ -1479,9 +1832,10 @@ function eedbParseCollaborationData(xmlCollaboration, collaboration) {
 function eedbParseConfigurationData(xmlConfig, config) {
   if(!xmlConfig) { return null; }
   if(!config) { config = new Object; }
-    
+  
   config.classname    = "Configuration";
   config.uuid         = xmlConfig.getAttribute("uuid");
+  config.fixed_id     = "";
   config.id           = config.uuid;
   config.access_count = Math.floor(xmlConfig.getAttribute("access_count"));
   config.type         = "";
@@ -1497,7 +1851,8 @@ function eedbParseConfigurationData(xmlConfig, config) {
 
   if(xmlConfig.getAttribute("type")) { config.type = xmlConfig.getAttribute("type"); }
   if(xmlConfig.getAttribute("create_date")) { config.create_date = xmlConfig.getAttribute("create_date"); }
-  
+  if(xmlConfig.getAttribute("fixed_id")) { config.fixed_id = xmlConfig.getAttribute("fixed_id"); }
+
   eedbParseMetadata(xmlConfig, config);
 
   var mdata = xmlConfig.getElementsByTagName("mdata");
@@ -1554,11 +1909,21 @@ function eedbParseAssemblyData(xmlAssembly, assembly) {
   assembly.genus         = xmlAssembly.getAttribute("genus");
   assembly.species       = xmlAssembly.getAttribute("species");
   assembly.release_date  = xmlAssembly.getAttribute("release_date");
-  assembly.import_date   = xmlAssembly.getAttribute("create_date");
-  assembly.import_timestamp = xmlAssembly.getAttribute("create_timestamp");
-
   assembly.ncbi_acc        = xmlAssembly.getAttribute("ncbi_acc");
   assembly.classification  = xmlAssembly.getAttribute("classification");
+
+  if(xmlAssembly.getAttribute("import_date")) {
+    assembly.import_date  = xmlAssembly.getAttribute("import_date");
+  }
+  if(xmlAssembly.getAttribute("create_date")) {
+    assembly.import_date  = xmlAssembly.getAttribute("create_date");
+  }
+  if(xmlAssembly.getAttribute("create_timestamp")) {
+    assembly.import_timestamp  = xmlAssembly.getAttribute("create_timestamp");
+  }
+  if(xmlAssembly.getAttribute("owner_identity")) {
+    assembly.owner_identity  = xmlAssembly.getAttribute("owner_identity");
+  }
 
   assembly.common_name = "";
   if(xmlAssembly.getAttribute("common_name")) { assembly.common_name = xmlAssembly.getAttribute("common_name"); }
@@ -1593,11 +1958,90 @@ function eedbParseAssemblyData(xmlAssembly, assembly) {
 }
 
 
+function eedbFetchChrom(asm, chrom_name) {
+  if(!asm || !chrom_name) { return null; }
+
+  var url = eedbSearchCGI + "?mode=chrom&asm="+asm+";chrom="+chrom_name;
+  var chromXMLHttp=GetXmlHttpObject();
+  if(chromXMLHttp==null) { return; }
+
+  chromXMLHttp.open("GET",url,false); //synchronous
+  chromXMLHttp.send(null);
+
+  if(chromXMLHttp.responseXML == null) return;
+  if(chromXMLHttp.readyState!=4) return;
+  if(chromXMLHttp.status!=200) { return; }
+  if(chromXMLHttp.responseXML == null) return;
+
+  var xmlDoc=chromXMLHttp.responseXML.documentElement;
+  if(xmlDoc==null) {
+    //document.getElementById("message").innerHTML= 'Problem with central DB!';
+    return;
+  }
+
+  var genomeHash = new Object;
+  var xmlAssemblies = xmlDoc.getElementsByTagName("assembly");
+  for(i=0; i<xmlAssemblies.length; i++) {
+    var assembly = eedbParseAssemblyData(xmlAssemblies[i]);
+    genomeHash[assembly.assembly_name] = assembly;
+  }
+
+  var xmlChroms = xmlDoc.getElementsByTagName("chrom");
+  for(i=0; i<xmlChroms.length; i++) {
+    var chrom = eedbParseChromData(xmlChroms[i]);
+    //if((chromXML.getAttribute('asm') != asm)  && (chromXML.getAttribute('ucsc_asm') != asm) && (chromXML.getAttribute('ncbi_asm') != asm)) { continue; }
+    if(chrom) { 
+      if(genomeHash[chrom.assembly_name]) {
+        chrom.assembly = genomeHash[chrom.assembly_name];
+      }
+      return chrom; 
+    }
+  }
+}
+
+
+function eedbParseChromData(chromXML, chrom) {
+  if(!chromXML) { return null; }
+
+  if(!chrom) { chrom = new Object; }
+
+  chrom.classname     = "Chrom";
+
+  //<chrom chr="chr1" ncbi_chrom_acc="NC_000001.11" asm="hg38" ucsc_asm="hg38" ncbi_asm="GRCh38" taxon_id="9606" length="248956422" id="7AA26B8D-8634-45A4-8F74-DF3E04B3456A::1:::Chrom" description="chr1"/>
+  chrom.chrom_name = chromXML.getAttribute('chr');
+  chrom.assembly_name = chromXML.getAttribute('asm');
+  chrom.chrom_length = Math.floor(chromXML.getAttribute('length'));
+  chrom.chrom_id = chromXML.getAttribute('id');
+
+  chrom.ncbi_chrom_acc = chromXML.getAttribute('ncbi_chrom_acc');
+  chrom.ucsc_name = chromXML.getAttribute('ucsc_asm');
+  chrom.ncbi_name = chromXML.getAttribute('ncbi_asm');
+  chrom.taxon_id = chromXML.getAttribute('taxon_id');
+  chrom.description = chromXML.getAttribute('description');
+
+  chrom.description = "Chrom "+chrom.assembly_name +"::"+ chrom.chrom_name +" ("+ chrom.chrom_length+"bp)";
+  if(chrom.taxon_id) { chrom.description += " taxID:"+ chrom.taxon_id; }
+  if(chrom.ucsc_name) { chrom.description += " "+chrom.ucsc_name; }
+  if(chrom.ncbi_name) { chrom.description += " "+chrom.ncbi_name; }
+  if(chrom.ncbi_chrom_acc) { chrom.description += " "+chrom.ncbi_chrom_acc; }
+
+  return chrom;
+}
+
+
 //-------------------------------------------------------------------
 //
 // object info display and metadata edit
 //
 //-------------------------------------------------------------------
+
+function eedbFetchAndDisplaySourceInfo(sourceID) {
+  var source = eedbGetObject(sourceID); //uses jscript cache to hold recent objects
+  //var source = eedbFetchObject(sourceID); //always fetches from webservice to get updates
+  if(source) {
+    eedbDisplaySourceInfo(source);
+  }
+}
 
 
 function eedbDisplaySourceInfo(source, user_match) {
@@ -1622,6 +2066,7 @@ function eedbDisplaySourceInfo(source, user_match) {
 
     info_div.setAttribute('xpos', xpos);
     info_div.setAttribute('ypos', ypos);
+
   } else {
     source = current_source;
     xpos = info_div.getAttribute('xpos');
@@ -1717,10 +2162,19 @@ function eedbDisplaySourceInfo(source, user_match) {
   tspan.setAttribute('style', "color:darkgray;");
   tspan.innerHTML = source.id;
 
+  if(source.subsource_count) {
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "font-weight: bold; ");
+    tspan.innerHTML = "subsources: ";
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.innerHTML = source.subsource_count;
+  }
+
   //description
   main_div.appendChild(document.createElement('hr'));
   tdiv = main_div.appendChild(document.createElement('div'));
-  if(source.description.length > 0) { tdiv.innerHTML = source.description; }
+  if(source.description && source.description.length>0) { tdiv.innerHTML = source.description; }
   else { tdiv.innerHTML = "no description"; }
   if(source.edit_mode) {
     tdiv.setAttribute('style', "color: rgb(105,105,155);");
@@ -1729,8 +2183,46 @@ function eedbDisplaySourceInfo(source, user_match) {
 
   main_div.appendChild(document.createElement('hr'));
 
+  if(source.request_full_load) { 
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "font-weight: bold; color:blue; ");
+    tspan.innerHTML = "loading full metadata.....";
+    eedbFullLoadCurrentSource(); //async process
+  }
+
+  //if there is a full_load_error
+  if(source.full_load_error) {
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "font-weight: bold; color:red; ");
+    tspan.innerHTML = "error: ";
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "color:darkgray;");
+    tspan.innerHTML = "unable to load full metadata, probably deleted but phantom object in cache. don't use.";
+  }
+
+  if(source.demux_key) {
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tdiv.setAttribute('style', "max-width:450px");
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.innerHTML = "demux_key: " + source.demux_key;
+  }
+
+  if(source.exptype && source.value) {
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tdiv.innerHTML = "signal : " + source.value + " " + source.exptype;
+  }
+  if(source.exptype && source.sense_value && source.antisense_value) {
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tdiv.innerHTML = "sense signal : " + source.sense_value + " " + source.exptype;
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tdiv.innerHTML = "anti-sense signal : " + source.antisense_value + " " + source.exptype;
+  }
+
   //for(var tag in source.mdata) { //new common mdata[].array system
-  var all_tags = Object.keys(source.mdata);
+  var all_tags = [];
+  if(source && source.mdata) { all_tags = Object.keys(source.mdata); }
   all_tags.sort(function (a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()); });
   for(var j=0; j<all_tags.length; j++) {
     var tag = all_tags[j];
@@ -1782,27 +2274,33 @@ function eedbDisplaySourceInfo(source, user_match) {
     }
   }
 
-  if(user_match) { 
+  if(user_match && source.full_load) { 
     var tdiv2 = main_div.appendChild(document.createElement('div'));
     if(source.edit_mode) {
       tdiv = tdiv2.appendChild(document.createElement('div'));
       tdiv.setAttribute('style', "float:right; margin: 0px 4px 4px 4px;");
-      var button = tdiv.appendChild(document.createElement('button'));
+      var button = tdiv.appendChild(document.createElement('input'));
+      button.type = "button";
+      button.className = "medbutton";
       button.setAttribute("onclick", "eedbSourceInfoEvent('save-metadata');return false");
-      button.innerHTML = "save metadata changes";
+      button.value = "save metadata changes";
       if(!source.metadata_changed) { button.setAttribute("disabled", "disabled"); }
 
       tdiv = tdiv2.appendChild(document.createElement('div'));
       tdiv.setAttribute('style', "margin: 4px 4px 4px 4px;");
-      var button = tdiv.appendChild(document.createElement('button'));
+      var button = tdiv.appendChild(document.createElement('input'));
+      button.type = "button";
+      button.className = "medbutton";
       button.setAttribute("onclick", "eedbSourceInfoEvent('add-metadata-panel');return false");
-      button.innerHTML = "add new metadata";
+      button.value = "add new metadata";
     } else {
       tdiv = tdiv2.appendChild(document.createElement('div'));
       tdiv.setAttribute('style', "margin: 4px 4px 4px 4px;");
-      var button = tdiv.appendChild(document.createElement('button'));
+      var button = tdiv.appendChild(document.createElement('input'));
+      button.type = "button";
+      button.className = "medbutton";
+      button.value = "edit metadata";
       button.setAttribute("onclick", "eedbSourceInfoEvent('edit-mode');return false");
-      button.innerHTML = "edit metadata";
     }
 
     main_div.appendChild(document.createElement('hr')); 
@@ -1919,14 +2417,18 @@ function eedbSourceInfoEvent(param, tag, value_idx) {
     input1.innerHTML = current_value;
     input1.focus();
 
-    var button = tdiv.appendChild(document.createElement('button'));
+    var button = tdiv.appendChild(document.createElement('input'));
+    button.type = "button";
+    button.className = "medbutton";
     button.setAttribute('style', "float:right; padding: 3px 3px 3px 3px; ");
     button.setAttribute("onclick", "eedbSourceInfoEvent('accept-edit', '"+tag+"','"+value_idx+"');return false");
-    button.innerHTML = "accept";
-    var button = tdiv.appendChild(document.createElement('button'));
+    button.value = "accept";
+    var button = tdiv.appendChild(document.createElement('input'));
+    button.type = "button";
+    button.className = "medbutton";
     button.setAttribute('style', "float:right; padding: 3px 3px 3px 3px; ");
     button.setAttribute("onclick", "eedbSourceInfoEvent('refresh');return false");
-    button.innerHTML = "cancel";
+    button.value = "cancel";
   }
   if(param=="accept-edit") {
     var input = document.getElementById("eedb_metadataedit_editvalue_textarea");
@@ -1958,7 +2460,7 @@ function eedbSourceInfoEvent(param, tag, value_idx) {
     var tdiv = info_div.appendChild(document.createElement('div'));
     tdiv.setAttribute('style', "width:380px; z-index:60; padding: 3px 3px 3px 3px; "+
                                "background-color:rgb(255,255,200); border:inset; border-width:2px; "+
-                               "position:absolute; left:"+(xpos)+"px; top:"+(ypos-30)+"px;");
+                               "position:absolute; left:"+(xpos)+"px; top:"+(ypos-200)+"px;");
     var tdiv2 = tdiv.appendChild(document.createElement('div'));
     tdiv2.setAttribute('style', "font-weight: bold; ");
     tdiv2.innerHTML = "add metadata: ";
@@ -1985,14 +2487,18 @@ function eedbSourceInfoEvent(param, tag, value_idx) {
     input1.setAttribute('style', "font-size:12px; width:330px; margin-left:5px; ");
     input1.setAttribute("rows", "5");
 
-    var button = tdiv.appendChild(document.createElement('button'));
+    var button = tdiv.appendChild(document.createElement('input'));
+    button.type = "button";
+    button.className = "medbutton";
     button.setAttribute('style', "float:right; padding: 3px 3px 3px 3px; ");
     button.setAttribute("onclick", "eedbSourceInfoEvent('accept-add');return false");
-    button.innerHTML = "add";
-    var button = tdiv.appendChild(document.createElement('button'));
+    button.value = "add";
+    var button = tdiv.appendChild(document.createElement('input'));
+    button.type = "button";
+    button.className = "medbutton";
     button.setAttribute('style', "float:right; padding: 3px 3px 3px 3px; ");
     button.setAttribute("onclick", "eedbSourceInfoEvent('refresh');return false");
-    button.innerHTML = "cancel";
+    button.value = "cancel";
   }
   if(param=="accept-add") {
     var input_tag   = document.getElementById("eedb_metadataedit_addtag_input");
@@ -2097,6 +2603,121 @@ function eedbSendMetadataEdits() {
 // collaboration select inferface
 //
 //---------------------------------------------------------------------------------
+
+var eedbCollaborationPulldown_hash = new Object();  //global hash of all uniq collaboration pulldowns
+
+function eedbCollaborationPulldown(submode, uniqID) {
+  //eedbShowLogin();
+  if(!uniqID) { uniqID = "zenbuCollabPulldown_"+ createUUID(); }
+  var collabWidget = eedbCollaborationPulldown_hash[uniqID];
+
+  if(!collabWidget) {    
+    console.log("eedbCollaborationPulldown ["+uniqID+"] create new widget");
+    collabWidget = document.createElement('span');
+    collabWidget.setAttribute("style", "position:relative;");
+    collabWidget.id = uniqID;
+    collabWidget.collaboration_uuid = current_collaboration.uuid;
+    collabWidget.collaboration_name = current_collaboration.name;
+    console.log("init with current_collaboration.uuid = "+ current_collaboration.uuid);
+    eedbCollaborationPulldown_hash[uniqID] = collabWidget;
+  }
+  
+  collabWidget.innerHTML = ""; //to clear old content
+
+  if(submode) { collabWidget.submode = submode; } 
+  else { submode = collabWidget.submode; }
+
+  if((submode != "config_search") && (submode != "filter_search") && (collabWidget.collaboration_uuid == "all")) {
+    //for saving into collaboration
+    collabWidget.collaboration_uuid = "private";
+    collabWidget.collaboration_name = "private";
+  }
+  var title = collabWidget.collaboration_name;
+  if(collabWidget.collaboration_uuid == "private") {
+    if(submode == "filter_search") { title = "my uploads"; }
+    else { title = "private"; }
+  }
+    
+  var span1 = collabWidget.appendChild(document.createElement('span'));
+  span1.setAttribute('style', "margin: 2px 1px 0px 0px;");
+  span1.innerHTML = "collaboration: ";
+  if(submode=="filter_search") { span1.innerHTML = "collaboration filter: "; }
+
+  var collab_array = new Array;
+
+  var select = collabWidget.appendChild(document.createElement('select'));
+  select.setAttribute("onchange", "eedbCollaborationPulldownChanged(\""+ uniqID +"\", this.value);");
+  select.className = "dropdown";
+  select.style.margin = "0px";
+  select.style.fontSize = "10px";
+  
+  if((submode == "filter_search") || (submode == "config_search")) {
+    var c1 = { uuid: "all", name:"all"};
+    collab_array.push(c1);
+  }
+  if(current_user) {
+    var c1 = { uuid: "private", name:"private"};
+    if(submode == "filter_search") { c1.name = "my uploads"; }
+    collab_array.push(c1);
+  }
+  
+  // make cgi query
+  var collabXMLHttp = GetXmlHttpObject()  
+  if(collabXMLHttp == null) { return; }
+  
+  var url = eedbUserCGI+"?mode=collaborations;format=minxml";
+  if((submode == "filter_search") || (submode == "config_search")) { url += ";submode=searchable"; }
+  else { url += ";submode=member"; }
+  collabXMLHttp.open("GET", url, false);  //not async
+  collabXMLHttp.send(null);
+  if(collabXMLHttp.responseXML == null) { return; }
+  if(collabXMLHttp.readyState!=4) { return; }
+  if(collabXMLHttp.status!=200) { return; }
+  
+  var xmlDoc=collabXMLHttp.responseXML.documentElement;
+  if(xmlDoc==null) { return; }
+  
+  var xmlCollabs = xmlDoc.getElementsByTagName("collaboration");
+  for(i=0; i<xmlCollabs.length; i++) {
+    var collaboration = eedbParseCollaborationData(xmlCollabs[i]);
+    collab_array.push(collaboration);
+  }
+  collab_array.sort(eedb_collab_sort_func);
+
+  for(i=0; i<collab_array.length; i++) {
+    var collaboration = collab_array[i];    
+    var option = select.appendChild(document.createElement('option'));
+    option.setAttribute("value", collaboration.uuid);
+    if(collabWidget.collaboration_uuid == collaboration.uuid) { option.setAttribute("selected", "selected"); }
+    option.innerHTML = collaboration.name;
+  }
+  collabWidget.collab_array = collab_array;
+  
+  return collabWidget;
+}
+
+function eedbCollaborationPulldownChanged(uniqID, collab_uuid) {
+  var collabWidget = eedbCollaborationPulldown_hash[uniqID];
+  if(!collabWidget) { return; }
+  if(!collabWidget.collab_array) { return; }
+
+  //console.log("eedbCollaborationPulldownChanged "+uniqID+ " : " +collab_uuid);
+
+  for(i=0; i<collabWidget.collab_array.length; i++) {
+    var collaboration = collabWidget.collab_array[i];
+    if(!collaboration) { continue; }
+    if(collaboration.uuid == collab_uuid) {
+      collabWidget.collaboration_uuid = collaboration.uuid;
+      collabWidget.collaboration_name = collaboration.name;
+    }
+  }
+  //console.log("eedbCollaborationPulldownChanged "+uniqID+ " : selection [" +collabWidget.collaboration_uuid +
+  //            "] : "+ collabWidget.collaboration_name);
+
+  if(collabWidget.callOutFunction) { collabWidget.callOutFunction(uniqID, collab_uuid); }
+}
+
+//--------------------
 
 function eedbCollaborationSelectWidget(submode) {
   var collabWidget = document.getElementById("_collaborationSelectWidget");
@@ -2295,6 +2916,10 @@ function eedb_collab_sort_func(a,b) {
   if(!a) { return 1; }
   if(!b) { return -1; }
 
+  if(a.uuid == "all") { return -1; }
+  if(b.uuid == "all") { return 1; }
+  if(a.uuid == "private") { return -1; }
+  if(b.uuid == "private") { return 1; }
   if(a.uuid == "curated") { return -1; }
   if(b.uuid == "curated") { return 1; }
   if(a.uuid == "public") { return -1; }
@@ -2383,35 +3008,46 @@ function eedbCollaborationChange(value) {
 //
 //---------------------------------------------------------------------------------
 
-function zenbuGenomeSelectWidget(submode) {
-  var genomeWidget   = document.getElementById("_genomeSelectWidget");
-  var assemblySelect = document.getElementById("_genomeSelect");
+function zenbuGenomeSelectWidget(submode, uniqID) {
+  if(!uniqID) { uniqID = "_"; }
+
+  var genomeWidget = current_genome.genomeWidgets[uniqID];
 
   if(!genomeWidget) {    
+    console.log("zenbuGenomeSelectWidget ["+uniqID+"] create new widget");
     genomeWidget = document.createElement('span');
-    genomeWidget.id = "_genomeSelectWidget";
+    genomeWidget.id = uniqID+"_genomeSelectWidget";
+    genomeWidget.uniqID = uniqID;
     //genomeWidget.setAttribute("style", "position:relative; margin:3px 3px 3px 0px;");
     genomeWidget.setAttribute("style", "margin:2px 10px 2px 5px;");
+    genomeWidget.name = "";
+    genomeWidget.assembly = null;
 
     var span2 = document.createElement('span');
     span2.innerHTML = "genome:";
     genomeWidget.appendChild(span2);
     
     assemblySelect = document.createElement('select');
+    //assemblySelect.className = "sliminput";
+    assemblySelect.className = "dropdown";
+    assemblySelect.style.fontSize = "10px";
     assemblySelect.setAttribute("name", "assembly");
-    assemblySelect.setAttribute('style', "margin: 1px 0px 1px 3px; font-family:arial,helvetica,sans-serif; ");
-    assemblySelect.setAttribute("onchange", "zenbuGenomeSelectChanged(this.value);");
-    assemblySelect.id = "_genomeSelect";
+   // assemblySelect.setAttribute('style', "margin: 1px 0px 1px 3px; font-family:arial,helvetica,sans-serif; ");
+    assemblySelect.setAttribute("onchange", "zenbuGenomeSelectChanged(\""+uniqID+"\", this.value);");
+    assemblySelect.id = uniqID+"_genomeSelect";
     genomeWidget.appendChild(assemblySelect);
-    
+
+    current_genome.genomeWidgets[uniqID] = genomeWidget;
+    genomeWidget.assemblySelect = assemblySelect;
   }
+  var assemblySelect = genomeWidget.assemblySelect;
   assemblySelect.innerHTML = ""; //to clear old content of <select>
     
   if(submode) { genomeWidget.setAttribute("submode", submode); } 
   else { submode = genomeWidget.getAttribute("submode"); }
   
   if(current_genome.available_genomes.length >0) {
-    zenbuGenomeSelectUpdate();
+    zenbuGenomeSelectUpdate(uniqID);
   } else {
     //create a loading... label and then load
     var option = document.createElement('option');
@@ -2426,11 +3062,12 @@ function zenbuGenomeSelectWidget(submode) {
 }
 
 
-function zenbuGenomeSelectUpdate() {
-  var genomeWidget   = document.getElementById("_genomeSelectWidget");
+function zenbuGenomeSelectUpdate(uniqID) {
+  if(!uniqID) { uniqID = "_"; }
+  var genomeWidget = current_genome.genomeWidgets[uniqID];
   if(!genomeWidget) { return; }
 
-  var assemblySelect = document.getElementById("_genomeSelect");
+  var assemblySelect = genomeWidget.assemblySelect;
   assemblySelect.innerHTML = ""; //to clear old content of <select>
   
   if(current_genome.available_genomes.length == 0) {
@@ -2456,6 +3093,14 @@ function zenbuGenomeSelectUpdate() {
     option.innerHTML = "please select genome assembly";
     assemblySelect.appendChild(option);
   }
+  if((genomeWidget.getAttribute("allow_non_genomic") == "true") || genomeWidget.allow_non_genomic) {
+    var option = document.createElement('option');
+    option.setAttribute("value", "non-genomic");
+    option.innerHTML = "non genomic";
+    assemblySelect.appendChild(option);
+    if(genomeWidget.name == "non-genomic") { option.setAttribute("selected", "selected"); }
+    //if(current_genome.name == "non-genomic") { option.setAttribute("selected", "selected"); }
+  }
 
   for(var i=0; i<current_genome.available_genomes.length; i++) {
     var assembly = current_genome.available_genomes[i];
@@ -2463,20 +3108,20 @@ function zenbuGenomeSelectUpdate() {
     var option = document.createElement('option');
     option.setAttribute("value", assembly.assembly_name);
     //option.innerHTML = assembly.common_name + " "+ assembly.assembly_name;
-    option.innerHTML = assembly.common_name + " ("+assembly.genus +" "+ assembly.species + ") "+ assembly.assembly_name;
+    //option.innerHTML = assembly.common_name + " ("+assembly.genus +" "+ assembly.species + ") "+ assembly.assembly_name;
+    option.innerHTML = assembly.assembly_name + " - "+ assembly.common_name + " ("+assembly.genus +" "+ assembly.species + ")";
     assemblySelect.appendChild(option);
     
-    if(assembly.assembly_name == current_genome.name) { option.setAttribute("selected", "selected"); }
+    if(assembly.assembly_name == genomeWidget.name) { option.setAttribute("selected", "selected"); }
+    //if(assembly.assembly_name == current_genome.name) { option.setAttribute("selected", "selected"); }
   }  
   return genomeWidget;
 }
 
 
 function zenbuLoadAvailableGenomes() {
-  //clear old list
-  current_genome.available_genomes = new Array;
-  current_genome.assembly = null;
-  
+  if(current_genome.loading) { return; }
+
   var genomeXMLHttp = GetXmlHttpObject()  
   if(genomeXMLHttp == null) { return; }
   current_genome.xhr = genomeXMLHttp;
@@ -2490,6 +3135,8 @@ function zenbuLoadAvailableGenomes() {
   genomeXMLHttp.open("POST", eedbSearchFCGI, true);
   genomeXMLHttp.setRequestHeader("Content-Type", "application/xml; charset=UTF-8;");
   genomeXMLHttp.send(paramXML);
+
+  current_genome.loading = true;
 }  
  
 function zenbuLoadAvailableGenomesReply() {
@@ -2499,12 +3146,12 @@ function zenbuLoadAvailableGenomesReply() {
   if(genomeXMLHttp.readyState!=4) { return; }
   if(genomeXMLHttp.status!=200) { return; }
   
+  current_genome.loading = false;
   var xmlDoc=genomeXMLHttp.responseXML.documentElement;
   if(xmlDoc==null) { return; }
   
   //make sure it is clear
   current_genome.available_genomes = new Array;
-  current_genome.assembly = null;
   var genomeHash = new Object;
 
   var xmlAssemblies = xmlDoc.getElementsByTagName("assembly");
@@ -2512,10 +3159,6 @@ function zenbuLoadAvailableGenomesReply() {
     var assembly = eedbParseAssemblyData(xmlAssemblies[i]);
 
     genomeHash[assembly.assembly_name] = assembly;
-    
-    if((assembly.assembly_name == current_genome.name) || (assembly.assembly_name == current_genome.name)) {
-      current_genome.assembly = assembly;
-    }
   }
 
   for(var name in genomeHash) {
@@ -2524,7 +3167,11 @@ function zenbuLoadAvailableGenomesReply() {
   }
   current_genome.available_genomes.sort(genomes_sort_func);
 
-  zenbuGenomeSelectUpdate();
+  for(uniqID in current_genome.genomeWidgets) {
+    var genomeWidget = current_genome.genomeWidgets[uniqID];
+    zenbuGenomeSelectUpdate(uniqID);
+  }
+  //zenbuGenomeSelectUpdate();
 }
 
 function genomes_sort_func(a,b) {
@@ -2542,21 +3189,30 @@ function genomes_sort_func(a,b) {
 }
 
 
-function zenbuGenomeSelectChanged(name) {
-  current_genome.name = "all";
-  current_genome.assembly = null;
+function zenbuGenomeSelectChanged(uniqID, name) {
+  console.log("zenbuGenomeSelectChanged ["+uniqID+"] name:"+name);
+  if(!uniqID) { uniqID = "_"; }
+  var genomeWidget = current_genome.genomeWidgets[uniqID];
+  if(!genomeWidget) { return; }
+  console.log("zenbuGenomeSelectChanged ["+uniqID+"] have the widget");
+
+  genomeWidget.name = "all";
+  genomeWidget.assembly = null;
   
   for(var i=0; i<current_genome.available_genomes.length; i++) {
     var assembly = current_genome.available_genomes[i];
     if((assembly.assembly_name == name) || (assembly.assembly_name == name)) {
-      current_genome.assembly = assembly;
-      current_genome.name = name;
+      genomeWidget.name = name;
+      genomeWidget.assembly = assembly;
+      console.log("zenbuGenomeSelectChanged found matching genome");
     }
   }
+  if(name == "non-genomic") { genomeWidget.name = name; }
     
-  if(current_genome.callOutFunction) {
-    current_genome.callOutFunction();
-  }
+  current_genome.name = genomeWidget.name
+
+  if(current_genome.callOutFunction) { current_genome.callOutFunction(); }
+  if(genomeWidget.callOutFunction)   { genomeWidget.callOutFunction(genomeWidget); }
 }
 
 

@@ -43,13 +43,15 @@ function dexInitContents() {
   // reset global current_collaboration
   current_collaboration.name = "all";
   current_collaboration.uuid = "all";
-  current_collaboration.callOutFunction = function() { dexReloadContentsData(); }
+  //current_collaboration.callOutFunction = function() { dexReloadContentsData(); }
 
   contents.mode = "Views";
   contents.current_index = 0;
   contents.page_size = 20;
   contents.num_pages = 0;
   contents.loading = false;
+  
+  contents.collaboration_select = null;
 
   contents.filters = new Object;
   contents.filters.datasource = "";
@@ -59,6 +61,7 @@ function dexInitContents() {
   contents.filters.search = "";
   contents.filters.hide_mapcount = 1;
   contents.filters.source_ids = "";
+  contents.filters.show_fixedID_reports = true;
 
   contents.cart = new Object;
   contents.cart.sources = new Object;
@@ -123,7 +126,8 @@ function dexParseURL(urlConfig) {
       var mode = value1;
       if(mode=="Experiments") { mode = "DataSources"; contents.filters.datasource="experiments"; }
       if(mode=="Annotation")  { mode = "DataSources"; contents.filters.datasource="feature_sources"; }
-      if((mode=="Views")||(mode=="Tracks")||(mode == "Scripts")||(mode=="DataSources")) {
+      if(mode=="Edges")       { mode = "DataSources"; contents.filters.datasource="edge_sources"; }
+      if((mode=="Views")||(mode=="Tracks")||(mode == "Scripts")||(mode=="DataSources")||(mode=="Reports")) {
         contents.mode = mode;
         rtnval = true;
       }
@@ -190,7 +194,7 @@ function dexShowSubmenu() {
   submenu_div.innerHTML ="";
 
   submenu_div.setAttribute('style', "margin:0px; background-repeat:repeat-x; "+
-     "background-image:url("+eedbWebRoot+"/images/subnav_bg.gif); width:300px;"+
+     "background-image:url("+eedbWebRoot+"/images/subnav_bg.gif); width:400px;"+
      "line-height:2em; border-right:1px; color:#FFFFFF; font-weight:bold;"+
      "font-family:Verdana, Arial, Helvitica, sans-serif; text-decoration:none; font-size:11px;");
 
@@ -199,7 +203,6 @@ function dexShowSubmenu() {
 
   //----------
   var span1 = submenu_div.appendChild(new Element('span'));
-  span1 = submenu_div.appendChild(new Element('span'));
   if(contents.mode == "Views") { 
     span1.setAttribute("style", spanstyle+"color:black;");
     span1.setAttribute("onMouseOver", "dexSubmenuHover(this, 'selected');");
@@ -212,7 +215,22 @@ function dexShowSubmenu() {
     span1.setAttribute("onclick", "dexReconfigContentsParam('mode', 'Views');");
   }
   span1.innerHTML = "Views";
-  
+
+  //----------
+  span1 = submenu_div.appendChild(new Element('span'));
+  if(contents.mode == "Reports") {
+    span1.setAttribute("style", spanstyle+"color:black;");
+    span1.setAttribute("onMouseOver", "dexSubmenuHover(this, 'selected');");
+    span1.setAttribute("onMouseOut",  "dexSubmenuHover(this, 'selected');");
+    span1.setAttribute("onclick", "dexReconfigContentsParam('mode', 'Reports');");
+  } else {
+    span1.setAttribute("style", spanstyle);
+    span1.setAttribute("onMouseOver", "dexSubmenuHover(this, 'in');");
+    span1.setAttribute("onMouseOut",  "dexSubmenuHover(this, 'out');");
+    span1.setAttribute("onclick", "dexReconfigContentsParam('mode', 'Reports');");
+  }
+  span1.innerHTML = "Reports";
+
   //----------
   span1 = submenu_div.appendChild(new Element('span'));
   if(contents.mode == "Tracks") { 
@@ -227,6 +245,7 @@ function dexShowSubmenu() {
     span1.setAttribute("onclick", "dexReconfigContentsParam('mode', 'Tracks');");
   }
   span1.innerHTML = "Tracks";
+
  
   //----------
   span1 = submenu_div.appendChild(new Element('span'));
@@ -299,17 +318,43 @@ function dexShowControls() {
   }
   dexShowCart();
   //-
+  if(!contents.collaboration_select) {
+    contents.collaboration_select = eedbCollaborationPulldown("filter_search");
+    contents.collaboration_select.callOutFunction = dexCollaborationChanged;
+  }
+  var collabSelect = contents.collaboration_select;
+    
   var collabCell = document.getElementById("dex_collaboration_widget");
   if(!collabCell) {
     var collabCell = ctrlOptions.appendChild(document.createElement('span'));
     collabCell.id = "dex_collaboration_widget";
     collabCell.setAttribute("style", "margin-left:5px; margin-right:5px; display:inline;");
-    var collabWidget = eedbCollaborationSelectWidget("filter_search");
-    collabCell.appendChild(collabWidget);
+    //var collabSelect = eedbCollaborationSelectWidget("filter_search");
+    collabCell.appendChild(collabSelect);
   }
   dexCreateDatasourceSelect();
   dexCreateAssemblySelect();
 
+  var reportsDiv = document.getElementById("dex_contents_controls_reports_div");
+  if(!reportsDiv) {
+    reportsDiv = ctrlOptions.appendChild(document.createElement('div'));
+    reportsDiv.id = "dex_contents_controls_reports_div";
+    reportsDiv.setAttribute("style", "margin-left:10px; vertical-align:bottom; display:inline-block;");
+    var tcheck = reportsDiv.appendChild(document.createElement('input'));
+    tcheck.setAttribute('type', "checkbox");
+    reportsDiv.showCheckbox = tcheck;
+    tspan = reportsDiv.appendChild(document.createElement('span'));
+    tspan.style.verticalAlign="2px";
+    tspan.innerHTML = "show only fixedID pages";
+  }
+  if(contents.mode=="Reports") {
+    reportsDiv.style.display = "inline-block";
+    if(contents.filters.show_fixedID_reports) { reportsDiv.showCheckbox.setAttribute("checked", "checked"); }
+    reportsDiv.showCheckbox.setAttribute("onclick", "dexReconfigContentsParam('show_fixedID_reports', this.checked);");
+  } else {
+    reportsDiv.style.display = "none";
+  }
+  
   //----------------
   var searchInput    = document.getElementById("dex_main_search_input");
   var searchButton   = document.getElementById("dex_contents_controls_search_button");
@@ -339,25 +384,31 @@ function dexShowControls() {
 
     searchInput = searchForm.appendChild(document.createElement('input'));
     searchInput.id = "dex_main_search_input";
+    searchInput.className = "sliminput";
     searchInput.setAttribute('style', "margin: 1px 1px 1px 1px; font-size:12px; font-family:arial,helvetica,sans-serif;");
     searchInput.setAttribute('size', "90");
     searchInput.setAttribute('type', "text");
 
     searchButton = searchForm.appendChild(document.createElement('input'));
     searchButton.id = "dex_contents_controls_search_button";
-    searchButton.setAttribute('style', "margin-left: 3px;");
+    searchButton.className = "slimbutton";
+    searchButton.style.fontSize = "12px";
+    //searchButton.setAttribute('style', "margin-left: 3px;");
     searchButton.setAttribute("type", "button");
     searchButton.setAttribute("value", "search");
     searchButton.setAttribute("onclick", "dexSearchSubmit();");
 
     clearButton = searchForm.appendChild(document.createElement('input'));
     clearButton.id = "dex_contents_controls_clear_button";
-    clearButton.setAttribute('style', "display:none;");
+    clearButton.className = "slimbutton";
+    //clearButton.setAttribute('style', "display:none;");
     clearButton.setAttribute("type", "button");
     clearButton.setAttribute("value", "clear");
     clearButton.setAttribute("onclick", "dexSearchClear('true');");
 
     var resetButton = searchForm.appendChild(document.createElement('input'));
+    resetButton.className = "slimbutton";
+    resetButton.style.fontSize = "12px";
     resetButton.setAttribute("type", "button");
     resetButton.setAttribute("value", "reset");
     resetButton.setAttribute("onclick", "dexSearchReset('true');");
@@ -377,14 +428,22 @@ function dexShowControls() {
     searchInput.setAttribute('style', "margin: 1px 1px 1px 1px; font-size:12px; font-family:arial,helvetica,sans-serif; background:rgb(224,245,224);");
   }
 
-  if((contents.mode == "Tracks") || (contents.mode == "Views") || (contents.mode == "Scripts")) {
-    eedbCollaborationSelectWidget("config_search");
+  if((contents.mode == "Tracks") || (contents.mode == "Views") || (contents.mode == "Scripts") || (contents.mode == "Reports")) {
+    //eedbCollaborationSelectWidget("config_search");
+    if(collabSelect) { eedbCollaborationPulldown("config_search", collabSelect.id); }
   } else {
-    eedbCollaborationSelectWidget("filter_search");
+    //eedbCollaborationSelectWidget("filter_search");
+    if(collabSelect) { eedbCollaborationPulldown("filter_search", collabSelect.id); }
   }
-
 }
 
+function dexCollaborationChanged() {
+  if(!contents.collaboration_select) { return; }
+  current_collaboration.name = contents.collaboration_select.collaboration_name;
+  current_collaboration.uuid = contents.collaboration_select.collaboration_uuid;
+  //console.log("dexCollaborationChanged "+current_collaboration.name+" : "+current_collaboration.uuid);
+  dexReloadContentsData();
+}
 
 function dexSearchSubmit() {
   var searchInput = document.getElementById("dex_main_search_input");
@@ -452,6 +511,7 @@ function dexReloadContentsData() {
   if(contents.mode == "Tracks") { dexReloadTracksData(); }
   if(contents.mode == "DataSources") { dexReloadDataSources(); }
   if(contents.mode == "Scripts") { dexReloadScriptsData(); }
+  if(contents.mode == "Reports") { dexReloadReportsData(); }
 }
 
 function dexShowContents() {
@@ -462,6 +522,7 @@ function dexShowContents() {
   if(contents.mode == "Tracks") { dexShowTracks(); }
   if(contents.mode == "DataSources") { dexShowDataSources(); }
   if(contents.mode == "Scripts") { dexShowScripts(); }
+  if(contents.mode == "Reports") { dexShowReports(); }
 }
 
 //---------------------------------------------------------------------------
@@ -498,6 +559,8 @@ function dexReloadDataSources() {
 
   if(contents.filters.datasource=="experiments") { paramXML += "<mode>experiments</mode>"; } 
   else if(contents.filters.datasource=="feature_sources") { paramXML += "<mode>feature_sources</mode>"; } 
+  else if(contents.filters.datasource=="edge_sources") { paramXML += "<mode>edge_sources</mode>"; } 
+  //else if(contents.filters.datasource=="assemblies") { paramXML += "<mode>genome</mode>"; } 
   else { paramXML += "<mode>sources</mode>"; }
 
   if(contents.filters.source_ids) {
@@ -506,8 +569,8 @@ function dexReloadDataSources() {
 
   if((contents.filters.assembly != "") || (contents.filters.search != "")) {
     var filter = "";
-    //if(contents.filters.assembly != "") { filter = "eedb:assembly_name:="+contents.filters.assembly + " "; }
-    if(contents.filters.assembly != "") { filter = contents.filters.assembly + " "; }
+    if(contents.filters.assembly != "") { filter = "(eedb:assembly_name:="+contents.filters.assembly + " or assembly_name:="+contents.filters.assembly+") "; }
+    //if(contents.filters.assembly != "") { filter = contents.filters.assembly + " "; }
     if(contents.filters.search != "")   { filter += contents.filters.search; }
     paramXML += "<filter>" + filter + "</filter>";
   }
@@ -581,6 +644,38 @@ function dexParseDataSourceSearch() {
     }
     source.visible = true;
   }
+
+  var xmlEdgeSources = xmlDoc.getElementsByTagName("edgesource");
+  for(i=0; i<xmlEdgeSources.length; i++) {
+    count1++
+    var xmlSource = xmlEdgeSources[i];
+    var srcid = xmlSource.getAttribute("id");
+    var source = sources_hash[srcid];
+    if(!source) {
+      count2++
+      source = new Object;
+      eedbParseEdgeSourceXML(xmlSource, source);
+      sources_hash[srcid] = source;
+      source.selected = false;
+    }
+    source.visible = true;
+  }
+
+  var xmlAssemblies = xmlDoc.getElementsByTagName("assembly");
+  for(i=0; i<xmlAssemblies.length; i++) {
+    count1++
+    var xmlSource = xmlAssemblies[i];
+    var srcid = xmlSource.getAttribute("id");
+    var source = sources_hash[srcid];
+    if(!source) {
+      count2++
+      source = new Object;
+      eedbParseAssemblyData(xmlSource, source);
+      sources_hash[srcid] = source;
+      source.selected = false;
+    }
+    source.visible = true;
+  }
   //document.getElementById("message").innerHTML = "parsed "+count1+" sources into "+count2+" unique";
 
   //dexCreateAssemblySelect();
@@ -600,7 +695,7 @@ function dexLoadFullDataSourcesList(ids) {
   paramXML += "</zenbu_query>\n";
   
   var singleExperimentXMLHttp=GetXmlHttpObject();
-  singleExperimentXMLHttp.open("POST", eedbSearchCGI, false);
+  singleExperimentXMLHttp.open("POST", eedbSearchFCGI, false);
   singleExperimentXMLHttp.setRequestHeader("Content-Type", "application/xml; charset=UTF-8;");
   singleExperimentXMLHttp.send(paramXML);
 
@@ -636,6 +731,18 @@ function dexLoadFullDataSourcesList(ids) {
     source.full_load = 1;
   }
 
+  var xmlEdgeSources = xmlDoc.getElementsByTagName("edgesource");
+  for(i=0; i<xmlEdgeSources.length; i++) {
+    var xmlSource = xmlEdgeSources[i];
+    var srcid = xmlSource.getAttribute("id");
+    var source = contents.datasources.sources_hash[srcid];
+    if(!source) { continue; }
+    if(source.full_load) { continue; }
+    eedbParseEdgeSourceXML(xmlSource, source);
+    if(source.platform) { contents.datasources.platforms[source.platform] = source.platform; }
+    source.full_load = 1;
+  }
+
 }
 
 
@@ -651,6 +758,12 @@ function dexFilteredDataSourcesArray() {
     if(!source.visible) { continue; }
     if((filters.platform!="") && (filters.platform != source.platform)) { continue; }
     if(filters.hide_mapcount && (/mapcount/.test(source.name))) { continue; }
+
+    if((contents.filters.datasource=="experiments") && (source.classname!="Experiment")) { continue; }
+    if((contents.filters.datasource=="feature_sources") && (source.classname!="FeatureSource")) { continue; }
+    if((contents.filters.datasource=="edge_sources") && (source.classname!="EdgeSource")) { continue; }
+    if((contents.filters.datasource=="assemblies") && (source.classname!="Assembly")) { continue; }
+
     sources_array.push(source);
   }
   return sources_array;
@@ -730,6 +843,7 @@ function dexShowDataSources() {
   //trhead.appendChild(new Element('th', { 'class': 'listView' }).update('evoc terms'));
   trhead.appendChild(new Element('th', { 'class': 'listView' }).update('time point'));
   trhead.appendChild(new Element('th', { 'class': 'listView' }).update('treatment'));
+  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('upload date'));
   trhead.appendChild(new Element('th', { 'class': 'listView' }).update('source type'));
 
   var load_ids="";
@@ -759,11 +873,13 @@ function dexShowDataSources() {
     tr.appendChild(new Element('td').update(i+1));
 
     var td = tr.appendChild(new Element('td'));
-    var input = td.appendChild(new Element('input'));
-    input.setAttribute('type', "checkbox");
-    input.setAttribute("style", "background:white;");
-    input.setAttribute("onclick", "dexAlterSelection('source-check', \"" +source.id+ "\");");
-    if(source.selected) { input.setAttribute('checked', "checked"); }
+    if(source.classname != "Assembly") {
+      var input = td.appendChild(new Element('input'));
+      input.setAttribute('type', "checkbox");
+      input.setAttribute("style", "background:white;");
+      input.setAttribute("onclick", "dexAlterSelection('source-check', \"" +source.id+ "\");");
+      if(source.selected) { input.setAttribute('checked', "checked"); }
+    }
 
     var idTD = tr.appendChild(document.createElement('td'));
     idTD.innerHTML = source.name;
@@ -779,7 +895,7 @@ function dexShowDataSources() {
     var span1 = td.appendChild(document.createElement('span'));
     span1.innerHTML = encodehtml(source.description);
     button = td.appendChild(new Element('button'));
-    button.setAttribute("style", "font-size:11px; font-family:arial,helvetica,sans-serif; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+    button.setAttribute("style", "font-size:11px; font-family:arial,helvetica,sans-serif; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
     button.setAttribute("type", "button");
     button.setAttribute("onmouseover", "eedbMessageTooltip('metadata details panel',130);");
     button.setAttribute("onclick", "dexShowSourceInfo(\"datasource\",\"" +source.id+ "\"); return false;");
@@ -801,6 +917,21 @@ function dexShowDataSources() {
     tr.appendChild(new Element('td').update(encodehtml(source.series_point)));
     tr.appendChild(new Element('td').update(encodehtml(source.treatment)));
 
+
+    var td = tr.appendChild(document.createElement('td'));
+    td.setAttribute("nowrap", "nowrap");
+    if(source.owner_identity) {
+      var tdiv = td.appendChild(document.createElement('div'));
+      tdiv.setAttribute("style", "font-size:10px;");
+      var tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.innerHTML = source.owner_identity;
+    }
+    if(source.import_date) {
+      var tdiv = td.appendChild(document.createElement('div'));
+      tdiv.setAttribute("style", "font-size:10px; color:rgb(94,115,153);");
+      tdiv.innerHTML = encodehtml(source.import_date);
+    }
+
     var td3 = tr.appendChild(document.createElement('td'));
     td3.innerHTML = source.classname;
 
@@ -810,6 +941,7 @@ function dexShowDataSources() {
     var tr = tbody.appendChild(new Element('tr'));
     tr.addClassName('odd');
     tr.appendChild(new Element('td').update("no data available"));
+    tr.appendChild(new Element('td'));
     tr.appendChild(new Element('td'));
     tr.appendChild(new Element('td'));
     tr.appendChild(new Element('td'));
@@ -847,14 +979,19 @@ function dex_datasource_sort_func(a,b) {
   if(a.selected && !b.selected) { return -1; }
   if(!a.selected && b.selected) { return 1; }
 
-  if(a.classname < b.classname) { return -1; }
-  if(a.classname > b.classname) { return 1; }
+  if(!a.import_timestamp && b.import_timestamp) { return 1; }
+  if(a.import_timestamp && !b.import_timestamp) { return -1; }
+  if(a.import_timestamp < b.import_timestamp) { return 1; }
+  if(a.import_timestamp > b.import_timestamp) { return -1; }
+  
+  //if(a.classname < b.classname) { return -1; }
+  //if(a.classname > b.classname) { return 1; }
 
-  if(!a.platform && b.platform) { return 1; }
-  if(a.platform && !b.platform) { return -1; }
+  //if(!a.platform && b.platform) { return 1; }
+  //if(a.platform && !b.platform) { return -1; }
 
-  if(a.platform < b.platform) { return -1; }
-  if(a.platform > b.platform) { return 1; }
+  //if(a.platform < b.platform) { return -1; }
+  //if(a.platform > b.platform) { return 1; }
 
   a_name = a.name.toLowerCase();
   b_name = b.name.toLowerCase();
@@ -896,6 +1033,7 @@ function dexReloadSourceMetadataStats() {
 
   if(contents.filters.datasource=="experiments") { paramXML += "<sourcetype>Experiment</sourcetype>"; } 
   else if(contents.filters.datasource=="feature_sources") { paramXML += "<sourcetype>FeatureSource</sourcetype>"; } 
+  else if(contents.filters.datasource=="edge_sources") { paramXML += "<sourcetype>EdgeSource</sourcetype>"; } 
 
   if((contents.filters.assembly != "") || (contents.filters.search != "")) {
     var filter = "";
@@ -1153,9 +1291,19 @@ function dexShowSourceInfo(datatype, id) {
   if(datatype == "view")   { object = dexGetConfig(datatype, id); }
   if(datatype == "track")  { object = dexGetConfig(datatype, id); } 
   if(datatype == "script") { object = dexGetConfig(datatype, id); }
+  if(datatype == "report") { object = dexGetConfig(datatype, id); }
+
+  if(datatype == "datasource") { 
+    var sources_array = dexFilteredDataSourcesArray();
+    for(j=0; j<sources_array.length; j++) {
+      var source = sources_array[j];
+      if(source && source.id == id) { object = source; break; }
+    }
+  }
 
   if(!object) { object = eedbReloadObject(id); }
   if(!object) { return false; }
+  if(!object.full_load) { object.request_full_load = true; }
 
   object.finishFunction = dexReloadContentsData;
 
@@ -1167,6 +1315,12 @@ function dexShowSourceInfo(datatype, id) {
     eedbDisplaySourceInfo(object);
   }
   if(object.classname == "FeatureSource") {
+    eedbDisplaySourceInfo(object);
+  }
+  if(object.classname == "EdgeSource") {
+    eedbDisplaySourceInfo(object);
+  }
+  if(object.classname == "Assembly") {
     eedbDisplaySourceInfo(object);
   }
   if(object.classname == "Configuration") {
@@ -1183,8 +1337,8 @@ function dexShowSourceInfo(datatype, id) {
 
       var delbutton = tdiv.appendChild(new Element('input'));
       delbutton.setAttribute('type', "button");
-      delbutton.setAttribute('value', "delete");
-      delbutton.setAttribute("style", "float:right; background-color:Coral; margin:0px 10px 0px 0px; font-size:10px;");
+      delbutton.setAttribute('value', "delete configuration");
+      delbutton.setAttribute("style", "background-color:Coral; margin:0px 10px 0px 0px; font-size:11px;");
       delbutton.setAttribute("onclick", "dexDeleteConfig(\"" + object.uuid +"\");");
 
       var collabWidget = dexCollaborationMoveWidget(object);
@@ -1275,10 +1429,17 @@ function dexCollaborationMoveWidget(object) {
     var xmlDoc=collabXMLHttp.responseXML.documentElement;
     if(xmlDoc==null) { return collabWidget; }
 
+
+    var collab_array = new Array;
     var xmlCollabs = xmlDoc.getElementsByTagName("collaboration");
     for(i=0; i<xmlCollabs.length; i++) {
       var collaboration = eedbParseCollaborationData(xmlCollabs[i]);
+      collab_array.push(collaboration);
+    }
+    collab_array.sort(eedb_collab_sort_func);
 
+    for(i=0; i<collab_array.length; i++) {
+      var collaboration = collab_array[i];    
       var option = collabSelect.appendChild(document.createElement('option'));
       option.setAttribute("value", collaboration.uuid);
       if(collaboration.uuid == object.collaboration.uuid) { option.setAttributeNS(null, "selected", "selected"); }
@@ -1286,9 +1447,14 @@ function dexCollaborationMoveWidget(object) {
     }
   }
 
-  var button = collabWidget.appendChild(document.createElement('button'));
+  //var button = collabWidget.appendChild(document.createElement('button'));
+  var button = collabWidget.appendChild(document.createElement('input'));
+  button.setAttribute('type', "button");
   button.id ="dex_collaboration_move_widget_button";
-  button.setAttribute("style", "margin-left:5px;");
+  button.className = "slimbutton";
+  button.value = "move";
+  button.style.fontSize = "12px";
+  //button.setAttribute("style", "margin-left:5px;");
   button.setAttribute("onclick", "dexMoveConfigCollaboration();return false");
   button.innerHTML = "move";
   button.setAttribute("disabled", "disabled");
@@ -1573,7 +1739,7 @@ function dexShowTracks() {
     var span1 = td.appendChild(document.createElement('span'));
     span1.innerHTML = encodehtml(track.description);
     button = td.appendChild(new Element('button'));
-    button.setAttribute("style", "font-size:11px; font-family:arial,helvetica,sans-serif; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+    button.setAttribute("style", "font-size:11px; font-family:arial,helvetica,sans-serif; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
     button.setAttribute("type", "button");
     button.setAttribute("onmouseover", "eedbMessageTooltip('metadata details panel',130);");
     button.setAttribute("onclick", "dexShowSourceInfo(\"track\",\"" +track.uuid+ "\"); return false;");
@@ -1876,6 +2042,16 @@ function dexShowViews() {
     a1.setAttribute("onmouseover", "eedbMessageTooltip('open visualization view in genome browser',120);");
     a1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
 
+    //td = tr.appendChild(document.createElement('td'));
+    //var span1 = td.appendChild(document.createElement('span'));
+    //span1.innerHTML = encodehtml(config.name);
+    //button = td.appendChild(new Element('button'));
+    //button.setAttribute("style", "font-size:11px; font-family:arial,helvetica,sans-serif; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+    //button.setAttribute("type", "button");
+    //button.setAttribute("onmouseover", "eedbMessageTooltip('open visualization view in genome browser',120);");
+    //button.setAttribute("onclick", "dexOpenView(\"" +config.uuid+ "\"); return false;");
+    //button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+    //button.innerHTML ="open view";
 
     td = tr.appendChild(document.createElement('td'));
     td.innerHTML = encodehtml(config.assembly);
@@ -1884,7 +2060,7 @@ function dexShowViews() {
     var span1 = td.appendChild(document.createElement('span'));
     span1.innerHTML = encodehtml(config.description);
     button = td.appendChild(new Element('button'));
-    button.setAttribute("style", "font-size:11px; font-family:arial,helvetica,sans-serif; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+    button.setAttribute("style", "font-size:11px; font-family:arial,helvetica,sans-serif; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
     button.setAttribute("type", "button");
     button.setAttribute("onmouseover", "eedbMessageTooltip('metadata details panel',130);");
     button.setAttribute("onclick", "dexShowSourceInfo(\"view\",\"" +config.uuid+ "\"); return false;");
@@ -1966,6 +2142,284 @@ function dexShowViews() {
   msg += contents.configs.total_count + " total configs";
   span1.innerHTML = msg;
 
+  var pagingSpan = dexPagingInterface();
+  div2.appendChild(pagingSpan);
+}
+
+
+function dexOpenView(uuid) {
+  var url = "../gLyphs/#config="+uuid;
+  //document.getElementById("message").innerHTML += "   "+ url;
+  location.href= url;
+}
+
+
+//---------------------------------------------------------------------------
+//
+// Reports Configs section
+//
+//---------------------------------------------------------------------------
+
+
+function dexReloadReportsData() {
+  var contents_table_div = document.getElementById("contents_table_div");
+  if(!contents_table_div) { return; }
+  
+  contents.filters.platform = "";
+  
+  var configs = contents.configs;
+  
+  configs.reports_array = new Array();
+  configs.reports_hash = new Object();
+  configs.platforms = new Object;
+  
+  //contents.current_index = 0;
+  contents.loading = true;
+  
+  dexShowControls();
+  
+  contentsXMLHttp=GetXmlHttpObject();
+  contentsXMLHttp.onreadystatechange=dexPrepareReportsData;
+  
+  var paramXML = "<zenbu_query>\n";
+  paramXML += "<mode>search</mode><format>minxml</format><configtype>reports</configtype>\n"; //minxml
+  paramXML += "<sort>create_date</sort><sort_order>desc</sort_order>";
+  if((contents.filters.assembly != "") || (contents.filters.search != "")) {
+    paramXML += "<filter>";
+    if(contents.filters.assembly != "") { paramXML += contents.filters.assembly + " "; }
+    if(contents.filters.search != "") { paramXML += contents.filters.search; }
+    paramXML += "</filter>";
+  }
+  paramXML += "<collab>" + current_collaboration.uuid + "</collab>";
+  paramXML += "</zenbu_query>\n";
+  
+  contentsXMLHttp.open("POST", eedbConfigCGI, true);
+  contentsXMLHttp.setRequestHeader("Content-Type", "application/xml; charset=UTF-8;");
+  contentsXMLHttp.send(paramXML);
+}
+
+
+function dexPrepareReportsData() {
+  var contents_table_div = document.getElementById("contents_table_div");
+  if(!contents_table_div) { return; }
+  
+  if(contentsXMLHttp == null) { return; }
+  if(contentsXMLHttp.responseXML == null) return;
+  if(contentsXMLHttp.readyState!=4) return;
+  if(contentsXMLHttp.status!=200) { return; }
+  var xmlDoc=contentsXMLHttp.responseXML.documentElement;
+  
+  if(xmlDoc==null) {
+    contents_table_div.setStyle({color:'black', opacity:1.0}).update('Problem with eeDB server!');
+    return;
+  }
+  
+  contents.loading = false;
+  var configs = contents.configs;
+  
+  if(xmlDoc.getElementsByTagName("result_count").length>0) {
+    configs.total_count = xmlDoc.getElementsByTagName("result_count")[0].getAttribute("total") -0;
+  }
+  
+  var xmlConfigs = xmlDoc.getElementsByTagName("configuration");
+  for(i=0; i<xmlConfigs.length; i++) {
+    var xmlConfig = xmlConfigs[i];
+    var uuid = xmlConfig.getAttribute("uuid");
+    
+    var config = configs.reports_hash[uuid];
+    if(!config) {
+      config = new Object;
+      config.uuid = uuid;
+      config.selected = false;
+      configs.reports_hash[uuid] = config;
+    }
+    eedbParseConfigurationData(xmlConfig, config);
+  }
+  
+  configs.reports_array.clear();
+  for(var uuid in configs.reports_hash) {
+    var config = configs.reports_hash[uuid];
+    configs.reports_array.push(config);
+  }
+  if(configs.reports_array.length > configs.total_count) { configs.total_count = configs.reports_array.length; }
+  
+  dexShowCart();
+  dexShowReports();
+}
+
+
+function dexFilteredReportsArray() {
+  var filters = contents.filters;
+  
+  var reports_array = contents.configs.reports_array;
+  var filter_array = new Array;
+  for(var i=0; i<reports_array.length; i++) {
+    var config = reports_array[i];
+    //if((filters.platform!="") && (filters.platform != experiment.platform)) { continue; }
+    //if(filters.hide_mapcount && (/mapcount/.test(experiment.name))) { continue; }
+    if(contents.filters.show_fixedID_reports && !config.fixed_id) { continue; }
+    
+    filter_array.push(config);
+  }
+  return filter_array;
+}
+
+
+function dexShowReports() {
+  var contents_table_div = document.getElementById("contents_table_div");
+  if(!contents_table_div) { return; }
+  
+  contents_table_div.innerHTML = "";
+  
+  if(contents.loading) {
+    var div2 = contents_table_div.appendChild(new Element('div'));
+    div2.innerHTML ="loading data...";
+    return;
+  }
+  
+  var reports_array = dexFilteredReportsArray();
+  if(!reports_array) { return; }
+  
+  dexCreateAssemblySelect();
+  
+  //
+  // now display as table
+  //
+  var div1 = new Element('div');
+  div1.setAttribute('style', "width:100%;");
+  var my_table = new Element('table');
+  my_table.setAttribute("width", "100%");
+  div1.appendChild(my_table);
+  var trhead = my_table.appendChild(new Element('thead')).appendChild(new Element('tr'));
+  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('row'));
+  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('name'));
+  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('fixedID'));
+  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('description'));
+  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('create date'));
+  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('accessed'));
+  //trhead.appendChild(new Element('th', { 'class': 'listView' }).update('dex template'));
+  
+  var num_pages = Math.ceil(reports_array.length / contents.page_size);
+  contents.configs.filter_count = reports_array.length;
+  contents.num_pages = num_pages;
+  
+  if(contents.current_index > (num_pages-1) * contents.page_size) {
+    contents.current_index = (num_pages-1) * contents.page_size;
+    if(contents.current_index <0) { contents.current_index=0; }
+  }
+  
+  var load_ids="";
+  for(j=0; j<contents.page_size; j++) {
+    var i = j+ contents.current_index;
+    if(i>=reports_array.length) { break; }
+    var config = reports_array[i];
+    if(load_ids) { load_ids += ","; }
+    load_ids += config.uuid;
+  }
+  dexLoadFullConfigList(load_ids, contents.configs.reports_hash);
+  
+  var tbody = my_table.appendChild(new Element('tbody'));
+  for(j=0; j<contents.page_size; j++) {
+    var i = j+ contents.current_index;
+    if(i>=reports_array.length) { break; }
+    
+    var config = reports_array[i];
+    
+    var tr = tbody.appendChild(new Element('tr'));
+    if(i%2 == 0) { tr.addClassName('odd') }
+    else { tr.addClassName('even') }
+    
+    tr.appendChild(new Element('td').update(i+1));
+    
+    //var td = tr.appendChild(document.createElement('td'));
+    //td.innerHTML = "<a href=\"../gLyphs/#config=" +config.uuid+ "\">view</a>";
+    
+    td = tr.appendChild(document.createElement('td'));
+    var a1 = td.appendChild(document.createElement('a'));
+    a1.setAttribute("href", "../reports/#" +config.uuid);
+    a1.innerHTML = config.name;
+    a1.setAttribute("onmouseover", "eedbMessageTooltip('open analysis report',120);");
+    a1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+    
+    td = tr.appendChild(document.createElement('td'));
+    td.innerHTML = encodehtml(config.fixed_id);
+    
+    td = tr.appendChild(document.createElement('td'));
+    var span1 = td.appendChild(document.createElement('span'));
+    span1.innerHTML = encodehtml(config.description);
+    button = td.appendChild(new Element('button'));
+    button.setAttribute("style", "font-size:11px; font-family:arial,helvetica,sans-serif; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+    button.setAttribute("type", "button");
+    button.setAttribute("onmouseover", "eedbMessageTooltip('metadata details panel',130);");
+    button.setAttribute("onclick", "dexShowSourceInfo(\"report\",\"" +config.uuid+ "\"); return false;");
+    button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+    button.innerHTML ="details";
+    
+    
+    //create data/owner edit cell
+    td = tr.appendChild(new Element('td'));
+    td.setAttribute("nowrap", "nowrap");
+    var tdiv = td.appendChild(new Element('div'));
+    tdiv.setAttribute("style", "font-size:10px;");
+    if(config.author) {
+      var tspan = tdiv.appendChild(new Element('span'));
+      tspan.innerHTML = config.author;
+    } else if(config.owner_identity) {
+      var tspan = tdiv.appendChild(new Element('span'));
+      tspan.innerHTML = config.owner_identity;
+    }
+    var tdiv = td.appendChild(new Element('div'));
+    tdiv.setAttribute("style", "font-size:10px; color:rgb(94,115,153);");
+    tdiv.innerHTML = config.create_date;
+    
+    
+    tr.appendChild(new Element('td').update(config.access_count));
+  }
+  
+  if(reports_array.length == 0) {
+    var tr = tbody.appendChild(new Element('tr'));
+    tr.addClassName('odd');
+    tr.appendChild(new Element('td').update("no data available"));
+    tr.appendChild(new Element('td'));
+    tr.appendChild(new Element('td'));
+    tr.appendChild(new Element('td'));
+    tr.appendChild(new Element('td'));
+    tr.appendChild(new Element('td'));
+  }
+  
+  
+  contents_table_div.innerHTML = "";
+  
+  //paging interface
+  var div2 = contents_table_div.appendChild(new Element('div'));
+  var span1 = div2.appendChild(new Element('span'));
+  var msg = reports_array.length + " filtered ";
+  msg += contents.configs.total_count + " total configs";
+  span1.innerHTML = msg;
+  
+  var pagingSpan = dexPagingInterface();
+  div2.appendChild(pagingSpan);
+  
+  var span3 = div2.appendChild(new Element('span'));
+  span3.setAttribute('style', "margin-left: 30px;");
+  var tspan = span3.appendChild(new Element('span'));
+  tspan.innerHTML = "page size: ";
+  var input = span3.appendChild(document.createElement('input'));
+  input.setAttribute('size', "3");
+  input.setAttribute('type', "text");
+  input.setAttribute('value', contents.page_size);
+  input.setAttribute("onchange", "dexReconfigContentsParam('page-size', this.value);return false;");
+  
+  //data table
+  contents_table_div.appendChild(div1);
+  
+  //bottom paging interface
+  var div2 = contents_table_div.appendChild(new Element('div'));
+  var span1 = div2.appendChild(new Element('span'));
+  var msg = reports_array.length + " filtered ";
+  msg += contents.configs.total_count + " total configs";
+  span1.innerHTML = msg;
+  
   var pagingSpan = dexPagingInterface();
   div2.appendChild(pagingSpan);
 }
@@ -2142,7 +2596,7 @@ function dexShowScripts() {
     //build track
     var td = tr.appendChild(new Element('td'));
     var button = td.appendChild(document.createElement("button"));
-    button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin:2px; border-radius: 5px; border: solid 1px #535353; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+    button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin:2px; border-radius: 5px; border: solid 1px #535353; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
     button.setAttribute("onclick", "dexCreateTrackFromScriptConfig(\"" +script.uuid+ "\"); return false;");
     button.innerHTML = "build track";
     if(!has_datasources) { button.setAttribute("disabled", "disabled"); }
@@ -2160,7 +2614,7 @@ function dexShowScripts() {
     var span1 = td.appendChild(document.createElement('span'));
     span1.innerHTML = encodehtml(script.description);
     button = td.appendChild(new Element('button'));
-    button.setAttribute("style", "font-size:11px; font-family:arial,helvetica,sans-serif; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+    button.setAttribute("style", "font-size:11px; font-family:arial,helvetica,sans-serif; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
     button.setAttribute("type", "button");
     button.setAttribute("onmouseover", "eedbMessageTooltip('metadata details panel',130);");
     button.setAttribute("onclick", "dexShowSourceInfo(\"script\",\"" +script.uuid+ "\"); return false;");
@@ -2397,6 +2851,7 @@ function dexShowCart() {
   var input = cart_div.appendChild(new Element('input'));
   input.setAttribute('type', "button");
   input.setAttribute("onclick", "dexAlterSelection('visualize-cart','');");
+  input.className = "slimbutton";
 
   if((experiment_array.length>0) || (featsource_array.length>0)) {
     input.setAttribute('value', "configure track");
@@ -2416,6 +2871,7 @@ function dexShowCart() {
 
   input = cart_div.appendChild(new Element('input'));
   input.setAttribute('type', "button");
+  input.className = "slimbutton";
   input.setAttribute("onclick", "dexAlterSelection('clear-cart','');");
   input.setAttribute('value', "clear cart");
 }
@@ -2495,9 +2951,11 @@ function dexCreateDatasourceSelect() {
     span1.innerHTML = "data source type:"
     var sourceSelect = sourceSpan.appendChild(document.createElement('select'));
     sourceSelect.id = "dex_search_datasource_select";
+    sourceSelect.className = "dropdown";
   //sourceSelect.setAttribute("onchange", "reconfigTrackParam(\""+ trackID+"\", 'source_search_mode', this.value);");
     sourceSelect.setAttribute("onchange", "dexReconfigContentsParam('datasource', this.value);");
-    sourceSelect.setAttribute("style", "margin-left:3px; ");
+    sourceSelect.style.marginLeft = "3px";
+    sourceSelect.style.fontSize = "10px";
 
     var option;
     option = sourceSelect.appendChild(document.createElement('option'));
@@ -2513,6 +2971,16 @@ function dexCreateDatasourceSelect() {
     option.setAttribute("value", "feature_sources");
     option.innerHTML = "only feature sources";
     if(contents.filters.datasource == "feature_sources") { option.setAttribute("selected", "selected"); }
+
+    option = sourceSelect.appendChild(document.createElement('option'));
+    option.setAttribute("value", "edge_sources");
+    option.innerHTML = "only edge sources";
+    if(contents.filters.datasource == "edge_sources") { option.setAttribute("selected", "selected"); }
+
+    option = sourceSelect.appendChild(document.createElement('option'));
+    option.setAttribute("value", "assemblies");
+    option.innerHTML = "only genome assemblies";
+    if(contents.filters.datasource == "assemblies") { option.setAttribute("selected", "selected"); }
   }
   if((contents.mode=="DataSources")||(contents.mode=="Experiments")||(contents.mode=="Annotation")) { sourceSpan.style.display = "inline"; }
   else { sourceSpan.style.display = "none"; }
@@ -2585,6 +3053,7 @@ function dexCreateAssemblySelect() {
   var genomeDiv = document.getElementById("dex_search_genome_div");
   if(!genomeDiv) {
     genomeDiv = ctrlDiv.appendChild(document.createElement('div'));
+    genomeDiv.setAttribute('style' , "display:inline-block; margin-left:5px;");
     genomeDiv.id = "dex_search_genome_div";
     genomeDiv.appendChild(genomeWidget);
   }
@@ -2677,6 +3146,9 @@ function dexReconfigContentsParam(param, value) {
     dexShowSubmenu();
     dexSearchReset(true); //reloads
   }
+  if(param == "show_fixedID_reports") {
+    contents.filters.show_fixedID_reports = value;
+  }
   dexShowContents();
 }
 
@@ -2721,6 +3193,7 @@ function dexCreateGlyphsConfig() {
   }
   //document.getElementById("message").innerHTML = "most_asm : " + most_asm;
   var loc = most_asm + "::chr1:1..100000";
+  if(most_asm == "hg38") { loc ="hg38::chr19:49657992-49667452"; }
   if(most_asm == "hg18") { loc ="hg18::chr19:54853066..54862509"; }
   if(most_asm == "mm9") { loc ="mm9::chr7:52251732..52259514"; }
   if(most_asm == "mm10") { loc ="mm10::chr7:44996347..45004147"; }
@@ -2949,6 +3422,11 @@ function dexGetConfig(datatype, uuid) {
     config = contents.scripts.scripts_hash[uuid]; 
     eedbParseConfigurationData(xmlConfig, config);
   }
+  if(datatype == "report")   {
+    config = contents.configs.reports_hash[uuid];
+    eedbParseConfigurationData(xmlConfig, config);
+  }
+  config.full_load= true;
   return config;
 }
 
