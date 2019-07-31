@@ -1,5 +1,23 @@
 ZENBU release notes
 
+2.11.3
+- added processing module OverlapMerge, a simple overlap-grow clustering algorithm
+- added processing module SiteFinder, a motif/sequence-pattern finding module which uses UPAC sequences to scan genome for features
+- extended FeatureRename module with metadata-key format strings using <mdkey_format> in similar way to the experiment rename with metadata-keys 
+- added upload job retry (pid failure check) code. schema changes in sql/system_tables.sql for table 'job'
+- added two more color spectrum for values with negative/positive ranges: middle-heat2 and divergent1
+- added 4px tall "thin-arrow" drawing style
+- major refactoring/rewritting of the old fantom4 Edge system code: Edge, EdgeWeight, EdgeSource, MetaSearch, OSCFileParser, SPStream, in preparation of new system
+- changed the sharing system to be more efficient. Now the webservice mode=sharedb can either take a sharedb (single) or a list from either source_ids= or peers=. A single web query can now bulk share with a single open sql-db connection and thus reduce the load on the collaboration databases.  
+- changed zenbu_upload (and zenbu_job_runner) to no longer allows sharing to collaboration at upload time since it was causing overload conditions on the collaboration sqlite databases. replaced with bulk sharing function 
+- updated eedb_sync_entrezgene.pl to the current NCBI webservice responses (circa October 2017)
+- improved the upload error messages
+- added error checking for loading files which exceed the 10MB line limit length and better error reporting
+- fixed bug with gff_mdata and BAM file loading
+- fixed old bug in parsing tab-separated files where the last column is left empty (just a tab \t\n\0) would cause a column count error. Now it correctly counts the empty last column
+- fixed bug in OverlapMerge module: needed to clear the old database primary_id since merge is a new feature now
+
+
 2.11.2
 - added chromosome name aliases and extended chrom_name parsing from the NCBI genome loading code. Used when uploading via zenbu_ncbi_genome_load.
 - extended GFF export to include subfeatures, correct ID-Parent linking, optional feature metadata control in the interface
