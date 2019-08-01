@@ -1,4 +1,4 @@
-/* $Id: zenbu_common.cpp,v 1.1 2016/02/01 07:01:02 severin Exp $ */
+/* $Id: zenbu_common.cpp,v 1.2 2019/08/01 02:56:00 severin Exp $ */
 
 /***
 
@@ -64,13 +64,14 @@ The rest of the documentation details each of the object methods. Internal metho
 
 using namespace std;
 
+string     _send_email_method = "SMTP";
 string     _smtp_server_url;
 string     _smtp_server_user;
 string     _smtp_server_passwd;
 string     _smtp_from;
 
 
-void  send_email(string email, string subject, string message) {   
+void  send_email_smtp(string email, string subject, string message) {   
   CURL *curl;
   CURLcode res;
   struct curl_slist *recipients = NULL;
@@ -174,3 +175,11 @@ void  send_email(string email, string subject, string message) {
 }
 
 
+void  send_email(string email, string subject, string message) {   
+  if(_send_email_method=="SMTP") {
+    return send_email_smtp(email, subject, message);
+  } else {
+    //fall back to SMTP if unknown method
+    return send_email_smtp(email, subject, message);
+  }
+}

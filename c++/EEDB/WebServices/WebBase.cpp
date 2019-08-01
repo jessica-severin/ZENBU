@@ -1,4 +1,4 @@
-/* $Id: WebBase.cpp,v 1.224 2019/07/31 06:59:15 severin Exp $ */
+/* $Id: WebBase.cpp,v 1.225 2019/08/01 02:56:00 severin Exp $ */
 
 /***
 
@@ -717,6 +717,9 @@ bool EEDB::WebServices::WebBase::parse_config_file(string path) {
 
   node = root_node->first_node("cache_dir");
   if(node) { EEDB::TrackCache::cache_dir = node->value(); }
+
+  node = root_node->first_node("email_method");
+  if(node) { _send_email_method = node->value(); }
 
   node = root_node->first_node("smtp_server");
   if(node) { _smtp_server_url = node->value(); }
