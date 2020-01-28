@@ -133,7 +133,9 @@ CREATE TABLE `collaboration_2_configuration` (
 
 CREATE TABLE `sessions` (
   `id` varchar(64) NOT NULL default '',
-  `a_session` text NOT NULL,
+  `create_time` datetime NOT NULL,
+  `last_access` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
+  `a_session` text default '',
   PRIMARY KEY  (`id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
@@ -314,6 +316,13 @@ CREATE TABLE `configuration_fixed_history` (
   KEY `configuration_id` (`configuration_id`)
 );
 
+CREATE TABLE `configuration_fixed` (
+  `fixed_id`         varchar(128) NOT NULL,
+  `editor_mode`      enum('OWNER_ONLY','COLLABORATORS','USER_LIST') NOT NULL default 'COLLABORATORS',
+  PRIMARY KEY (`fixed_id`)
+);
+
+
 --
 -- Table structure for job queueing system
 --
@@ -370,12 +379,12 @@ CREATE TABLE job (
   user_id                   int NOT NULL,
   parameters                text,
   job_claim                 char(40) NOT NULL default '', #UUID
-  worker_id                 int NOT NULL,
+  worker_id                 int,
   status                    enum('READY','BLOCKED','CLAIMED','RUN','DONE','FAILED') DEFAULT 'READY' NOT NULL,
   retry_count               int default 0 not NULL,
   created timestamp         NOT NULL default CURRENT_TIMESTAMP,
-  starttime                 datetime NOT NULL,
-  completed                 datetime NOT NULL,
+  starttime                 datetime,
+  completed                 datetime,
   runtime                   int default 0 NOT NULL,
   host                      varchar(64) NOT NULL default '',
   process_id                int(11) NOT NULL default '0',
