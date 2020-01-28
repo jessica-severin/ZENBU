@@ -1,4 +1,4 @@
-/* $Id: DemultiplexSource.cpp,v 1.2 2019/02/26 23:58:33 severin Exp $ */
+/* $Id: DemultiplexSource.cpp,v 1.3 2020/01/27 10:11:05 severin Exp $ */
 
 /***
 
@@ -123,6 +123,7 @@ void EEDB::SPStreams::DemultiplexSource::init() {
   _demux_source_mode  = EXPERIMENT;  // enum { FEATURESOURCE, EXPERIMENT }
   _demux_mdata.clear();
   _side_linking_mdkey = "";
+  _enable_full_demux = false;
   
   //internal data structures
   _linking_mdata_hash.clear();
@@ -171,6 +172,9 @@ void EEDB::SPStreams::DemultiplexSource::_xml(string &xml_buffer) {
   }
   if(!_side_linking_mdkey.empty()) { xml_buffer += "<side_linking_mdkey>"+_side_linking_mdkey+"</side_linking_mdkey>"; }
   
+  if(_enable_full_demux) { xml_buffer.append("<full_demux>true</full_demux>"); }
+  else { xml_buffer.append("<full_demux>false</full_demux>"); }
+  
   xml_buffer.append("<demux_mdata>");
   for(unsigned int i=0; i<_demux_mdata.size(); i++) {
     _demux_mdata[i]->xml(xml_buffer);
@@ -205,6 +209,11 @@ EEDB::SPStreams::DemultiplexSource::DemultiplexSource(void *xml_node) {
   if((node = root_node->first_node("side_linking_mdkey")) != NULL) { 
     _side_linking_mdkey=node->value();
   }
+
+  if((node = root_node->first_node("full_demux")) != NULL) {
+    _enable_full_demux=false;
+    if(string(node->value()) == "true") { _enable_full_demux=true; }
+  }  
 
   _demux_mdata.clear();
   demux_mdata_node = root_node->first_node("demux_mdata");
@@ -267,6 +276,12 @@ MQDB::DBObject* EEDB::SPStreams::DemultiplexSource::_next_in_stream() {
   if(obj == NULL) { return NULL; }
 
   //non-feature objects are just passed through this module      
+  if((obj->classname() == EEDB::FeatureSource::class_name) || 
+     (obj->classname() == EEDB::Experiment::class_name)) {
+    EEDB::DataSource*  source = (EEDB::DataSource*)obj;
+    _full_demux_source(source);
+  }
+
   if(obj->classname() != EEDB::Feature::class_name) {
     return obj;
   }
@@ -398,6 +413,48 @@ bool  EEDB::SPStreams::DemultiplexSource::_demux_source_for_feature(EEDB::Featur
   }
   
   return true;
+}
+
+void  EEDB::SPStreams::DemultiplexSource::_full_demux_source(EEDB::DataSource* source) {
+  //using the side_stream linking mdata file. It will use all the demux keys from the _linking_mdata_hash
+  //to fill in all the possible demux keys for the sources streamed through this module.
+  if(!source) { return; }
+  if(!_enable_full_demux) { return; }
+
+  _preload_side_stream_linking_mdata_hash();  
+  if(_linking_mdata_hash.empty()) { return; }
+
+  fprintf(stderr, "DemultiplexSource::_full_demux_source: %s", source->simple_xml().c_str());  
+
+  EEDB::FeatureSource *fsrc = NULL;
+  EEDB::Experiment *exp = NULL;
+  if(_demux_source_mode == FEATURESOURCE) { fsrc = (EEDB::FeatureSource*)source; }
+  if(_demux_source_mode == EXPERIMENT)    { exp =  (EEDB::Experiment*)source; } 
+  if(!fsrc && !exp) { return; }
+  
+  map<string, EEDB::MetadataSet*>::iterator it1;
+  for(it1=_linking_mdata_hash.begin(); it1!=_linking_mdata_hash.end(); it1++) {
+    string demux_key = (*it1).first;
+    //fprintf(stderr, "demux_key[%s]\n", demux_key.c_str());
+  
+    if(fsrc) {
+      EEDB::FeatureSource *demux_fsrc = (EEDB::FeatureSource*)fsrc->subsource_for_key(demux_key);
+      //link mdata if needed
+      if(demux_fsrc && (_subsource_hash.find(demux_fsrc->db_id()) == _subsource_hash.end())) {
+        _subsource_hash[demux_fsrc->db_id()] = demux_fsrc;
+        _transfer_linking_metadata(demux_fsrc);
+      }      
+    }
+    
+    if(exp) {
+      EEDB::Experiment *demux_exp = (EEDB::Experiment*)exp->subsource_for_key(demux_key);
+      //link mdata if needed
+      if(demux_exp && (_subsource_hash.find(demux_exp->db_id()) == _subsource_hash.end())) {
+        _subsource_hash[demux_exp->db_id()] = demux_exp;
+        _transfer_linking_metadata(demux_exp);
+      }      
+    }
+  }
 }
 
 

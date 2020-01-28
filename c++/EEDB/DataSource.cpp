@@ -1,4 +1,4 @@
-/* $Id: DataSource.cpp,v 1.29 2018/12/05 00:33:15 severin Exp $ */
+/* $Id: DataSource.cpp,v 1.30 2020/01/23 07:13:59 severin Exp $ */
 
 /***
 
@@ -452,8 +452,8 @@ EEDB::DataSource*  EEDB::DataSource::subsource_for_key(string demux_key) {
     
     string dbid = uuid;
     dbid += "::" + l_to_string(objID);
-    //dbid += "s_"+ demux_key;
-    dbid += "s"+ l_to_string(_subsource_hash.size());
+    dbid += "s"+ demux_key;
+    //dbid += "s"+ l_to_string(_subsource_hash.size());
     dbid += ":::" + objClass;
     subsource->_db_id = dbid;
   }

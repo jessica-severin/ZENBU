@@ -1,4 +1,4 @@
-/* $Id: WebBase.cpp,v 1.225 2019/08/01 02:56:00 severin Exp $ */
+/* $Id: WebBase.cpp,v 1.228 2020/01/28 04:38:42 severin Exp $ */
 
 /***
 
@@ -215,7 +215,7 @@ string EEDB::WebServices::WebBase::xml() {
 
 
 void  EEDB::WebServices::WebBase::get_post_data() {
-  long long  readCount=0;
+  //long long  readCount=0;
   char       *readbuf;
   int        readBufSize = 8192;
   size_t     p2;
@@ -224,7 +224,8 @@ void  EEDB::WebServices::WebBase::get_post_data() {
 
   while(!feof(stdin)) {
     memset(readbuf, 0, readBufSize + 10);
-    readCount = (int)fread(readbuf, 1, readBufSize, stdin);
+    //readCount = (int)fread(readbuf, 1, readBufSize, stdin);
+    fread(readbuf, 1, readBufSize, stdin);
     _post_data.append(readbuf);
   }
   
@@ -1095,7 +1096,7 @@ void EEDB::WebServices::WebBase::save_session() {
     _session_data["id"] = uuid;
     snprintf(buffer, 2040, "%ld", (long int)time(NULL)); 
     _session_data["SESSION_CTIME"] = buffer;
-    _userDB->do_sql("INSERT into sessions(id) values(?)", "s", uuid.c_str());
+    _userDB->do_sql("INSERT into sessions(id,a_session) values(?,'')", "s", uuid.c_str());
   }
   
   snprintf(buffer, 2040, "%ld", (long int)time(NULL)); 
@@ -1153,13 +1154,11 @@ void EEDB::WebServices::WebBase::hmac_authorize_user() {
   if((auth_node = root_node->first_node("authenticate")) == NULL) { free(xml_text); return; }
   
   string  openID, email;
-  time_t  expire_time=0;
+  //time_t  expire_time=0;
   
   if((node = auth_node->first_node("openID")) != NULL) { openID = node->value(); }
   if((node = auth_node->first_node("email")) != NULL) { email = node->value(); }
-  if((node = auth_node->first_node("expires")) != NULL) { 
-    expire_time = strtol(node->value(), NULL, 10);
-  }
+  //if((node = auth_node->first_node("expires")) != NULL) { expire_time = strtol(node->value(), NULL, 10); }
   free(xml_text);
   
   //fprintf(stderr, "HMAC auth openID[%s] expire[%ld]\n", openID.c_str(), expire_time);

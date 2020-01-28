@@ -1,4 +1,4 @@
-/* $Id: Edge.cpp,v 1.92 2019/02/27 09:00:17 severin Exp $ */
+/* $Id: Edge.cpp,v 1.93 2020/01/08 05:53:07 severin Exp $ */
 
 /***
 
@@ -332,21 +332,22 @@ void EEDB::Edge::_simple_xml(string &xml_buffer) {
 void EEDB::Edge::_xml(string &xml_buffer) {
   _xml_start(xml_buffer);
 
-  //if(feature1()) { 
-  //  xml_buffer.append("<feature1>");
-  //  feature1()->simple_xml(xml_buffer);
-  //  xml_buffer.append("</feature1>");
-  //}
-
-  //if(feature2()) { 
-  //  xml_buffer.append("<feature2>");
-  //  feature2()->simple_xml(xml_buffer);
-  //  xml_buffer.append("</feature2>");
-  //}
-
   EEDB::MetadataSet *mdset = metadataset();
   if(mdset!=NULL) { mdset->xml(xml_buffer); }
 
+/*
+  if(feature1()) { 
+    xml_buffer.append("<feature1>");
+    feature1()->xml(xml_buffer);
+    xml_buffer.append("</feature1>\n");
+  }
+
+  if(feature2()) { 
+    xml_buffer.append("<feature2>");
+    feature2()->xml(xml_buffer);
+    xml_buffer.append("</feature2>\n");
+  }
+*/
   _xml_end(xml_buffer);
 }
 
@@ -369,20 +370,24 @@ long int  EEDB::Edge::feature2_id() {
 
 string  EEDB::Edge::feature1_dbid() {
   if(_feature1 != NULL) { return _feature1->db_id(); }
+  if(!_feature1_dbid.empty()) { return _feature1_dbid; }
   string uuid;
   if(edge_source()) {
     uuid = edge_source()->feature_source1_uuid();
   } else if(peer_uuid()) { uuid = peer_uuid(); }
   string dbid = uuid +"::"+ l_to_string(_feature1_id);
+  _feature1_dbid = dbid;
   return dbid;
 }
 string  EEDB::Edge::feature2_dbid() {
   if(_feature2 != NULL) { return _feature2->db_id(); }
+  if(!_feature2_dbid.empty()) { return _feature2_dbid; }
   string uuid;
   if(edge_source()) {
     uuid = edge_source()->feature_source2_uuid();
   } else if(peer_uuid()) { uuid = peer_uuid(); }
   string dbid = uuid +"::"+ l_to_string(_feature2_id);
+  _feature2_dbid = dbid;
   return dbid;
 }
 
@@ -391,11 +396,13 @@ void  EEDB::Edge::feature1_id(long int id) {
   if(_feature1 != NULL) { _feature1->release(); }
   _feature1 = NULL;
   _feature1_id = id;
+  _feature1_dbid = "";
 }
 void  EEDB::Edge::feature2_id(long int id) {
   if(_feature2 != NULL) { _feature2->release(); }
   _feature2 = NULL;
   _feature2_id = id;
+  _feature2_dbid = "";
 }
 
 // lazy load object methods
@@ -419,6 +426,8 @@ EEDB::EdgeSource*  EEDB::Edge::edge_source() {
   if(_database and (_edge_source_id != -1)) { //lazy load from database
     _edge_source = EEDB::EdgeSource::fetch_by_id(_database, _edge_source_id);
     _edge_source->retain();
+    _feature1_dbid = "";
+    _feature2_dbid = "";
   }
   return _edge_source;
 }
@@ -427,6 +436,8 @@ void  EEDB::Edge::edge_source(EEDB::EdgeSource* obj) {
   if(_edge_source != NULL) { _edge_source->release(); }
   _edge_source = obj;
   _edge_source_id = -1;
+  _feature1_dbid = "";
+  _feature2_dbid = "";
   if(_edge_source != NULL) { _edge_source->retain(); }
 }
 
@@ -761,7 +772,7 @@ void  EEDB::Edge::merge_edges(vector<EEDB::Edge*> &edges) {
 
 
 /*
-# $Id: Edge.cpp,v 1.92 2019/02/27 09:00:17 severin Exp $
+# $Id: Edge.cpp,v 1.93 2020/01/08 05:53:07 severin Exp $
 =head1 NAME - EEDB::Edge
 
 =head1 SYNOPSIS

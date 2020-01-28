@@ -1,4 +1,4 @@
-/* $Id: UploadFile.cpp,v 1.46 2019/07/31 06:59:15 severin Exp $ */
+/* $Id: UploadFile.cpp,v 1.47 2019/10/31 04:27:39 severin Exp $ */
 
 /***
 
@@ -971,7 +971,7 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_into_zdx() {
   //always build the feature index and name index when loading into ZDX
   zdxstream->rebuild_feature_index();
 
-  if(_upload_parameters["build_feature_name_index"] == "true") {
+  if(_upload_parameters["build_feature_name_index"] != "false") {
     zdxstream->build_feature_name_index();
   }
 

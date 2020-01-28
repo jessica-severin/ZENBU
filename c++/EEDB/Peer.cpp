@@ -1,4 +1,4 @@
-/* $Id: Peer.cpp,v 1.153 2019/03/26 07:10:59 severin Exp $ */
+/* $Id: Peer.cpp,v 1.154 2020/01/28 05:15:54 severin Exp $ */
 
 /***
 
@@ -180,7 +180,7 @@ EEDB::Peer*  EEDB::Peer::new_from_url(string url) {
     delete peer;
     return NULL;
   }
-  else if((t_driver == string("http")) or (t_driver == string("zenbu"))) {
+  else if((t_driver == string("http")) or (t_driver == string("https")) or (t_driver == string("zenbu"))) {
     //fprintf(stderr, "try to connect to remote zenbu[%s]\n", url.c_str());
     EEDB::SPStreams::RemoteServerStream *rstream = EEDB::SPStreams::RemoteServerStream::new_from_url(url);
     if(!rstream) { return NULL; }

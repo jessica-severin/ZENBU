@@ -1,4 +1,4 @@
-/* $Id: RemoteServerStream.cpp,v 1.71 2016/10/28 08:46:53 severin Exp $ */
+/* $Id: RemoteServerStream.cpp,v 1.72 2020/01/28 05:15:10 severin Exp $ */
 
 /***
 
@@ -214,7 +214,7 @@ void EEDB::SPStreams::RemoteServerStream::init() {
   _user            = NULL;
   _restream_start  = -1;
   
-  _server_url = "http://fantom.gsc.riken.jp/zenbu/"; //default
+  _server_url = "https://fantom.gsc.riken.jp/zenbu/"; //default
 
   curl_global_init(CURL_GLOBAL_ALL);  
 }

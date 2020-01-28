@@ -1,4 +1,4 @@
-/* $Id: MetaSearch.cpp,v 1.94 2019/07/31 06:59:15 severin Exp $ */
+/* $Id: MetaSearch.cpp,v 1.96 2020/01/07 06:51:00 severin Exp $ */
 
 /***
 
@@ -437,6 +437,46 @@ GFF2, GFF3, and BED are common formats.  XML is supported in all access modes, b
   double   total_time  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
   printf("<p>processtime_sec : %1.6f\n", total_time);
   printf("<hr/>\n");
+
+  //parameters
+  if(!_parameters.empty()) {
+    printf("<h3>Parameters</h3>\n");
+    map<string,string>::iterator it1;
+    for(it1=_parameters.begin(); it1!=_parameters.end(); it1++) {
+      if((*it1).first.empty() || (*it1).second.empty()) { continue; }
+      printf("%s = [%s]<br>\n", (*it1).first.c_str(), (*it1).second.c_str());
+    }
+  }
+  if(!_collaboration_filter.empty()) {
+    printf("collaboration_filter : %s<br>\n", _collaboration_filter.c_str());
+  }
+  if(!_filter_peer_ids.empty()) {
+    printf("<p><b>filter_peer_ids</b>\n");
+    map<string, bool>::iterator  it2;
+    for(it2 = _filter_peer_ids.begin(); it2 != _filter_peer_ids.end(); it2++) {
+      printf("<br>%s\n", (*it2).first.c_str());
+    }
+  }
+  if(!_filter_source_ids.empty()) {
+    printf("<p><b>filter_source_ids</b>\n");
+    map<string, bool>::iterator  it2;
+    for(it2 = _filter_source_ids.begin(); it2 != _filter_source_ids.end(); it2++) {
+      printf("<br>%s\n", (*it2).first.c_str());
+    }
+  }
+  if(!_filter_source_names.empty()) {
+    printf("<p><b>filter_source_names</b>\n");
+    for(unsigned int i=0; i<_filter_source_names.size(); i++) {
+      printf("<br>%s\n", _filter_source_names[i].c_str());
+    }
+  }
+  if(!_filter_ids_array.empty()) {
+    printf("<p><b>filter_ids_array</b>\n");
+    vector<string>::iterator  it;
+    for(it = _filter_ids_array.begin(); it != _filter_ids_array.end(); it++) {
+      printf("<br>%s\n", (*it).c_str());
+    }
+  }
 
   printf("</body>\n");
   printf("</html>\n");
@@ -1681,6 +1721,15 @@ void EEDB::WebServices::MetaSearch::show_edges() {
     while(EEDB::Edge *edge = (EEDB::Edge*)stream->next_in_stream()) {
       if(!edge) { continue; }
       
+      //perform edge metadata filter
+      if(_parameters.find("filter") != _parameters.end()) {
+        EEDB::MetadataSet  *mdset = edge->metadataset();
+        if((mdset != NULL) and (!(mdset->check_by_filter_logic(_parameters["filter"])))) {
+          edge->release();
+          continue;
+        }
+      }
+
       if(deep_loop ==1) { 
         //printf("%s", edge->simple_xml().c_str());
         if(_parameters["format"] == "xml") {

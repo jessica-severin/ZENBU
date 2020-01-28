@@ -1,4 +1,4 @@
-/* $Id: OSCFileParser.cpp,v 1.224 2019/07/31 06:59:15 severin Exp $ */
+/* $Id: OSCFileParser.cpp,v 1.226 2019/11/15 04:41:17 severin Exp $ */
 
 /***
 
@@ -860,11 +860,14 @@ bool  EEDB::Tools::OSCFileParser::init_from_oscheader_file(string path) {
       p3=line;
       while(*p3 != '\0') {
         p2=p3;  //beginning of new column
-        while((*p3 != '\0') && (*p3 != '\t')) { p3++; }
+        while((*p3 != '\0') && (*p3 != '\t') && (*p3 != '\r')) { p3++; }
         if(*p3 != '\0') { //not finished yet
           *p3 = '\0';  //null terminate column
           p3++;
         }
+        while(*p2== ' ') { p2++; } //remove leading spaces, is null terminated so no worries
+        char *p4 = p3-2; //last char before \0
+        while((*p4== ' ') && (p4>p2)) { *p4 = '\0'; p4--; } //remove trailing spaces, move null termination
         columns.push_back(string(p2));
       }
       _parse_column_names(columns);
@@ -1367,7 +1370,7 @@ bool EEDB::Tools::OSCFileParser::init_from_xml_file(string path) {
   rapidxml::xml_node<>     *node, *root_node, *section_node;
   rapidxml::xml_attribute<> *attr;
 
-  fprintf(stderr, "OSCFileParser::init_from_xml_file : %s\n", path.c_str());
+  //fprintf(stderr, "OSCFileParser::init_from_xml_file : %s\n", path.c_str());
   map<string, EEDB::DataSource*>  sources_map;  
 
   _columns.clear();
@@ -1413,7 +1416,7 @@ bool EEDB::Tools::OSCFileParser::init_from_xml_file(string path) {
     node = section_node->first_node();
     while(node) {
       if(strcmp(node->name(), "experiment")==0) {
-        fprintf(stderr, "OSCFileParser::init_from_xml_file parsing experiment\n");
+        //fprintf(stderr, "OSCFileParser::init_from_xml_file parsing experiment\n");
         EEDB::Experiment *exp = new EEDB::Experiment(node, _load_source_metadata);
         //if(_peer) { exp->peer_uuid(_peer->uuid()); }
         set_datasource(exp);

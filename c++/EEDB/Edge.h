@@ -1,4 +1,4 @@
-/* $Id: Edge.h,v 1.10 2019/02/27 09:00:17 severin Exp $ */
+/* $Id: Edge.h,v 1.11 2020/01/08 05:53:07 severin Exp $ */
 
 /***
 
@@ -156,6 +156,8 @@ class Edge : public MQDB::MappedQuery {
     long int              _edge_source_id;
     long int              _feature1_id;
     long int              _feature2_id;
+    string                _feature1_dbid;
+    string                _feature2_dbid;
   
     //double                _weight;
     //string                _sub_type;
