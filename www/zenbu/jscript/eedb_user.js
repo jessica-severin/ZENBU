@@ -3679,8 +3679,13 @@ function eedbUserRefreshSearchControls() {
 
   td1 = tr1.appendChild(document.createElement('td'));
 
-  td1 = tr1.appendChild(document.createElement('td'));
+  var tr2 = table1.appendChild(document.createElement('tr'));
+  td1 = tr2.appendChild(document.createElement('td'));
+  td1.setAttribute("colspan", "4");
+
+  td1 = tr2.appendChild(document.createElement('td'));
   td1.setAttribute("width", "1px");
+  td1.setAttribute("align", "right");
   var button = td1.appendChild(document.createElement("input"));
   button.type = "button";
   button.className = "medbutton";
@@ -3689,8 +3694,8 @@ function eedbUserRefreshSearchControls() {
   button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
   button.value = "share";
 
-  td1 = tr1.appendChild(document.createElement('td'));
-  td1.setAttribute("width", "1px");
+  //td1 = tr2.appendChild(document.createElement('td'));
+  //td1.setAttribute("width", "1px");
   button = td1.appendChild(document.createElement("input"));
   button.type = "button";
   button.className = "medbutton";

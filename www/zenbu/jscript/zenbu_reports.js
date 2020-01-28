@@ -43,6 +43,7 @@ reportsInitParams.configUUID = "Intro";
 
 var current_report = new Object();
 current_report.elements = new Object(); //hash of elementID to element in this report
+current_report.active_cascades = {};
 current_report.display_width = Math.floor(800);
 current_report.asm = "hg18";
 current_report.config_title = "";
@@ -873,6 +874,7 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
   reportElement.sort_reverse = false;
   reportElement.show_only_search_matches = false;
   reportElement.hide_zero = false;
+  reportElement.auto_content_height = false;
   reportElement.title = "";
   reportElement.title_prefix = "";
   //reportElement.resetable = false;
@@ -920,6 +922,7 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("layout_ypos")) {  reportElement.layout_ypos = parseInt(elementDOM.getAttribute("layout_ypos")); }
   if(elementDOM.getAttribute("content_width")) {  reportElement.content_width = parseInt(elementDOM.getAttribute("content_width")); }
   if(elementDOM.getAttribute("content_height")) {  reportElement.content_height = parseInt(elementDOM.getAttribute("content_height")); }
+  if(elementDOM.getAttribute("auto_content_height") == "true") { reportElement.auto_content_height = true; }
 
   if(elementDOM.getAttribute("assembly_name")) { reportElement.assembly_name = elementDOM.getAttribute("assembly_name"); }
 
@@ -1235,6 +1238,7 @@ function reportsGenerateElementDOM(reportElement) {
   
   if(reportElement.content_width) { elementDOM.setAttribute("content_width", reportElement.content_width); }
   if(reportElement.content_height) { elementDOM.setAttribute("content_height", reportElement.content_height); }
+  if(reportElement.auto_content_height) { elementDOM.setAttribute("auto_content_height", "true"); }
   
   //dtype_columns
   if(reportElement.datatypes) {
@@ -2517,7 +2521,8 @@ function reportsDisplayEditTools() {
     toolPanelElement.datasource_mode = "";  //feature, edge, shared_element
     toolPanelElement.resetable = false;
     toolPanelElement.content_width = 150;
-    toolPanelElement.content_height = 380;
+    toolPanelElement.content_height = 100;
+    toolPanelElement.auto_content_height = true;
     toolPanelElement.layout_xpos = masterRect.right - 200;
     toolPanelElement.layout_ypos = masterRect.top + 20;
     toolPanelElement.widget_search = false;
@@ -2647,8 +2652,8 @@ function reportsDrawToolsPanel(toolPanelElement) {
   button.setAttribute("style", "font-size:12px; padding: 1px 4px; margin-top:10px; width:100%; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
   button.setAttribute("onmouseover", "eedbMessageTooltip(\"create element\",100);");
   button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-  button.setAttribute("onmousedown", "reportsToolsPanelCreateElement('treelist');");
-  button.innerHTML = "TreeList";
+  button.setAttribute("onmousedown", "reportsToolsPanelCreateElement('table');");
+  button.innerHTML = "Table";
 
   tdiv = main_div.appendChild(document.createElement('div'));
   tdiv.setAttribute("style", "width:80%; margin:auto; ");
@@ -2656,9 +2661,9 @@ function reportsDrawToolsPanel(toolPanelElement) {
   button.setAttribute("style", "font-size:12px; padding: 1px 4px; margin-top:10px; width:100%; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
   button.setAttribute("onmouseover", "eedbMessageTooltip(\"create element\",100);");
   button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-  button.setAttribute("onmousedown", "reportsToolsPanelCreateElement('table');");
-  button.innerHTML = "Table";
-  
+  button.setAttribute("onmousedown", "reportsToolsPanelCreateElement('treelist');");
+  button.innerHTML = "TreeList";
+
   tdiv = main_div.appendChild(document.createElement('div'));
   tdiv.setAttribute("style", "width:80%; margin:auto; ");
   button = tdiv.appendChild(document.createElement("button"));
@@ -2676,6 +2681,15 @@ function reportsDrawToolsPanel(toolPanelElement) {
   button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
   button.setAttribute("onmousedown", "reportsToolsPanelCreateElement('circos');");
   button.innerHTML = "Circos";
+
+  tdiv = main_div.appendChild(document.createElement('div'));
+  tdiv.setAttribute("style", "width:80%; margin:auto; ");
+  button = tdiv.appendChild(document.createElement("button"));
+  button.setAttribute("style", "font-size:12px; padding: 1px 4px; margin-top:10px; width:100%; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.setAttribute("onmouseover", "eedbMessageTooltip(\"create element\",100);");
+  button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  button.setAttribute("onmousedown", "reportsToolsPanelCreateElement('cytoscape');");
+  button.innerHTML = "Cytoscape";
 
   tdiv = main_div.appendChild(document.createElement('div'));
   tdiv.setAttribute("style", "width:80%; margin:auto; ");
@@ -3278,10 +3292,24 @@ function reportsParseElementData(reportElement, xhrObj) {
         if(w1 > dtype_col.max_val) { dtype_col.max_val = w1; }
       }
     }
+    
+    //edge metadata
+    for(var tag in edge.mdata) { //new common mdata[].array system
+      if(tag=="keyword") { continue; }
+      if(tag=="eedb:display_name") { continue; }
+      var t_col = reportElementAddDatatypeColumn(reportElement, tag, tag, false);
+    }
+
+    //edge metadata
+    for(var tag in edge.mdata) { //new common mdata[].array system
+      if(tag=="keyword") { continue; }
+      if(tag=="eedb:display_name") { continue; }
+      var t_col = reportElementAddDatatypeColumn(reportElement, tag, tag, false);
+    }
 
     reportElement.edge_array.push(edge);
   }
-  console.log("reportsParseElementData read "+reportElement.feature_array.length+" features; "+ reportElement.edge_array.length +" edges");
+  console.log("reportsParseElementData ["+reportElement.elementID+"] read "+reportElement.feature_array.length+" features; "+ reportElement.edge_array.length +" edges");
 
   var dtype_msg = "";
   reportElement.dtype_columns = new Array();
@@ -3344,6 +3372,7 @@ function reportElementAddDatatypeColumn(reportElement, dtype, title, visible) {
 
     reportElement.datatypes[dtype] = dtype_col;
     reportElement.dtype_columns.push(dtype_col);
+    //console.log("reportElementAddDatatypeColumn "+reportElement.elementID+" new "+dtype_col.datatype);
   }
   dtype_col.dtype_valid = true;
   return dtype_col;
@@ -3378,7 +3407,7 @@ function reportElementEdgeCheckValidFilters(reportElement, edge) {
   if(!reportElementCheckValidSignalFilters(reportElement, edge.feature1)) { edge.filter_valid = false; return false; }
   if(!reportElementCheckValidSignalFilters(reportElement, edge.feature2)) { edge.filter_valid = false; return false; }
 
-  edge.filter_valid = true;
+  //edge.filter_valid = true;
   return true;
 }
 
@@ -3422,7 +3451,7 @@ function reportElementCheckValidSignalFilters(reportElement, feature) {
   }
   
   //passed all the filters so it is good to go
-  feature.filter_valid = true;
+  //feature.filter_valid = true;
   return true;
 }
 
@@ -3490,6 +3519,7 @@ function reportElementCheckCategoryFilters(reportElement, object) {
 }
 */
 
+
 function reportElementCheckCategoryFilters(reportElement, object) {
   if(!reportElement) { return false; }
   if(!object) { return false; }
@@ -3507,7 +3537,7 @@ function reportElementCheckCategoryFilters(reportElement, object) {
     if(!dtype_col.categories) { continue; }
 
     if(!reportsObjectCheckCategoryFilters(object, dtype_col)) {
-      object.filter_valid = false;
+      //object.filter_valid = false;
       return false;
     }
   }
@@ -3618,12 +3648,12 @@ function reportElementSearchData(elementID) {
   if(!reportElement) { return; }
   var starttime = new Date();
 
-  var datasourceElement = reportElement;
-  if(reportElement.datasourceElementID) {
-    var ds = current_report.elements[reportElement.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+reportElement.datasourceElementID+"]"); }
-  }
+  var datasourceElement = reportElement.datasource();
+  // if(reportElement.datasourceElementID) {
+  //   var ds = current_report.elements[reportElement.datasourceElementID];
+  //   if(ds) { datasourceElement = ds; }
+  //   else { console.log("failed to find datasource ["+reportElement.datasourceElementID+"]"); }
+  // }
 
   var feature_count = datasourceElement.feature_array.length;
   var edge_count    = datasourceElement.edge_array.length;
@@ -3786,7 +3816,7 @@ function reportElementPostprocessFeaturesQuery(reportElement) {
 
     if(!reportElementCheckValidSignalFilters(reportElement, feature)) { continue; }
 
-    if(!reportElementCheckCategoryFilters(reportElement, feature)) { continue; }
+    if(!reportElementCheckCategoryFilters(reportElement, feature)) { feature.filter_valid = false; continue; }
     reportElement.filter_count++;
   }
 
@@ -3882,6 +3912,7 @@ function reportElementLoadSourceEdges(reportElement) {
     feature_ids += reportElement.filter_feature_ids;
   }
   paramXML += "<feature_ids>"+feature_ids+"</feature_ids>";
+  console.log("load "+reportElement.elementID+" edges with filter_features: "+feature_ids);
   if(reportElement.format == "descxml") {
     paramXML += "<mdkey_list>";
     //<mdkey_list>HGNC_symbol, HGNC_name, ";
@@ -3946,6 +3977,16 @@ function reportElementPostprocessEdgesQuery(reportElement) {
     console.log("reportElementPostprocessEdgesQuery start focus["+reportElement.focus_feature.name+"]");
   }
   
+  var filter_feature_ids_hash = {};
+  if(reportElement.filter_feature_ids) {
+    var ids = reportElement.filter_feature_ids.split(/[\s\,]/);
+    for(var i=0; i<ids.length; i++) {
+      var objID = ids[i];
+      if(!objID) { continue; }
+      filter_feature_ids_hash[objID] = true;
+    }
+  }
+  
   //general edge filtering
   reportElement.filter_count=0;
   for(var k=0; k<reportElement.edge_array.length; k++) {
@@ -3977,7 +4018,14 @@ function reportElementPostprocessEdgesQuery(reportElement) {
        (reportElement.focus_feature.id != edge.feature1_id) &&
        (reportElement.focus_feature.id != edge.feature2_id)) { continue; }
 
-    if(!reportElementCheckCategoryFilters(reportElement, edge)) { continue; }
+    if(!reportElementCheckCategoryFilters(reportElement, edge)) { edge.filter_valid = false; continue; }
+
+    if(reportElement.filter_feature_ids) {
+      if(!filter_feature_ids_hash[edge.feature1_id] && !filter_feature_ids_hash[edge.feature2_id]) {
+        edge.filter_valid = false;
+        continue;
+      }
+    }
 
     reportElement.filter_count++;
   }
@@ -4087,7 +4135,7 @@ function reportElementPostprocessSourcesQuery(reportElement) {
     var source = reportElement.sources_array[j];
     if(!source) { continue; }
     source.filter_valid = true;
-    if(!reportElementCheckCategoryFilters(reportElement, source)) { continue; }
+    if(!reportElementCheckCategoryFilters(reportElement, source)) { source.filter_valid = false; continue; }
     reportElement.filter_count++;
   }
 
@@ -4253,16 +4301,32 @@ function reportsPostprocessElement(elementID) {
   }
   if(reportElement.datasource_mode == "shared_element") {
     //copy column/datatypes from datasource to reportElement
-    //console.log("reportsPostprocessElement "+elementID+" copy datatypes from shared_element");
-    if(reportElement.datasourceElementID) {
-      datasourceElement = current_report.elements[reportElement.datasourceElementID];
-      if(datasourceElement) {
-        for(var dtype in datasourceElement.datatypes) {
-          var dtype_col = datasourceElement.datatypes[dtype];
-          if(!dtype_col) { continue; }
-          var t_col = reportElementAddDatatypeColumn(reportElement, dtype_col.datatype, dtype_col.title, false);
-          t_col.col_type = dtype_col.col_type;
-        }
+    var datasourceElement = reportElement.datasource();
+    if(datasourceElement && (datasourceElement.elementID != elementID)) {
+      //console.log("reportsPostprocessElement "+elementID+" copy datatypes from shared_element "+datasourceElement.elementID);
+      for(var dtype in datasourceElement.datatypes) {
+        var dtype_col = datasourceElement.datatypes[dtype];
+        if(!dtype_col) { continue; }
+        var t_col = reportElementAddDatatypeColumn(reportElement, dtype_col.datatype, dtype_col.title, false);
+        t_col.col_type = dtype_col.col_type;
+      }
+      //might be best to always copy the feature/edge/source array into the local to allow local sorting
+      //shares feature/edge/source objects so does not use extra memory, but array and sort can be different
+      console.log("copy feature/edge/source array objs from "+datasourceElement.elementID+" into "+reportElement.elementID+" local arrays for local sorting");
+      reportElement.feature_array = []; 
+      for(j=0; j<datasourceElement.feature_array.length; j++) {
+        var feature = datasourceElement.feature_array[j];
+        if(feature) { reportElement.feature_array.push(feature); }
+      }
+      reportElement.edge_array = []; 
+      for(j=0; j<datasourceElement.edge_array.length; j++) {
+        var edge = datasourceElement.edge_array[j];
+        if(edge) { reportElement.edge_array.push(edge); }
+      }
+      reportElement.sources_array = []; 
+      for(j=0; j<datasourceElement.sources_array.length; j++) {
+        var source = datasourceElement.sources_array[j];
+        if(source) { reportElement.sources_array.push(source); }
       }
     }
   }
@@ -4359,7 +4423,7 @@ function reportsPostprocessElement(elementID) {
   reportElementTriggerCascade(reportElement, "select");
 
   if(reportElement.init_selection) {
-    reportElementEvent(reportElement.elementID, 'select', reportElement.init_selection);
+    reportElementUserEvent(reportElement, 'select', reportElement.init_selection);
     reportElement.init_selection = ""; //clear it, uses the new current selection at save time
   }
 }
@@ -4373,12 +4437,12 @@ function reportsDrawElement(elementID) {
 
   if(reportElement.element_type == "layout") { return; }  //need to keep the layout and single-element drawing separate
   
-  var datasourceElement = reportElement;
-  if(reportElement.datasourceElementID) {
-    var ds = current_report.elements[reportElement.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+reportElement.datasourceElementID+"]"); }
-  }
+  var datasourceElement = reportElement.datasource();
+  // if(reportElement.datasourceElementID) {
+  //   var ds = current_report.elements[reportElement.datasourceElementID];
+  //   if(ds) { datasourceElement = ds; }
+  //   else { console.log("failed to find datasource ["+reportElement.datasourceElementID+"]"); }
+  // }
 
   //general drawing for all elements: frame, titlebar, loading_info
   var main_div = reportElement.main_div;
@@ -4407,7 +4471,8 @@ function reportsDrawElement(elementID) {
     default: break;
   }
   if(current_report.edit_page_configuration) { //if editing ... draw frame/resize
-    style += "overflow: auto; resize: both; ";
+    if(reportElement.auto_content_height) { style += "overflow: visible; resize: horizontal; "; }
+    else { style += "overflow: auto; resize: both; "; }
     //style += "border:inset; border-width:2px; overflow: auto; resize: both; ";
     //"padding: 5px 5px 5px 5px; overflow-y:scroll; resize:both; ";
   }
@@ -4415,7 +4480,7 @@ function reportsDrawElement(elementID) {
     style += "position:absolute; left:"+ reportElement.layout_xpos +"px; top:"+ reportElement.layout_ypos +"px; ";
   }
   if(reportElement.content_width) { style += "width:"+(reportElement.content_width)+"px; "; }
-  if(reportElement.content_height) { style += "height: "+(reportElement.content_height)+"px; "; }
+  if(reportElement.content_height && !reportElement.auto_content_height) { style += "height: "+(reportElement.content_height)+"px; "; }
   main_div.setAttribute('style', style);
   
   if(current_report.edit_page_configuration) {
@@ -4529,12 +4594,20 @@ function reportElementTriggerCascade(reportElement, on_trigger) {
   if(!reportElement) { return; }
   var elementID = reportElement.elementID;
 
-  var datasource = reportElement;
-  if(reportElement.datasourceElementID) {
-    datasource = current_report.elements[reportElement.datasourceElementID];
-  }
+  var datasource = reportElement.datasource();
+  //if(reportElement.datasourceElementID) {
+  //  datasource = current_report.elements[reportElement.datasourceElementID];
+  //}
   if(!datasource) { return; }
-  //console.log("TRIGGER-CASCADE "+on_trigger+" from element["+reportElement.elementID+"] datasource["+datasource.elementID+"]");
+  console.log("TRIGGER-CASCADE from element["+reportElement.elementID+"] datasource["+datasource.elementID+"]  on["+on_trigger+"]");
+  
+  //code to try to prevent run-away infinite loops
+  var cascade_key = reportElement.elementID +"_"+ on_trigger;
+  if(current_report.active_cascades[cascade_key]) {
+    console.log("event cascade ["+cascade_key+"] already happened so don't trigger again");
+    return;
+  }
+  current_report.active_cascades[cascade_key] = true;
 
   //first check for elements globally which use this reportElement as it's dependant datasource
   for(var depID in current_report.elements) {
@@ -4544,19 +4617,19 @@ function reportElementTriggerCascade(reportElement, on_trigger) {
       if(on_trigger == "select") {
         if(datasource.selected_edge) {
           //console.log("TRIGGER-CASCADE depdenant on["+on_trigger+"] from element["+reportElement.elementID+"] to dependent element["+dependantElement.elementID+"] selection-edge["+datasource.selected_edge.id+"]");
-          reportElementEvent(dependantElement.elementID, 'select', datasource.selected_edge.id);
+          reportElementCascadeEvent(dependantElement, 'select', datasource.selected_edge.id);
         }
         else if(datasource.selected_feature) {
           //console.log("TRIGGER-CASCADE depdenant on["+on_trigger+"] from element["+reportElement.elementID+"] to dependent element["+dependantElement.elementID+"] selection-feature["+datasource.selected_feature.id+"]");
-          reportElementEvent(dependantElement.elementID, 'select', datasource.selected_feature.id);
+          reportElementCascadeEvent(dependantElement, 'select', datasource.selected_feature.id);
         }
         else if(datasource.selected_source) {
           //console.log("TRIGGER-CASCADE depdenant on["+on_trigger+"] from element["+reportElement.elementID+"] to dependent element["+dependantElement.elementID+"] selection-source["+datasource.selected_source.id+"]");
-          reportElementEvent(dependantElement.elementID, 'select', datasource.selected_source.id);
+          reportElementCascadeEvent(dependantElement, 'select', datasource.selected_source.id);
         }
         else { //send if clear or valid
           //console.log("TRIGGER-CASCADE depdenant on["+on_trigger+"] from element["+reportElement.elementID+"] to dependent element["+dependantElement.elementID+"] selection_id["+datasource.selected_id+"]");
-          reportElementEvent(dependantElement.elementID, 'select', datasource.selected_id);
+          reportElementCascadeEvent(dependantElement, 'select', datasource.selected_id);
         }
       }
       if(on_trigger == "reset") {
@@ -4633,9 +4706,9 @@ function reportElementTriggerCascade(reportElement, on_trigger) {
 
     if(trigger.action_mode == "select") {
       if(trigger.options == "selection_id") {
-        if(datasource.selected_feature) { reportElementEvent(trigger.targetElement.elementID, 'select', datasource.selected_feature.id); }
-        if(datasource.selected_edge)    { reportElementEvent(trigger.targetElement.elementID, 'select', datasource.selected_edge.id); }
-        if(datasource.selected_source)  { reportElementEvent(trigger.targetElement.elementID, 'select', datasource.selected_source.id); }
+        if(datasource.selected_feature) { reportElementCascadeEvent(trigger.targetElement, 'select', datasource.selected_feature.id); }
+        if(datasource.selected_edge)    { reportElementCascadeEvent(trigger.targetElement, 'select', datasource.selected_edge.id); }
+        if(datasource.selected_source)  { reportElementCascadeEvent(trigger.targetElement, 'select', datasource.selected_source.id); }
       }
       
       var datatype = trigger.options;
@@ -4648,19 +4721,19 @@ function reportElementTriggerCascade(reportElement, on_trigger) {
 
       if(t_feature) {
         if(datatype == "id") {
-          reportElementEvent(trigger.targetElement.elementID, 'select', t_feature.id);
+          reportElementCascadeEvent(trigger.targetElement, 'select', t_feature.id);
         }
         else if(datatype == "name") {
-          reportElementEvent(trigger.targetElement.elementID, 'select', t_feature.name);
+          reportElementCascadeEvent(trigger.targetElement, 'select', t_feature.name);
         }
         else if(t_feature.mdata[datatype]) {
           //console.log("send mdata ["+t_feature.mdata[datatype]+"]");
-          reportElementEvent(trigger.targetElement.elementID, 'select', t_feature.mdata[datatype]);
+          reportElementCascadeEvent(trigger.targetElement, 'select', t_feature.mdata[datatype]);
         }
       }
       if(trigger.options == "clear") {
         console.log("trigger send clear selection");
-        reportElementEvent(trigger.targetElement.elementID, 'select', "");
+        reportElementCascadeEvent(trigger.targetElement, 'select', "");
       }
     }
     
@@ -4697,10 +4770,11 @@ function reportElementTriggerCascade(reportElement, on_trigger) {
         trigger.targetElement.filter_feature_ids  = "";
       }
       if(trigger.options == "selection") {
+        //if(datasource.selected_id) { trigger.targetElement.filter_feature_ids  = datasource.selected_id; }
         var selected_feature = datasource.selected_feature;
         if(!selected_feature) { select_feature = datasource.focus_feature; }
         if(selected_feature) {
-          //console.log("TRIGGER-CASCADE action["+trigger.action_mode+" - "+trigger.options+"] ON ["+trigger.targetElement.elementID+"] to selection ["+selected_feature.name +"  "+selected_feature.id +"]");
+          console.log("TRIGGER-CASCADE action["+trigger.action_mode+" - "+trigger.options+"] ON ["+trigger.targetElement.elementID+"] to selection ["+selected_feature.name +"  "+selected_feature.id +"]");
           trigger.targetElement.filter_feature_ids  = selected_feature.id;
         }
       }
@@ -4709,7 +4783,7 @@ function reportElementTriggerCascade(reportElement, on_trigger) {
       }
       if(trigger.options == "all_features") {
         //all_features in element/datasource are used as load filter for next element load
-        //console.log("TRIGGER-CASCADE action["+trigger.action_mode+" - "+trigger.options+"] ON ["+trigger.targetElement.elementID+"]");
+        console.log("TRIGGER-CASCADE action["+trigger.action_mode+" - "+trigger.options+"] ON ["+trigger.targetElement.elementID+"]");
         var all_feature_ids = "";
         for(var k=0; k<datasource.feature_array.length; k++) {
           var feature = datasource.feature_array[k];
@@ -4736,8 +4810,12 @@ function reportElementTriggerCascade(reportElement, on_trigger) {
       reportsDrawElement(trigger.targetElement.elementID);
     }
     if(trigger.action_mode == "select_location") {
-      reportElementEvent(trigger.targetElement.elementID, 'select_location', datasource.selected_location);
-      //reportElementEvent(trigger.targetElement.elementID, 'select', datasource.selected_edge.id); }
+      if(datasource.selected_location) {
+        reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_location);
+      } else if(datasource.selected_feature) {
+        reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_feature.chromloc);
+      }
+      //reportElementCascadeEvent(trigger.targetElement, 'select', datasource.selected_edge.id); }
       //reportsDrawElement(trigger.targetElement.elementID);
     }
     
@@ -4785,6 +4863,7 @@ function reportsNewReportElement(element_type, elementID) {
     case "zenbugb":    reportElement = new ZenbuGBElement(elementID); break;
     case "circos":     reportElement = new ZenbuCircosElement(elementID); break;
     case "genomewide": reportElement = new ZenbuGenomeWideElement(elementID); break;
+    case "cytoscape":  reportElement = new ZenbuCytoscapeElement(elementID); break;
     default:
       reportElementInit(reportElement);
       break;
@@ -4867,10 +4946,12 @@ function reportElementInit(reportElement) {
 
   reportElement.content_width = 250;
   reportElement.content_height = 250;
+  reportElement.auto_content_height = false;
   
   reportElement.cascade_triggers = new Array();
   
   reportElement.filterSubpanel = reportElement_filterSubpanel;
+  reportElement.datasource     = reportElement_datasourceElement;
 
   //type specific initialization parameters
   if(reportElement.element_type == "treelist") {
@@ -4952,6 +5033,23 @@ function reportElementInit(reportElement) {
 }
 
 
+function reportElement_datasourceElement() {
+  var datasourceElement = this;
+  // var datasourceElementID = this.datasourceElementID;
+  // if(this.newconfig && this.newconfig.datasourceElementID != undefined) { datasourceElementID = this.newconfig.datasourceElementID; }
+  if(this.datasourceElementID) {
+    var ds = current_report.elements[this.datasourceElementID];
+    if(ds) { datasourceElement = ds; }
+    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
+  }
+  while(datasourceElement.datasource_element) {
+    datasourceElement = datasourceElement.datasource_element;
+    //console.log(datasourceElement);
+  }
+  return datasourceElement;
+}
+
+
 //=================================================================
 //
 // Layout related code
@@ -5010,6 +5108,8 @@ function reportsNewLayoutElement(layout_type, elementID, layout_parentID) {
     current_report.elements[layoutElement.elementID] = layoutElement;
   }
   
+  layoutElement.datasource = reportElement_datasourceElement;
+
   reportsDrawLayoutElement(layoutElement);
   
   return layoutElement;
@@ -6049,21 +6149,34 @@ function layoutElement_tab_configSubpanel() {
 function reportElementEvent(elementID, mode, value, value2) {
   var reportElement = current_report.elements[elementID];
   if(!reportElement) { return; }
+  reportElementUserEvent(reportElement, mode, value, value2);
+}
 
-  console.log("reportElementEvent ["+elementID+"] "+mode+" "+value+" "+value2);
+
+function reportElementUserEvent(reportElement, mode, value, value2) {
+  if(!reportElement) { return; }
+  var elementID = reportElement.elementID;
+  console.log("reportElementUserEvent ["+elementID+"] "+mode+" "+value+" "+value2);
+  current_report.active_cascades = {};  //start new user cascade
+  reportElementCascadeEvent(reportElement, mode, value, value2);
+}
+
+
+function reportElementCascadeEvent(reportElement, mode, value, value2) {
+  //internal event from a cascade not from a user interaction
+  if(!reportElement) { return; }
   var starttime = new Date();
 
-  var datasourceElement = reportElement;
-  if(reportElement.datasourceElementID) {
-    var ds = current_report.elements[reportElement.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+reportElement.datasourceElementID+"]"); }
-  }
+  var elementID = reportElement.elementID;
+  console.log("reportElementCascadeEvent ["+elementID+"] "+mode+" "+value+" "+value2);
+  
+  var datasourceElement = reportElement.datasource();
 
   //
   // subclass method
   //
   if(reportElement.elementEvent) {
+    //if(reportElement.elementEvent(mode, value, value2)) { return true; }
     reportElement.elementEvent(mode, value, value2);
   }
 
@@ -6185,17 +6298,22 @@ function reportElementEvent(elementID, mode, value, value2) {
       }
     }  //if(value)
   }
-  if(reportElement.selected_edge) { console.log("selected edge ["+elementID+"] "+reportElement.selected_edge.id +"]"); }
-  if(reportElement.selected_feature) { console.log("selected feature ["+elementID+"] ["+reportElement.selected_feature.name +" "+reportElement.selected_feature.id +"]"); }
-  if(reportElement.selected_source) { console.log("selected source ["+elementID+"] ["+reportElement.selected_source.name +" "+reportElement.selected_source.id +"]"); }
+  
+  if((mode == "select") || (mode == "select_location") || (mode == "hyperlink_trigger")) {
+    //debug
+    if(reportElement.selected_id) { console.log("selected_id ["+elementID+"] ["+reportElement.selected_id+"]"); }
+    if(reportElement.selected_edge) { console.log("selected edge ["+elementID+"] "+reportElement.selected_edge.id +"]"); }
+    if(reportElement.selected_feature) { console.log("selected feature ["+elementID+"] ["+reportElement.selected_feature.name +" "+reportElement.selected_feature.id +"]"); }
+    if(reportElement.selected_source) { console.log("selected source ["+elementID+"] ["+reportElement.selected_source.name +" "+reportElement.selected_source.id +"]"); }
+  }
 
   if(mode == "select") {
     reportElementShowSelectedFeature(elementID, reportElement.selected_id); //highlights the feature/edge in reportElement
     reportElementTriggerCascade(reportElement, "select");
-    var endtime = new Date();
-    var runtime = (endtime.getTime() - starttime.getTime());
-    console.log("select full cascade time ["+reportElement.elementID+"] "+(runtime)+"msec");
-    return true; //to avoid the full/slow redraw at the bottom of this function
+//     var endtime = new Date();
+//     var runtime = (endtime.getTime() - starttime.getTime());
+//     console.log("select full cascade time ["+reportElement.elementID+"] "+(runtime)+"msec");
+//     return true; //to avoid the full/slow redraw at the bottom of this function
   }
   if(mode == "select_location") {
     //console.log("trigger select_location ");
@@ -6223,39 +6341,6 @@ function reportElementEvent(elementID, mode, value, value2) {
     reportElement.mouseover_value = null;
   }
 
-  if(mode == "page-size") {  
-    var table_page_index = (reportElement.table_page-1) * reportElement.table_page_size;  //get old index
-    reportElement.table_page_size = Math.floor(value);
-    if(reportElement.table_page_size < 5) { reportElement.table_page_size = 5; }
-    //if(reportElement.table_page_size > 100) { reportElement.table_page_size = 100; }
-    var num_pages = Math.ceil(reportElement.filter_count / reportElement.table_page_size);
-    reportElement.table_num_pages = num_pages;
-    reportElement.table_page = Math.floor(table_page_index / reportElement.table_page_size) + 1;
-    //console.log("new page size:"+reportElement.table_page_size+" old index="+table_page_index+"  new page="+reportElement.table_page);
-    //reportElement.content_height = Math.floor((reportElement.table_page_size * 16.4) + 65);  //For DrawTable
-    var line_height = 16.4;
-    if(reportElement.font_size) { line_height = reportElement.font_size + 3; }
-    reportElement.content_height = Math.floor((reportElement.table_page_size * line_height) + 65);  //For DrawTable
-  }
-  if(mode == "page") {  
-    if(value<1) { value = 1; }
-    reportElement.table_page = value;
-  }
-  if(mode == "previous-page") {  
-    reportElement.table_page--;
-    if(reportElement.table_page<1) { reportElement.table_page = 1; }
-  }
-  if(mode == "next-page") {  
-    reportElement.table_page++;
-    if(reportElement.table_page > reportElement.table_num_pages) { reportElement.table_page = reportElement.table_num_pages; }
-  }
-
-  if(mode == "column_sort") {
-    if(reportElement.sort_col == value) {
-      reportElement.sort_reverse = !reportElement.sort_reverse;
-    }
-    reportElement.sort_col = value;
-  }
   if(mode == "dtype_filter_select") {
     reportElement.dtype_filter_select = value;
   }
@@ -6589,7 +6674,9 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
     return;
   }
   if(param == "content_height") {
-    reportElement.content_height = parseInt(value);
+    reportElement.auto_content_height = false;
+    if(value == "auto") { reportElement.auto_content_height=true; }
+    else { reportElement.content_height = parseInt(value); }
     reportElementToggleSubpanel(elementID, 'refresh'); //refresh
     reportElement.resized = true;
     reportsDrawElement(elementID);
@@ -6604,7 +6691,9 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
   var newconfig = reportElement.newconfig;
 
   //first do the subclass method if defined
-  if(reportElement.reconfigureParam) { reportElement.reconfigureParam(param, value, altvalue); }
+  if(reportElement.reconfigureParam) { 
+    if(reportElement.reconfigureParam(param, value, altvalue)) { return; } 
+  }
 
   //general
   if(param == "title") {
@@ -7197,6 +7286,18 @@ function reportElementCreateSearchWidget(reportElement) {
   g1.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\"search\",50);");
   g1.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
 
+  var backg = g1.appendChild(document.createElementNS(svgNS,'rect'));
+  backg.setAttributeNS(null, 'x', '-2px');
+  backg.setAttributeNS(null, 'y', '-2px');
+  backg.setAttributeNS(null, 'width',  "18px");
+  backg.setAttributeNS(null, 'height', "18px");
+  backg.setAttributeNS(null, 'fill', 'rgb(255,255,255)'); //
+
+  var datasourceElement = reportElement.datasource();
+  if(datasourceElement.search_data_filter) {  
+    backg.setAttributeNS(null, 'fill', '#ffc266'); //#ffe0b3 #bdf5bd
+  }
+
   var circle1 = g1.appendChild(document.createElementNS(svgNS,'circle'));
   circle1.setAttributeNS(null, 'cx', '5px');
   circle1.setAttributeNS(null, 'cy', '5px');
@@ -7620,7 +7721,7 @@ function reportElementConfigSubpanel(reportElement) {
     configdiv.id = cfgID;
     configdiv.setAttribute('style', "background-color:rgb(245,245,250); text-align:left; " +
                            "border:inset; border-width:2px; padding: 3px 3px 3px 3px; " +
-                           "width:400px; display:none; opacity: 1.0; " +
+                           "width:450px; display:none; opacity: 1.0; " +
                            "position:absolute; top:20px; right:10px;"
                            );
     reportElement.config_subpanel = configdiv;
@@ -7632,8 +7733,8 @@ function reportElementConfigSubpanel(reportElement) {
   var mainRect = main_div.getBoundingClientRect();
   //console.log("main_div "+main_div_id+" rect x:"+mainRect.x+" y:"+mainRect.y+" left:"+mainRect.left+" top:"+mainRect.top);
   var auxwidth = mainRect.width-5;
-  var configwidth = 405;
-  if(auxwidth<430) { auxwidth = 430; }
+  var configwidth = 430;  //was 405
+  if(auxwidth<460) { auxwidth = 460; } //was 430
   if(reportElement.newconfig && (reportElement.newconfig.edit_datasource_query || reportElement.newconfig.edit_cascade_triggers || reportElement.newconfig.edit_datasource_script)) {
     if(mainRect.width < 775) { auxwidth = 775; }
     configwidth = 750;
@@ -7672,6 +7773,7 @@ function reportElementConfigSubpanel(reportElement) {
   if(reportElement.element_type == "html")     { tspan.innerHTML = "html configuration: "; }
   if(reportElement.element_type == "circos")   { tspan.innerHTML = "circos configuration: "; }
   if(reportElement.element_type == "genomewide"){ tspan.innerHTML = "genomewide configuration: "; }
+  if(reportElement.element_type == "cytoscape") { tspan.innerHTML = "cytoscape configuration: "; }
   tspan = tdiv.appendChild(document.createElement('span'));
   //tspan.setAttribute('style', "font-size:10px; color:blue; padding-left:5px; font-style:italic;");
   tspan.setAttribute('style', "font-size:10px; color:blue; padding-left:5px;");
@@ -7760,7 +7862,6 @@ function reportElementConfigSubpanel(reportElement) {
   tdiv2  = general_ctrl_div.appendChild(document.createElement('div'));
   
   var content_width = reportElement.content_width;
-  if(reportElement.newconfig && reportElement.newconfig.content_width != undefined) { content_width = reportElement.newconfig.content_width; }
   var span0 = tdiv2.appendChild(document.createElement('span'));
   span0.setAttribute('style', "margin-left:5px; font-size:12px; font-family:arial,helvetica,sans-serif;");
   span0.innerHTML = "width:";
@@ -7773,7 +7874,7 @@ function reportElementConfigSubpanel(reportElement) {
   input.setAttribute("onblur", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'refresh', this.value);");
 
   var content_height = reportElement.content_height;
-  if(reportElement.newconfig && reportElement.newconfig.content_height != undefined) { content_height = reportElement.newconfig.content_height; }
+  if(reportElement.auto_content_height) { content_height = "auto"; }
   var span0 = tdiv2.appendChild(document.createElement('span'));
   span0.setAttribute('style', "margin-left:10px; font-size:12px; font-family:arial,helvetica,sans-serif;");
   span0.innerHTML = "height:";
@@ -8153,10 +8254,10 @@ function reportElementFilterHoverValue(elementID, dtype, setvalue) {
     eedbClearSearchTooltip();
     reportElementFilterbarUpdate(dtype_col, filterBar);
     if(dtype_col.autoSet == "filter_max") {
-      reportElementEvent(datasourceElement.elementID, 'dtype-filter-max', dtype_col.datatype, relValue);
+      reportElementUserEvent(datasourceElement, 'dtype-filter-max', dtype_col.datatype, relValue);
     }
     if(dtype_col.autoSet == "filter_min") {
-      reportElementEvent(datasourceElement.elementID, 'dtype-filter-min', dtype_col.datatype, relValue);
+      reportElementUserEvent(datasourceElement, 'dtype-filter-min', dtype_col.datatype, relValue);
     }    
     dtype_col.autoSet = "";
   }
@@ -9150,6 +9251,72 @@ function zenbuReports_hoverInfo(reportElement, object) {
   toolTipLayer.innerHTML = "";
   toolTipLayer.appendChild(divFrame);
   toolTipSTYLE.display='block';
+}
+
+
+function zenbu_object_dtypecol_value(object, dtype_col, mode) {
+  if(!object || !dtype_col) { return ""; }
+  
+  var value = "";
+  var values = {};
+  var datatype = dtype_col.datatype;
+  datatype = datatype.replace(/^f1\./, '');
+  datatype = datatype.replace(/^f2\./, '');
+
+  var t_feature = object;
+  var edge = null;
+  if(object.classname == "Edge") { 
+    edge = object;
+    if(edge && (/^f1\./.test(dtype_col.datatype))) { t_feature = edge.feature1;}
+    if(edge && (/^f2\./.test(dtype_col.datatype))) { t_feature = edge.feature2;}
+  }
+
+  if(t_feature && (dtype_col.datatype == "name") || (dtype_col.datatype == "f1.name") || (dtype_col.datatype == "f2.name")) {
+    value = t_feature.name;
+  } 
+  else if(edge && edge.weights && (dtype_col.col_type == "weight")) {
+    var weights = edge.weights[dtype_col.datatype];
+    if(weights) { 
+      value = weights[0].weight.toPrecision(4);
+    }
+  } 
+  else if(t_feature && t_feature.expression && (dtype_col.col_type == "signal")) {
+    for(var j2=0; j2<t_feature.expression.length; j2++) {
+      var expression = t_feature.expression[j2];
+      if(expression.datatype != datatype) { continue; }
+      var e1 = expression.total.toPrecision(4);
+      if(mode!="unqiue" || (mode=="unique" && !values[e1])) {
+        if(value != "") { value += " "; }
+        value += e1;
+      }
+      values[e1] = true;
+      if(mode=="first" && value!="") { break; }
+    }
+  } 
+  else if(t_feature && t_feature.mdata && dtype_col.col_type == "mdata") {
+    var val = "";
+    if(t_feature.mdata && t_feature.mdata[datatype]) {
+      var value_array = t_feature.mdata[datatype];
+      for(var idx1=0; idx1<value_array.length; idx1++) {
+        var md1 = value_array[idx1];
+        if(mode!="unique" || (mode=="unique" && !values[md1])) {
+          if(val) { val += ", "; }
+          val += md1;
+        }
+        values[md1] = true;
+        if(mode=="first" && val!="") { break; }
+      }
+    } else if(t_feature.source && (datatype == "category")) {
+      val = t_feature.source.category;
+    } else if(t_feature.source && (datatype == "source_name")) {
+      val = t_feature.source.name;
+    } else if(datatype == "location_string") {
+      val = t_feature.chromloc;
+    }
+    if(val) { value = val; }      
+  }
+  
+  return value;
 }
 
 

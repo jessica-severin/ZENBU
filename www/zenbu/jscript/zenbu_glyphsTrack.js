@@ -48,9 +48,12 @@ var gLyphsSourceCache = new Object();
 function ZenbuGlyphsTrack(glyphsGB, trackID) {
   if(!trackID) { trackID = "glyphTrack" + (newTrackID++); }
 
+  this.element_type = "glyphsTrack";
+  this.trackID = trackID;
+  this.elementID = trackID;
+  this.datasource_mode = "feature";
   this.glyphsGB  = glyphsGB;
   this.expPanelActive = false;
-  this.trackID = trackID;
   this.hideTrack  = 0;
   this.title      = "";
   this.description = "";
@@ -85,7 +88,7 @@ function ZenbuGlyphsTrack(glyphsGB, trackID) {
   this.overlap_mode    = "5end";
   this.binning    = "sum";
   this.experiment_merge = "mean";
-  this.maxlevels  = 100;
+  this.maxlevels  = 0;
   this.track_height  = 100;
   this.scale_max_signal = "auto";
   this.scale_min_signal = "auto";
@@ -94,6 +97,7 @@ function ZenbuGlyphsTrack(glyphsGB, trackID) {
   this.exprbin_strandless = false;
   this.exprbin_add_count = false;
   this.exprbin_subfeatures = false;
+  this.exprbin_flipstrand = false;
   this.exprbin_binsize = "";
   this.createMode  = "single";
   this.whole_chrom_scale  = false;
@@ -118,6 +122,7 @@ function ZenbuGlyphsTrack(glyphsGB, trackID) {
   this.has_expression  = false;
   this.has_subfeatures = false;
   this.selected_feature = null;
+  this.search_select_filter = "";
   
   var trackDiv = document.createElement('div');
   trackDiv.setAttribute("align","left");
@@ -133,6 +138,13 @@ function ZenbuGlyphsTrack(glyphsGB, trackID) {
   //this.noNameSearch = false;
   //this.source_outmode  = "";
   
+  this.feature_array = [];
+  this.edge_array = [];
+  this.experiments = new Object();
+  this.datasources = new Object();
+  this.datatypes = new Object();
+  this.experiment_array = new Array();
+
   //class functions
   this.displayWidth = gLyphsTrack_displayWidth;
   this.expPanelFrame = gLyphsTrack_expPanelFrame;
@@ -140,6 +152,10 @@ function ZenbuGlyphsTrack(glyphsGB, trackID) {
   //link into global cache and into GB
   glyphsTrack_global_track_hash[this.trackID] = this;
   glyphsGB.tracks_hash[this.trackID] = this;
+
+  glyphTrackAddDatatypeColumn(this, "name", "name", true, "mdata");
+  glyphTrackAddDatatypeColumn(this, "category", "category", true, "mdata");
+  glyphTrackAddDatatypeColumn(this, "location_string", "location", false, "mdata");
 
   return this;
 }
@@ -612,7 +628,7 @@ function gLyphsTrack_reconfig_with_visible_experiments(trackID) {
   glyphTrack.expfilter = "";
   glyphTrack.uuid = "";
   prepareTrackXHR(trackID);
-  gLyphsAutosaveConfig();
+  glyphTrack.glyphsGB.autosave();
 }
 
 
@@ -633,7 +649,7 @@ function glyphs_reconfig_experiments(trackID, cmd) {
   }
   //console.log("remove unselected experiments : "+source_ids);
   //prepareTrackXHR(trackID);
-  //gLyphsAutosaveConfig();
+  //glyphTrack.glyphsGB.autosave();
   gLyphsRenderTrack(glyphTrack);
   gLyphsDrawTrack(trackID);
 }
@@ -811,7 +827,6 @@ function gLyphsTrackCalcMetadataGrouping(trackID) {
   var glyphTrack = glyphsTrack_global_track_hash[trackID];
   if(!glyphTrack) { return false; }
   
-  console.log("gLyphsTrackCalcMetadataGrouping "+trackID);
   var starttime = new Date();
 
   var graph_msgdiv = null;
@@ -837,8 +852,10 @@ function gLyphsTrackCalcMetadataGrouping(trackID) {
     return;
   }
   
+  console.log("gLyphsTrackCalcMetadataGrouping "+trackID);
   //clear and rebuild
-  glyphTrack.experiment_mdgrouping = new Array;
+  if(!glyphTrack.experiment_mdgrouping) { glyphTrack.experiment_mdgrouping = new Array; }
+
 
   var mdgroupkey = glyphTrack.mdgroupkey;
   var group_mdkey_array = new Array();
@@ -916,7 +933,30 @@ function gLyphsTrackCalcMetadataGrouping(trackID) {
   
   //post-processing loops
 
+  //UNKNOWN group: always recalculate the source_ids. those not in the ingroup become UNKNOWN
+  var unkGroup = null;
+  for(var idx4=0; idx4<glyphTrack.experiment_mdgrouping.length; idx4++) {
+    var mdg2 = glyphTrack.experiment_mdgrouping[idx4];
+    if(mdg2.mdvalue == "UNKNOWN - no metadata key") {
+      unkGroup = mdg2;
+      break;
+    }
+  }
+  if(!unkGroup) {
+    console.log("create UNKNOWN mdgroup");
+    unkGroup = new Object;
+    unkGroup.mdvalue = "UNKNOWN - no metadata key";
+    unkGroup.name = "UNKNOWN - no metadata key";
+    unkGroup.id   = unkGroup.mdvalue
+    unkGroup.hide = false;
+    glyphTrack.experiment_mdgrouping.push(unkGroup);
+  }
+  unkGroup.source_ids = new Array;
+  unkGroup.source_hash = new Object;
+  unkGroup.source_count = 0;
+
   //find all the sources not covered by the mdkey (outside)
+  //ingroup = all the sources IN mdgroups
   var ingroup = new Object;
   for(var i=0; i<glyphTrack.experiment_mdgrouping.length; i++) {
     var mdgroup = glyphTrack.experiment_mdgrouping[i];
@@ -929,25 +969,17 @@ function gLyphsTrackCalcMetadataGrouping(trackID) {
     }
   }
 
-  var mdgroup = new Object;
-  mdgroup.mdvalue = "UNKNOWN - no metadata key";
-  mdgroup.name = mdgroup.mdvalue
-  mdgroup.id   = mdgroup.mdvalue
-  mdgroup.source_ids = new Array;
-  mdgroup.source_hash = new Object;
-  mdgroup.source_count = 0;
-  mdgroup.hide = false;
   for(var expID in glyphTrack.experiments) {
     var experiment = glyphTrack.experiments[expID];
     if(!experiment) { continue; }
     if(ingroup[expID]) { continue; }
-    if(!mdgroup.source_hash[expID]) {
-      mdgroup.source_hash[expID] = true;
-      mdgroup.source_ids.push(expID);
-      //if(!(glyphTrack.hide_zero && (experiment.value==0)) && !(experiment.hide)) { mdgroup.source_count++; }
+    if(!unkGroup.source_hash[expID]) {
+      unkGroup.source_hash[expID] = true;
+      unkGroup.source_ids.push(expID);
+      //if(!(glyphTrack.hide_zero && (experiment.value==0)) && !(experiment.hide)) { unkGroup.source_count++; }
     }
   }
-  if(mdgroup.source_ids.length > 0) { glyphTrack.experiment_mdgrouping.push(mdgroup); }
+  //if(unkGroup.source_ids.length > 0) { glyphTrack.experiment_mdgrouping.push(unkGroup); }
 
   gLyphsTrackCalcMetadataGroupingValues(glyphTrack);
 
@@ -1095,7 +1127,7 @@ function gLyphsTrackSourcesMissingMetadataLoad(glyphTrack, mdkeys) {
     if(!tok) { continue; }
     mdkey_array.push(tok);
   }
-  console.log("gLyphsTrackSourcesMissingMetadataLoad "+glyphTrack.trackID+" mdkeys ["+mdkeys+"]split into "+mdkey_array.length+" keys");
+  console.log("gLyphsTrackSourcesMissingMetadataLoad "+glyphTrack.trackID+" exps.count="+glyphTrack.experiment_array.length+" mdkeys ["+mdkeys+"]split into "+mdkey_array.length+" keys");
 
   //first perform logic to find experiments missing mdkey and which need to load necessary mdata
   var expID_hash = new Object();
@@ -1114,16 +1146,31 @@ function gLyphsTrackSourcesMissingMetadataLoad(glyphTrack, mdkeys) {
         var key_ok=false; //find in either my mdata or my parent mdata
         if(experiment.mdata[mdkey]) { key_ok=true; }
         //if(experiment.parent_source && experiment.parent_source.mdata[mdkey]) { key_ok=true; }
-        if(!key_ok) { exp_ok=false; } //if any key missing then exp needs reload
+        if(!key_ok) { //if any key missing then exp needs reload
+          exp_ok=false; 
+          //console.log("experiment "+experiment.id+" missing group key ["+mdkey+"]");
+        }
       }
-    } else { exp_ok=false; }
+    } else {  //no experiment.mdata so definitely need to load
+      exp_ok=false;
+    }
     if(!exp_ok) {
       //console.log("experiment "+experiment.id+" missing group keys");
       if(experiment.parent_source) {
-        if(!experiment.parent_source.full_load) { expID_hash[experiment.parent_source.id] = true; }
+        if(!experiment.parent_source.full_load) { 
+          expID_hash[experiment.parent_source.id] = true; 
+          //console.log("experiment "+experiment.parent_source.id+" will load metadata");
+        }
         else { console.log("parent "+experiment.parent_source.id+" already full_load so skip"); }
       }
-      else { expID_hash[experiment.id] = true; }
+      else { 
+        if(!(experiment.objID =~ /s/)) {
+          //console.log("experiment "+experiment.id+" will load metadata");
+          expID_hash[experiment.id] = true; 
+        } else {
+          //console.log("experiment "+experiment.id+" is dynamic subsource, can't load metadata");
+        }
+      }
     }
   }
   if(!expID_hash) { 
@@ -1173,7 +1220,7 @@ function gLyphsTrackSourcesMissingMetadataLoad(glyphTrack, mdkeys) {
 
   glyphTrack.checked_missing_mdata = 1; //1 == sending data
   
-  sourcesXMLHttp.open("POST", eedbSearchFCGI, true);  //async
+  sourcesXMLHttp.open("POST", eedbSearchCGI, true);  //async
   sourcesXMLHttp.onreadystatechange= function(id) { return function() { gLyphsTrackSourcesMissingMetadataXMLResponse(id); };}(glyphTrack.trackID);
   sourcesXMLHttp.setRequestHeader("Content-Type", "application/xml; charset=UTF-8;");
   sourcesXMLHttp.send(paramXML);
@@ -1681,6 +1728,14 @@ function prepareTrackXHR(trackID) {
   glyphTrack.newconfig = undefined;
   glyphTrack.glyphs_array = new Array(); //clear the old feature objects
 
+  if(!glyphTrack.source_ids) {
+    glyphTrack.dataLoaded = true;
+    glyphTrack.maxlevels  = 0;
+    gLyphsDrawTrack(trackID);
+    gLyphsUpdateLoadingProgress(glyphTrack.glyphsGB);
+    return;
+  }
+
   //code to delay loading of data when tracks are compressed
   glyphTrack.dataLoaded = false;
   if(glyphTrack.hideTrack) { return; }
@@ -1726,7 +1781,7 @@ function prepareTrackXHR(trackID) {
   else {
     if(sourceName) { paramXML += "<source_names>"+sourceName+"</source_names>\n"; }
   }
-  if(exptype) { paramXML += "<exptype>"+exptype+"</exptype>\n"; }
+  if(exptype && exptype!="-") { paramXML += "<exptype>"+exptype+"</exptype>\n"; }
   if(glyphTrack.uuid) { paramXML += "<track_uuid>"+glyphTrack.uuid+"</track_uuid>\n"; }
   
   paramXML += "<asm>"+glyphTrack.glyphsGB.asm+"</asm>\n";
@@ -1743,23 +1798,23 @@ function prepareTrackXHR(trackID) {
 
   paramXML += "<mode>region</mode>\n";
   paramXML += "<source_outmode>" + glyphTrack.source_outmode + "</source_outmode>\n";
-
-  if(glyphTrack.exprbin_strandless)  { paramXML += "<strandless>true</strandless>\n"; }
-  if(glyphTrack.exprbin_add_count)   { paramXML += "<add_count_expression>true</add_count_expression>\n"; }
-  if(glyphTrack.exprbin_subfeatures) { paramXML += "<overlap_check_subfeatures>true</overlap_check_subfeatures>\n"; }
-
   paramXML += "<display_width>"+dwidth+"</display_width>\n";
 
-  if(glyphTrack.exprbin_binsize) { paramXML += "<bin_size>"+ glyphTrack.exprbin_binsize +"</bin_size>\n"; }
+  //if(glyphTrack.exprbin_strandless)  { paramXML += "<strandless>true</strandless>\n"; }
+  //if(glyphTrack.exprbin_add_count)   { paramXML += "<add_count_expression>true</add_count_expression>\n"; }
+  //if(glyphTrack.exprbin_subfeatures) { paramXML += "<overlap_check_subfeatures>true</overlap_check_subfeatures>\n"; }
+  //if(glyphTrack.exprbin_flipstrand)  { paramXML += "<flip_strand>true</flip_strand>\n"; }
+  //if(glyphTrack.exprbin_binsize) { paramXML += "<bin_size>"+ glyphTrack.exprbin_binsize +"</bin_size>\n"; }
 
   if(glyphTrack.spstream_mode == "expression") {
-    paramXML += "<binning>"+binning+"</binning>\n";
-    //paramXML += "<binning>sum</binning>\n";
-    paramXML += "<overlap_mode>"+overlap_mode+"</overlap_mode>\n";
-    if(!glyphTrack.script) {
-      //switch back to the legacy default histogram binning
-      paramXML += "<expression_binning>true</expression_binning>\n"; 
-    }
+    paramXML += glyphsTrack_expressionConfigXML(glyphTrack);
+    //     paramXML += "<binning>"+binning+"</binning>\n";
+    //     //paramXML += "<binning>sum</binning>\n";
+    //     paramXML += "<overlap_mode>"+overlap_mode+"</overlap_mode>\n";
+    //     if(!glyphTrack.script) {
+    //       //switch back to the legacy default histogram binning
+    //       paramXML += "<expression_binning>true</expression_binning>\n"; 
+    //     }
   }
 
   if(glyphStyle && (glyphStyle=='centroid' || 
@@ -2006,7 +2061,7 @@ function gLyphsXHResponseParseData(trackID) {
 
   //console.log(" ["+trackID + '-rs'+xhr.readyState+ "-st"+xhr.status + "]");
   if(xhr.readyState!=4) { return; }
-  console.log("XHR response "+ trackID + " readyState="+xhr.readyState + "  status="+xhr.status);
+  //console.log("XHR response "+ trackID + " readyState="+xhr.readyState + "  status="+xhr.status);
 
   /*
   if(xhr.status>=500) { 
@@ -2201,19 +2256,23 @@ function gLyphsParseFeatureTrackData(glyphTrack, xhrObj) {
 
   var xhr        = xhrObj.xhr;
   var xmlDoc     = xhr.responseXML.documentElement;
-  //console.log("  parseFeature["+xhrObj.trackID+"]");
+  //console.log("gLyphsParseFeatureTrackData[ "+glyphTrack.trackID+" "+xhrObj.trackID+"]");
 
   if(!glyphTrack.glyphs_array) { glyphTrack.glyphs_array = new Array(); }
   glyphTrack.glyphs_array = [];
 
   if(!glyphTrack.feature_array) { glyphTrack.feature_array = new Array(); }
   glyphTrack.feature_array = [];
+  glyphTrack.features = new Object();
   glyphTrack.total_obj_count = 0;
 
+  if(!glyphTrack.edge_array) { glyphTrack.edge_array = new Array(); }
+  glyphTrack.edge_array = [];
 
   if(!glyphTrack.experiments) { glyphTrack.experiments = new Object(); }
+  if(!glyphTrack.datasources) { glyphTrack.datasources = new Object(); }
+  if(!glyphTrack.datatypes)   { glyphTrack.datatypes = new Object(); }
   glyphTrack.experiment_array = new Array();
-  glyphTrack.datatypes   = new Object();
   
   glyphTrack.hashkey = "";
   var trackcache = xmlDoc.getElementsByTagName("track_cache");
@@ -2229,6 +2288,10 @@ function gLyphsParseFeatureTrackData(glyphTrack, xhrObj) {
     }
     */
   }
+
+  //var cnt=0;
+  //for(var expID in glyphTrack.experiments){ cnt++; }
+  //console.log("gLyphsParseFeatureTrackData ["+glyphTrack.trackID+"] "+cnt +" experiment ids (before parsing)");
 
   glyphTrack.security_error = "";
   var security_error = xmlDoc.getElementsByTagName("security_error");
@@ -2248,6 +2311,7 @@ function gLyphsParseFeatureTrackData(glyphTrack, xhrObj) {
   }
 
   // get the experiments for this track
+  glyphTrack.datasource_mode = "feature"; //reset
   var sources_node = xmlDoc.getElementsByTagName("sources");
   if(sources_node && sources_node.length>0) {
     sources_node = sources_node[0];
@@ -2256,17 +2320,30 @@ function gLyphsParseFeatureTrackData(glyphTrack, xhrObj) {
     for (var i = 0; i < sources_children.length; i++) {
       var sourceDOM = sources_children[i]
 
-      //if(sourceDOM.tagName == "featuresource") {
-      //  var srcID = sourceDOM.getAttribute("id");
-      //  var source = glyphTrack.experiments[srcID];
-      //  if(!source) {
-      //    var source = new Object;
-      //    source.uuid = srcID;
-      //  }
-      //  eedbParseFeatureSourceData(sourceDOM, source);
-      //} else
+      if(sourceDOM.tagName == "featuresource") {
+        var srcID = sourceDOM.getAttribute("id");
+        var source = glyphTrack.datasources[srcID];
+        if(!source) {
+          var source = new Object;
+          source.uuid = srcID;
+          glyphTrack.datasources[srcID] = source;
+        }
+        eedbParseFeatureSourceData(sourceDOM, source);
+      }
+      if(sourceDOM.tagName == "edgesource") {
+        var srcID = sourceDOM.getAttribute("id");
+        var source = glyphTrack.datasources[srcID];
+        if(!source) {
+          var source = new Object;
+          source.uuid = srcID;
+          glyphTrack.datasources[srcID] = source;
+        }
+        eedbParseEdgeSourceXML(sourceDOM, source);
+        glyphTrack.datasource_mode = "edge";
+      }
       if(sourceDOM.tagName == "experiment") {
         var expID = sourceDOM.getAttribute("id");
+        //console.log("parse top level experiment "+expID);
         var source = glyphTrack.experiments[expID];
         if(!source) {
           source = new Object();
@@ -2280,17 +2357,26 @@ function gLyphsParseFeatureTrackData(glyphTrack, xhrObj) {
           eedbParseExperimentData(sourceDOM, source);
           //eedbParseMetadata(sourceDOM, source);
         }
+        glyphTrack.datasources[expID] = source;
         //subsource logic: move subsources up to the track.experiments, overwrite as needed since these can be generated dynamically and change based on location 
         if(source.subsources) {
+          var sub_id_count=0;
           for(var subID in source.subsources) {
             var subsource = source.subsources[subID];
             glyphTrack.experiments[subID] = subsource;
+            sub_id_count++;
           }
+          //console.log("experiment "+expID+" has "+sub_id_count+" subsources");
         }
       }
     }
   }
 
+  //var cnt=0;
+  //for(var expID in glyphTrack.experiments){ cnt++; }
+  //console.log("gLyphsParseFeatureTrackData ["+glyphTrack.trackID+"] "+cnt +" experiment ids (before loading features)");
+
+  if(glyphTrack.search_select_filter) { console.log("parse feature data with search_select_filter ["+glyphTrack.search_select_filter+"]"); }
   // get the top features from the XML
   // TODO look into alternate method here. this will grab all features
   //  and then I need to figure out if it is top or not. maybe can use children()
@@ -2312,8 +2398,12 @@ function gLyphsParseFeatureTrackData(glyphTrack, xhrObj) {
     if(feature) {
       feature.trackID = glyphTrack.trackID;
       feature.fidx = feat_idx++;
+      feature.filter_valid = true;
+      feature.search_match = false;
       glyphTrack.total_obj_count++;
       glyphTrack.feature_array.push(feature);
+      if(feature.id) { glyphTrack.features[feature.id] = feature; }
+
       if(feature.subfeatures) { 
         glyphTrack.has_subfeatures=true; 
         glyphTrack.total_obj_count += feature.subfeatures.length;
@@ -2323,7 +2413,9 @@ function gLyphsParseFeatureTrackData(glyphTrack, xhrObj) {
         glyphTrack.total_obj_count += feature.expression.length;
         for(var j=0; j<feature.expression.length; j++) {
           var expression = feature.expression[j];
-          glyphTrack.datatypes[expression.datatype] = true;
+          //glyphTrackAddDatatypeColumn(glyphTrack, expression.datatype, expression.datatype, true, "signal");
+          var dtype_col = glyphTrackAddDatatypeColumn(glyphTrack, expression.datatype, expression.datatype, true, "signal");
+          dtype_col.col_type = "signal";
           if(!glyphTrack.experiments[expression.expID]) { 
             glyphTrack.experiments[expression.expID] = new Object(); 
           }
@@ -2338,15 +2430,141 @@ function gLyphsParseFeatureTrackData(glyphTrack, xhrObj) {
           feature.color = "black"; //specified mdkey, but not present so default to black
         }
       }
-      if(glyphTrack.selected_feature && (glyphTrack.selected_feature.id == feature.id)) {
+      
+      if(glyphTrack.search_select_filter) {
+        gLyphsTrackSearchTestObject(glyphTrack, feature);
+      }
+      else if(glyphTrack.glyphsGB.selected_feature) {
+        if(glyphTrack.glyphsGB.selected_feature.id == feature.id) {
+          console.log(glyphTrack.trackID+" found matching selected_feature to glyphsGB "+glyphTrack.glyphsGB.selected_feature.id);
+          glyphTrack.selected_feature = feature;
+          feature.search_selected = true;
+        }
+      }
+      else if(glyphTrack.selected_feature && (glyphTrack.selected_feature.id == feature.id)) {
+        console.log(glyphTrack.trackID+" found matching selected_feature to glyphsTrack");
         glyphTrack.selected_feature = feature;
+        feature.search_selected = true;
       }
       if(feature.strand=="+" || feature.strand=="-") { glyphTrack.strandless=false; }
     }
   }
+  //glyphTrack.search_select_filter = ""; //clear search_select_filter after used
   if(glyphTrack.feature_array.length==0) { glyphTrack.strandless=false; }
-  console.log("gLyphsParseFeatureTrackData ["+glyphTrack.trackID+"]read "+glyphTrack.feature_array.length +" features");
+  //console.log("gLyphsParseFeatureTrackData ["+glyphTrack.trackID+"]read "+glyphTrack.feature_array.length +" features");
   
+  //read the edges
+  var children = xmlDoc.childNodes;
+  var first_edge=true;
+  for (var i = 0; i < children.length; i++) {
+    var childDOM = children[i]
+    if(!childDOM.tagName) { continue; }
+    //console.log("child tagName ["+childDOM.tagName+"]");
+    if(childDOM.tagName != "edge") { continue; }
+    var edge = eedbParseEdgeXML(childDOM);
+    if(!edge) { continue; }
+    
+    if(first_edge) {
+      glyphTrackAddDatatypeColumn(glyphTrack, "f1.name", "name", true);
+      glyphTrackAddDatatypeColumn(glyphTrack, "f1.category", "category", false);
+      glyphTrackAddDatatypeColumn(glyphTrack, "f1.source_name", "source_name", false);
+      glyphTrackAddDatatypeColumn(glyphTrack, "f1.location_link", "location", false);
+      glyphTrackAddDatatypeColumn(glyphTrack, "f1.location_string", "location", false);
+      
+      glyphTrackAddDatatypeColumn(glyphTrack, "f2.name", "name", true);
+      glyphTrackAddDatatypeColumn(glyphTrack, "f2.category", "category", false);
+      glyphTrackAddDatatypeColumn(glyphTrack, "f2.source_name", "source_name", false);
+      glyphTrackAddDatatypeColumn(glyphTrack, "f2.location_link", "location", false);
+      glyphTrackAddDatatypeColumn(glyphTrack, "f2.location_string", "location", false);
+      first_edge=false;
+    }
+  
+    glyphTrack.edge_array.push(edge);
+    edge.trackID = glyphTrack.trackID;
+    edge.filter_valid = true;
+    edge.search_match = false;
+    //connect datasource and features
+    if(glyphTrack.datasources[edge.source_id]) { 
+      edge.source = glyphTrack.datasources[edge.source_id];
+    }
+    if(glyphTrack.features[edge.feature1_id]) { 
+      edge.feature1 = glyphTrack.features[edge.feature1_id];
+      edge.feature1.f1_edge_count++;
+      for(var tag in edge.feature1.mdata) { //new common mdata[].array system
+        if(tag=="keyword") { continue; }
+        if(tag=="eedb:display_name") { continue; }
+        var dtype = "f1."+tag;
+        var t_col = glyphTrackAddDatatypeColumn(glyphTrack, dtype, tag);
+      }
+      //feature1.expression.data_types
+      if(edge.feature1.expression) {
+        for(var eidx=0; eidx<edge.feature1.expression.length; eidx++) {
+          var expr = edge.feature1.expression[eidx];
+          if(!expr) { continue; }
+          if(!expr.datatype) { continue; }
+          var dtype = "f1."+expr.datatype;
+          var dtype_col = glyphTrackAddDatatypeColumn(glyphTrack, dtype, expr.datatype, false);
+          dtype_col.col_type = "signal";
+          if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
+            dtype_col.min_val = expr.total;
+            dtype_col.max_val = expr.total;
+          }
+          if(expr.total < dtype_col.min_val) { dtype_col.min_val = expr.total; }
+          if(expr.total > dtype_col.max_val) { dtype_col.max_val = expr.total; }
+        }
+      }
+    }
+    if(glyphTrack.features[edge.feature2_id]) { 
+      edge.feature2 = glyphTrack.features[edge.feature2_id];
+      edge.feature2.f2_edge_count++;
+      //console.log("connect edge.feature2 ["+edge.feature2_id+"] name["+edge.feature2.name+"]");
+      for(var tag in edge.feature2.mdata) { //new common mdata[].array system
+        if(tag=="keyword") { continue; }
+        if(tag=="eedb:display_name") { continue; }
+        var dtype = "f2."+tag;
+        var t_col = glyphTrackAddDatatypeColumn(glyphTrack, dtype, tag);
+      }
+      //feature2.expression.data_types
+      if(edge.feature2.expression) {
+        for(var eidx=0; eidx<edge.feature2.expression.length; eidx++) {
+          var expr = edge.feature2.expression[eidx];
+          if(!expr) { continue; }
+          if(!expr.datatype) { continue; }
+          var dtype = "f2."+expr.datatype;
+          var dtype_col = glyphTrackAddDatatypeColumn(glyphTrack, dtype, expr.datatype, false);
+          dtype_col.col_type = "signal";
+          if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
+            dtype_col.min_val = expr.total;
+            dtype_col.max_val = expr.total;
+          }
+          if(expr.total < dtype_col.min_val) { dtype_col.min_val = expr.total; }
+          if(expr.total > dtype_col.max_val) { dtype_col.max_val = expr.total; }
+        }
+      }
+    }
+    
+    for(var dtype in edge.weights) {
+      var weights = edge.weights[dtype];
+      if(!weights) { continue; }
+      var dtype_col = glyphTrackAddDatatypeColumn(glyphTrack, dtype, dtype, true);
+      dtype_col.col_type = "weight";
+      if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
+        dtype_col.min_val = weights[0].weight;
+        dtype_col.max_val = weights[0].weight;
+      }
+      for(var j=0; j<weights.length; j++) {
+        var w1 = weights[j].weight;
+        if(w1 < dtype_col.min_val) { dtype_col.min_val = w1; }
+        if(w1 > dtype_col.max_val) { dtype_col.max_val = w1; }
+      }
+    }
+
+    glyphTrack.edge_array.push(edge);
+  }
+  
+  if(glyphTrack.edge_array.length >0) { glyphTrack.datasource_mode = "edge"; }
+  console.log("gLyphsParseFeatureTrackData ["+glyphTrack.trackID+"] "+glyphTrack.feature_array.length +" features; "+ glyphTrack.edge_array.length +" edges");
+
   // get the experiments for this track
   gLyphsCacheSources(glyphTrack);  //original per-track source cache system
   
@@ -2366,6 +2584,42 @@ function gLyphsParseFeatureTrackData(glyphTrack, xhrObj) {
   glyphTrack.express_total_antisense_sum = 0;
 
   if(glyphTrack.has_expression && (!glyphTrack.datatypes[glyphTrack.datatype])) { glyphTrack.datatype = dtype; }
+}
+
+
+function glyphTrackAddDatatypeColumn(glyphTrack, dtype, title, visible, col_type) {
+  if(!glyphTrack) { return; }
+  
+  if(!glyphTrack.dtype_columns) { glyphTrack.dtype_columns = new Array; }
+  if(!glyphTrack.datatypes) { glyphTrack.datatypes = new Object(); }
+
+  var dtype_col = glyphTrack.datatypes[dtype];
+  if(!dtype_col) {
+    dtype_col = new Object;
+    dtype_col.datatype = dtype;
+    if(title) { dtype_col.title = title; }
+    else { dtype_col.title = dtype; }
+    dtype_col.colnum = glyphTrack.dtype_columns.length + 1;
+    dtype_col.signal_order = glyphTrack.dtype_columns.length + 1;
+    dtype_col.col_type = "mdata";
+    if(col_type) { dtype_col.col_type = col_type; }
+    dtype_col.visible = false;
+    dtype_col.user_modifiable = false;    
+    dtype_col.filtered = false;
+    dtype_col.filter_abs = false;
+    dtype_col.filter_min = "min";
+    dtype_col.filter_max = "max";
+    dtype_col.min_val = 0;
+    dtype_col.max_val = 0;
+    dtype_col.highlight_color = "";  //default is #EBEBEB" but leave empty unless different from default
+    
+    if(visible) { dtype_col.visible = true; }
+
+    glyphTrack.datatypes[dtype] = dtype_col;
+    glyphTrack.dtype_columns.push(dtype_col);
+  }
+  dtype_col.dtype_valid = true;
+  return dtype_col;
 }
 
 /*
@@ -2403,8 +2657,9 @@ function gLyphsRenderFeatureTrack(glyphTrack) {
     if((glyphTrack.selected_feature.chrom != glyphTrack.glyphsGB.chrom) ||
        (glyphTrack.selected_feature.start > glyphTrack.glyphsGB.end) ||
        (glyphTrack.selected_feature.end < glyphTrack.glyphsGB.start)) {
-      console.log("selected_feature "+(glyphTrack.selected_feature.name)+" off screen so unselect "+(glyphTrack.trackID));
+      console.log(glyphTrack.trackID+" selected_feature "+(glyphTrack.selected_feature.id)+" ["+glyphTrack.selected_feature.name+"] off screen so unselect");
       glyphTrack.selected_feature = null;
+      glyphTrack.search_select_filter = "";
     }
   }
 
@@ -2621,6 +2876,10 @@ function convertFullFeatureXML(glyphTrack, featureXML) {
     }
      */
   }
+
+  for(var tag in feature.mdata) { //new common mdata[].array system
+    glyphTrackAddDatatypeColumn(glyphTrack, tag, tag, true, "mdata");
+  }
   
   return feature;
 }
@@ -2762,7 +3021,7 @@ function gLyphsDrawFeatureTrack(glyphTrack) {
       if(glyphTrack.selected_feature) {
         //opacity*original + (1-opacity)*background = resulting pixel
         var rgb = new RGBColor(glyphTrack.backColor);
-        var alpha = 0.5;
+        var alpha = 0.8;
         rgb.r = alpha*rgb.r + (1-alpha)*220.0;
         rgb.g = alpha*rgb.g + (1-alpha)*220.0;
         rgb.b = alpha*rgb.b + (1-alpha)*220.0;
@@ -2869,18 +3128,20 @@ function gLyphsDrawFeatureTrack(glyphTrack) {
 
   if(!glyphTrack.glyphsGB.exportSVGconfig) {
     var trackLine = document.createElementNS(svgNS,'rect');
-    if(glyphTrack.glyphsGB.trackline_xpos) { trackLine.setAttributeNS(null, 'x', (glyphTrack.glyphsGB.trackline_xpos-2)+'px'); } 
-    else { trackLine.setAttributeNS(null, 'x', '0px'); }
+    trackLine.setAttributeNS(null, 'x', '0px');
     trackLine.setAttributeNS(null, 'y', '11px');
     trackLine.setAttributeNS(null, 'width',  '1px');
     trackLine.setAttributeNS(null, 'height', (maxlevels*levelHeight + 2)+'px');
     trackLine.setAttributeNS(null, 'style', 'fill: orangered;');
+    trackLine.setAttributeNS(null, 'opacity', "1");
     trackLine.setAttributeNS(null, "onmousemove", "selectTrackRegion('drag', \"" + glyphTrack.trackID + "\");");
     //trackLine.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
     trackLine.setAttributeNS(null, "onmousedown", "selectTrackRegion('startdrag', \"" + glyphTrack.trackID + "\");");
     trackLine.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \"" + glyphTrack.trackID + "\");");
     g1.appendChild(trackLine);
     glyphTrack.trackLine = trackLine;
+    if(glyphTrack.glyphsGB.trackline_xpos) { trackLine.setAttributeNS(null, 'x', (glyphTrack.glyphsGB.trackline_xpos)+'px'); } 
+    if(glyphTrack.is_moving) { trackLine.setAttributeNS(null, 'opacity', "0"); }
   }
 
   g1.appendChild(selectRect);
@@ -3107,12 +3368,16 @@ function gLyphsTrackFeatureColour(glyphTrack, feature) {
     else { colour = new RGBColour(255,0,0); } //red
   }
   if(glyphTrack.selected_feature && (glyphTrack.glyphStyle!="1D-heatmap")) {
-    if(glyphTrack.selected_feature.id == feature.id) { 
+    if((glyphTrack.selected_feature.fidx !== undefined) && (glyphTrack.selected_feature.fidx == feature.fidx)) { 
+      colour = new RGBColour(255,0,136); //slightly red deeppink
+    } else if(glyphTrack.selected_feature.id && (glyphTrack.selected_feature.id == feature.id)) { 
       //colour = new RGBColour(255,0,225,0.5);
       //colour = new RGBColour(255,0,0); //red
       //colour = new RGBColour(255,20,147); //deeppink
       colour = new RGBColour(255,0,136); //slightly red deeppink
       //colour = new RGBColour(255,0,80); //deeppink
+    } else if(feature.search_selected) { 
+      colour = new RGBColour(255,0,136); //slightly red deeppink
     } else {
       //var hsl = colour.getHSL();
       //hsl.l = 100-((100 - hsl.l)*0.33);
@@ -3426,7 +3691,6 @@ function gLyphsTrack_render_xyplot(glyphTrack) {
   //
   var height = (glyphTrack.track_height) / 2.0;
   var middle = 12+ Math.floor(height);
-  if(glyphTrack.strandless) { middle = 12+glyphTrack.track_height; }
   
   var strkw = "1px";
   
@@ -3454,8 +3718,10 @@ function gLyphsTrack_render_xyplot(glyphTrack) {
   if(glyphTrack.xyplot_fill) {
     expressLine1.style.opacity = "0.75";
     expressLine1.style.strokeWidth = "1px";
-    expressLine2.style.opacity = "0.75";
-    expressLine2.style.strokeWidth = "1px";
+    if(expressLine2) {
+      expressLine2.style.opacity = "0.75";
+      expressLine2.style.strokeWidth = "1px";
+    }
   }
 
   glyphTrack.expressLine1 = expressLine1;
@@ -3613,16 +3879,31 @@ function gLyphsTrack_render_arc(glyphTrack) {
   if(glyphTrack.xyplot_fill) {
     expressLine1.style.opacity = "0.75";
     expressLine1.style.strokeWidth = "1px";
-    expressLine2.style.opacity = "0.75";
-    expressLine2.style.strokeWidth = "1px";
+    if(expressLine2) {
+      expressLine2.style.opacity = "0.75";
+      expressLine2.style.strokeWidth = "1px";
+    }
   }
 
   glyphTrack.expressLine1 = expressLine1;
   glyphTrack.expressLine2 = expressLine2;
   
-  var features = glyphTrack.feature_array;
-  if(!features) { return; }
+  var obj_array = []
+  obj_array = glyphTrack.feature_array;
   //if(features.length == 0) { return; }
+  if(glyphTrack.datasource_mode=="edge") {
+    obj_array = glyphTrack.edge_array;
+    for(var i=0; i<obj_array.length; i++) {
+      var edge = obj_array[i];
+      if(!edge) { continue; }
+      var f1 = edge.feature1;
+      var f2 = edge.feature2;
+      if(f1) { edge.start = (f1.start + f1.end) / 2; }
+      if(f2) { edge.end = (f2.start + f2.end) / 2; }
+    }
+  }
+
+  if(!obj_array) { return; }
 
   var region_start = glyphTrack.glyphsGB.start; 
   var region_end   = glyphTrack.glyphsGB.end; 
@@ -3633,8 +3914,8 @@ function gLyphsTrack_render_arc(glyphTrack) {
   
   //precalc xfs, xfe, xfm, arc_height
   var max_arc_height = 1;
-  for(var i=0; i<features.length; i++) {
-    var feature = features[i];
+  for(var i=0; i<obj_array.length; i++) {
+    var feature = obj_array[i];
     if(!feature) { continue; }
     
     var xfs = dwidth*(feature.start-region_start)/(region_end-region_start); 
@@ -3658,8 +3939,8 @@ function gLyphsTrack_render_arc(glyphTrack) {
     feature.arc_height = arc_height;
   }
     
-  for(var i=0; i<features.length; i++) {
-    var feature = features[i];
+  for(var i=0; i<obj_array.length; i++) {
+    var feature = obj_array[i];
     if(!feature) { continue; }
     
     var xfs = feature.xfs;
@@ -3696,9 +3977,16 @@ function gLyphsTrack_render_arc(glyphTrack) {
         if(feature.fidx !== undefined) {
           t_path.setAttributeNS(null, "onmouseover", "gLyphsTrackFeatureInfo(\""+glyphTrack.trackID+"\", \""+(feature.fidx)+"\");");
           t_path.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \""+glyphTrack.trackID+"\", \""+feature.fidx+"\");");
-        } else if(feature.id) {
+        } else if((feature.classname == "Feature") && feature.id) {
           t_path.setAttributeNS(null, "onmouseover", "eedbSearchTooltip(\"" +(feature.id)+ "\");");
           t_path.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \""+glyphTrack.trackID+"\", \""+feature.id+"\");"); 
+//         } else if(feature.classname == "Edge") {
+//           //if(feature.eidx) {
+//           //  t_path.setAttributeNS(null, "onmouseover", "gLyphsTrackEdgeInfo(\""+glyphTrack.trackID+"\", \""+(feature.eidx)+"\");");
+//           //}
+//           t_path.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \""+glyphTrack.trackID+"\", \""+feature.id+"\");"); 
+        } else {
+          t_path.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \""+glyphTrack.trackID+"\");"); 
         }
       }
     }
@@ -4178,11 +4466,14 @@ function gLyphsDrawExpressTrack(glyphTrack) {
     trackLine.setAttributeNS(null, 'width',  '1px');
     trackLine.setAttributeNS(null, 'height', track_height+'px');
     trackLine.setAttributeNS(null, 'style', 'fill: orangered;');
+    trackLine.setAttributeNS(null, 'opacity', "1");
     trackLine.setAttributeNS(null, "onmousemove", "selectTrackRegion('drag', \"" + glyphTrack.trackID + "\");");
     trackLine.setAttributeNS(null, "onmousedown", "selectTrackRegion('startdrag', \"" + glyphTrack.trackID + "\");");
     trackLine.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \"" + glyphTrack.trackID + "\");");
     g1.appendChild(trackLine);
     glyphTrack.trackLine = trackLine;
+    if(glyphTrack.glyphsGB.trackline_xpos) { trackLine.setAttributeNS(null, 'x', (glyphTrack.glyphsGB.trackline_xpos)+'px'); }
+    if(glyphTrack.is_moving) { trackLine.setAttributeNS(null, 'opacity', "0"); }
   }
   
   if(glyphTrack.whole_chrom_scale) {
@@ -4216,15 +4507,12 @@ function gLyphsTrackCalcExperimentGroupArray(glyphTrack) {
 
   var trackID     = glyphTrack.trackID;
     
-  //console.log(" gLyphsTrackCalcExperimentGroupArray");
+  console.log("gLyphsTrackCalcExperimentGroupArray "+trackID);
 
   if(glyphTrack.exppanelmode == "mdgroup") {
-    if(!glyphTrack.experiment_mdgrouping) { 
-      console.log("gLyphsTrackCalcExperimentGroupArray "+trackID+" no experiment_mdgrouping");
-      //gLyphsTrackFetchMetadataGrouping(trackID);  //async
-      gLyphsTrackCalcMetadataGrouping(trackID);
-    }
+    gLyphsTrackCalcMetadataGrouping(trackID); //new logic so I can safely call alwys, but I also must now to update with dynamic subsource
     if(glyphTrack.experiment_mdgrouping) { 
+      console.log("gLyphsTrackCalcExperimentGroupArray "+trackID+" experiment_mdgrouping length = "+(glyphTrack.experiment_mdgrouping.length));
       for(var k=0; k<glyphTrack.experiment_mdgrouping.length; k++) {
         var mdgroup = glyphTrack.experiment_mdgrouping[k];
         if(!mdgroup) { continue; }
@@ -4294,7 +4582,7 @@ function gLyphsTrackCalcExperimentGroupArray(glyphTrack) {
     }
     
     var features = glyphTrack.feature_array;
-    if(!features) { continue; }
+    if(!features || features.length==0) { continue; }
     
     for(var i=0; i<features.length; i++) {
       var feature = features[i];
@@ -6160,6 +6448,7 @@ function gLyphsDrawSelection(glyphTrack) {
   if(!selectRect) { return; }
 
   if(!selection.chrom_start || !selection.chrom_end) { return; }
+  if(selection.chrom_start == selection.chrom_end) { return; }
 
   var dwidth = glyphTrack.glyphsGB.display_width;
   var start  = glyphTrack.glyphsGB.start;
@@ -6672,6 +6961,7 @@ function gLyphsColorSpaceOptions(glyphTrack) {
     signalCSI.invert = glyphTrack.scale_invert;
     if(glyphTrack.signal_user_color) { signalCSI.single_color = glyphTrack.signal_user_color; }
     signalCSI.callOutFunction = gLyphsTrackSignalCSSIUpdate;
+    signalCSI.style.marginLeft = "7px";
     glyphTrack.signalCSI = signalCSI;
   }
   zenbuColorSpaceSetSenseColor(glyphTrack.posStrandColor);
@@ -7327,7 +7617,8 @@ function glyphsSaveTrackConfig(trackID) {
 
   eedbShowLogin();
   if(!current_user) {
-    gLyphsNoUserWarn("save a track configuration");
+    zenbuGeneralWarn("In order to save a track configuration, you must first log into ZENBU.", "Warning: Not logged into the ZENBU system");
+    eedbLoginAction("login");
     return;
   }
 
@@ -7459,6 +7750,65 @@ function glyphsSaveTrackConfigParam(trackID, param, value) {
 }
 
 
+function glyphsTrack_expressionConfigXML(glyphTrack) {
+  if(!glyphTrack) { return ""; }
+  if(glyphTrack.spstream_mode != "expression") { return ""; }
+
+  var overlap_mode = glyphTrack.overlap_mode;
+  if(glyphTrack.newconfig && glyphTrack.newconfig.overlap_mode) { overlap_mode = glyphTrack.newconfig.overlap_mode; }
+
+  var binning = glyphTrack.binning;
+  if(glyphTrack.newconfig && glyphTrack.newconfig.binning) { binning = glyphTrack.newconfig.binning; }
+
+  var binsize = glyphTrack.exprbin_binsize;
+  if(glyphTrack.newconfig && glyphTrack.newconfig.exprbin_binsize) { binsize = glyphTrack.newconfig.exprbin_binsize; }
+
+  var strandless = glyphTrack.exprbin_strandless;
+  if(glyphTrack.newconfig && glyphTrack.newconfig.exprbin_strandless) { strandless = glyphTrack.newconfig.exprbin_strandless; }
+
+  var add_count = glyphTrack.exprbin_add_count;
+  if(glyphTrack.newconfig && glyphTrack.newconfig.exprbin_add_count) { add_count = glyphTrack.newconfig.exprbin_add_count; }
+
+  var subfeatures = glyphTrack.exprbin_subfeatures;
+  if(glyphTrack.newconfig && glyphTrack.newconfig.exprbin_subfeatures) { subfeatures = glyphTrack.newconfig.exprbin_subfeatures; }
+
+  var flipstrand = glyphTrack.exprbin_flipstrand;
+  if(glyphTrack.newconfig && glyphTrack.newconfig.exprbin_flipstrand) { flipstrand = glyphTrack.newconfig.exprbin_flipstrand; }
+
+  var spstreamXML = "<zenbu_script>\n";
+  spstreamXML += "\t<stream_processing>\n";
+  if(add_count) {
+    spstreamXML += "\t\t<spstream module=\"AppendExpression\"/>\n";
+  }
+  if(flipstrand) {
+    spstreamXML += "\t\t<spstream module=\"FlipStrand\"/>\n";
+  }
+  spstreamXML += "\t\t<spstream module=\"TemplateCluster\">\n";
+  spstreamXML += "\t\t\t<overlap_mode>"+overlap_mode+"</overlap_mode>\n";
+  spstreamXML += "\t\t\t<expression_mode>"+binning+"</expression_mode>\n";
+
+  if(strandless) { spstreamXML += "\t\t\t<ignore_strand>true</ignore_strand>\n"; } 
+  else { spstreamXML += "\t\t\t<ignore_strand>false</ignore_strand>\n"; }
+
+  if(subfeatures) { spstreamXML += "\t\t\t<overlap_subfeatures>true</overlap_subfeatures>\n"; } 
+  else { spstreamXML += "\t\t\t<overlap_subfeatures>false</overlap_subfeatures>\n"; }
+
+  spstreamXML += "\t\t\t<side_stream>\n\t\t\t\t<spstream module=\"FeatureEmitter\">\n\t\t\t\t\t<fixed_grid>true</fixed_grid>\n";
+  if(binsize) { spstreamXML += "\t\t\t\t\t<width>"+binsize+"</width>\n" }
+
+  if(strandless) { spstreamXML += "\t\t\t\t\t<both_strands>false</both_strands>\n"; } 
+  else { spstreamXML += "\t\t\t\t\t<both_strands>true</both_strands>\n"; } 
+
+  spstreamXML += "\t\t\t\t</spstream>\n";
+  spstreamXML += "\t\t\t</side_stream>\n";
+  spstreamXML += "\t\t</spstream>\n";
+  spstreamXML += "\t</stream_processing>\n";
+  spstreamXML += "</zenbu_script>\n";
+
+  return spstreamXML;
+}
+
+
 function glyphsGenerateTrackDOM(glyphTrack) {
   var doc = document.implementation.createDocument("", "", null);
 
@@ -7574,6 +7924,7 @@ function glyphsGenerateTrackDOM(glyphTrack) {
     if(glyphTrack.exprbin_strandless) { expressDOM.setAttribute("strandless", glyphTrack.exprbin_strandless); }
     if(glyphTrack.exprbin_add_count) { expressDOM.setAttribute("add_count", glyphTrack.exprbin_add_count); }
     if(glyphTrack.exprbin_subfeatures) { expressDOM.setAttribute("subfeatures", glyphTrack.exprbin_subfeatures); }
+    if(glyphTrack.exprbin_flipstrand) { expressDOM.setAttribute("flipstrand", glyphTrack.exprbin_flipstrand); }
     if(glyphTrack.exprbin_binsize) { expressDOM.setAttribute("binsize", glyphTrack.exprbin_binsize); }
   }  
   
@@ -7748,7 +8099,7 @@ function gLyphsCreateTrackFromTrackDOM(trackDOM, glyphsGB) {
     
   if(trackDOM.getAttribute("logscale"))   { glyphTrack.logscale = Math.floor(trackDOM.getAttribute("logscale")); }
   
-  glyphTrack.maxlevels  = 100;
+  glyphTrack.maxlevels  = 0;
   glyphTrack.track_height = 100;
   if(trackDOM.getAttribute("maxlevels")) {
     glyphTrack.track_height  = Math.floor(trackDOM.getAttribute("maxlevels"));
@@ -7862,6 +8213,7 @@ function gLyphsCreateTrackFromTrackDOM(trackDOM, glyphsGB) {
     if(expressbinDOM.getAttribute("strandless")) { glyphTrack.exprbin_strandless = expressbinDOM.getAttribute("strandless"); }
     if(expressbinDOM.getAttribute("add_count")) { glyphTrack.exprbin_add_count = expressbinDOM.getAttribute("add_count"); }
     if(expressbinDOM.getAttribute("subfeatures")) { glyphTrack.exprbin_subfeatures = expressbinDOM.getAttribute("subfeatures"); }
+    if(expressbinDOM.getAttribute("flipstrand")) { glyphTrack.exprbin_flipstrand = expressbinDOM.getAttribute("flipstrand"); }
     if(expressbinDOM.getAttribute("binsize")) { glyphTrack.exprbin_binsize = expressbinDOM.getAttribute("binsize"); }
   }
   
@@ -8031,7 +8383,7 @@ function gLyphsLoadTrackConfigUUID(glyphsGB, trackUUID) {
 function gLyphsLoadTrackConfig(glyphsGB, configDOM) {
   if(!glyphsGB) { return; }
   //--------------------------------
-  eedbEmptySearchResults(glyphsGB.searchSetID);
+  gLyphsEmptySearchResults(glyphsGB);
 
   //console.log("gLyphsLoadTrackConfig");
 
@@ -8059,12 +8411,10 @@ function gLyphsLoadTrackConfig(glyphsGB, configDOM) {
     glyphsTrack_global_track_hash[glyphTrack.trackID] = glyphTrack;
     glyphset.insertBefore(glyphTrack.trackDiv, newtrack_div);
 
-    eedbAddSearchTrack(glyphsGB.searchSetID, glyphTrack.source_ids, glyphTrack.title);
-
     gLyphsDrawTrack(glyphTrack.trackID);  //this creates empty tracks with the "loading" tag
     prepareTrackXHR(glyphTrack.trackID);
   }
-  //gLyphsAutosaveConfig();
+  //glyphTrack.glyphsGB.autosave();
 
   return;
 
@@ -8178,7 +8528,8 @@ function glyphsSaveScriptConfig(trackID) {
 
   current_user = eedbShowLogin();
   if(!current_user) {
-    gLyphsNoUserWarn("save a script");
+    zenbuGeneralWarn("In order to save a script, you must first log into ZENBU.", "Warning: Not logged into the ZENBU system");
+    eedbLoginAction("login");
     return;
   }
 
@@ -8329,7 +8680,7 @@ function glyphsSaveScriptConfigParam(trackID, param, value) {
     trackDiv.removeChild(saveConfigDiv);
     glyphTrack.saveScriptConfig = undefined;
     gLyphsDrawTrack(trackID);
-    if(uuid) { gLyphsAutosaveConfig(); }
+    if(uuid) { glyphTrack.glyphsGB.autosave(); }
   }
 }
 
@@ -9033,6 +9384,9 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
   if(param == "exprbin_subfeatures") { 
     newconfig.exprbin_subfeatures = value;
   }
+  if(param == "exprbin_flipstrand") { 
+    newconfig.exprbin_flipstrand = value;
+  }
   if(param == "exprbin_binsize") { 
     newconfig.exprbin_binsize = value;
   }
@@ -9041,53 +9395,11 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
     newconfig.spstream_mode = "custom";
     newconfig.spstream_changed = true;
 
-    var overlap_mode = glyphTrack.overlap_mode;
-    if(glyphTrack.newconfig && glyphTrack.newconfig.overlap_mode) { overlap_mode = glyphTrack.newconfig.overlap_mode; }
-
-    var binning = glyphTrack.binning;
-    if(glyphTrack.newconfig && glyphTrack.newconfig.binning) { binning = glyphTrack.newconfig.binning; }
-
-    var binsize = glyphTrack.exprbin_binsize;
-    if(glyphTrack.newconfig && glyphTrack.newconfig.exprbin_binsize) { binsize = glyphTrack.newconfig.exprbin_binsize; }
-
-    var strandless = glyphTrack.exprbin_strandless;
-    if(glyphTrack.newconfig && glyphTrack.newconfig.exprbin_strandless) { strandless = glyphTrack.newconfig.exprbin_strandless; }
-
-    var add_count = glyphTrack.exprbin_add_count;
-    if(glyphTrack.newconfig && glyphTrack.newconfig.exprbin_add_count) { add_count = glyphTrack.newconfig.exprbin_add_count; }
-
-    var subfeatures = glyphTrack.exprbin_subfeatures;
-    if(glyphTrack.newconfig && glyphTrack.newconfig.exprbin_subfeatures) { subfeatures = glyphTrack.newconfig.exprbin_subfeatures; }
-
     newconfig.script = new Object;
     newconfig.script.name = "expression binning";
     newconfig.script.desc = "";
-    newconfig.script.spstreamXML =  "<zenbu_script>\n";
-    newconfig.script.spstreamXML += "\t<stream_processing>\n";
-    if(add_count) {
-      newconfig.script.spstreamXML += "\t\t<spstream module=\"AppendExpression\"/>\n";
-    }
-    newconfig.script.spstreamXML += "\t\t<spstream module=\"TemplateCluster\">\n";
-    newconfig.script.spstreamXML += "\t\t\t<overlap_mode>"+overlap_mode+"</overlap_mode>\n";
-    newconfig.script.spstreamXML += "\t\t\t<expression_mode>"+binning+"</expression_mode>\n";
+    newconfig.script.spstreamXML = glyphsTrack_expressionConfigXML(glyphTrack);
 
-    if(strandless) { newconfig.script.spstreamXML += "\t\t\t<ignore_strand>true</ignore_strand>\n"; } 
-    else { newconfig.script.spstreamXML += "\t\t\t<ignore_strand>false</ignore_strand>\n"; }
-
-    if(subfeatures) { newconfig.script.spstreamXML += "\t\t\t<overlap_subfeatures>true</overlap_subfeatures>\n"; } 
-    else { newconfig.script.spstreamXML += "\t\t\t<overlap_subfeatures>false</overlap_subfeatures>\n"; }
-
-    newconfig.script.spstreamXML += "\t\t\t<side_stream>\n\t\t\t\t<spstream module=\"FeatureEmitter\">\n\t\t\t\t\t<fixed_grid>true</fixed_grid>\n";
-    if(binsize) { newconfig.script.spstreamXML += "\t\t\t\t\t<width>"+binsize+"</width>\n" }
-
-    if(strandless) { newconfig.script.spstreamXML += "\t\t\t\t\t<both_strands>false</both_strands>\n"; } 
-    else { newconfig.script.spstreamXML += "\t\t\t\t\t<both_strands>true</both_strands>\n"; } 
-
-    newconfig.script.spstreamXML += "\t\t\t\t</spstream>\n";
-    newconfig.script.spstreamXML += "\t\t\t</side_stream>\n";
-    newconfig.script.spstreamXML += "\t\t</spstream>\n";
-    newconfig.script.spstreamXML += "\t</stream_processing>\n";
-    newconfig.script.spstreamXML += "</zenbu_script>\n";
     var reconfig_div = document.getElementById(trackID+"_reconfigure_divframe");
     if(reconfig_div) { 
       reconfig_div.style.width="500px";
@@ -9330,6 +9642,7 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
       if(newconfig.exprbin_strandless !== undefined) { glyphTrack.exprbin_strandless = newconfig.exprbin_strandless; }
       if(newconfig.exprbin_add_count !== undefined) { glyphTrack.exprbin_add_count = newconfig.exprbin_add_count; }
       if(newconfig.exprbin_subfeatures !== undefined) { glyphTrack.exprbin_subfeatures = newconfig.exprbin_subfeatures; }
+      if(newconfig.exprbin_flipstrand !== undefined) { glyphTrack.exprbin_flipstrand = newconfig.exprbin_flipstrand; }
       if(newconfig.exprbin_binsize !== undefined) { glyphTrack.exprbin_binsize = newconfig.exprbin_binsize; }
       if(newconfig.overlap_mode !== undefined) { glyphTrack.overlap_mode = newconfig.overlap_mode; }
       if(newconfig.binning !== undefined) { glyphTrack.binning = newconfig.binning; }
@@ -9385,7 +9698,7 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
     clearKids(glyphTrack.trackDiv);
 
     if(glyphTrack.createMode == "trackset") {
-      gLyphsAppendTracksViaTrackSet(glyphTrack);
+      gLyphsAppendTracksViaTrackSet(glyphTrack.glyphsGB, glyphTrack);
     }
 
     if(glyphTrack.dexMode) {
@@ -9394,8 +9707,7 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
     }
 
     if(glyphTrack.createMode == "single") {
-      gLyphsInitSearchFromTracks(glyphTrack.glyphsGB);
-      gLyphsAutosaveConfig();
+      glyphTrack.glyphsGB.autosave();
       gLyphsDrawTrack(trackID);
       prepareTrackXHR(trackID);
     }
@@ -9443,6 +9755,7 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
       if(newconfig.exprbin_strandless !== undefined) { glyphTrack.exprbin_strandless = newconfig.exprbin_strandless; needReload=1; }
       if(newconfig.exprbin_add_count !== undefined) { glyphTrack.exprbin_add_count = newconfig.exprbin_add_count; needReload=1; }
       if(newconfig.exprbin_subfeatures !== undefined) { glyphTrack.exprbin_subfeatures = newconfig.exprbin_subfeatures; needReload=1; }
+      if(newconfig.exprbin_flipstrand !== undefined) { glyphTrack.exprbin_flipstrand = newconfig.exprbin_flipstrand; needReload=1; }
       if(newconfig.exprbin_binsize !== undefined) { glyphTrack.exprbin_binsize = newconfig.exprbin_binsize; needReload=1; }
       if(newconfig.overlap_mode !== undefined) { glyphTrack.overlap_mode = newconfig.overlap_mode; needReload=1; }
       if(newconfig.binning !== undefined) { glyphTrack.binning = newconfig.binning; needReload=1; }
@@ -9476,7 +9789,9 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
         glyphTrack.signalCSI = null; //clear
       }
       if(glyphTrack.DSI) {
-        if(glyphTrack.DSI.newconfig.source_ids && (glyphTrack.source_ids != glyphTrack.DSI.newconfig.source_ids)) { 
+        //if(glyphTrack.DSI.newconfig.source_ids && (glyphTrack.source_ids != glyphTrack.DSI.newconfig.source_ids)) { 
+        if(glyphTrack.DSI.newconfig.source_ids && glyphTrack.source_ids) { 
+          console.log("glyphTrack.DSI has source_ids to clear exp/mdata and recalc");
           glyphTrack.source_ids = glyphTrack.DSI.newconfig.source_ids; 
           glyphTrack.experiments = new Object();;
           glyphTrack.experiment_array = new Array();
@@ -9553,8 +9868,7 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
       gLyphsRenderTrack(glyphTrack);
       gLyphsDrawTrack(trackID);
     }
-    gLyphsInitSearchFromTracks(glyphTrack.glyphsGB);
-    gLyphsAutosaveConfig();
+    glyphTrack.glyphsGB.autosave();
   }
   
   if(glyphTrack.subpanelMode == "reconfig") {
@@ -9822,6 +10136,18 @@ function createStreamParams_expression(glyphTrack, paramDiv) {
   var span1 = div3.appendChild(document.createElement('span'));
   span1.innerHTML = "omit gaps (introns)";
 
+  var exprbin_flipstrand = glyphTrack.exprbin_flipstrand
+  if(glyphTrack.newconfig && glyphTrack.newconfig.exprbin_flipstrand !== undefined) { 
+    exprbin_flipstrand = glyphTrack.newconfig.exprbin_flipstrand;
+  }
+  var flipstrandCheck = div3.appendChild(document.createElement('input'));
+  flipstrandCheck.setAttribute('style', "margin: 1px 1px 1px 7px;");
+  flipstrandCheck.setAttribute('type', "checkbox");
+  if(exprbin_flipstrand) { flipstrandCheck.setAttribute('checked', "checked"); }
+  flipstrandCheck.setAttribute("onclick", "reconfigTrackParam(\""+ glyphTrack.trackID+"\", 'exprbin_flipstrand', this.checked);");
+  var span1 = div3.appendChild(document.createElement('span'));
+  span1.innerHTML = "flip strand";
+
   var tspan2 = div3.appendChild(document.createElement('span'));
   tspan2.setAttribute('style', "margin: 1px 0px 1px 20px; font-size:10px; font-family:arial,helvetica,sans-serif; ");
   tspan2.innerHTML = "fixed bin size:";
@@ -10072,7 +10398,7 @@ function zenbuReconfigureTrackPanel(glyphTrack) {
   glyphTrack.DSI.allowChangeDatasourceMode = false;
   glyphTrack.DSI.enableResultFilter = false;
   glyphTrack.DSI.allowMultipleSelect = true;
-  glyphTrack.DSI.datasource_mode = "feature";
+  glyphTrack.DSI.datasource_mode = "all_data";
   glyphTrack.DSI.style.marginLeft = "5px";
   glyphTrack.DSI.style.marginRight = "5px";  
   glyphTrack.DSI.main_div = glyphTrack.trackDiv;
@@ -10621,6 +10947,7 @@ function createGlyphstyleSelect(glyphTrack) {
     //strandlessOpt.style.display  = "none";
     fillOpt.style.display  = "none";
     expressOpts2.style.display = "none";
+    //colorModeDiv.style.display  = "block"; //TODO: extend heatmap coloring to allow strand or fixed colors
     colorModeDiv.style.display  = "none";
     featSortModeSpan.style.display = "none";
   } else if(glyphStyle == "arc") {
@@ -10724,6 +11051,12 @@ function createDatatypeSelect(trackID) {
   }
   datatypeSelect.innerHTML = ""; //to clear old content
 
+  var option = document.createElement('option');
+  option.setAttribute("value", "-");
+  option.innerHTML = "< all datatypes >";
+  option.selected = "selected";
+  datatypeSelect.appendChild(option);
+
   var source_ids = "";
   if(glyphTrack.source_ids) { source_ids = glyphTrack.source_ids; }
   if(glyphTrack.newconfig && glyphTrack.newconfig.source_ids) { source_ids = glyphTrack.newconfig.source_ids; }
@@ -10731,7 +11064,7 @@ function createDatatypeSelect(trackID) {
   if(source_ids == "") { return datatypeSelect; }
 
   datatypeSelect.setAttribute('disabled', "disabled");
-  if(glyphTrack.exptype) {
+  if(glyphTrack.exptype && glyphTrack.exptype!="-") {
     var option = datatypeSelect.appendChild(document.createElement('option'));
     option.setAttribute("selected", "selected");
     option.innerHTML = glyphTrack.exptype;
@@ -10777,10 +11110,11 @@ function displayDatatypeSelect(trackID) {
   datatypeSelect.innerHTML = ""; //to clear old content
   datatypeSelect.removeAttribute("disabled");
 
-  //var option = document.createElement('option');
-  //option.setAttribute("value", "");
-  //option.innerHTML = "no datatype filter";
-  //datatypeSelect.appendChild(option);
+  var option = document.createElement('option');
+  option.setAttribute("value", "-");
+  option.innerHTML = "< all datatypes >";
+  option.setAttribute("selected", "selected");
+  datatypeSelect.appendChild(option);
 
   var exptype = glyphTrack.exptype;
   if(glyphTrack.newconfig && glyphTrack.newconfig.exptype) { exptype = glyphTrack.newconfig.exptype; }
@@ -10790,6 +11124,7 @@ function displayDatatypeSelect(trackID) {
   var selectOK = false;
   var defaultType = "";
   //console.log("dataypes: ");
+  if(exptype == "-") { selectOK=true; } //all datatypes
   for(var i=0; i<types.length; i++) {
     sortedTypes.push(types[i]);
     var type = types[i].getAttribute("type");
@@ -10809,7 +11144,7 @@ function displayDatatypeSelect(trackID) {
 
   sortedTypes.sort(datatype_sort_func);
   if(!selectOK || !exptype) { 
-    //console.log(" :: change default ["+defaultType+"]");
+    console.log("exptype undef :: change to default ["+defaultType+"]");
     exptype = defaultType;
     if(glyphTrack.newconfig) { glyphTrack.newconfig.exptype = exptype; }
   }
@@ -10824,6 +11159,9 @@ function displayDatatypeSelect(trackID) {
     }
     option.innerHTML = type;
     datatypeSelect.appendChild(option);
+  }
+  if(sortedTypes.length==0) {
+    datatypeSelect.setAttribute('disabled', "disabled");
   }
 
   return datatypeSelect;
@@ -11506,27 +11844,27 @@ function gLyphsDownloadRegionBuildStats(trackID) {
     else {
       if(glyphTrack.sources) { paramXML += "<source_names>"+glyphTrack.sources+"</source_names>\n"; }
     }
-    if(glyphTrack.exptype) { paramXML += "<exptype>"+glyphTrack.exptype+"</exptype>\n"; }
+    if(glyphTrack.exptype && glyphTrack.exptype!="-") { paramXML += "<exptype>"+glyphTrack.exptype+"</exptype>\n"; }
     if(glyphTrack.uuid) { paramXML += "<track_uuid>"+glyphTrack.uuid+"</track_uuid>\n"; }
   
     paramXML += "<source_outmode>" + glyphTrack.source_outmode + "</source_outmode>\n";
-
-    if(glyphTrack.exprbin_strandless)  { paramXML += "<strandless>true</strandless>\n"; }
-    if(glyphTrack.exprbin_add_count)   { paramXML += "<add_count_expression>true</add_count_expression>\n"; }
-    if(glyphTrack.exprbin_subfeatures) { paramXML += "<overlap_check_subfeatures>true</overlap_check_subfeatures>\n"; }
-
     paramXML += "<display_width>"+glyphTrack.glyphsGB.display_width+"</display_width>\n";
 
-    if(glyphTrack.exprbin_binsize) { paramXML += "<bin_size>"+ glyphTrack.exprbin_binsize +"</bin_size>\n"; }
+    //if(glyphTrack.exprbin_strandless)  { paramXML += "<strandless>true</strandless>\n"; }
+    //if(glyphTrack.exprbin_add_count)   { paramXML += "<add_count_expression>true</add_count_expression>\n"; }
+    //if(glyphTrack.exprbin_subfeatures) { paramXML += "<overlap_check_subfeatures>true</overlap_check_subfeatures>\n"; }
+    //if(glyphTrack.exprbin_flipstrand)  { paramXML += "<flip_strand>true</flip_strand>\n"; }
+    //if(glyphTrack.exprbin_binsize) { paramXML += "<bin_size>"+ glyphTrack.exprbin_binsize +"</bin_size>\n"; }
 
     if(glyphTrack.spstream_mode == "expression") {
-      paramXML += "<binning>"+glyphTrack.binning+"</binning>\n";
-      paramXML += "<binning>sum</binning>\n";
-      paramXML += "<overlap_mode>"+glyphTrack.overlap_mode+"</overlap_mode>\n";
-      if(!glyphTrack.script) {
-        //switch back to the legacy default histogram binning
-        paramXML += "<expression_binning>true</expression_binning>\n"; 
-      }
+      paramXML += glyphsTrack_expressionConfigXML(glyphTrack);
+      //paramXML += "<binning>"+glyphTrack.binning+"</binning>\n";
+      //paramXML += "<binning>sum</binning>\n";
+      //paramXML += "<overlap_mode>"+glyphTrack.overlap_mode+"</overlap_mode>\n";
+      //if(!glyphTrack.script) {
+      //  //switch back to the legacy default histogram binning
+      //  paramXML += "<expression_binning>true</expression_binning>\n"; 
+      //}
     }
 
     var glyphStyle = glyphTrack.glyphStyle;
@@ -11847,8 +12185,7 @@ function gLyphsDuplicateTrack(trackID) {
   gLyphsDrawTrack(trackID2);  //this creates empty tracks with the "loading" tag
 
   prepareTrackXHR(trackID2);
-  gLyphsAutosaveConfig();
-  gLyphsInitSearchFromTracks(glyphTrack.glyphsGB); //rebuild
+  glyphTrack.glyphsGB.autosave();
 }
 
 
@@ -11881,8 +12218,7 @@ function removeTrack(trackID) {
 
   gLyphsDrawExpressionPanel(glyphTrack.glyphsGB);
   //displayProbeInfo();  //old system not used anymore
-  gLyphsAutosaveConfig();
-  gLyphsInitSearchFromTracks(glyphTrack.glyphsGB); //rebuild
+  glyphTrack.glyphsGB.autosave();
 }
 
 //----- move/drag/resize section
@@ -11899,7 +12235,7 @@ function endDrag() {
     current_resizeTrack = null;
 
     gLyphsDrawTrack(trackID);
-    //gLyphsAutosaveConfig();
+    //glyphTrack.glyphsGB.autosave();
   }
 
   document.body.style.cursor = 'default';
@@ -11931,7 +12267,7 @@ function moveTrack(mode, trackID) {
         glyphset.insertBefore(current_dragTrack.trackDiv, current_dragTrack.move_snap_container); //moves it
         glyphset.removeChild(current_dragTrack.move_snap_container); 
         current_dragTrack.move_snap_container = null;
-        gLyphsAutosaveConfig();
+        current_dragTrack.glyphsGB.autosave();
       }
       
       current_dragTrack.is_moving = false;
@@ -12201,6 +12537,7 @@ function selectTrackRegion(mode, trackID, featureID) {
     glyphTrack.delay_experiment_draw = false;
     glyphTrack.experiment_ranksum_enrichment = null; //clear this so it recalcs
     currentSelectTrackID = null;
+    console.log("enddrag xstart:"+glyphTrack.selection.xstart+"  xend:"+glyphTrack.selection.xend+"  featureID:"+featureID);
     if(glyphTrack.selection.xend == glyphTrack.selection.xstart) {
       //single point click so no selection
       glyphTrack.selection = null;
@@ -12210,23 +12547,19 @@ function selectTrackRegion(mode, trackID, featureID) {
         if(fidx == featureID) {
           var obj = glyphTrack.feature_array[fidx];
           if(glyphTrack.selected_feature && !glyphTrack.selected_feature.id && !obj.id) {
-            glyphTrack.selected_feature = null;
-            gLyphsProcessFeatureSelect(glyphTrack.glyphsGB); //clear feature selection
+            gLyphsTrackSelectFeature(glyphTrack); //clear feature selection
           } else {
-            glyphTrack.selected_feature = obj;
-            console.log("set glyphTrack.selected_feature "+obj.name+"  "+obj.id);
-            gLyphsProcessFeatureSelect(glyphTrack.glyphsGB, obj);
+            console.log("set glyphTrack.selected_feature "+obj.name+" id["+obj.id+"] fidx["+obj.fidx+"]");
+            gLyphsTrackSelectFeature(glyphTrack, obj);
           }
           gLyphsRenderTrack(glyphTrack);
           gLyphsDrawTrack(trackID);
         } else {
           console.log("feature select by ID not fidx");
           var feature = eedbGetObject(featureID);
-          glyphTrack.selected_feature = feature;
-          gLyphsProcessFeatureSelect(glyphTrack.glyphsGB, feature);
+          gLyphsTrackSelectFeature(glyphTrack, feature);
           gLyphsRenderTrack(glyphTrack);
           gLyphsDrawTrack(trackID);
-          //gLyphsLoadObjectInfo(featureID);
         }
       } else {
         //single point click not on feature will recenter
@@ -12237,8 +12570,7 @@ function selectTrackRegion(mode, trackID, featureID) {
           glyphTrack.last_select_point = chrpos;    
         }
         if(glyphTrack.selected_feature) { 
-          glyphTrack.selected_feature = null;
-          gLyphsProcessFeatureSelect(glyphTrack.glyphsGB); //clear feature selection
+          gLyphsTrackSelectFeature(glyphTrack); //clear feature selection
           gLyphsRenderTrack(glyphTrack);
           gLyphsDrawTrack(trackID);
         } else {
@@ -12252,8 +12584,7 @@ function selectTrackRegion(mode, trackID, featureID) {
       glyphTrack.selection.chrom_end=t; 
     }
     if(!featureID && glyphTrack.selected_feature) {
-      glyphTrack.selected_feature = null;
-      gLyphsProcessFeatureSelect(glyphTrack.glyphsGB); //clear feature selection
+      gLyphsTrackSelectFeature(glyphTrack); //clear feature selection
       gLyphsRenderTrack(glyphTrack);
       gLyphsDrawTrack(trackID);
     } else if(glyphTrack.glyphStyle=="experiment-heatmap") {
@@ -12282,6 +12613,103 @@ function selectTrackRegion(mode, trackID, featureID) {
 }
 
 
+function gLyphsTrackSelectFeature(glyphTrack, feature) {
+  if(!glyphTrack) { return; }
+  
+  //clear previous selections
+  //if(!feature && glyphTrack.selected_feature) { console.log("gLyphsTrackSelectFeature clear selected_feature"); }
+  if(glyphTrack.glyphsGB) { glyphTrack.glyphsGB.selected_feature = null;}
+  glyphTrack.selected_feature = null;
+  glyphTrack.search_select_filter = "";
+  for(var i=0; i<glyphTrack.feature_array.length; i++) {
+    var tf = glyphTrack.feature_array[i];
+    if(tf) { tf.search_selected = false; }
+  }
+  if(!feature) {
+    zenbuDisplayFeatureInfo(); //clears panel
+    return; 
+  }
+  if(feature.classname != "Feature") { return; }
+
+  //check if metadata/fullload has heppened, if not request it
+  if(feature.id && !feature.full_load) { feature.request_full_load = true; }
+
+  if(glyphTrack.selected_feature == feature) {
+    if(!gLyphsCenterOnFeature(glyphTrack.glyphsGB, glyphTrack.selected_feature)) {
+      //returns false if centering did not change
+      zenbuDisplayFeatureInfo(glyphTrack.selected_feature);
+    }
+  } else {
+    console.log("gLyphsTrackSelectFeature set selected_feature");
+    glyphTrack.selected_feature = feature;
+    zenbuDisplayFeatureInfo(feature);
+  }
+  gLyphsDrawExpressionPanel(glyphTrack.glyphsGB);
+  if(glyphTrack.glyphsGB.selectionCallback) {
+    glyphTrack.glyphsGB.selectionCallback();
+  }
+}
+
+
+function gLyphsTrackSearchSelect(glyphTrack, filter) {
+  if(!glyphTrack) { return; }
+  glyphTrack.selected_feature = null; //clear previous selected_feature
+  glyphTrack.search_select_filter = filter;
+  //console.log("gLyphsTrackSearchSelect "+glyphTrack.trackID+" ["+filter+"]");
+
+  for(var i=0; i<glyphTrack.feature_array.length; i++) {
+    var feature = glyphTrack.feature_array[i];
+    if(!feature) { continue; }
+    gLyphsTrackSearchTestObject(glyphTrack, feature);
+    if(feature.search_selected) {
+      console.log("gLyphsTrackSearchSelect "+glyphTrack.trackID+" ["+filter+"] found match "+feature.id);
+    }
+  }
+}
+
+
+function gLyphsTrackSearchTestObject(glyphTrack, feature) {
+  if(!feature) { return; }
+  feature.search_selected = false;
+  if(!glyphTrack.search_select_filter) { return; }
+  var filter = glyphTrack.search_select_filter.toLowerCase();
+  
+  if(feature.name && (feature.name.toLowerCase().indexOf(filter) != -1)) {
+    feature.search_selected = true;
+    glyphTrack.selected_feature = feature; 
+    return;
+  }
+  if(feature.source && feature.source.category && (feature.source.category.toLowerCase().indexOf(filter) != -1)) {
+    feature.search_selected = true;
+    glyphTrack.selected_feature = feature; 
+    return;
+  }
+  if(feature.source && feature.source.name && (feature.source.name.toLowerCase().indexOf(filter) != -1)) {
+    feature.search_selected = true;
+    glyphTrack.selected_feature = feature; 
+    return;
+  }
+  if(feature.chromloc && (feature.chromloc.toLowerCase().indexOf(filter) != -1)) {
+    feature.search_selected = true;
+    glyphTrack.selected_feature = feature; 
+    return;
+  }
+  for(var tag in feature.mdata) { //new common mdata[].array system
+    if(feature.search_selected) { return; }
+    var value_array = feature.mdata[tag];
+    for(var idx1=0; idx1<value_array.length; idx1++) {
+      if(feature.search_selected) { return; }
+      var value = value_array[idx1];
+      if(value && (value.toLowerCase().indexOf(filter) != -1)) {
+        feature.search_selected = true;
+        glyphTrack.selected_feature = feature; 
+        return;
+      }
+    }
+  }
+}
+
+
 function magnifyToSelection(trackID) {
   var glyphTrack = glyphsTrack_global_track_hash[trackID];
   if(glyphTrack == null) { return; }
@@ -12291,10 +12719,9 @@ function magnifyToSelection(trackID) {
   gLyphsSetLocation(glyphTrack.glyphsGB, glyphTrack.glyphsGB.asm, glyphTrack.glyphsGB.chrom, selection.chrom_start, selection.chrom_end);
   glyphTrack.selection = null;
 
-  eedbEmptySearchResults(glyphTrack.glyphsGB.searchSetID);
+  gLyphsEmptySearchResults(glyphTrack.glyphsGB);
   gLyphsReloadRegion(glyphTrack.glyphsGB);
-  //dhtmlHistory.add("#config="+glyphTrack.glyphsGB.configUUID +";loc="+glyphTrack.glyphsGB.asm+"::"+glyphTrack.glyphsGB.chrom+":"+glyphTrack.glyphsGB.start+".."+glyphTrack.glyphsGB.end);
-  gLyphsChangeDhtmlHistoryLocation();
+  glyphTrack.glyphsGB.urlHistoryUpdate();
 }
 
 
@@ -12438,7 +12865,7 @@ function gLyphsShowScripts(trackID) {
     
   var scripts_array = glyphTrack.predef_scripts;
   if(!scripts_array) { return; }
-  scripts_array.sort(gLyphs_configs_sort_func);  
+  scripts_array.sort(gLyphs_name_sort_func);  
   
   var div1 = scriptsDiv.appendChild(document.createElement('div'));
   div1.setAttribute("style", "border:1px black solid; background-color:snow; overflow:auto; width:100%; max-height:250px;");
@@ -12478,9 +12905,12 @@ function gLyphsShowScripts(trackID) {
 }
 
 
-function gLyphs_configs_sort_func(a,b) {
+function gLyphs_name_sort_func(a,b) {
   if(!a) { return 1; }
   if(!b) { return -1; }
+  
+  if(a.exact_match) { return -1; }
+  if(b.exact_match) { return 1; }
   
   var an = String(a.name).toUpperCase();
   var bn = String(b.name).toUpperCase();
@@ -13161,4 +13591,205 @@ function gLyphsTrackFetchSourcesInfoResponse(trackID) {
   }
 }
 
+//-------------------------------------------------------------
+
+
+
+function gLyphsTrackSearchNamedFeatures(glyphTrack, query) {
+  if(!glyphTrack) { return; }
+    
+  if(!glyphTrack.nameSearchDiv) { glyphTrack.nameSearchDiv = document.createElement('div'); }
+  glyphTrack.named_feature_array = [];  
+    
+  if(glyphTrack.noNameSearch) { return; }
+    
+  //if(glyphTrack.nameSearchXHR) { return; }  //one already out
+  var searchDiv = glyphTrack.nameSearchDiv;
+  searchDiv.style.display = 'block';
+  searchDiv.style.fontSize = "11px";
+  searchDiv.onmouseout= eedbClearSearchTooltip;
+  searchDiv.innerHTML = "";
+
+  var tspan = searchDiv.appendChild(document.createElement('span'));
+  tspan.style = "font-weight:bold;color:Navy;";
+  tspan.innerHTML = glyphTrack.title+"::";
+  var tspan = searchDiv.appendChild(document.createElement('span'));
+  tspan.style.paddingLeft = "3px";
+  tspan.innerHTML = "searching...";
+
+  var paramXML = "<zenbu_query>";
+  paramXML += "<source_ids>"+ glyphTrack.source_ids +"</source_ids>"; 
+  //paramXML += "<mode>search</mode><format>descxml</format><collab>all</collab>\n";
+  paramXML += "<mode>search</mode><limit>1000</limit>";
+  paramXML += "<format>fullxml</format>";
+  if(!glyphTrack.allowUnmapped) { paramXML += "<skip_no_location>true</skip_no_location>"; }
+  paramXML += "<name>"+query+"</name>";
+  paramXML += "</zenbu_query>";
+  
+  console.log("gLyphsTrackSearchNamedFeatures "+glyphTrack.trackID);
+  //console.log("gLyphsTrackSearchNamedFeatures "+paramXML);
+  
+  glyphTrack.nameSearchInfo = { total:0, matchCount:0, filtered:0, current_query:query };
+
+  var xhr=GetXmlHttpObject();
+  glyphTrack.nameSearchXHR = xhr;
+  xhr.open("POST", eedbSearchCGI, true); //async
+  xhr.setRequestHeader("Content-Type", "application/xml; charset=UTF-8;");
+  xhr.onreadystatechange= function(id) { return function() { gLyphsTrackNameSearchResponse(id); };}(glyphTrack.trackID);
+  xhr.send(paramXML);
+}
+
+
+function gLyphsTrackNameSearchResponse(trackID) {
+  if(!trackID) { return; }
+  var glyphTrack = glyphsTrack_global_track_hash[trackID];
+  if(!glyphTrack) { return; }
+  
+  var xhr = glyphTrack.nameSearchXHR;
+  if(!xhr) { return; }
+
+  if(xhr.responseXML == null) return;
+  if(xhr.readyState!=4) return;
+  if(xhr.status!=200) { return; }
+  if(xhr.responseXML == null) return;
+  
+  var xmlDoc=xhr.responseXML.documentElement;
+  if(xmlDoc==null) { return; }
+  console.log("gLyphsTrackNameSearchResponse "+glyphTrack.trackID+" has response");
+
+  //search stats  
+  var searchInfo = glyphTrack.nameSearchInfo;
+  var xml_summary = xmlDoc.getElementsByTagName("result_count");
+  if(xml_summary.length>0) {
+    searchInfo.total      = parseInt(xml_summary[0].getAttribute("total"))
+    searchInfo.filtered   = parseInt(xml_summary[0].getAttribute("filtered"));
+    searchInfo.matchCount = parseInt(xml_summary[0].getAttribute("match_count"))
+    if(searchInfo.filtered>0 && searchInfo.matchCount==0) { 
+      searchInfo.matchCount=searchInfo.filtered;
+    }
+  }
+
+  var xml_features = [];
+  var children = xmlDoc.childNodes;
+  for (var i = 0; i < children.length; i++) {
+    var childDOM = children[i]
+    if(!childDOM.tagName) { continue; }
+    //console.log("child tagName ["+childDOM.tagName+"]");
+    if(childDOM.tagName == "feature") {
+      xml_features.push(childDOM);
+    }
+  }  
+  for(i=0; i<xml_features.length; i++) { 
+    var featureXML = xml_features[i];
+    var feature = convertFullFeatureXML(glyphTrack, featureXML);
+    //var feature = convertFeatureXML(glyphTrack, featureXML);
+    if(feature) {
+      glyphTrack.named_feature_array.push(feature);
+      feature.trackID = glyphTrack.trackID;
+    }
+  }
+  
+  //find the exact_match and move to front via sort
+  for(var i=0; i<glyphTrack.named_feature_array.length; i++) {
+    var feature = glyphTrack.named_feature_array[i];
+    if(feature.name.toLowerCase() == searchInfo.current_query.toLowerCase()) { feature.exact_match = true; }
+  }
+  glyphTrack.named_feature_array.sort(gLyphs_name_sort_func);
+
+  for(var i=0; i<glyphTrack.named_feature_array.length; i++) {
+    var feature = glyphTrack.named_feature_array[i];
+    feature.fidx = i;
+  }
+
+  console.log("gLyphsTrackNameSearchResponse "+glyphTrack.trackID+" returned features:"+(glyphTrack.named_feature_array.length)+
+    "  total:"+searchInfo.total+"  filtered:"+searchInfo.filtered+"  matchCount:"+searchInfo.matchCount);
+
+  gLyphsTrackDisplayNameSearchResults(glyphTrack);
+}
+
+
+function gLyphsTrackDisplayNameSearchResults(glyphTrack) {
+  if(!glyphTrack) { return; }
+  var searchDiv = glyphTrack.nameSearchDiv;
+  if(!searchDiv) return;
+  
+  searchDiv.style.display = 'block';
+  searchDiv.style.fontSize = "11px";
+  searchDiv.style.width = glyphTrack.glyphsGB.display_width+'px';
+  searchDiv.onmouseout= eedbClearSearchTooltip;
+  searchDiv.innerHTML = "";
+
+  if(glyphTrack.named_feature_array.length == 0) {
+    searchDiv.style.display = 'none';
+    return;
+  }
+    
+  if(glyphTrack.title) { 
+    var tspan = searchDiv.appendChild(document.createElement('span'));
+    tspan.style = "font-weight:bold;color:Navy;";
+    tspan.innerHTML = glyphTrack.title+"::";
+  }
+
+  if(glyphTrack.nameSearchInfo) { 
+    var searchInfo = glyphTrack.nameSearchInfo;
+    if(searchInfo.total==-1) {
+      //"Error in query";
+      searchDiv.style.display = 'none';
+      return;
+    } else if((searchInfo.filtered==0) && (searchInfo.matchCount==0)) {
+      //searchInfo.total+" searched : No match found";
+      searchDiv.style.display = 'none';
+      return;
+    } else if(searchInfo.filtered > searchInfo.matchCount) {
+      var tspan = searchDiv.appendChild(document.createElement('span'));
+      tspan.innerHTML = searchInfo.matchCount+" matches : Too many to display";
+      searchDiv.style.display = 'block';
+    }
+  }
+  searchDiv.style.display = 'block';
+
+  var tspan = searchDiv.appendChild(document.createElement('span'));
+  tspan.style.paddingLeft = "5px";
+  tspan.innerHTML = "(found " +searchInfo.filtered;
+  if(searchInfo.filtered < searchInfo.total) { tspan.innerHTML += ", from " +searchInfo.total; }
+  tspan.innerHTML += ") ";
+
+  for(var i=0; i<glyphTrack.named_feature_array.length; i++) {
+    var feature = glyphTrack.named_feature_array[i];
+    
+    var tspan = searchDiv.appendChild(document.createElement('span'));
+    tspan.style.paddingLeft = "5px";
+    tspan.style.color = "blue";
+    tspan.style.display = "inline-block";
+    tspan.onclick = function(idx) { return function() { gLyphsTrackNameSearchSelect(glyphTrack.trackID, idx); };}(feature.fidx);
+    tspan.onmouseover = function(idx) { return function() { gLyphsTrackNameSearchFeatureInfo(glyphTrack.trackID, idx); };}(feature.fidx);
+
+    tspan.innerHTML = feature.name;
+    if(feature.name.toLowerCase() == searchInfo.current_query.toLowerCase()) { 
+      tspan.style.fontSize = "12px";
+      tspan.style.fontWeight = "bold";
+      //if(searchDiv.exact_match_autoclick) { eedbSearchSingleSelect(searchID, obj.fid); }
+    }
+  }
+  //eedbDisplaySearchSetHasResults(searchTrack.searchSetID);
+}
+
+
+function gLyphsTrackNameSearchFeatureInfo(trackID, feature_idx) {
+  if(!trackID) { return; }
+  var glyphTrack = glyphsTrack_global_track_hash[trackID];
+  if(!glyphTrack) { return; }
+  var feature = glyphTrack.named_feature_array[feature_idx];
+  eedbDisplayTooltipObj(feature);
+}
+
+function gLyphsTrackNameSearchSelect(trackID, feature_idx) {
+  if(!trackID) { return; }
+  var glyphTrack = glyphsTrack_global_track_hash[trackID];
+  if(!glyphTrack) { return; }
+  var feature = glyphTrack.named_feature_array[feature_idx];
+  console.log("gLyphsTrackNameSearchSelect "+trackID+" selected_feature: "+feature.name+"  "+feature.chromloc);
+  glyphTrack.glyphsGB.selected_feature = feature;
+  gLyphsCenterOnFeature(glyphTrack.glyphsGB, feature);
+}
 

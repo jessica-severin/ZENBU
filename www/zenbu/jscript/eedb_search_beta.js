@@ -763,7 +763,14 @@ function eedbFeatureTooltip(feature) {
   if(feature.description) { object_html += "<div>" + encodehtml(feature.description)+ "</div>"; }
   if(feature.gene_names) { object_html += "<div>alias: " + feature.gene_names +"</div>"; }
   if(feature.entrez_id) { object_html += "<div>EntrezID: " + feature.entrez_id +"</div>"; }
-  if(feature.chromloc) { object_html += "<div>location: " + genloc + feature.chromloc +"</div>"; }
+  if(feature.chromloc) { 
+    object_html += "<div>location: " + genloc + feature.chromloc; 
+    var len = feature.end - feature.start+1;
+    if(len > 1000000) { len = Math.round(len/100000)/10.0 + "mb"; }
+    else if(len > 1000) { len = Math.round(len/100)/10.0 + "kb"; }
+    else { len += "bp"; }
+    object_html += " ("+len+")</div>"; 
+  }
   if(feature.maxexpress) { object_html += "<div>maxexpress: " + feature.maxexpress + "</div>"; }
   if(feature.score || feature.exp_total) { 
     object_html += "<div>";
@@ -1215,6 +1222,7 @@ function eedbParseFeatureData(xmlFeature, feature) {
   feature.start        = -1;
   feature.end          = -1;
   feature.description  = "";
+  feature.category     = "";
   feature.gene_names   = "";
   
   if(xmlFeature.getAttribute("fsrc")) { feature.source_name = xmlFeature.getAttribute("fsrc"); }
@@ -1466,7 +1474,20 @@ function eedbParseEdgeXML(edgeXML, edge) {
     if(!(edge.weights[weight.datatype])) { edge.weights[weight.datatype] = new Array; }
     edge.weights[weight.datatype].push(weight);
   }
-
+  
+  var f1 = edgeXML.getElementsByTagName("feature1");
+  if(f1 && f1.length>0) { 
+    var featureXML = f1[0].firstChild;
+    var feature = eedbParseFeatureFullXML(featureXML);
+    if(feature) { edge.feature1 = feature; }
+  }
+  var f2 = edgeXML.getElementsByTagName("feature2");
+  if(f2 && f2.length>0) { 
+    var featureXML = f2[0].firstChild;
+    var feature = eedbParseFeatureFullXML(featureXML);
+    if(feature) { edge.feature2 = feature; }
+  }
+  
   return edge;
 }
 
@@ -1483,6 +1504,7 @@ function eedbParseDataSourceXML(sourceXML, source) {
   source.platform     = sourceXML.getAttribute("platform");
   source.series_point = sourceXML.getAttribute("series_point");
   source.feature_count = 0;
+  source.edge_count    = 0;
   source.platform     = '';
   source.assembly     = '';
   source.description  = "";
@@ -1506,6 +1528,9 @@ function eedbParseDataSourceXML(sourceXML, source) {
   if(sourceXML.getAttribute("feature_count")) {
     source.feature_count  = parseInt(sourceXML.getAttribute("feature_count"));
   }
+  if(sourceXML.getAttribute("edge_count")) {
+    source.edge_count  = parseInt(sourceXML.getAttribute("edge_count"));
+  }
   source.platform     = '';
   source.assembly     = '';
   source.description  = "";
@@ -1513,7 +1538,6 @@ function eedbParseDataSourceXML(sourceXML, source) {
   source.ev_terms     = '';
   source.biosample    = '';
   source.treatment    = "";
-  source.feature_count = 0;
 
   if(source.id) {
     var zobj = unparse_dbid(source.id);
@@ -1690,40 +1714,33 @@ function eedbParseMetadata(eedbXML, eedbObject) {
     eedbObject.species_name = "";
   }
 
-  var syms = eedbXML.getElementsByTagName("symbol");
-  var mdata = eedbXML.getElementsByTagName("mdata");
-  for(j=0; j<syms.length; ++j) {
-    var tag   = syms[j].getAttribute("type");
-    var value = syms[j].getAttribute("value");
+  var children = eedbXML.childNodes;
+  for(var j=0; j<children.length; j++) {
+    var mdataDOM = children[j]
+    if(mdataDOM.tagName != "symbol") { continue; }
 
+    var tag   = mdataDOM.getAttribute("type");
+    var value = mdataDOM.getAttribute("value");
+    
     if(!value) { continue; }
     if(/^UNDEFINED/.exec(value)) { continue; }
 
-    //if(!(eedbObject.mdata[tag])) { eedbObject.mdata[tag] = value; }
-    //else { eedbObject.mdata[tag] += ", " + value; }
-
     if(!(eedbObject.mdata[tag])) { eedbObject.mdata[tag] = new Array; }
     eedbObject.mdata[tag].push(value);
-
-    //if(tag == "eedb:shared_in_collaboration") { 
-    //  if(!eedbObject.collaboration_id_hash) { eedbObject.collaboration_id_hash = new Object; }
-    //  var collaboration_uuid = syms[j].getAttribute("value"); 
-    //  eedbObject.collaboration_id_hash[collaboration_uuid] = new Object;
-    //}
   }
-  for(j=0; j<mdata.length; ++j) {
-    if(!(mdata[j].firstChild)) { continue; }
-    if(!(mdata[j].firstChild.nodeValue)) { continue; }
+  for(var j=0; j<children.length; j++) {
+    var mdataDOM = children[j]
+    if(mdataDOM.tagName != "mdata") { continue; }
 
-    var tag   = mdata[j].getAttribute("type")
-    var value = mdata[j].firstChild.nodeValue;
+    if(!(mdataDOM.firstChild)) { continue; }
+    if(!(mdataDOM.firstChild.nodeValue)) { continue; }
+
+    var tag   = mdataDOM.getAttribute("type")
+    var value = mdataDOM.firstChild.nodeValue;
     if(tag == "osc_header") { continue; }
     if(tag == "oscfile_colnum") { continue; }
     if(!value) { continue; }
     if(/^UNDEFINED/.exec(value)) { continue; }
-
-    //if(!(eedbObject.mdata[tag])) { eedbObject.mdata[tag] = value; }
-    //else { eedbObject.mdata[tag] += ", " + value; }
 
     if(!(eedbObject.mdata[tag])) { eedbObject.mdata[tag] = new Array; }
     eedbObject.mdata[tag].push(value);
@@ -1825,13 +1842,16 @@ function eedbParseSimpleMetadata(eedbXML, eedbObject) {
   if(!eedbXML) { return; }
   if(!eedbObject) { return; }
   
-  eedbObject.mdata = new Object;  //hash to array of values
+  if(!eedbObject.mdata) { eedbObject.mdata = new Object; } //hash to array of values
   
-  var syms = eedbXML.getElementsByTagName("symbol");
-  var mdata = eedbXML.getElementsByTagName("mdata");
-  for(j=0; j<syms.length; ++j) {
-    var tag   = syms[j].getAttribute("type");
-    var value = syms[j].getAttribute("value");
+  var children = eedbXML.childNodes;
+
+  for(var j=0; j<children.length; j++) {
+    var mdataDOM = children[j]
+    if(mdataDOM.tagName != "symbol") { continue; }
+
+    var tag   = mdataDOM.getAttribute("type");
+    var value = mdataDOM.getAttribute("value");
     
     if(!value) { continue; }
     if(/^UNDEFINED/.exec(value)) { continue; }
@@ -1839,12 +1859,14 @@ function eedbParseSimpleMetadata(eedbXML, eedbObject) {
     if(!(eedbObject.mdata[tag])) { eedbObject.mdata[tag] = new Array; }
     eedbObject.mdata[tag].push(value);
   }
-  for(j=0; j<mdata.length; ++j) {
-    if(!(mdata[j].firstChild)) { continue; }
-    if(!(mdata[j].firstChild.nodeValue)) { continue; }
+  for(var j=0; j<children.length; j++) {
+    var mdataDOM = children[j]
+    if(mdataDOM.tagName != "mdata") { continue; }
+    if(!(mdataDOM.firstChild)) { continue; }
+    if(!(mdataDOM.firstChild.nodeValue)) { continue; }
     
-    var tag   = mdata[j].getAttribute("type")
-    var value = mdata[j].firstChild.nodeValue;
+    var tag   = mdataDOM.getAttribute("type")
+    var value = mdataDOM.firstChild.nodeValue;
     if(tag == "osc_header") { continue; }
     if(tag == "oscfile_colnum") { continue; }
     if(!value) { continue; }
@@ -2471,6 +2493,17 @@ function eedbDisplaySourceInfo(source, user_match) {
     tspan = tdiv.appendChild(document.createElement('span'));
     tspan.setAttribute('style', "color:darkgray;");
     tspan.innerHTML = source.feature_count;
+  }
+  if(source.classname== "EdgeSource") {
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tdiv.setAttribute('style', "float:left; margin: 0px 4px 4px 4px;");
+
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "font-weight: bold; ");
+    tspan.innerHTML = "edge count: ";
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "color:darkgray;");
+    tspan.innerHTML = source.edge_count;
   }
 
   tdiv = main_div.appendChild(document.createElement('div'));

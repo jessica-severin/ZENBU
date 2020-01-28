@@ -212,12 +212,7 @@ function zenbuChartElement_generateConfigDOM() {
 //TODO: these are placeholders for now, still need to figure out how to integrate subclass into main code
 
 function zenbuChartElement_elementEvent(mode, value, value2) {
-  //var datasourceElement = this;
-  //if(this.datasourceElementID) {
-  //  var ds = current_report.elements[this.datasourceElementID];
-  //  if(ds) { datasourceElement = ds; }
-  //  else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  //}
+  //var datasourceElement = this.datasource();
 }
 
 
@@ -319,12 +314,8 @@ function zenbuChartElement_postprocess() {
 
   if(this.display_type=="3D") { this.display_type = "scatter3D"; } //backward compatability
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    datasourceElement = current_report.elements[this.datasourceElementID];
-    this.datasourceElement = datasourceElement;
-    this.loading = datasourceElement.loading;
-  }
+  var datasourceElement = this.datasource();
+  this.loading = datasourceElement.loading;
   if(!datasourceElement) { return; }
 
   if(this.dependant_timestamp != datasourceElement.loaded_timestamp) {
@@ -432,12 +423,7 @@ function zenbuChartElement_postprocessBubbleChart() {
 
   var t0 = performance.now();
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
 
   //backward compatability hack for converting axis.datatype to signal_active
   if(!this.backward_compat_check_dataypes) {
@@ -906,12 +892,7 @@ function zenbuChartElement_postprocessPlotly() {
   console.log("zenbuChartElement_postprocessPlotly");
   var t0 = performance.now();
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
 
   //backward compatability hack for converting axis.datatype to signal_active
   if(!this.backward_compat_check_dataypes) {
@@ -1561,12 +1542,7 @@ function zenbuChartElement_postprocessBarChart() {
 
   var t0 = performance.now();
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
 
   this.max_value = 0;
   this.xaxis.min_value = -1;
@@ -1723,12 +1699,7 @@ function zenbuChartElement_prepareBarChartSignal(signal_dtype) {
 
   var t0 = performance.now();
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
 
   if(datasourceElement.datasource_mode == "feature") {    
     //this.feature_array is clone of datasource.feature_array if this!=datasource to allow internal sort
@@ -1864,12 +1835,7 @@ function zenbuChartElement_createBarChartDataset(signal_dtype) {
 
   var t0 = performance.now();
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
 
   var dataset = {};
 
@@ -1974,12 +1940,7 @@ function zenbuChartElement_postprocessLegendCategory() {
   if(!this.category_datatype) { return; }
   console.log("zenbuChartElement_postprocessLegendCategory "+this.elementID);
     
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
   
   if(!datasourceElement.dtype_columns) { return; }
   var columns = datasourceElement.dtype_columns;
@@ -2113,12 +2074,7 @@ function zenbuChartElement_showSelections() {
   var elementID = this.elementID;
   console.log("zenbuChartElement_showSelections ["+elementID+"]  selected_id="+this.selected_id);
   
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
 
   var select_id = this.selected_id;
   //if(this.selected_edge) {
@@ -2503,13 +2459,7 @@ function zenbuChartElement_draw() {
   var main_div = this.main_div;
   if(!main_div) { return; }
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
-
+  var datasourceElement = this.datasource();
 
   //if(!this.chart_data || !this.x_feature || !this.y_feature || datasourceElement.filter_count==0) {
   //if(!this.chart_data || !this.x_feature || !this.y_feature) {
@@ -2581,12 +2531,7 @@ function zenbuChartElement_drawBarChart() {
   if(!main_div) { return; }
   var mainRect = main_div.getBoundingClientRect();
   
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
   
   var signal_dtype = this.datatypes[this.xaxis.datatype];
 
@@ -2782,12 +2727,7 @@ function ZenbuChartElement_drawPlotly3D() {
   var main_div = this.main_div;
   if(!main_div) { return; }
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
 
   var content_width = 100;
   var content_height = 100;
@@ -2851,24 +2791,14 @@ function ZenbuChartElement_drawPlotlyTernary() {
   var main_div = this.main_div;
   if(!main_div) { return; }
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
 
   /*
   var main_div = this.main_div;
   if(!main_div) { return; }
   var mainRect = main_div.getBoundingClientRect();
   
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
   
   var signal_dtype = this.datatypes[this.xaxis.datatype];
 
@@ -2934,7 +2864,7 @@ function zenbuChartElement_plotlyClickEvent(eventdata, datasourceElement) {
   if(!point) { return; }
   if(point.customdata) { //feature/edge/ object
     console.log("plotly clicked fid:"+point.customdata.id+"  name:"+point.customdata.name);
-    reportElementEvent(datasourceElement.elementID, 'select', point.customdata.id);
+    reportElementUserEvent(datasourceElement, 'select', point.customdata.id);
   }
 }
 
@@ -2970,14 +2900,7 @@ function zenbuChartElement_configSubpanel() {
   
   var configdiv = this.config_options_div;
 
-  var datasourceElement = this;
-  var datasourceElementID = this.datasourceElementID;
-  if(this.newconfig && this.newconfig.datasourceElementID != undefined) { datasourceElementID = this.newconfig.datasourceElementID; }
-  if(datasourceElementID) {
-    datasourceElement = current_report.elements[datasourceElementID];
-    this.datasourceElement = datasourceElement;
-  }
-  if(!datasourceElement) { datasourceElement = this; }
+  var datasourceElement = this.datasource();
     
   var datasource_mode = datasourceElement.datasource_mode;
   if(this.newconfig && this.newconfig.datasource_mode != undefined) { 
@@ -3892,12 +3815,7 @@ function reportsChartTooltipEvent(elementID, tooltipItems, data, mode) {
   if(!reportElement) { return ""; }
   if(tooltipItems.length == 0) { return ""; }
 
-  var datasourceElement = reportElement;
-  if(reportElement.datasourceElementID) {
-    var ds = current_report.elements[reportElement.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+reportElement.datasourceElementID+"]"); }
-  }
+  var datasourceElement = reportElement.datasource();
 
   var rtnValue = new Array; //doh finally found correct documentation, get multiple lines via array of strings
   tooltipItems.forEach(function(tooltipItem) {
@@ -3992,12 +3910,7 @@ function reportsChartClickEvent(event, eventItems) {
   if(!reportElement) { return; }
   //console.log("first gene " + data.datasets[0].data[0].gene_name);
   
-  var datasourceElement = reportElement;
-  if(reportElement.datasourceElementID) {
-    var ds = current_report.elements[reportElement.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+reportElement.datasourceElementID+"]"); }
-  }
+  var datasourceElement = reportElement.datasource();
   
   var names = "";
   console.log("reportsChartClickEvent ["+reportElement.elementID+"] datasource["+datasourceElement.elementID+"] eventItems.length: " + eventItems.length); //should be an array of active elements what ever that means
@@ -4021,11 +3934,11 @@ function reportsChartClickEvent(event, eventItems) {
     }
     if(feature) { 
       console.log("click found feature:"+feature.name); 
-      reportElementEvent(datasourceElement.elementID, 'select', feature.id);
+      reportElementUserEvent(datasourceElement, 'select', feature.id);
     }
     if(edge) { 
       console.log("click found edge:"+edge.id);
-      reportElementEvent(datasourceElement.elementID, 'select', edge.id);
+      reportElementUserEvent(datasourceElement, 'select', edge.id);
     }
     //var fields="";
     //for(var tok in data_obj) { fields += tok+", "; }
@@ -4036,20 +3949,19 @@ function reportsChartClickEvent(event, eventItems) {
     if(data_obj.feature2_id) {
       if(datasourceElement) {
         //TODO select in datasourceElementID (ex: click in chart cascades up to dependant table)
-        //reportElementEvent(reportElement.datasourceElementID, 'select', data_obj.edge_id);
-        reportElementEvent(datasourceElement.elementID, 'select', data_obj.feature2_id);
+        reportElementUserEvent(datasourceElement, 'select', data_obj.feature2_id);
       }
     }
     if(data_obj.feature_id) {
       if(reportElement && reportElement.datasourceElementID) {
         //TODO select in datasourceElementID (ex: click in chart cascades up to dependant table)
-        reportElementEvent(datasourceElement.elementID, 'select', data_obj.feature_id);
+        reportElementUserEvent(datasourceElement, 'select', data_obj.feature_id);
       }
     }
     if(data_obj.edge_id) {
       if(reportElement && reportElement.datasourceElementID) {
         //TODO select in datasourceElementID (ex: click in chart cascades up to dependant table)
-        reportElementEvent(datasourceElement.elementID, 'select', data_obj.edge_id);
+        reportElementUserEvent(datasourceElement, 'select', data_obj.edge_id);
       }
     }
 

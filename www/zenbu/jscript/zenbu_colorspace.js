@@ -59,7 +59,7 @@ function zenbuColorSpaceInterface(uniqID) {
     zenbuCSI.colorspace = "fire1";
     zenbuCSI.single_color = "#0000FF";
     zenbuCSI.enableScaling = true;
-    zenbuCSI.min_signal = 0;
+    zenbuCSI.min_signal = "auto";
     zenbuCSI.max_signal = "auto";
     zenbuCSI.logscale = false;
     zenbuCSI.invert = false;
@@ -142,8 +142,8 @@ function zenbuColorSpaceInterfaceUpdate(uniqID) {
   //first colorspace_category
   var div1 = zenbuCSI.appendChild(document.createElement('div'));
   var span1 = div1.appendChild(document.createElement('span'));
-  span1.setAttribute("style", "margin: 0px 0px 0px 7px;");
-  span1.appendChild(document.createTextNode("color options:"));
+  span1.setAttribute("style", "margin: 0px 0px 0px 0px;");
+  span1.appendChild(document.createTextNode("color:"));
 
   var select = div1.appendChild(document.createElement('select'));
   select.className = "dropdown";
@@ -261,7 +261,7 @@ function zenbuColorSpaceInterfaceUpdate(uniqID) {
     var levelInput = div2.appendChild(document.createElement('input'));
     levelInput.className = "sliminput";
     //levelInput.style.fontSize = "10px";
-    levelInput.setAttribute('size', "5");
+    levelInput.setAttribute('size', "10");
     levelInput.setAttribute('type', "text");
     levelInput.setAttribute('value', min_signal);
     levelInput.setAttribute("onkeyup", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'min_signal', this.value);");
@@ -273,7 +273,7 @@ function zenbuColorSpaceInterfaceUpdate(uniqID) {
     var levelInput = div2.appendChild(document.createElement('input'));
     levelInput.className = "sliminput";
     //levelInput.style.fontSize = "10px";
-    levelInput.setAttribute('size', "5");
+    levelInput.setAttribute('size', "10");
     levelInput.setAttribute('type', "text");
     levelInput.setAttribute('value', max_signal);
     levelInput.setAttribute("onkeyup", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'max_signal', this.value);");
@@ -290,7 +290,7 @@ function zenbuColorSpaceInterfaceUpdate(uniqID) {
 function zenbuColorSpaceInterfaceReconfigParam(uniqID, param, value, altvalue) {
   var zenbuCSI = zenbuColorSpaceInterface_hash[uniqID];
   if(!zenbuCSI) { return; }
-  console.log("zenbuColorSpaceInterfaceReconfigParam["+uniqID+"] "+param+" value="+value+"  altvalue="+altvalue);
+  //console.log("zenbuColorSpaceInterfaceReconfigParam["+uniqID+"] "+param+" value="+value+"  altvalue="+altvalue);
 
   if(zenbuCSI.newconfig === undefined) {
     zenbuCSI.newconfig = new Object;
@@ -299,11 +299,11 @@ function zenbuColorSpaceInterfaceReconfigParam(uniqID, param, value, altvalue) {
 
   if(param == "min_signal") {  
     newconfig.min_signal = parseFloat(value); 
-    if(isNaN(newconfig.min_signal)) { newconfig.min_signal = 0; } 
+    if(isNaN(newconfig.min_signal)) { newconfig.min_signal = "auto"; } 
   }
   if(param == "max_signal") {  
     newconfig.max_signal = parseFloat(value); 
-    if(isNaN(newconfig.max_signal) || (newconfig.max_signal==0)) { newconfig.max_signal = "auto"; } 
+    if(isNaN(newconfig.max_signal)) { newconfig.max_signal = "auto"; } 
   }
   if(param == "logscale") { 
     if(value) { newconfig.logscale=1; }

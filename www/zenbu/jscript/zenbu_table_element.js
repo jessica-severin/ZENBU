@@ -120,13 +120,7 @@ function zenbuTableElement_generateConfigDOM() {
 //TODO: these are placeholders for now, still need to figure out how to integrate subclass into main code
 
 function zenbuTableElement_elementEvent(mode, value, value2) {
-  /*
-  //var datasourceElement = this;
-  //if(this.datasourceElementID) {
-  //  var ds = current_report.elements[this.datasourceElementID];
-  //  if(ds) { datasourceElement = ds; }
-  //  else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  //}
+  //var datasourceElement = this.datasource();
   if(mode == "page-size") {  
     var table_page_index = (this.table_page-1) * this.table_page_size;  //get old index
     this.table_page_size = Math.floor(value);
@@ -153,118 +147,13 @@ function zenbuTableElement_elementEvent(mode, value, value2) {
     this.table_page++;
     if(this.table_page > this.table_num_pages) { this.table_page = this.table_num_pages; }
   }
-
   if(mode == "column_sort") {
     if(this.sort_col == value) {
       this.sort_reverse = !this.sort_reverse;
     }
     this.sort_col = value;
+    reportsPostprocessElement(this.elementID);
   }
-  if(mode == "dtype_filter_select") {
-    this.dtype_filter_select = value;
-  }
-  if(mode == "dtype-title") {
-    var dtype = this.datatypes[value];
-    if(dtype) { dtype.title = value2; }
-    reportElementToggleSubpanel(elementID, 'refresh');
-  }
-  if(mode == "dtype-colnum") {
-    var dtype = this.datatypes[value];
-    if(dtype) {
-      if(parseInt(value2) < dtype.colnum) { dtype.colnum = parseInt(value2) - 0.5; }
-      else { dtype.colnum = parseInt(value2) + 0.5; }
-    }
-    reportElementToggleSubpanel(elementID, 'refresh');
-  }
-  if(mode == "dtype-visible") {
-    var dtype = this.datatypes[value];
-    if(dtype) { dtype.visible = !dtype.visible; }
-  }
-  if(mode == "dtype-filter") {  
-    var dtype = this.datatypes[value];
-    if(dtype) { dtype.filtered = !dtype.filtered; }
-    reportsPostprocessElement(elementID);
-  }
-  if(mode == "dtype-filter-add") {
-    var dtype = this.datatypes[this.dtype_filter_select];
-    if(dtype) { dtype.filtered = true; }
-    reportsPostprocessElement(elementID);
-  }
-  if(mode == "dtype-filter-remove") {
-    var dtype = this.datatypes[value];
-    if(dtype) {
-      dtype.filtered = false;
-      this.dtype_filter_select = dtype.datatype;  //set to that which was just deleted
-    }
-    reportsPostprocessElement(elementID);
-  }
-  if(mode == "dtype-filter-abs") {
-    var dtype = this.datatypes[value];
-    if(dtype) {
-      dtype.filter_abs = !dtype.filter_abs;
-      //switching abs/non-abs mode, so best to just reset
-      if(dtype.filter_abs) {
-        dtype.filter_min = 0.0;
-        dtype.filter_max = "max";
-      } else {
-        dtype.filter_min = "min"; 
-        dtype.filter_max = "max";
-      }
-    }
-    reportsPostprocessElement(elementID);
-  }
-  if(mode == "dtype-filter-min") {
-    var val2_float = parseFloat(value2);
-    var dtype = this.datatypes[value];    
-    if(dtype) {
-      var max_val = dtype.max_val;
-      var min_val = dtype.min_val;
-      if(dtype.filter_abs) {
-        min_val = 0.0;
-        if(Math.abs(dtype.min_val)>max_val) { max_val = Math.abs(dtype.min_val); }
-      }
-      if(isNaN(val2_float))     { val2_float = min_val; }
-      if(val2_float > max_val)  { val2_float = max_val; }
-      if(val2_float < min_val)  { val2_float = min_val; }
-      if((dtype.filter_max!="max") && (val2_float > dtype.filter_max)) { val2_float = dtype.filter_max; }
-      if(!dtype.filter_abs && val2_float==min_val) { dtype.filter_min="min"; } else { dtype.filter_min = val2_float; }
-      reportsPostprocessElement(elementID);
-    }
-  }
-  if(mode == "dtype-filter-max") {  
-    var val2_float = parseFloat(value2);
-    if(isNaN(val2_float)) { value2="max"; }
-    var dtype = this.datatypes[value];
-    if(dtype) {
-      var max_val = dtype.max_val;
-      if(dtype.filter_abs && (Math.abs(dtype.min_val)>max_val)) {
-        max_val = Math.abs(dtype.min_val);
-      }
-      if(val2_float < dtype.min_val)    { val2_float = dtype.min_val; }
-      if(val2_float >= max_val)         { value2 = "max"; }
-      if((dtype.filter_min!="min") && (val2_float < dtype.filter_min)) { val2_float = dtype.filter_min; }
-      if(value2=="max") { dtype.filter_max="max"; } else { dtype.filter_max = val2_float; }
-      reportsPostprocessElement(elementID);
-    }
-  }
-
-  if(mode == "dtype-category-filter") {  
-    var dtype = this.datatypes[value];
-    if(dtype) { 
-      if(dtype.categories && dtype.categories[value2]) {
-        dtype.categories[value2].filtered = !(dtype.categories[value2].filtered); 
-      }
-      dtype.filtered = false;
-      for(var ctg in dtype.categories) {
-        if(dtype.categories[ctg].filtered) {
-          dtype.filtered = true;
-          break;          
-        }
-      }
-      reportsPostprocessElement(elementID);
-    }
-  }
-  */
 }
 
 
@@ -314,14 +203,9 @@ function zenbuTableElement_reset() {
 
 function zenbuTableElement_postprocess() {
   var elementID = this.elementID;
-  //console.log("reportsPostprocessTable ["+elementID+"]");
+  //console.log("zenbuTableElement_postprocess ["+elementID+"]");
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
 
   //update title
   this.title = this.title_prefix;
@@ -331,7 +215,7 @@ function zenbuTableElement_postprocess() {
   
   if(datasourceElement.datasource_mode == "feature") {
     datasourceElement.filter_count=0;
-    //datasourceElement.feature_array.sort(this.tableSortFunc());
+    datasourceElement.feature_array.sort(this.tableSortFunc());
     for(j=0; j<datasourceElement.feature_array.length; j++) {
       var feature = datasourceElement.feature_array[j];
       if(!feature) { continue; }
@@ -342,7 +226,8 @@ function zenbuTableElement_postprocess() {
   }
   if(datasourceElement.datasource_mode == "edge") {
     datasourceElement.filter_count=0;
-    //datasourceElement.edge_array.sort(this.tableSortFunc());
+    console.log("table postprocess ds["+(datasourceElement.elementID)+"] sort "+(datasourceElement.edge_array.length)+" edges by "+(this.sort_col));
+    datasourceElement.edge_array.sort(this.tableSortFunc());
     for(j=0; j<datasourceElement.edge_array.length; j++) {
       var edge = datasourceElement.edge_array[j];
       if(!edge) { continue; }
@@ -357,7 +242,7 @@ function zenbuTableElement_postprocess() {
   }
   if(datasourceElement.datasource_mode == "source") {
     datasourceElement.filter_count=0;
-    //datasourceElement.edge_array.sort(this.tableSortFunc());
+    datasourceElement.sources_array.sort(this.tableSortFunc());
     for(j=0; j<datasourceElement.sources_array.length; j++) {
       var source = datasourceElement.sources_array[j];
       if(!source) { continue; }
@@ -377,12 +262,7 @@ function zenbuTableElement_showSelections() {
   
   console.log("zenbuTableElement_showSelections "+this.elementID+" "+this.selected_id);
   
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
   
   //figure out which page the selected feature/edge is on so it updates
   var display_list = new Array();
@@ -472,12 +352,10 @@ function zenbuTableElement_showSelections() {
 function zenbuTableElement_draw() {
   if(this.loading) { return; }
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
+
+  var main_div =  this.main_div;
+  if(!main_div) { return; }
 
   //resize to pagesize logic
   if(this.resized) {
@@ -488,7 +366,7 @@ function zenbuTableElement_draw() {
     //need to round this index to the page boundary
     var line_height = 16.4;  //old offset was 72
     if(this.font_size) { line_height = this.font_size + 3; }
-    this.table_page_size = Math.round((this.content_height -65) / line_height);
+    this.table_page_size = Math.round((this.content_height -67) / line_height);
     if(this.table_page_size < 5) { this.table_page_size = 5; }
     this.table_page = Math.floor(table_page_index / this.table_page_size) + 1;
     this.table_num_pages  = Math.ceil(this.filter_count / this.table_page_size);
@@ -497,11 +375,9 @@ function zenbuTableElement_draw() {
     if(this.content_height < t_height) {
       this.content_height = Math.floor((this.table_page_size * line_height) + 65);
       console.log("resized readjust height ["+ this.content_height  +"]");
+      main_div.style.height = this.content_height +"px";
     }
   }
-
-  var main_div =  this.main_div;
-  if(!main_div) { return; }
 
   //TODO: need logic for toggle hiding table if no focus_feature/filter_ids/data
   //if(need to hide) { return; }
@@ -560,7 +436,7 @@ function zenbuTableElement_draw() {
   var tbody_temp_thead = null;
 
   if(this.overflow_mode == "scrolling") {
-    table_div.style.height = (this.content_height - 25)+"px";
+    table_div.style.height = (this.content_height - 20)+"px";
     
     var tbody1 = table.appendChild(document.createElement('tbody'));
     var tr = tbody1.appendChild(document.createElement('tr'));
@@ -681,17 +557,17 @@ function zenbuTableElement_draw() {
 
     //in google Chrome, can not mix onclick and onmouseover, so must use onmousedown instead
     if(feature) {
-      tr.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select', '"+ feature.id+"');");
+      tr.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select', '"+ feature.id+"');");
       tr.setAttribute("onmouseover", "zenbuTableElement_hoverInfo('"+this.elementID+"', 'feature', '"+feature.id+"');");
       tr.setAttribute("onmouseout", "eedbClearSearchTooltip();");
     }
     if(edge) {
-      tr.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select', '"+ edge.id+"');");
+      tr.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select', '"+ edge.id+"');");
       tr.setAttribute("onmouseover", "zenbuTableElement_hoverInfo('"+this.elementID+"', 'edge', '"+edge.id+"');");
       tr.setAttribute("onmouseout", "eedbClearSearchTooltip();");
     }
     if(source) {
-      tr.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select', '"+ source.id+"');");
+      tr.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select', '"+ source.id+"');");
       tr.setAttribute("onmouseover", "zenbuTableElement_hoverInfo('"+this.elementID+"', 'source', '"+source.id+"');");
       tr.setAttribute("onmouseout", "eedbClearSearchTooltip();");
     }
@@ -729,11 +605,12 @@ function zenbuTableElement_draw() {
       if(!dtype_col) { continue; }
       if(!dtype_col.visible) { continue; }
 
-      var t_feature;
-      if(feature) { t_feature = feature;}
-      if(source) { t_feature = source;}
-      if(edge && (/^f1\./.test(dtype_col.datatype))) { t_feature = edge.feature1;}
-      if(edge && (/^f2\./.test(dtype_col.datatype))) { t_feature = edge.feature2;}
+      var t_object;
+      if(edge) { t_object = edge;}
+      if(feature) { t_object = feature;}
+      if(source) { t_object = source;}
+      if(edge && (/^f1\./.test(dtype_col.datatype))) { t_object = edge.feature1;}
+      if(edge && (/^f2\./.test(dtype_col.datatype))) { t_object = edge.feature2;}
       
       var datatype = dtype_col.datatype;
       datatype = datatype.replace(/^f1\./, '');
@@ -760,18 +637,18 @@ function zenbuTableElement_draw() {
         if(source)  { rowNumA.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'source-info', '"+source.id+"');"); }
       }
       
-      if(t_feature && (dtype_col.datatype == "name") || (dtype_col.datatype == "f1.name") || (dtype_col.datatype == "f2.name")) {
+      if(t_object && (dtype_col.datatype == "name") || (dtype_col.datatype == "f1.name") || (dtype_col.datatype == "f2.name")) {
         //td.innerHTML = feature.name;
         var a1 = td.appendChild(document.createElement('a'));
         a1.setAttribute("target", "top");
         a1.setAttribute("href", "./");
-        a1.innerHTML = t_feature.name;
-        if((t_feature.classname=="Experiment") || (t_feature.classname=="FeatureSource") || (t_feature.classname=="EdgeSource")) {
-          a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'source-info', '"+t_feature.id+"');"); 
-        } else if(t_feature.classname=="Edge") {
-          a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'edge-info', '"+t_feature.id+"');");
+        a1.innerHTML = t_object.name;
+        if((t_object.classname=="Experiment") || (t_object.classname=="FeatureSource") || (t_object.classname=="EdgeSource")) {
+          a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'source-info', '"+t_object.id+"');"); 
+        } else if(t_object.classname=="Edge") {
+          a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'edge-info', '"+t_object.id+"');");
         } else {
-          a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'feature-info', '"+t_feature.id+"');");
+          a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'feature-info', '"+t_object.id+"');");
         }
         a1.setAttribute("onclick", "return false;");
       } else if(edge && (dtype_col.col_type == "weight")) {
@@ -781,45 +658,51 @@ function zenbuTableElement_draw() {
           if(val1 != Math.floor(val1)) { val1 = val1.toPrecision(4); }
           td.innerHTML = val1;
         }
-      } else if(t_feature && t_feature.score && (datatype == "bedscore") && (dtype_col.col_type == "signal")) {
-        td.innerHTML = parseFloat(t_feature.score);
-        //td.innerHTML = parseFloat(t_feature.score).toPrecision(6);
+        td.setAttribute("align", "right");
+        td.style.padding = "0px 5px 0px 3px";
+      } else if(t_object && t_object.score && (datatype == "bedscore") && (dtype_col.col_type == "signal")) {
+        td.setAttribute("align", "right");
+        td.style.padding = "0px 5px 0px 3px";
+        td.innerHTML = parseFloat(t_object.score);
+        //td.innerHTML = parseFloat(t_object.score).toPrecision(6);
         //tspan.innerHTML = parseFloat(feature.score); 
-      } else if(t_feature && t_feature.expression && (dtype_col.col_type == "signal")) {
-        //console.log("feature "+t_feature.name+" signal ["+datatype+"]");
-        for(var j2=0; j2<t_feature.expression.length; j2++) {
-          var expression = t_feature.expression[j2];
+      } else if(t_object && t_object.expression && (dtype_col.col_type == "signal")) {
+        //console.log("feature "+t_object.name+" signal ["+datatype+"]");
+        td.style.padding = "0px 5px 0px 3px";
+        td.setAttribute("align", "right");
+        for(var j2=0; j2<t_object.expression.length; j2++) {
+          var expression = t_object.expression[j2];
           if(expression.datatype != datatype) { continue; }
           if(td.innerHTML != "") { td.innerHTML += " "; }
           var val1 = expression.total;
           if(val1 != Math.floor(val1)) { val1 = val1.toPrecision(4); }
           td.innerHTML = val1;
         }
-      } else if(t_feature && dtype_col.col_type == "mdata") {
+      } else if(t_object && dtype_col.col_type == "mdata") {
         var val = "";
-        if(t_feature.mdata && t_feature.mdata[datatype]) {
-          var value_array = t_feature.mdata[datatype];
+        if(t_object.mdata && t_object.mdata[datatype]) {
+          var value_array = t_object.mdata[datatype];
           for(var idx1=0; idx1<value_array.length; idx1++) {
             if(val) { val += ", "; }
             val += value_array[idx1];
           }
-        } else if(t_feature.source && (datatype == "category")) {
-          val = t_feature.source.category;
-        } else if(t_feature.source && (datatype == "source_name")) {
-          val = t_feature.source.name;
+        } else if(t_object.source && (datatype == "category")) {
+          val = t_object.source.category;
+        } else if(t_object.source && (datatype == "source_name")) {
+          val = t_object.source.name;
         } else if(datatype == "platform") {
-          val = t_feature.platform;
+          val = t_object.platform;
         } else if(datatype == "import_date") {
-          val = t_feature.import_date;
+          val = t_object.import_date;
         } else if(datatype == "owner_identity") {
-          val = t_feature.owner_identity;
+          val = t_object.owner_identity;
         } else if(datatype == "owner_import_date") {
-          val = "<div style='font-size:10px;'>" + t_feature.owner_identity +"</div>";
-          val += "<div style='font-size:10px; color:rgb(94,115,153);'>" + t_feature.import_date +"</div>";
+          val = "<div style='font-size:10px;'>" + t_object.owner_identity +"</div>";
+          val += "<div style='font-size:10px; color:rgb(94,115,153);'>" + t_object.import_date +"</div>";
         } else if(datatype == "source_class") {
-          val = t_feature.classname;
+          val = t_object.classname;
         } else if(datatype == "location_string") {
-          val = t_feature.chromloc;
+          val = t_object.chromloc;
         }
         if(val) { td.innerHTML = val; }
         
@@ -827,16 +710,16 @@ function zenbuTableElement_draw() {
           var a1 = td.appendChild(document.createElement('a'));
           a1.setAttribute("target", "top");
           a1.setAttribute("href", "#");
-          //a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select_location', '"+t_feature.id+"');");
-          a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select_location', '"+t_feature.chromloc+"');");
+          //a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select_location', '"+t_object.id+"');");
+          a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select_location', '"+t_object.chromloc+"');");
           a1.setAttribute("onclick", "return false;");
           a1.innerHTML = dtype_col.title;
         }
-      } else if(t_feature && (dtype_col.col_type == "hyperlink")) {
+      } else if(t_object && (dtype_col.col_type == "hyperlink")) {
         var a1 = td.appendChild(document.createElement('a'));
         a1.setAttribute("target", "top");
         a1.setAttribute("href", "#"+datatype);
-        a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'hyperlink_trigger', '"+t_feature.id+"', '"+datatype+"');");
+        a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'hyperlink_trigger', '"+t_object.id+"', '"+datatype+"');");
         a1.setAttribute("onclick", "return false;");
         a1.innerHTML = dtype_col.title;
       }
@@ -853,7 +736,7 @@ function zenbuTableElement_draw() {
     //draw filter count at bottom        
     var tspan = table_div.appendChild(document.createElement('span'));
     tspan.setAttribute('style', "font-size:12px; margin-right: 10px; float:right; display:inline-block; ");
-    tspan.innerHTML = this.filter_count + " rows";
+    tspan.innerHTML = this.filter_count + " "+datasourceElement.datasource_mode+"s";
     
     //transfer the column widths from the tbody.td to the th so they are lined up
     var thElements = thead.getElementsByTagName("th");
@@ -890,7 +773,7 @@ function zenbuTableElement_draw() {
     //readjust the table_scroll_div height if the header has wrapped lines
     var t_rect = thead.getBoundingClientRect();
     console.log("scrolling table header height:"+(t_rect.height));
-    this.table_scroll_div.style.height = (this.content_height - 65 - t_rect.height)+"px";
+    this.table_scroll_div.style.height = (this.content_height - 60 - t_rect.height)+"px";
     
     if(this.table_needs_to_scroll) {
       this.table_needs_to_scroll = false;
@@ -906,12 +789,12 @@ function zenbuTableElement_draw() {
     }
   }
   
-  if(this.overflow_mode == "paging") {
+  if(!this.resized && (this.overflow_mode == "paging")) {
     //double check bounds
     var mainRect = main_div.getBoundingClientRect();
     var tableRect = table_div.getBoundingClientRect();
     //if((this.overflow_mode == "paging") && (tableRect.bottom > mainRect.bottom-3)) {
-    if((tableRect.bottom>0) && (tableRect.bottom > mainRect.bottom-3)) {
+    if((tableRect.bottom>0) && (tableRect.bottom > mainRect.bottom-5)) {
       var offset = Math.round(tableRect.bottom - mainRect.bottom + 7);
       this.content_height += offset;
       console.log("drawTable["+this.elementID+"] need to resize to fit tableBottom:"+tableRect.bottom+" mainBottom:"+mainRect.bottom + " offset:"+offset+" new content_height:"+this.content_height);
@@ -929,11 +812,7 @@ function zenbuTableElement_hoverInfo(elementID, classType, objID) {
   if(!reportElement) { return; }
   if(!reportElement.show_hover_info) { return; }
 
-  var datasourceElement = reportElement;
-  if(reportElement.datasourceElementID) {
-    var ds = current_report.elements[reportElement.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-  }
+  var datasourceElement = reportElement.datasource();
   if(!datasourceElement) { return; }
   
   var object = null;
@@ -966,10 +845,11 @@ function zenbuTableElement_hoverInfo(elementID, classType, objID) {
 function zenbuTableElement_pagingInterface() {
   if(!this.main_div) { return; }
   
-  var main_div = this.main_div;
-  var mainRect = main_div.getBoundingClientRect();
+  var datasourceElement = this.datasource();
   
-  //interface changes at <750 <630 <570 <490 <430 <340
+  var content_width = this.content_width;
+  
+  //interface changes at content_width: 750 700 670 630 570 500 400 320 300 250
   
   //var num_pages = Math.ceil(this.filter_count / Math.floor(this.table_page_size));
   //this.table_num_pages = num_pages;
@@ -977,6 +857,7 @@ function zenbuTableElement_pagingInterface() {
   //console.log("zenbuTableElement_pagingInterface "+this.elementID+" filter_count= "+this.filter_count+" page_size["+this.table_page_size+"]  num_pages"+this.table_num_pages+"]  table_page["+this.table_page+"]")
   
   //var page = Math.ceil(this.table_page_index / this.table_page_size) + 1;
+  if(this.table_page < 1) { this.table_page = 1; }
   var page = this.table_page;
   var table_page_index = (this.table_page-1) * this.table_page_size;
   //console.log("zenbuTableElement_pagingInterface page_size["+this.table_page_size+"] table_page_index="+table_page_index+", page="+this.table_page);
@@ -990,46 +871,48 @@ function zenbuTableElement_pagingInterface() {
   span5.setAttribute('style', "margin-right: 10px; float:right; display:inline-block; ");
   var tspan = span5.appendChild(document.createElement('span'));
   //tspan.innerHTML = "filtered " + this.filter_count + " / " + this.raw_count;
-  tspan.innerHTML = this.filter_count + " rows";
+  tspan.innerHTML = this.filter_count + " "+datasourceElement.datasource_mode+"s";
   
   var tspan = pagingSpan.appendChild(document.createElement('a'));
   tspan.setAttribute('style', "color:purple; text-decoration:underline;");
   tspan.setAttribute('href', "./");
   tspan.setAttribute("onclick", "reportElementEvent(\""+this.elementID+"\", 'previous-page'); return false");
-  if(mainRect.width<570) { tspan.innerHTML = "<<"; }
-  else if(mainRect.width<750) { tspan.innerHTML = "<< previous"; }
+  if(content_width<570) { tspan.innerHTML = "<<"; }
+  else if(content_width<750) { tspan.innerHTML = "<< previous"; }
   else { tspan.innerHTML = "<< previous page"; }
   
-  var tspan2 = pagingSpan.appendChild(document.createElement('span'));
-  tspan2.setAttribute('style', "margin-left: 5px; font-weight:bold; display:inline-block;");
-  if(mainRect.width<630) { tspan2.innerHTML = "page"; } else { tspan2.innerHTML = "| Page: "; }
+  if(content_width>=300) {
+    var tspan2 = pagingSpan.appendChild(document.createElement('span'));
+    tspan2.setAttribute('style', "margin-left: 5px; font-weight:bold; display:inline-block;");
+    if(content_width<670) { tspan2.innerHTML = "page"; } else { tspan2.innerHTML = "| Page: "; }
+  }
   
   var start_page = 1;
   var end_page = 10;
-  if(mainRect.width<750) { end_page=8; }
-  if(mainRect.width<490) { end_page=6; }
-  if(mainRect.width<430) { end_page=0; }
+  if(content_width<700) { end_page=8; }
+  if(content_width<630) { end_page=6; }
+  if(content_width<500) { end_page=0; }
   
   if(page >= Math.ceil(end_page*0.7)) {
     var span2 = pagingSpan.appendChild(document.createElement('a'));
-    span2.setAttribute('style', "margin-left: 4px; color:purple; text-decoration:underline; display:inline-block; min-width:25px;");
-    if(mainRect.width<630) { span2.style.minWidth = "20px"; }
+    span2.setAttribute('style', "margin-left: 4px; color:purple; text-decoration:underline; display:inline-block; min-width:20px;");
+    if(content_width<320) { span2.style.minWidth = "10px"; }
     span2.setAttribute('href', "./");
     span2.setAttribute("onclick", "reportElementEvent(\""+this.elementID+"\", 'page', \"1\"); return false");
     span2.innerHTML = 1;
     
     var span2 = pagingSpan.appendChild(document.createElement('span'));
-    span2.setAttribute('style', "margin-left: 4px; display:inline-block; min-width:25px;");
-    if(mainRect.width<630) { span2.style.minWidth = "20px"; }
+    span2.setAttribute('style', "margin-left: 2px; display:inline-block; min-width:20px;");
+    if(content_width<320) { span2.style.marginLeft = "0px"; span2.style.minWidth = "12px"; }
     span2.innerHTML = "...";
     
-    if(mainRect.width<430) {
+    if(content_width<500) {
       start_page = page;
       end_page = 0;
-    } else if(mainRect.width<490) {
+    } else if(content_width<630) {
       start_page = page - 1;
       end_page = start_page +3;
-    } else if(mainRect.width<750) {
+    } else if(content_width<700) {
       start_page = page - 2;
       end_page = start_page +5;
     } else {
@@ -1040,39 +923,37 @@ function zenbuTableElement_pagingInterface() {
   for(var j=start_page; j<end_page; j++) {
     if(j>this.table_num_pages) { break; }
     var span2 = pagingSpan.appendChild(document.createElement('a'));
-    span2.setAttribute('style', "margin-left: 4px; color:purple; text-decoration:underline; display:inline-block; min-width:25px;");
-    if(j == page) { span2.setAttribute('style', "margin-left: 4px; color:black; font-weight:bold; display:inline-block; min-width:25px;"); }
-    if(mainRect.width<630) { span2.style.minWidth = "20px"; }
+    span2.setAttribute('style', "margin-left: 4px; color:purple; text-decoration:underline; display:inline-block; min-width:20px;");
+    if(j == page) { span2.setAttribute('style', "margin-left: 4px; color:black; font-weight:bold; display:inline-block; min-width:20px;"); }
     span2.setAttribute('href', "./");
     span2.setAttribute("onclick", "reportElementEvent(\""+this.elementID+"\", 'page', \"" +j+ "\"); return false");
     span2.innerHTML = j;
   }
   if(j<=this.table_num_pages) {
-    if((mainRect.width>=430) && (j+1<this.table_num_pages)) {
+    if((content_width>=500) && (j+1<this.table_num_pages)) {
       var span2 = pagingSpan.appendChild(document.createElement('span'));
-      span2.setAttribute('style', "margin-left: 4px; display:inline-block; min-width:25px;");
-      if(mainRect.width<630) { span2.style.minWidth = "20px"; }
+      span2.setAttribute('style', "margin-left: 4px; display:inline-block; min-width:20px;");
+      if(content_width<320) { span2.style.marginLeft = "0px"; span2.style.minWidth = "10px"; }
       span2.innerHTML = "...";
     }
     if(j+1 == this.table_num_pages) {
       span2 = pagingSpan.appendChild(document.createElement('a'));
       span2.setAttribute('href', "./");
-      span2.setAttribute('style', "margin-left: 4px; color:purple; text-decoration:underline; display:inline-block; min-width:25px;");
-      if(mainRect.width<630) { span2.style.minWidth = "20px"; }
+      span2.setAttribute('style', "margin-left: 4px; color:purple; text-decoration:underline; display:inline-block; min-width:20px;");
+      //if(content_width<500) { span2.style.minWidth = "20px"; } else { span2.style.minWidth = "25px"; }
       span2.setAttribute("onclick", "reportElementEvent(\""+this.elementID+"\", 'page', \"" +(this.table_num_pages-1)+ "\"); return false");
       span2.innerHTML = this.table_num_pages-1;
     }
     span2 = pagingSpan.appendChild(document.createElement('a'));
     span2.setAttribute('href', "./");
-    span2.setAttribute('style', "margin-left: 4px; color:purple; text-decoration:underline; display:inline-block; min-width:25px;");
-    if(mainRect.width<630) { span2.style.minWidth = "20px"; }
+    span2.setAttribute('style', "margin-left: 4px; color:purple; text-decoration:underline; display:inline-block; min-width:20px;");
     span2.setAttribute("onclick", "reportElementEvent(\""+this.elementID+"\", 'page', \"" +this.table_num_pages+ "\"); return false");
     span2.innerHTML = this.table_num_pages;
   }
   
-  if(mainRect.width>=630) {
+  if(content_width>=500) {
     var tspan3 = pagingSpan.appendChild(document.createElement('span'));
-    tspan3.setAttribute('style', "margin-left: 5px; color:black; font-weight:bold;");
+    tspan3.setAttribute('style', "margin-left: 4px; color:black; font-weight:bold;");
     tspan3.innerHTML = "|";
   }
   
@@ -1080,17 +961,28 @@ function zenbuTableElement_pagingInterface() {
   tspan4.setAttribute('href', "./");
   tspan4.setAttribute('style', "margin-left: 4px; font-family:arial,helvetica,sans-serif; color:purple; text-decoration:underline;");
   tspan4.setAttribute("onclick", "reportElementEvent(\""+this.elementID+"\", 'next-page');return false");
-  if(mainRect.width<570) { tspan4.innerHTML = ">>"; }
-  else if(mainRect.width<750) { tspan4.innerHTML = "next >>"; }
+  if(content_width<570) { tspan4.innerHTML = ">>"; }
+  else if(content_width<750) { tspan4.innerHTML = "next >>"; }
   else { tspan4.innerHTML = "next page >>"; }
   
-  if(mainRect.width>=340) {
+  if(content_width>=250) {
     var span3 = pagingSpan.appendChild(document.createElement('span'));
     span3.setAttribute('style', "margin-left: 15px; ");
     var tspan = span3.appendChild(document.createElement('span'));
-    tspan.innerHTML = "page size: ";
+    tspan.innerHTML = "page: ";
     var input = span3.appendChild(document.createElement('input'));
-    input.setAttribute("style", "font-size:12px; width:50px; padding: 1px 5px; margin: 3px 2px; box-sizing: border-box; border: 1px solid gray; border-radius: 4px;");
+    input.setAttribute("style", "font-size:12px; width:35px; padding: 1px 2px; margin: 3px 0px; box-sizing: border-box; border: 1px solid gray; border-radius: 4px;");
+    input.setAttribute('type', "text");
+    input.setAttribute('value', this.table_page);
+    input.setAttribute("onchange", "reportElementEvent(\""+this.elementID+"\", 'page', this.value); return false;");
+  }
+  if(content_width>=400) {
+    var span3 = pagingSpan.appendChild(document.createElement('span'));
+    span3.setAttribute('style', "margin-left: 5px; ");
+    var tspan = span3.appendChild(document.createElement('span'));
+    tspan.innerHTML = "rows: ";
+    var input = span3.appendChild(document.createElement('input'));
+    input.setAttribute("style", "font-size:12px; width:35px; padding: 1px 2px; margin: 3px 0px; box-sizing: border-box; border: 1px solid gray; border-radius: 4px;");
     input.setAttribute('type', "text");
     input.setAttribute('value', this.table_page_size);
     input.setAttribute("onchange", "reportElementEvent(\""+this.elementID+"\", 'page-size', this.value); return false;");
@@ -1127,12 +1019,7 @@ function zenbuTableElement_pagingInterface() {
 function zenbuTableElement_configSubpanel() {
   if(!this.config_options_div) { return; }
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
 
   var configdiv = this.config_options_div;
   
@@ -1213,14 +1100,8 @@ function reports_table_column_order_func(a,b) {
 function  zenbuTableElement_tableSortFunc() {
   var sort_rev = false;
   if(this.sort_reverse) { sort_rev = true; }
-  //console.log("get sort_func for ["+colname+"]");
   
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
   
   var colname = this.sort_col;
   if(!colname) { return name_func; }
@@ -1228,6 +1109,7 @@ function  zenbuTableElement_tableSortFunc() {
   var datatype = colname;
   datatype = datatype.replace(/^f1\./, '');
   datatype = datatype.replace(/^f2\./, '');
+  console.log("tableSortFunc for colname["+colname+"] -> datatype ["+datatype+"]");
   
   //feature sort functions
   var name_func = function(a,b) {
@@ -1296,10 +1178,16 @@ function  zenbuTableElement_tableSortFunc() {
     if(!bf) { return -1; }
     //if(af.search_match && !bf.search_match) { return -1; }
     //if(!af.search_match && bf.search_match) { return 1; }
+    //var a_val = "";
+    //var b_val = "";
     var a_md = af.mdata[datatype];
     var b_md = bf.mdata[datatype];
+    if(!a_md) { return 1; }
+    if(!b_md) { return -1; }
     if(a_md && a_md[0]) { a_md = a_md[0].toLowerCase(); }
     if(b_md && b_md[0]) { b_md = b_md[0].toLowerCase(); }
+    //if(!a_val) { return 1; }
+    //if(!b_val) { return -1; }
     if(a_md < b_md) { res = -1; }
     if(a_md > b_md) { res =  1; }
     if(sort_rev) { res = -1 * res; }

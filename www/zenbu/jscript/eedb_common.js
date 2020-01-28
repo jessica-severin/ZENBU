@@ -1295,7 +1295,7 @@ function zenbuClearMessage() {
 }
   
 
-function zenbuGeneralWarn(message) {
+function zenbuGeneralWarn(message, title) {
   var main_div = document.getElementById("message");
   if(!main_div) { return; }
 
@@ -1319,6 +1319,7 @@ function zenbuGeneralWarn(message) {
   tdiv.setAttribute('style', "font-size:14px; font-weight:bold;");
   var tspan = tdiv.appendChild(document.createElement('span'));
   tspan.innerHTML = "Alert:";
+  if(title) { tspan.innerHTML = title; }
 
   var a1 = tdiv.appendChild(document.createElement('a'));
   a1.setAttribute("target", "top");
@@ -1403,6 +1404,6 @@ function zenbu_object_clone(obj) {
   if(Array.isArray(obj)) {
     return [].concat(obj);
   } else {
-    return Object.extend({ }, obj);
+    return Object.assign({ }, obj);
   }
 }

@@ -59,11 +59,13 @@ function zenbuConfigurationInterface(uniqID) {
     zenbuCI.configDOM = null;
     zenbuCI.autosave = false;
     zenbuCI.config_type = "";
-    zenbuCI.upload_callback = null;
+    zenbuCI.uploadCallOutFunction = null;
+    zenbuCI.uploadCompleteFunction = null;
+    zenbuCI.config = null; //set to parsed Configuration object on complete of upload
 
     zenbuCI.panel_title = "Save configuration";
-    zenbuCI.title  = "";
-    zenbuCI.desc   = "";
+    zenbuCI.title = "";
+    zenbuCI.description = "";
     zenbuCI.fixed_id = "";
     zenbuCI.edit_fixed_id = false;
     zenbuCI.validation_status = "valid";
@@ -137,7 +139,7 @@ function zenbuConfigurationInterfaceUpdate(uniqID) {
   divFrame.appendChild(tdiv)
   
   //----------
-  if(zenbuCI.configUUID && (zenbuCI.config_type=="REPORT")) {
+  if(zenbuCI.configUUID) {
     var div1 = divFrame.appendChild(document.createElement('div'));
     div1.setAttribute('style', "margin: 0px 0px 3px 0px;");
     var span0 = div1.appendChild(document.createElement('span'));
@@ -222,8 +224,8 @@ function zenbuConfigurationInterfaceUpdate(uniqID) {
   var descInput = document.createElement('textarea');
   descInput.setAttribute('style', "width:385px; max-width:385px; min-width:385px; min-height:50px; margin: 3px 5px 3px 7px; font-size:10px; font-family:arial,helvetica,sans-serif;");
   descInput.setAttribute('rows', 7);
-  descInput.setAttribute('value', zenbuCI.desc);
-  descInput.innerHTML = zenbuCI.desc;
+  descInput.setAttribute('value', zenbuCI.description);
+  descInput.innerHTML = zenbuCI.description;
   descInput.onkeyup = function() { zenbuConfigurationInterfaceReconfigParam(uniqID, 'desc', descInput.value); }
   divFrame.appendChild(descInput);
   
@@ -333,7 +335,7 @@ function zenbuConfigurationInterfaceReconfigParam(uniqID, param, value) {
   console.log("zenbuConfigurationInterfaceReconfigParam["+uniqID+"] "+param+" value="+value);
 
   if(param == "name") { zenbuCI.title = value; }
-  if(param == "desc") { zenbuCI.desc = value; }
+  if(param == "desc") { zenbuCI.description = value; }
   
   if(param == "fixed_id") {
     if(value == "") {
@@ -364,31 +366,17 @@ function zenbuConfigurationInterfaceReconfigParam(uniqID, param, value) {
     //TODO: bring up panel with inputs and webservice checking logic
   }
   if(param == "fixedID_editor_mode") {
-    //TODO: way to save the change back to webservice, either immediate or delayed
-    //zenbuCI.fixedID_editor_mode = value;
-    //zenbuConfigurationInterfaceUpdate(uniqID); //refresh
-    //zenbuConfigurationInterfaceFixedIDEditorManagementPanel(zenbuCI, false);
-    var fixed_id = zenbuCI.config_fixed_id;
-    if(zenbuCI && zenbuCI.fixed_id) { fixed_id = zenbuCI.fixed_id; }
-    zenbuConfigurationInterfaceChangeFixIdEditorMode(zenbuCI, fixed_id, value);
+    zenbuConfigurationInterfaceChangeFixIdEditorMode(zenbuCI, zenbuCI.fixed_id, value);
   }
   if(param == "add_fixedID_editor") {
-    var fixed_id = zenbuCI.config_fixed_id;
-    if(zenbuCI && zenbuCI.fixed_id) { fixed_id = zenbuCI.fixed_id; }
     if(value == "") {
       var input1 = document.getElementById("configuration_fixedID_user_input");
       if(input1) { value = input1.value; }
     }
-    zenbuConfigurationInterfaceChangeFixIdEditors(zenbuCI, fixed_id, value, 'add');
+    zenbuConfigurationInterfaceChangeFixIdEditors(zenbuCI, zenbuCI.fixed_id, value, 'add');
   }
   if(param == "remove_fixedID_editor") {
-    var fixed_id = zenbuCI.config_fixed_id;
-    if(zenbuCI && zenbuCI.fixed_id) { fixed_id = zenbuCI.fixed_id; }
-    //if(value == "") {
-    //  var input1 = document.getElementById("configuration_fixedID_user_input");
-    //  if(input1) { value = input1.value; }
-    //}
-    zenbuConfigurationInterfaceChangeFixIdEditors(zenbuCI, fixed_id, value, 'remove');
+    zenbuConfigurationInterfaceChangeFixIdEditors(zenbuCI, zenbuCI.fixed_id, value, 'remove');
   }
   
   if(param == "autogen-uuid") {
@@ -406,7 +394,7 @@ function zenbuConfigurationInterfaceReconfigParam(uniqID, param, value) {
   
   if(param == "accept") {
     zenbuCI.saveConfigXHR = undefined;
-    if(zenbuCI.upload_callback) { zenbuCI.upload_callback(zenbuCI.uniqID); } 
+    if(zenbuCI.uploadCallOutFunction) { zenbuCI.uploadCallOutFunction(zenbuCI); } 
     else { zenbuConfigurationInterfaceUploadConfigXML(zenbuCI); }
     zenbuCI.innerHTML = "";
   }
@@ -568,8 +556,7 @@ function zenbuConfigurationInterfaceFixedIDEditorManagementPanel(zenbuCI, reload
   //var global_layer_div = document.getElementById("global_panel_layer");
   //if(!global_layer_div) { return; }
 
-  var fixed_id = zenbuCI.config_fixed_id;
-  if(zenbuCI && zenbuCI.fixed_id) { fixed_id = zenbuCI.fixed_id; }
+  var fixed_id = zenbuCI.fixed_id;
   if(!fixed_id) { zenbuConfigurationInterfaceUpdate(uniqID); return; }
   console.log("zenbuConfigurationInterfaceFixedIDEditorManagementPanel fixed_id["+fixed_id+"]");
   
@@ -899,6 +886,7 @@ function zenbuConfigurationInterfaceParseFixIdEditorsResponse(uniqID) {
 
 function zenbuConfigurationInterfaceUploadConfigXML(zenbuCI) {
   if(!zenbuCI) { return; }
+  var uniqID = zenbuCI.uniqID;
   
   if(zenbuCI.saveConfigXHR) {
     //a save already in operation. flag for resave when finished
@@ -909,6 +897,34 @@ function zenbuConfigurationInterfaceUploadConfigXML(zenbuCI) {
   var configDOM = zenbuCI.configDOM;
   if(!configDOM) { return; }
   
+  var doc = document.implementation.createDocument("", "", null);
+  if(zenbuCI.collabWidget) {
+    var collab = configDOM.appendChild(doc.createElement("collaboration"));
+    collab.setAttribute("uuid", zenbuCI.collabWidget.collaboration_uuid);
+    collab.setAttribute("name", zenbuCI.collabWidget.collaboration_name);
+  }
+  if(zenbuCI.autosave) {
+    var autosave = doc.createElement("autoconfig");
+    autosave.setAttribute("value", "public");
+    configDOM.appendChild(autosave);
+  }
+  var summary = configDOM.appendChild(doc.createElement("summary"));
+  if(current_user) { 
+    if(current_user.nickname) { summary.setAttribute("user", current_user.nickname); }
+    if(current_user.openID) { summary.setAttribute("creator_openID", current_user.openID); }
+  }
+  if(zenbuCI.title) { 
+    summary.setAttribute("name", encodehtml(zenbuCI.title));
+    //var title = summary.appendChild(doc.createElement("title"));
+    //title.nodeValue = zenbuCI.title;
+  }
+  if(zenbuCI.description) { 
+    summary.setAttribute("desc", encodehtml(zenbuCI.description));
+    //var description = summary.appendChild(doc.createElement("description"));
+    //description.nodeValue = zenbuCI.description;
+  }
+
+  
   var serializer = new XMLSerializer();
   var configXML  = serializer.serializeToString(configDOM);
   
@@ -916,14 +932,14 @@ function zenbuConfigurationInterfaceUploadConfigXML(zenbuCI) {
   var idx1 = configXML.indexOf("<ZENBU_reports_page_config>");
   if(idx1 > 0) { configXML = configXML.substr(idx1); }
   
-  zenbuCI.view_config = undefined; //clear old config object since it is not valid anymore
+  zenbuCI.config = undefined; //clear old config object since it is not valid anymore
   
   //build the zenbu_query
   var paramXML = "<zenbu_query>\n";
   paramXML += "<mode>saveconfig</mode><configtype>"+(zenbuCI.config_type.toLowerCase())+"</configtype>\n";
   if(zenbuCI.fixed_id) { paramXML += "<fixed_id>"+zenbuCI.fixed_id+"</fixed_id>\n"; }
   if(zenbuCI.title) { paramXML += "<title>"+ encodehtml(zenbuCI.title) + "</title>\n"; }
-  if(zenbuCI.desc) { paramXML += "<description>"+ encodehtml(zenbuCI.desc) + "</description>\n"; }
+  if(zenbuCI.description) { paramXML += "<description>"+ encodehtml(zenbuCI.description) + "</description>\n"; }
   
   if(zenbuCI.autosave) {
     paramXML += "<autosave>true</autosave>\n";
@@ -932,10 +948,9 @@ function zenbuConfigurationInterfaceUploadConfigXML(zenbuCI) {
       paramXML += "<collaboration_uuid>"+ zenbuCI.collabWidget.collaboration_uuid +"</collaboration_uuid>\n";
     }
   }
-  
   paramXML += "<configXML>" + configXML + "</configXML>";
   paramXML += "</zenbu_query>\n";
-  
+    
   var configXHR=GetXmlHttpObject();
   if(configXHR==null) {
     alert ("Your browser does not support AJAX!");
@@ -969,41 +984,28 @@ function zenbuConfigurationInterfaceUploadResponse(uniqID) {
   zenbuCI.configUUID = "";
   if(xmlDoc.getElementsByTagName("configuration")) {
     var configXML = xmlDoc.getElementsByTagName("configuration")[0];
-    zenbuCI.view_config = eedbParseConfigurationData(configXML);
-    if(zenbuCI.view_config) {
-      zenbuCI.configUUID = zenbuCI.view_config.uuid;
-      zenbuCI.config_fixed_id = zenbuCI.view_config.fixed_id;
-      if(zenbuCI.view_config.collaboration) {
-        //current_collaboration.name = zenbuCI.view_config.collaboration.name;
-        //current_collaboration.uuid = zenbuCI.view_config.collaboration.uuid;
-        console.log("loaded view has collaboration ["+zenbuCI.view_config.collaboration.name+"]  ["+zenbuCI.view_config.collaboration.uuid+"]")
+    zenbuCI.config = eedbParseConfigurationData(configXML);
+    if(zenbuCI.config) {
+      zenbuCI.configUUID = zenbuCI.config.uuid;
+      zenbuCI.fixed_id = zenbuCI.config.fixed_id;
+      if(zenbuCI.config.collaboration) {
+        //current_collaboration.name = zenbuCI.config.collaboration.name;
+        //current_collaboration.uuid = zenbuCI.config.collaboration.uuid;
+        console.log("loaded view has collaboration ["+zenbuCI.config.collaboration.name+"]  ["+zenbuCI.config.collaboration.uuid+"]")
       }
+      // console.log("upload complete");
+      // console.log("title:"+zenbuCI.config.title);
+      // console.log("name:"+zenbuCI.config.name);
+      // console.log("description:"+zenbuCI.config.description);
+      // console.log("author:"+zenbuCI.config.author);
+      // console.log("owner_identity:"+zenbuCI.config.owner_identity);
+      // console.log("uuid:"+zenbuCI.config.uuid);
+      // console.log("fixed_id:"+zenbuCI.config.fixed_id);
+      // console.log("create_date:"+zenbuCI.config.create_date);
+      // console.log("type:"+zenbuCI.config.type);
     }
   }
   
-  if(zenbuCI.configUUID) {
-    //reportsChangeDhtmlHistoryLocation();
-    zenbuCI.desc           = zenbuCI.desc;
-    zenbuCI.config_title   = zenbuCI.title;
-    zenbuCI.config_creator = "guest";
-    if(current_user) {
-      if(current_user.email)    { zenbuCI.config_creator = current_user.email; }
-      if(current_user.openID)   { zenbuCI.config_creator = current_user.openID; }
-      if(current_user.nickname) { zenbuCI.config_creator = current_user.nickname; }
-    }
-    //reportsShowConfigInfo();
-  }
-  
-//   zenbuCI.saveConfigXHR = undefined;
-//   if(zenbuCI.modified) { //do it again since it was modified after this save was initiated
-//     reportsUploadPageConfigXML();
-//     return;
-//   }
-  //finished
-//   zenbuCI = undefined;
-//   zenbuCI.edit_page_configuration = false;
-  
-//   reportsDisplayEditTools();
-//   reportsDrawElements();
+  if(zenbuCI.uploadCompleteFunction) { zenbuCI.uploadCompleteFunction(zenbuCI); }
 }
 

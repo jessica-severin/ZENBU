@@ -221,14 +221,15 @@ function zenbuCategoryElement_postprocess() {
   for(var ctg in categories) {
     var ctg_obj = categories[ctg];
     ctg_obj.count = 0;
+    ctg_obj.hidden_count = 0;
     ctg_obj.value = null;
   }
   
   function update_category(dtype_col, ctgval, filter_valid, category_method, signal) {
     if(!ctgval) { return; }
     var categories = dtype_col.categories;
-    if(!categories[ctgval]) { categories[ctgval] = {ctg:ctgval, count:0, value:null, filtered:false}; }
-    if(!filter_valid) { return; }
+    if(!categories[ctgval]) { categories[ctgval] = {ctg:ctgval, count:0, hidden_count:0, value:null, filtered:false}; }
+    if(!filter_valid) { categories[ctgval].hidden_count++; return; }
     categories[ctgval].count++;
     
     if(category_method=="count") { return; }
@@ -254,7 +255,16 @@ function zenbuCategoryElement_postprocess() {
     }
   };
 
-  var is_filtered = selected_dtype.filtered;
+  //recalc if this is filtered or not
+  var is_filtered = false;
+  for(var ctg in selected_dtype.categories) {
+    if(selected_dtype.categories[ctg].filtered) {
+      is_filtered = true;
+      break;          
+    }
+  }
+  if(selected_dtype.filtered != is_filtered) { console.log("DANGER!! selected_dtype.filtered out of sync with categories"); }
+  selected_dtype.filtered = is_filtered;
 
   var max_cnt=0;
   if(datasourceElement.datasource_mode == "edge")    {
@@ -279,39 +289,15 @@ function zenbuCategoryElement_postprocess() {
       if(edge && (/^f1\./.test(selected_dtype.datatype))) { t_feature = edge.feature1;}
       if(edge && (/^f2\./.test(selected_dtype.datatype))) { t_feature = edge.feature2;}
 
-      if(is_filtered) { //need to recalculate
-        //check for edge-weight filters
-        if(!reportElementEdgeCheckValidFilters(datasourceElement, edge)) { continue; }
-
-        selected_dtype.filtered=false;
-        reportElementCheckCategoryFilters(datasourceElement, edge);
+      //specific logic rather than using object.filter_valid
+      if(!reportElementEdgeCheckValidFilters(datasourceElement, edge)) { continue; }
+      selected_dtype.filtered=false;
+      if(!reportElementCheckCategoryFilters(datasourceElement, edge)) {
+        //even with this filter turned off it is still filter out so really filtered so skip it
+        if(is_filtered) { selected_dtype.filtered=true; }
+        continue;
       }
-      if(!edge.filter_valid) { continue; }
-
-      //var ctg = edge.mdata[selected_dtype.datatype]
-      //if(!edge.filter_valid) { continue; }
-      //TODO: maybe also implement the multi-select filter_feature_ids or some new multi-select-trigger layer
-      //this.filter_count++;
-    
-      /*
-      var val = "";
-      if(t_feature && (selected_dtype.datatype == "category")) {
-        val = t_feature.category;
-        if(val && !categories[val]) { categories[val] = {ctg:val, count:0, filtered:false}; }
-        if(source.filter_valid) { categories[val].count++; }
-      } else if(t_feature && (selected_dtype.datatype == "source_name")) {
-        val = t_feature.name;
-        if(val && !categories[val]) { categories[val] = {ctg:val, count:0, filtered:false}; }
-        if(source.filter_valid) { categories[val].count++; }
-      } else if(source.mdata && source.mdata[selected_dtype.datatype]) {
-        var value_array = source.mdata[selected_dtype.datatype];
-        for(var idx1=0; idx1<value_array.length; idx1++) {
-          val = value_array[idx1];
-          if(val && !categories[val]) { categories[val] = {ctg:val, count:0, filtered:false}; }
-          if(source.filter_valid) { categories[val].count++; }
-        }
-      }
-       */
+      if(is_filtered) { selected_dtype.filtered=true; }
       
       var signal = 0;
       if(this.ctg_value_datatype) {
@@ -334,70 +320,43 @@ function zenbuCategoryElement_postprocess() {
       }
 
       if(t_feature) {
+        var filtered =reportsObjectCheckCategoryFilters(t_feature, selected_dtype);
         if(t_feature.source && (datatype == "category")) {
           //console.log("check t_feature "+t_feature.name+" -- category");
-          update_category(selected_dtype, t_feature.source.category, t_feature.filter_valid, this.category_method, signal);
-          //val = t_feature.source.category;
-          //if(val && !categories[val]) { categories[val] = {ctg:val, count:0, value:0, filtered:false}; }
-          //if(t_feature.filter_valid) { categories[val].count++; }
+          update_category(selected_dtype, t_feature.source.category, filtered, this.category_method, signal);
         } else if(t_feature.source && (datatype == "source_name")) {
           //console.log("check t_feature "+t_feature.name+" -- source_name");
-          update_category(selected_dtype, t_feature.source.name, t_feature.filter_valid, this.category_method, signal);
-          //val = t_feature.source.name;
-          //if(val && !categories[val]) { categories[val] = {ctg:val, count:0, value:0, filtered:false}; }
-          //if(t_feature.filter_valid) { categories[val].count++; }
+          update_category(selected_dtype, t_feature.source.name, filtered, this.category_method, signal);
         } else if(datatype == "location_string") {
           //console.log("check t_feature "+t_feature.name+" -- location_string");
-          update_category(selected_dtype, t_feature.chromloc, t_feature.filter_valid, this.category_method, signal);
-          //val = t_feature.chromloc;
-          //if(val && !categories[val]) { categories[val] = {ctg:val, count:0, value:0, filtered:false}; }
-          //if(t_feature.filter_valid) { categories[val].count++; }
+          update_category(selected_dtype, t_feature.chromloc, filtered, this.category_method, signal);
         } else  if(datatype == "name") {
-          update_category(selected_dtype, t_feature.name, t_feature.filter_valid, this.category_method, signal);
+          update_category(selected_dtype, t_feature.name, filtered, this.category_method, signal);
         } else if(t_feature.mdata && t_feature.mdata[datatype]) {
           //console.log("check t_feature "+t_feature.name+" -- "+selected_dtype.datatype+"  mdata["+datatype+"]");
           var value_array = t_feature.mdata[datatype];
           for(var idx1=0; idx1<value_array.length; idx1++) {
             val = value_array[idx1];
-            update_category(selected_dtype, val, t_feature.filter_valid, this.category_method, signal);
-            //if(val && !categories[val]) { categories[val] = {ctg:val, count:0, value:0, filtered:false}; }
-            //if(t_feature.filter_valid) { categories[val].count++; }
+            update_category(selected_dtype, val, filtered, this.category_method, signal);
           }
         }
-      } else {
-        //selected_dtype is on the edge
+      } else { //selected_dtype is on the edge
+        var filtered =reportsObjectCheckCategoryFilters(edge, selected_dtype);
         //console.log("check edge name["+edge.name+"]");
         if(edge.source && (datatype == "category")) {
-          update_category(selected_dtype, edge.source.category, edge.filter_valid, this.category_method, signal);
-          //val = edge.source.category;
-          //if(val && !categories[val]) { categories[val] = {ctg:val, count:0, value:0, filtered:false}; }
-          //if(edge.filter_valid) { categories[val].count++; }
+          update_category(selected_dtype, edge.source.category, filtered, this.category_method, signal);
         } else if(edge.source && (datatype == "source_name")) {
-          update_category(selected_dtype, edge.source.name, edge.filter_valid, this.category_method, signal);
-          //val = edge.source.name;
-          //if(val && !categories[val]) { categories[val] = {ctg:val, count:0, value:0, filtered:false}; }
-          //if(edge.filter_valid) { categories[val].count++; }
+          update_category(selected_dtype, edge.source.name, filtered, this.category_method, signal);
         } else if(datatype == "location_string") {
-          update_category(selected_dtype, edge.chromloc, edge.filter_valid, this.category_method, signal);
-          //val = edge.chromloc;
-          //if(val && !categories[val]) { categories[val] = {ctg:val, count:0, value:0, filtered:false}; }
-          //if(edge.filter_valid) { categories[val].count++; }
+          update_category(selected_dtype, edge.chromloc, filtered, this.category_method, signal);
         } else if(edge.mdata && edge.mdata[datatype]) {
           var value_array = edge.mdata[datatype];
           for(var idx1=0; idx1<value_array.length; idx1++) {
             val = value_array[idx1];
-            update_category(selected_dtype, val, edge.filter_valid, this.category_method, signal);
-            //if(val && !categories[val]) { categories[val] = {ctg:val, count:0, value:0, filtered:false}; }
-            //if(edge.filter_valid) { categories[val].count++; }
+            update_category(selected_dtype, val, filtered, this.category_method, signal);
           }
         }
-      }
-      
-      if(is_filtered) {  //reset filter back
-        selected_dtype.filtered=true;
-        reportElementEdgeCheckValidFilters(datasourceElement, edge);
-        reportElementCheckCategoryFilters(datasourceElement, edge);
-      }
+      }      
     }  //loop on edges
   }
   
@@ -407,11 +366,16 @@ function zenbuCategoryElement_postprocess() {
     for(j=0; j<datasourceElement.feature_array.length; j++) {
       var feature = datasourceElement.feature_array[j];
       if(!feature) { continue; }
-      if(is_filtered) {
-        selected_dtype.filtered=false;
-        reportElementCheckValidSignalFilters(datasourceElement, feature);
-        reportElementCheckCategoryFilters(datasourceElement, feature);
+      
+      //specific logic rather than using object.filter_valid
+      if(!reportElementCheckValidSignalFilters(datasourceElement, feature)) { continue; }
+      selected_dtype.filtered=false;
+      if(!reportElementCheckCategoryFilters(datasourceElement, feature)) {
+        //even with this filter turned off it is still filter out so really filtered so skip it
+        if(is_filtered) { selected_dtype.filtered=true; }
+        continue;
       }
+      if(is_filtered) { selected_dtype.filtered=true; }
 
       var signal = 0;
       if(feature.expression_hash && feature.expression_hash[this.ctg_value_datatype] && feature.expression_hash[this.ctg_value_datatype][0]) {
@@ -438,12 +402,6 @@ function zenbuCategoryElement_postprocess() {
           update_category(selected_dtype, val, feature.filter_valid, this.category_method, signal);
         }
       }
-      
-      if(is_filtered) {
-        selected_dtype.filtered=true;
-        reportElementCheckValidSignalFilters(datasourceElement, feature);
-        reportElementCheckCategoryFilters(datasourceElement, feature);
-      }
     }
   }
   
@@ -452,11 +410,16 @@ function zenbuCategoryElement_postprocess() {
     for(j=0; j<datasourceElement.sources_array.length; j++) {
       var source = datasourceElement.sources_array[j];
       if(!source) { continue; }
-      if(is_filtered) {
-        selected_dtype.filtered=false;
-        source.filter_valid = true;
-        reportElementCheckCategoryFilters(datasourceElement, source);
+
+      //specific logic rather than using object.filter_valid
+      selected_dtype.filtered=false;
+      if(!reportElementCheckCategoryFilters(datasourceElement, source)) {
+        //even with this filter turned off it is still filter out so really filtered so skip it
+        if(is_filtered) { selected_dtype.filtered=true; }
+        continue;
       }
+      if(is_filtered) { selected_dtype.filtered=true; }
+
       var val = "";
       if(selected_dtype.datatype == "category") {
         val = source.category;
@@ -474,17 +437,13 @@ function zenbuCategoryElement_postprocess() {
           if(source.filter_valid) { categories[val].count++; }
         }
       }
-      if(is_filtered) {
-        selected_dtype.filtered=true;
-        source.filter_valid = true;
-        reportElementCheckCategoryFilters(datasourceElement, source);
-      }
     }
   }
   
   for(var ctg in categories) {
     var ctg_obj = categories[ctg];
     if(ctg_obj.count>max_cnt) { max_cnt=ctg_obj.count; }
+    if(ctg_obj.hidden_count>max_cnt) { max_cnt=ctg_obj.hidden_count; }
     //console.log("dtype["+selected_dtype.datatype+"]  category ["+ctg_obj.ctg+"] cnt="+ctg_obj.count);
   }
   
@@ -791,6 +750,7 @@ function zenbuCategoryElement_drawFilterList() {
   for(var ctg in categories) {
     var ctg_obj = categories[ctg];
     if(ctg_obj.count>max_cnt) { max_cnt=ctg_obj.count; }
+    if(ctg_obj.hidden_count>max_cnt) { max_cnt=ctg_obj.hidden_count; }
     //console.log("category ["+ctg_obj.ctg+"] cnt="+ctg_obj.count);
     ctg_array.push(ctg_obj);
   }
@@ -820,7 +780,7 @@ function zenbuCategoryElement_drawFilterList() {
   for(var idx1=0; idx1<ctg_array.length; idx1++) {
     var ctg_obj = ctg_array[idx1];
     
-    if(this.hide_zero && !ctg_obj.filtered && (ctg_obj.count==0)) { continue; }
+    if(this.hide_zero && !ctg_obj.filtered && (ctg_obj.count==0) && (ctg_obj.hidden_count==0)) { continue; }
     
     var tdiv = ctg_main_div.appendChild(document.createElement('div'));
     style ="margin: 0px 0px 0px 0px; text-align:left; font-size:12px; font-family:arial,helvetica,sans-serif; background-color:#FDFDFD;  word-wrap:break-word; ";
@@ -847,13 +807,18 @@ function zenbuCategoryElement_drawFilterList() {
     tspan1.innerHTML = ctg_obj.ctg;
     if(selected_dtype.filtered) { tspan1.style.fontWeight = "bold"; }
 
+    var ctg_count = ctg_obj.count;
+    if(ctg_obj.count==0 && ctg_obj.hidden_count>0) { ctg_count = ctg_obj.hidden_count; }
     var tspan2 = tdiv.appendChild(document.createElement('span'));
     tspan2.setAttribute('style', "display:inline-block; position:relative; margin-left:2px; background-color:lightgray; border-radius:7px; height:14px; font-size:10px;");
     tspan2.style.width = ((content_width-30)/2)+"px";
-    var varwidth = ((content_width-30)/2)*(ctg_obj.count/max_cnt);
+    var varwidth = ((content_width-30)/2)*(ctg_count/max_cnt);
     tspan3 = tspan2.appendChild(document.createElement('span'));
-    tspan3.setAttribute('style', "display:inline-block; position:absolute; background-color:lightblue; border-radius:7px; height:14px; left:0px; top:0px;");
+    var bckcolor = "lightblue";
+    if(ctg_obj.filtered) { bckcolor = "#a7f1a7"; }
+    tspan3.setAttribute('style', "display:inline-block; position:absolute; background-color:"+bckcolor+"; border-radius:7px; height:14px; left:0px; top:0px;");
     if(varwidth>12) { tspan3.style.width = parseInt(varwidth)+"px"; }
+
     else {
       tspan3.style.width = "12px";
       var clip1 = tspan2.appendChild(document.createElement('span'));
@@ -863,7 +828,7 @@ function zenbuCategoryElement_drawFilterList() {
     }
     tspan4 = tspan2.appendChild(document.createElement('span'));
     tspan4.setAttribute('style', "display:inline-block; position:absolute; text-align:center; left:0px; top:1px; ");
-    tspan4.appendChild(document.createTextNode(ctg_obj.count));
+    tspan4.appendChild(document.createTextNode(ctg_count));
     tspan4.style.width = parseInt((content_width-30)/2)+"px";
   }
 }
@@ -918,6 +883,7 @@ function zenbuCategoryElement_drawChart() {
   for(var ctg in categories) {
     var ctg_obj = categories[ctg];
     if(ctg_obj.count>max_cnt) { max_cnt=ctg_obj.count; }
+    if(ctg_obj.hidden_count>max_cnt) { max_cnt=ctg_obj.hidden_count; }
     //console.log("category ["+ctg_obj.ctg+"] cnt="+ctg_obj.count);
     ctg_array.push(ctg_obj);
   }
@@ -1074,6 +1040,8 @@ function category_count_sort_func(a,b) {
   if(!a.filtered && b.filtered) { return 1; }
   if(b.count > a.count) { return 1; }
   if(b.count < a.count) { return -1; }
+  if(b.hidden_count > a.hidden_count) { return 1; }
+  if(b.hidden_count < a.hidden_count) { return -1; }
   return 0;
 }
 

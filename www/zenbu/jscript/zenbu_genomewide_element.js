@@ -1,4 +1,4 @@
-/* $Id: zenbu_genomewide_element.js,v 1.18 2019/04/01 09:26:10 severin Exp $ */
+/* $Id: zenbu_genomewide_element.js,v 1.22 2019/11/28 10:03:41 severin Exp $ */
 
 // ZENBU
 //
@@ -159,12 +159,7 @@ function zenbuGenomeWideElement_generateConfigDOM() {
 //===============================================================
 
 function zenbuGenomeWideElement_elementEvent(mode, value, value2) {
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
   
   if(mode == "select_slot") {  
     if(this.chromview_slots) {
@@ -194,7 +189,7 @@ function zenbuGenomeWideElement_elementEvent(mode, value, value2) {
         //var chromloc = slot.chrom.chrom_name+":"+slot.start+".."+slot.end;
         var chromloc = slot.chrom.chrom_name+":"+start+".."+end;
         //this.selected_location = chromloc;
-        reportElementEvent(this.elementID, 'select_location', chromloc);
+        reportElementUserEvent(this, 'select_location', chromloc);
       }
     }
   }
@@ -338,12 +333,7 @@ function zenbuGenomeWideElement_postprocess() {
   
   this.fetchAssembly();  //fetch if needed
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
 
   var feature_count = datasourceElement.feature_array.length;
   var edge_count    = datasourceElement.edge_array.length;
@@ -373,7 +363,8 @@ function zenbuGenomeWideElement_postprocess() {
 
   if(!datasourceElement.dtype_filter_select) { datasourceElement.dtype_filter_select = "slotcount"; }
 
-  if(datasourceElement.datasource_mode == "feature") {
+  //if(datasourceElement.datasource_mode == "feature") {
+  if(datasourceElement.feature_array.length>0) {
     this.filter_count=0;
     for(j=0; j<datasourceElement.feature_array.length; j++) {
       var feature = datasourceElement.feature_array[j];
@@ -404,6 +395,7 @@ function zenbuGenomeWideElement_postprocess() {
   }
 
   if(datasourceElement.datasource_mode == "edge") {
+    console.log("zenbuGenomeWideElement_postprocess [" + this.elementID+"] edges");
     this.filter_count=0;
     //datasourceElement.edge_array.sort(this.tableSortFunc());
     for(j=0; j<datasourceElement.edge_array.length; j++) {
@@ -421,8 +413,14 @@ function zenbuGenomeWideElement_postprocess() {
       if(this.assembly && this.assembly.chroms_hash) {
         var chrom1 = this.assembly.chroms_hash[edge.feature1.chrom];
         var chrom2 = this.assembly.chroms_hash[edge.feature2.chrom];
-        if(chrom1) { chrom1.has_features = true; }
-        if(chrom2) { chrom2.has_features = true; }
+        if(chrom1) { 
+          chrom1.has_features = true; 
+          edge.feature1.chrom_name_index = chrom1.name_index;
+        }
+        if(chrom2) { 
+          chrom2.has_features = true; 
+          edge.feature2.chrom_name_index = chrom2.name_index;          
+        }
       }
     }
   }
@@ -589,12 +587,7 @@ function zenbuGenomeWideElement_drawChromosomeView() {
   var main_div = this.main_div;
   if(!main_div) { return; }
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
 
   if(this.resized) { //clear render caches so it rebuilds
     this.chromview_feature_render = null; 
@@ -739,12 +732,7 @@ function zenbuGenomeWideElement_renderChromViewFeatures() {
   console.log("zenbuGenomeWideElement_renderChromViewFeatures start");
   var t0 = performance.now();
   
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
   
   //
   // render the features onto genomic-map
@@ -983,11 +971,7 @@ function zenbuGenomeWideElement_slotHoverInfo(elementID, slotIdx) {
   var reportElement = current_report.elements[elementID];
   if(!reportElement) { return; }
 
-  var datasourceElement = reportElement;
-  if(reportElement.datasourceElementID) {
-    var ds = current_report.elements[reportElement.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-  }
+  var datasourceElement = reportElement.datasource();
   if(!datasourceElement) { return; }
     
   var slot = reportElement.chromview_slots[slotIdx];
@@ -1070,12 +1054,7 @@ function zenbuGenomeWideElement_drawManhattanPlot() {
   var main_div = this.main_div;
   if(!main_div) { return; }
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
   
   if(this.resized) { //clear render caches so it rebuilds
     this.manhattan_feature_render = null; 
@@ -1281,12 +1260,7 @@ function zenbuGenomeWideElement_renderManhattanViewFeatures() {
   console.log("zenbuGenomeWideElement_renderManhattanViewFeatures start");
   var t0 = performance.now();
   
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
   
   var height = this.manhattan_bottom - 15;
   var width  = this.content_width;  
@@ -1408,6 +1382,8 @@ function zenbuGenomeWideElement_renderManhattanViewFeatures() {
       }
       fy = this.manhattan_bottom -2 - (height * s1);
     }
+    
+    if(this.hide_filtered_slots && !is_valid) { continue; }
     
     var color = "#E8E8E8";
     if(is_valid) {
@@ -1551,12 +1527,7 @@ function zenbuGenomeWideElement_renderEdges(svg) {
   var main_div = this.main_div;
   if(!main_div) { return; }
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
   if(datasourceElement.datasource_mode != "edge") { return; }
     
   //console.log("zenbuGenomeWideElement_renderEdges ["+this.elementID+"]");
@@ -1654,11 +1625,7 @@ function zenbuGenomeWideElement_edgeHoverInfo(elementID, edgeIdx) {
   var reportElement = current_report.elements[elementID];
   if(!reportElement) { return; }
 
-  var datasourceElement = reportElement;
-  if(reportElement.datasourceElementID) {
-    var ds = current_report.elements[reportElement.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-  }
+  var datasourceElement = reportElement.datasource();
   if(!datasourceElement) { return; }
   if(datasourceElement.datasource_mode != "edge") { return; }
     
@@ -1753,12 +1720,7 @@ function zenbuGenomeWideElement_configSubpanel() {
   
   var configdiv = this.config_options_div;
   
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
 
   var labelDiv = configdiv.appendChild(document.createElement('div'));
   labelDiv.setAttribute("style", "font-size:12px; font-family:arial,helvetica,sans-serif;");
@@ -1778,7 +1740,7 @@ function zenbuGenomeWideElement_configSubpanel() {
 
   //-----  
   tdiv2  = configdiv.appendChild(document.createElement('div'));
-  tdiv2.setAttribute('style', "margin-top: 5px;");
+  tdiv2.setAttribute('style', "margin: 5px 0px 0px 5px;");
   tdiv2.appendChild(reportElementColorSpaceOptions(this));
     
   tdiv2  = configdiv.appendChild(document.createElement('div'));
@@ -1833,16 +1795,27 @@ function zenbuGenomeWideElement_configSubpanel() {
     option.innerHTML = val1;
     if(val1 == display_type) { option.setAttribute("selected", "selected"); }
   }
+  
+  var feature_color_mode = this.feature_color_mode;
+  if(this.newconfig && this.newconfig.feature_color_mode != undefined) { feature_color_mode = this.newconfig.feature_color_mode; }
 
   var chrom_view_options = configdiv.appendChild(document.createElement("div"));
+  var datatype_options  = configdiv.appendChild(document.createElement("div"));
   var manhattan_options  = configdiv.appendChild(document.createElement("div"));
   chrom_view_options.style.display = "none";
   manhattan_options.style.display = "none";
-  if(display_type=="chromosome view") { chrom_view_options.style.display = "block"; }
-  if(display_type=="manhattan plot")  { manhattan_options.style.display = "block"; }
+  if(display_type=="chromosome view") { 
+    chrom_view_options.style.display = "block";
+    datatype_options.style.display = "none";    
+    if(feature_color_mode == "signal") { datatype_options.style.display = "block"; }
+  }
+  if(display_type=="manhattan plot")  { 
+    datatype_options.style.display = "block";    
+    manhattan_options.style.display = "block";
+  }
 
   //datatype select
-  var tdiv  = configdiv.appendChild(document.createElement('div'));
+  var tdiv  = datatype_options.appendChild(document.createElement('span'));
   tdiv.setAttribute('style', "margin: 3px 1px 0px 5px;");
   var tspan = tdiv.appendChild(document.createElement('span'));
   tspan.innerHTML = "signal datatype: ";
@@ -1903,29 +1876,47 @@ function zenbuGenomeWideElement_configSubpanel() {
   //manhattan-plot manhattan_options
   //
   //yaxis_logscale
-  tdiv2  = manhattan_options.appendChild(document.createElement('div'));
-  tcheck = tdiv2.appendChild(document.createElement('input'));
-  tcheck.setAttribute('style', "margin: 0px 1px 0px 5px;");
-  tcheck.setAttribute('type', "checkbox");
-  var val1 = this.yaxis_logscale;
-  if(this.newconfig && this.newconfig.yaxis_logscale != undefined) { 
-    val1 = this.newconfig.yaxis_logscale; 
-  }
-  if(val1) { tcheck.setAttribute('checked', "checked"); }
-  tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'yaxis_logscale', this.checked);");
-  tspan2 = tdiv2.appendChild(document.createElement('span'));
-  tspan2.innerHTML = "y-axis logscale";
+  if(display_type=="manhattan plot")  { 
+    tdiv2  = manhattan_options.appendChild(document.createElement('div'));
+    //tdiv2  = datatype_options.appendChild(document.createElement('span'));
+    //tdiv2.style.display = "inline-block";
+    tdiv2.style.marginLeft = "5px";
+    tcheck = tdiv2.appendChild(document.createElement('input'));
+    tcheck.setAttribute('style', "margin: 0px 1px 0px 5px;");
+    tcheck.setAttribute('type', "checkbox");
+    var val1 = this.yaxis_logscale;
+    if(this.newconfig && this.newconfig.yaxis_logscale != undefined) { 
+      val1 = this.newconfig.yaxis_logscale; 
+    }
+    if(val1) { tcheck.setAttribute('checked', "checked"); }
+    tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'yaxis_logscale', this.checked);");
+    tspan2 = tdiv2.appendChild(document.createElement('span'));
+    tspan2.innerHTML = "y-axis logscale";
 
+    tspan2  = tdiv2.appendChild(document.createElement('span'));
+    //tspan2.style.display = "inline-block";
+    tspan2.style.marginLeft = "5px";
+    tcheck = tspan2.appendChild(document.createElement('input'));
+    tcheck.setAttribute('style', "margin: 0px 1px 0px 5px;");
+    tcheck.setAttribute('type', "checkbox");
+    var val1 = this.hide_filtered_slots;
+    if(this.newconfig && this.newconfig.hide_filtered_slots != undefined) { 
+      val1 = this.newconfig.hide_filtered_slots; 
+    }
+    if(val1) { tcheck.setAttribute('checked', "checked"); }
+    tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'hide_filtered_slots', this.checked);");
+    tspan2 = tdiv2.appendChild(document.createElement('span'));
+    tspan2.innerHTML = "hide filtered";
+  }
+  
   //
   //feature_color_mode
   //
   tdiv2  = configdiv.appendChild(document.createElement('div'));
   var tspan = tdiv2.appendChild(document.createElement('span'));
-  tspan.setAttribute('style', "margin: 0px 5px 0px 5px; ");
+  tspan.setAttribute('style', "margin: 0px 0px 0px 5px; ");
   tspan.innerHTML = "coloring mode: ";
 
-  var feature_color_mode = this.feature_color_mode;
-  if(this.newconfig && this.newconfig.feature_color_mode != undefined) { feature_color_mode = this.newconfig.feature_color_mode; }
   //console.log("feature_color_mode : "+feature_color_mode);
   radio1 = tdiv2.appendChild(document.createElement('input'));
   radio1.setAttribute("type", "radio");
@@ -1963,7 +1954,7 @@ function zenbuGenomeWideElement_configSubpanel() {
   if(feature_color_mode == "signal") { radio2.setAttribute('checked', "checked"); }
   radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'feature_color_mode', this.value);");
   tspan = tdiv2.appendChild(document.createElement('span'));
-  tspan.innerHTML = "signal spectrum";
+  tspan.innerHTML = "signal";
 
   var color_options_div = configdiv.appendChild(document.createElement('div'));
   color_options_div.setAttribute('style', "margin-top:2px;");

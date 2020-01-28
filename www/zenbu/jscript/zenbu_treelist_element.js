@@ -109,12 +109,7 @@ function zenbuTreeListElement_generateConfigDOM() {
 //TODO: these are placeholders for now, still need to figure out how to integrate subclass into main code
 
 function zenbuTreeListElement_elementEvent(mode, value, value2) {
-  //var datasourceElement = this;
-  //if(this.datasourceElementID) {
-  //  var ds = current_report.elements[this.datasourceElementID];
-  //  if(ds) { datasourceElement = ds; }
-  //  else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  //}
+  //var datasourceElement = this.datasource();
 }
 
 
@@ -410,12 +405,7 @@ function zenbuTreeListElement_configSubpanel() {
   
   var configdiv = this.config_options_div;
   
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
   
   //-----
   div1 = configdiv.appendChild(document.createElement('div'));

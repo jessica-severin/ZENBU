@@ -41,9 +41,13 @@ var eedbEchoSvgCGI = eedbWebRoot + "/cgi/eedb_svgecho.cgi";
 
 function ZenbuGenomeBrowser(main_div) {
   this.uuid = zenbuGenerateUUID();
+  this.elementID = "zenbuGB_"+ this.uuid;
   console.log("new ZenbuGenomeBrowser : "+this.uuid);
 
   this.display_width = Math.floor(800);
+  this.display_width_auto = false;
+  this.searchbox_enabled = true;
+  
   this.asm = "hg38";
   this.genus = "";
   this.species = "";
@@ -59,6 +63,7 @@ function ZenbuGenomeBrowser(main_div) {
   this.view_config = null;
   this.config_createdate = "";
   this.config_creator = "";
+  this.config_fixed_id = "";
   this.view_config_loaded = false;
 
   this.nocache = false;
@@ -87,12 +92,18 @@ function ZenbuGenomeBrowser(main_div) {
   this.expPanelFrame = this.main_div.appendChild(document.createElement('div'));
 
   gLyphsSearchInterface(this);
-  //eedbEmptySearchResults(this.searchSetID);
   
   //class methods
   this.regionLocation    = gLyphsGB_regionLocation;
   this.activeTrack       = gLyphsGB_activeTrack;
   this.selectedFeature   = gLyphsGB_selectedFeature;
+
+  //callbacks
+  this.autosave             = gLyphsGB_default_autosave;
+  this.urlHistoryUpdate     = gLyphsGB_default_urlHistoryUpdate;
+  this.trackLoadComplete    = gLyphsGB_default_trackLoadComplete;
+  this.selectionCallback    = gLyphsGB_default_selectionCallback;
+  this.activeTrackCallback  = gLyphsGB_default_activeTrackCallback;
 }
 
 
@@ -114,6 +125,33 @@ function gLyphsGB_selectedFeature() {
   return activeTrack.selected_feature;
 }
 
+function gLyphsGB_default_autosave() {
+  //just a place holder "superclass" method so that it always functions
+  console.log("gLyphsGB_default_autosave");
+}
+
+function gLyphsGB_default_urlHistoryUpdate() {
+  //just a place holder "superclass" method so that it always functions
+  console.log("gLyphsGB_default_urlHistoryUpdate");
+}
+
+function gLyphsGB_default_trackLoadComplete() {
+  //just a place holder "superclass" method so that it always functions
+  console.log("gLyphsGB_default_trackLoadComplete");
+}
+
+function gLyphsGB_default_selectionCallback() {
+  //just a place holder "superclass" method so that it always functions
+  if(this.selectedFeature()) {
+    console.log("gLyphsGB_default_selectionCallback activeTrack:"+this.active_trackID+"  feature:"+(this.selectedFeature().id));
+  } else { console.log("gLyphsGB_default_selectionCallback"); }
+}
+
+function gLyphsGB_default_activeTrackCallback() {
+  //just a place holder "superclass" method so that it always functions
+  console.log("gLyphsGB_default_activeTrackCallback activeTrack:"+this.active_trackID);
+}
+
 //---------------------------------------------
 //
 // and XHR to get the feature DOM data
@@ -124,6 +162,7 @@ function gLyphsGB_selectedFeature() {
 function gLyphsProcessFeatureSelect(glyphsGB, object) {
   if(!object) {
     if(glyphsGB.selected_feature) { 
+      console.log("gLyphsProcessFeatureSelect clear selected_feature");
       //clear selected feature
       glyphsGB.selected_feature = undefined;
       zenbuDisplayFeatureInfo(); //clears panel
@@ -138,27 +177,19 @@ function gLyphsProcessFeatureSelect(glyphsGB, object) {
   if(object.source_name == "eeDB_gLyphs_configs") {
     var configUUID = object.uuid;;
     if(configUUID) { 
-      gLyphsInitViewConfigUUID(configUUID); 
+      gLyphsInitViewConfigUUID(glyphsGB, configUUID); 
       gLyphsReloadRegion(glyphsGB);
-      gLyphsChangeDhtmlHistoryLocation();
+      glyphsGB.urlHistoryUpdate();
       return 0;
     }
   } else {
     if(glyphsGB.selected_feature == object) {
       gLyphsCenterOnFeature(glyphsGB, glyphsGB.selected_feature);
     } else {
+      console.log("gLyphsProcessFeatureSelect set selected_feature");
       glyphsGB.selected_feature = object;
-      //if(object.strand!="+" && object.strand!="-") {
-      //  if(current_region.flip_orientation) { object.strand = "-"; } else { object.strand = "+"; }
-      //}
       zenbuDisplayFeatureInfo(object);
     }
-
-    //need to rethink if I rebuild this differently
-    //feature_express_probes = xmlDoc.getElementsByTagName("feature_express");
-    //displayProbeInfo();  //old system not used anymore
-    //current_express_probe = feature_express_probes[0];
-    //current_express_probe = processFeatureExpressProbe(feature_express_probes[0]);
 
     gLyphsDrawExpressionPanel(glyphsGB);
   }
@@ -166,54 +197,16 @@ function gLyphsProcessFeatureSelect(glyphsGB, object) {
 }
 
 
-/*
-function processFeatureExpressProbe(probeXML) {
-  if(!probeXML) { return undefined; }
-
-  var expExpress = new Object;
-
-  var heading_text = probeXML.getAttribute("probe_title");
-  if(!heading_text) {
-    heading_text = "expression";
-    var feature = probeXML.getElementsByTagName("feature")[0];
-    if(feature) {
-      var fsource = feature.getElementsByTagName("featuresource")[0];
-      heading_text = "[" + fsource.getAttribute("name") + "]   " + feature.getAttribute("name");
-    }
-    var region = probeXML.getElementsByTagName("express_region")[0];
-    if(region) {
-      var asm    = region.getAttribute("asm");
-      var chrom  = region.getAttribute("chrom");
-      var start  = region.getAttribute("start");
-      var end    = region.getAttribute("end");
-      heading_text = "region: "+ asm + " " +chrom+ ":" +start+ ".." +end;
-    }
+function gLyphsSearchSelect(glyphsGB, search_filter) {
+  if(!glyphsGB) { return; }
+  glyphsGB.selected_feature = null;  //remove gb-wide selected_feature
+  for(var trackID in glyphsGB.tracks_hash){
+    var glyphTrack = glyphsGB.tracks_hash[trackID];
+    if(!glyphTrack) { continue; }
+    gLyphsTrackSearchSelect(glyphTrack, search_filter);
   }
-  expExpress.heading_text     = heading_text;
-  expExpress.experiment_array = new Array;
-  expExpress.experiments      = new Object;
-
-  var express = probeXML.getElementsByTagName("expression");
-  var max_value = 0;
-  for(var i=0; i<express.length; i++) {
-    var experiment = new Object;
-
-    experiment.exptype   = express[i].getAttribute("type");
-    experiment.expname   = express[i].getAttribute("exp_name");
-    experiment.id        = express[i].getAttribute("experiment_id");
-    experiment.value     = parseFloat(express[i].getAttribute("value"));
-    experiment.sig_error = parseFloat(express[i].getAttribute("sig_error"));
-
-    expExpress.experiments[experiment.id] = experiment;
-    expExpress.experiment_array.push(experiment);
-
-    if(experiment.value > max_value) max_value = experiment.value;
-  }
-  expExpress.max_value = max_value;
-  return expExpress;
-} 
-*/
-
+  gLyphsRedrawRegion(glyphsGB);
+}
 
 
 //=======================================================================================
@@ -229,14 +222,16 @@ function gLyphsChangeActiveTrack(glyphTrack) {
     if(!glyphTrack.glyphsGB.share_exp_panel) { glyphsExpPanelDraw(glyphTrack); }
     return;
   }
-  //console.log("gLyphsChangeActiveTrack "+glyphTrack.trackID);
+  console.log("gLyphsChangeActiveTrack "+glyphTrack.trackID);
   
   glyphTrack.glyphsGB.active_trackID = glyphTrack.trackID;
   glyphTrack.expPanelActive = true;
 
   gLyphsProcessFeatureSelect(glyphTrack.glyphsGB); //clear feature selection
   gLyphsUpdateTrackTitleBars(glyphTrack.glyphsGB);
-  gLyphsDrawExpressionPanel(glyphTrack.glyphsGB); 
+  gLyphsDrawExpressionPanel(glyphTrack.glyphsGB);
+  
+  if(glyphTrack.glyphsGB.activeTrackCallback) { glyphTrack.glyphsGB.activeTrackCallback(); }
 }
 
 
@@ -264,9 +259,9 @@ function gLyphsUpdateTrackTitleBars(glyphsGB) {
 //----------------------------------------------
 
 function gLyphsCenterOnFeature(glyphsGB, feature) {
-  if(!glyphsGB) { return; }
+  if(!glyphsGB) { return false; }
   if(feature === undefined) { feature = glyphsGB.selected_feature; }
-  if(feature === undefined) { return; }
+  if(feature === undefined) { return false; }
 
   var start = feature.start;
   var end   = feature.end;
@@ -277,7 +272,7 @@ function gLyphsCenterOnFeature(glyphsGB, feature) {
   if((glyphsGB.asm == feature.asm) && 
      (glyphsGB.chrom == feature.chrom) &&
      (glyphsGB.start == start) &&
-     (glyphsGB.end == end)) { return; }
+     (glyphsGB.end == end)) { return false; }
 
   gLyphsSetLocation(glyphsGB, feature.asm, feature.chrom, start, end);
 
@@ -287,7 +282,8 @@ function gLyphsCenterOnFeature(glyphsGB, feature) {
   }
 
   gLyphsReloadRegion(glyphsGB);
-  gLyphsChangeDhtmlHistoryLocation();
+  glyphsGB.urlHistoryUpdate();
+  return true;
 }
 
 
@@ -434,7 +430,7 @@ function gLyphsInitLocation(glyphsGB, query) {
   if(region) {
     gLyphsSetLocation(glyphsGB, region.asm, region.chrom, region.start, region.end, region.strand);
     glyphsGB.main_div.style.display = 'block';
-    eedbEmptySearchResults(glyphsGB.searchSetID);
+    gLyphsEmptySearchResults(glyphsGB);
     return true;
   }
   return false;
@@ -485,7 +481,7 @@ function gLyphsRecenterView(glyphsGB, chrpos) {
 
   gLyphsSetLocation(glyphsGB, glyphsGB.asm, glyphsGB.chrom, start, end);
   gLyphsReloadRegion(glyphsGB);
-  gLyphsChangeDhtmlHistoryLocation();
+  glyphsGB.urlHistoryUpdate();
 }
 
 
@@ -493,7 +489,7 @@ function gLyphsLoadLocation(glyphsGB, chromloc) {
   //parse location and reload the view
   if(gLyphsInitLocation(glyphsGB, chromloc)) {
     gLyphsReloadRegion(glyphsGB);
-    gLyphsChangeDhtmlHistoryLocation();
+    glyphsGB.urlHistoryUpdate();
   }
 }
 
@@ -509,7 +505,7 @@ function glyphsGetChromInfo(glyphsGB, asm, chrom) {
   glyphsGB.chrom_id     = null;
   glyphsGB.has_sequence = false;
 
-  var url = eedbSearchFCGI + "?mode=chrom&asm="+asm+";chrom="+chrom;
+  var url = eedbSearchCGI + "?mode=chrom&asm="+asm+";chrom="+chrom;
   var chromXMLHttp=GetXmlHttpObject();
   if(chromXMLHttp==null) { return; }
 
@@ -609,7 +605,7 @@ function glyphsGetChromSequence(glyphsGB) {
 
   var xmlDoc=chromXMLHttp.responseXML.documentElement;
   if(xmlDoc==null) {
-    document.getElementById("message").innerHTML= 'Problem with central DB!';
+    //document.getElementById("message").innerHTML= 'Problem with central DB!';
     return;
   }
 
@@ -627,15 +623,14 @@ function gLyphsRedrawRegion(glyphsGB) {
   var glyphset = glyphsGB.gLyphTrackSet;
   glyphset.setAttribute("style", 'width: '+ (glyphsGB.display_width+10) +'px;');
 
-  var gLyphDivs = glyphset.getElementsByClassName("gLyphTrack");
-  for(var i=0; i<gLyphDivs.length; i++) {
-    var gLyphDiv = gLyphDivs[i];
-    var trackID = gLyphDiv.getAttribute("id");
-    var glyphTrack = glyphsTrack_global_track_hash[trackID];
+  for(var trackID in glyphsGB.tracks_hash){
+    var glyphTrack = glyphsGB.tracks_hash[trackID];
     if(!glyphTrack) { continue; }
     gLyphsRenderTrack(glyphTrack);
     gLyphsDrawTrack(trackID);
   }
+  zenbuDisplayFeatureInfo(); //clears panel
+  gLyphsDrawExpressionPanel(glyphsGB);
 }
 
 
@@ -661,283 +656,147 @@ function glyphsNavigationControls(glyphsGB) {
   var navCtrls = glyphsGB.navCtrls;  
   navCtrls.innerHTML ="";
 
-    //view load progress div
-    var loadProgress = navCtrls.appendChild(document.createElement("div"));
-    loadProgress.id = "gLyphs_load_progress_div";
-    loadProgress.setAttribute("style", "margin-top:5px; margin-bottom:3px; font-size:12px; display:none; ");
-
-    //location
-    var locInfo = navCtrls.appendChild(document.createElement("div"));
-    locInfo.setAttribute("style", "float:left; margin-top:5px; margin-bottom:3px; font-size:12px; ");
-    locInfo.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
-    if(zenbu_embedded_view) {
-      locInfo.setAttributeNS(null, "onclick", "zenbu_toggle_embedded_view();");
-      locInfo.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\"go to full view in ZENBU\",150);");
-    } else {
-      locInfo.onclick = function() { glyphsEditLocation(glyphsGB); }
-      locInfo.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\"change location\",80);");
-    }
-    glyphsGB.gLyphs_location_info = locInfo;
+  //view load progress div
+  var loadProgress = navCtrls.appendChild(document.createElement("div"));
+  loadProgress.setAttribute("style", "margin-top:5px; margin-bottom:3px; font-size:12px; display:none; ");
+  glyphsGB.load_progress_div = loadProgress;
  
-    //move buttons
-    var navCtrlRight = navCtrls.appendChild(document.createElement("div"));
-    navCtrlRight.setAttribute("style", "float:right; margin-bottom:3px;");
+  //location
+  var locInfo = navCtrls.appendChild(document.createElement("div"));
+  locInfo.setAttribute("style", "float:left; margin-top:5px; margin-bottom:3px; font-size:12px; ");
+  locInfo.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
+  if(zenbu_embedded_view) {
+    locInfo.setAttributeNS(null, "onclick", "zenbu_toggle_embedded_view();");
+    locInfo.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\"go to full view in ZENBU\",150);");
+  } else {
+    locInfo.onclick = function() { glyphsEditLocation(glyphsGB); }
+    locInfo.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\"change location\",80);");
+  }
+  glyphsGB.gLyphs_location_info = locInfo;
 
-    var span2 = navCtrlRight.appendChild(document.createElement("span"));
-    span2.setAttribute("style", "margin-right:3px; margin-left:5px;");
+  //move buttons
+  var navCtrlRight = navCtrls.appendChild(document.createElement("div"));
+  navCtrlRight.setAttribute("style", "float:right; margin-bottom:3px;");
 
-    var button = navCtrlRight.appendChild(document.createElement("button"));
-    button.setAttribute("style", "font-size:10px; font-weight:bold; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
-    button.setAttribute("onclick", "regionChange('ll')");
-    button.innerHTML = "<<";
+  var span2 = navCtrlRight.appendChild(document.createElement("span"));
+  span2.setAttribute("style", "margin-right:3px; margin-left:5px;");
 
-    var button = navCtrlRight.appendChild(document.createElement("button"));
-    button.setAttribute("style", "font-size:10px; font-weight:bold; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
-    button.setAttribute("onclick", "regionChange('l')");
-    button.innerHTML = "<";
+  var button = navCtrlRight.appendChild(document.createElement("button"));
+  button.setAttribute("style", "font-size:10px; font-weight:bold; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.onclick = function() { gLyphsRegionChange(glyphsGB, "ll"); }
+  button.innerHTML = "<<";
 
-    var button = navCtrlRight.appendChild(document.createElement("button"));
-    button.setAttribute("style", "font-size:10px; font-weight:bold; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
-    button.setAttribute("onclick", "regionChange('r')");
-    button.innerHTML = ">";
+  var button = navCtrlRight.appendChild(document.createElement("button"));
+  button.setAttribute("style", "font-size:10px; font-weight:bold; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.onclick = function() { gLyphsRegionChange(glyphsGB, "l"); }
+  button.innerHTML = "<";
 
-    var button = navCtrlRight.appendChild(document.createElement("button"));
-    button.setAttribute("style", "font-size:10px; font-weight:bold; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
-    button.setAttribute("onclick", "regionChange('rr')");
-    button.innerHTML = ">>";
+  var button = navCtrlRight.appendChild(document.createElement("button"));
+  button.setAttribute("style", "font-size:10px; font-weight:bold; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.onclick = function() { gLyphsRegionChange(glyphsGB, "r"); }
+  button.innerHTML = ">";
 
-    //magnify buttons
-    span2 = navCtrlRight.appendChild(document.createElement("span"));
-    span2.setAttribute("style", "margin-left:7px;");
+  var button = navCtrlRight.appendChild(document.createElement("button"));
+  button.setAttribute("style", "font-size:10px; font-weight:bold; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.onclick = function() { gLyphsRegionChange(glyphsGB, "rr"); }
+  button.innerHTML = ">>";
 
-    var button = navCtrlRight.appendChild(document.createElement("button"));
-    button.setAttribute("style", "font-size:10px; font-weight:normal; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
-    button.setAttribute("onclick", "regionChange('zoomfactor', 0.1)");
-    button.setAttribute("onmouseover", "eedbMessageTooltip(\"zoom in\",50);");
+  //magnify buttons
+  span2 = navCtrlRight.appendChild(document.createElement("span"));
+  span2.setAttribute("style", "margin-left:7px;");
+
+  var button = navCtrlRight.appendChild(document.createElement("button"));
+  button.setAttribute("style", "font-size:10px; font-weight:normal; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.onclick = function() { gLyphsRegionChange(glyphsGB, "zoomfactor", 0.1); }
+  button.setAttribute("onmouseover", "eedbMessageTooltip(\"zoom in\",50);");
+  button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  button.innerHTML = "+10x";
+
+  var button = navCtrlRight.appendChild(document.createElement("button"));
+  button.setAttribute("style", "font-size:10px; font-weight:normal; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.onclick = function() { gLyphsRegionChange(glyphsGB, "zoomfactor", 0.2); }
+  button.setAttribute("onmouseover", "eedbMessageTooltip(\"zoom in\",50);");
+  button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  button.innerHTML = "+5x";
+
+  var button = navCtrlRight.appendChild(document.createElement("button"));
+  button.setAttribute("style", "font-size:10px; font-weight:normal; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.onclick = function() { gLyphsRegionChange(glyphsGB, "zoomfactor", 0.5); }
+  button.setAttribute("onmouseover", "eedbMessageTooltip(\"zoom in\",50);");
+  button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  button.innerHTML = "+2x";
+
+  var button = navCtrlRight.appendChild(document.createElement("button"));
+  button.setAttribute("style", "font-size:10px; font-weight:normal; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:5px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.onclick = function() { gLyphsRegionChange(glyphsGB, "zoomfactor", 2); }
+  button.setAttribute("onmouseover", "eedbMessageTooltip(\"zoom out\",50);");
+  button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  button.innerHTML = "-2x";
+
+  var button = navCtrlRight.appendChild(document.createElement("button"));
+  button.setAttribute("style", "font-size:10px; font-weight:normal; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.onclick = function() { gLyphsRegionChange(glyphsGB, "zoomfactor", 5); }
+  button.setAttribute("onmouseover", "eedbMessageTooltip(\"zoom out\",50);");
+  button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  button.innerHTML = "-5x";
+
+  var button = navCtrlRight.appendChild(document.createElement("button"));
+  button.setAttribute("style", "margin-right:10px; font-size:10px; font-weight:normal; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.onclick = function() { gLyphsRegionChange(glyphsGB, "zoomfactor", 10); }
+  button.setAttribute("onmouseover", "eedbMessageTooltip(\"zoom out\",50);");
+  button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  button.innerHTML = "-10x";
+
+
+  if(!zenbu_embedded_view) {
+    // settings
+    var button = navCtrlRight.appendChild(document.createElement("input"));
+    button.type = "button";
+    button.className = "slimbutton";
+    button.onclick = function() { gLyphsGlobalSettingsPanel(glyphsGB); }
+    button.setAttribute("onmouseover", "eedbMessageTooltip(\"global view configuration settings\",100);");
     button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    button.innerHTML = "+10x";
+    button.innerHTML = "settings";
+    button.value = "settings";
 
-    var button = navCtrlRight.appendChild(document.createElement("button"));
-    button.setAttribute("style", "font-size:10px; font-weight:normal; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
-    button.setAttribute("onclick", "regionChange('zoomfactor', 0.2)");
-    button.setAttribute("onmouseover", "eedbMessageTooltip(\"zoom in\",50);");
+    // export view
+    var button = navCtrlRight.appendChild(document.createElement("input"));
+    button.type = "button";
+    button.className = "slimbutton";
+    button.onclick = function() { configureExportSVG(glyphsGB); }
+    button.setAttribute("onmouseover", "eedbMessageTooltip(\"export view to SVG image file\",80);");
     button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    button.innerHTML = "+5x";
+    button.innerHTML = "export svg";
+    button.value = "export svg";
+  }
 
-    var button = navCtrlRight.appendChild(document.createElement("button"));
-    button.setAttribute("style", "font-size:10px; font-weight:normal; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
-    button.setAttribute("onclick", "regionChange('zoomfactor', 0.5)");
-    button.setAttribute("onmouseover", "eedbMessageTooltip(\"zoom in\",50);");
-    button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    button.innerHTML = "+2x";
+  var button = navCtrlRight.appendChild(document.createElement("button"));
+  button.id = "zenbu_embed_toggle_button";
+  button.setAttribute("style", "font-size:10px; padding: 1px 1px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.setAttribute("onclick", "zenbu_toggle_embedded_view();");
+  button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  if(zenbu_embedded_view) { 
+    button.innerHTML = "E"; 
+    button.setAttribute("onmouseover", "eedbMessageTooltip(\"switch to full ZENBU\",100);");
+  } else { 
+    button.innerHTML = "F";
+    button.setAttribute("onmouseover", "eedbMessageTooltip(\"switch to embedded ZENBU\",100);");
+  }
 
-    var button = navCtrlRight.appendChild(document.createElement("button"));
-    button.setAttribute("style", "font-size:10px; font-weight:normal; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:5px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
-    button.setAttribute("onclick", "regionChange('zoomfactor', 2)");
-    button.setAttribute("onmouseover", "eedbMessageTooltip(\"zoom out\",50);");
-    button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    button.innerHTML = "-2x";
+  // var button = navCtrlRight.appendChild(document.createElement("button"));
+  // button.setAttribute("style", "font-size:10px; padding: 1px 1px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  // button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  // button.setAttribute("onmouseover", "eedbMessageTooltip(\"redraw view\",80);");
+  // button.onclick = function() { gLyphsRegionChange(glyphsGB, "redraw"); }
+  // button.innerHTML = "R"; 
 
-    var button = navCtrlRight.appendChild(document.createElement("button"));
-    button.setAttribute("style", "font-size:10px; font-weight:normal; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
-    button.setAttribute("onclick", "regionChange('zoomfactor', 5)");
-    button.setAttribute("onmouseover", "eedbMessageTooltip(\"zoom out\",50);");
-    button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    button.innerHTML = "-5x";
-
-    var button = navCtrlRight.appendChild(document.createElement("button"));
-    button.setAttribute("style", "margin-right:10px; font-size:10px; font-weight:normal; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; margin-left:1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
-    button.setAttribute("onclick", "regionChange('zoomfactor', 10)");
-    button.setAttribute("onmouseover", "eedbMessageTooltip(\"zoom out\",50);");
-    button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    button.innerHTML = "-10x";
-
-    //zoom level widget
-    var zoomdiv = document.createElement("span");    
-    //navCtrlRight.appendChild(zoomdiv);
-    zoomdiv.setAttribute("style", "font-size:10px; font-weight:bold; padding: 1px 4px; background: #EEEEEE; margin-left:17px; margin-right:10px;  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
-
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("style", "margin-left:2px;");
-    span1.setAttribute("onclick", "regionChange('zoomfactor', 0.5)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"zoom in 2x\",80);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "-";
-
-    //----
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("style", "margin-left:1px; margin-right:1px;");
-    span1.setAttribute("onclick", "regionChange('zoomlevel', 1)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"100bp\",50);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "|";
-
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("style", "margin-left:1px; margin-right:1px;");
-    span1.setAttribute("onclick", "regionChange('zoomlevel', 500)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"500bp\",50);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "|";
-
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("style", "margin-left:1px; margin-right:1px;");
-    span1.setAttribute("onclick", "regionChange('zoomlevel', 1000)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"1kb\",50);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "|";
-
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("style", "margin-left:1px; margin-right:1px;");
-    span1.setAttribute("onclick", "regionChange('zoomlevel', 3000)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"3kb\",50);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "|";
-
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("style", "margin-left:1px; margin-right:1px;");
-    span1.setAttribute("onclick", "regionChange('zoomlevel', 5000)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"5kb\",50);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "|";
-
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("style", "margin-left:1px; margin-right:1px;");
-    span1.setAttribute("onclick", "regionChange('zoomlevel', 10000)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"10kb\",50);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "|";
-
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("style", "margin-left:1px; margin-right:1px;");
-    span1.setAttribute("onclick", "regionChange('zoomlevel', 50000)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"50kb\",50);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "|";
-
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("style", "margin-left:1px; margin-right:1px;");
-    span1.setAttribute("onclick", "regionChange('zoomlevel', 100000)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"100kb\",50);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "|";
-
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("style", "margin-left:1px; margin-right:1px;");
-    span1.setAttribute("onclick", "regionChange('zoomlevel', 500000)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"500kb\",50);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "|";
-
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("style", "margin-left:1px; margin-right:1px;");
-    span1.setAttribute("onclick", "regionChange('zoomlevel', 1000000)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"1mb\",50);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "|";
-
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("style", "margin-left:1px; margin-right:1px;");
-    span1.setAttribute("onclick", "regionChange('zoomlevel', 5000000)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"5mb\",50);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "|";
-
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("style", "margin-left:1px; margin-right:1px;");
-    span1.setAttribute("onclick", "regionChange('zoomlevel', 10000000)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"10mb\",50);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "|";
-
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("style", "margin-left:1px; margin-right:1px;");
-    span1.setAttribute("onclick", "regionChange('zoomlevel', 50000000)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"50mb\",50);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "|";
-
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("onclick", "regionChange('zoomlevel', 100000000)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"100mb\",50);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "|";
-
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("onclick", "regionChange('zoomlevel', 10000000000)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"chromosome\",80);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "|";
-    //----
-
-    var span1 = zoomdiv.appendChild(document.createElement("span"));
-    span1.setAttribute("onclick", "regionChange('zoomfactor', 2.0)");
-    span1.setAttribute("onmouseover", "eedbMessageTooltip(\"zoom out 2x\",80);");
-    span1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    span1.innerHTML = "+";
-
-    if(!zenbu_embedded_view) {
-      // settings
-      var button = navCtrlRight.appendChild(document.createElement("input"));
-      button.type = "button";
-      button.className = "slimbutton";
-      button.onclick = function() { gLyphsGlobalSettingsPanel(glyphsGB); }
-      button.setAttribute("onmouseover", "eedbMessageTooltip(\"global view configuration settings\",100);");
-      button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-      button.innerHTML = "settings";
-      button.value = "settings";
-
-      // export view
-      var button = navCtrlRight.appendChild(document.createElement("input"));
-      button.type = "button";
-      button.className = "slimbutton";
-      button.onclick = function() { configureExportSVG(glyphsGB); }
-      button.setAttribute("onmouseover", "eedbMessageTooltip(\"export view to SVG image file\",80);");
-      button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-      button.innerHTML = "export svg";
-      button.value = "export svg";
-    }
-
-    // save view
-    /*
-    var button = navCtrlRight.appendChild(document.createElement("button"));
-    button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
-    button.setAttribute("onclick", "gLyphsSaveConfig();");
-    button.setAttribute("onmouseover", "eedbMessageTooltip(\"save view configuration to collaboration\",100);");
-    button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    button.innerHTML = "save view";
-    */
-
-    //reload
-    /*
-    var button = navCtrlRight.appendChild(document.createElement("button"));
-    button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
-    button.setAttribute("onclick", "regionChange('reload')");
-    button.setAttribute("onmouseover", "eedbMessageTooltip(\"reload view\",80);");
-    button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    button.innerHTML = "reload";
-    */
-
-    var button = navCtrlRight.appendChild(document.createElement("button"));
-    button.id = "zenbu_embed_toggle_button";
-    button.setAttribute("style", "font-size:10px; padding: 1px 1px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
-    button.setAttribute("onclick", "zenbu_toggle_embedded_view();");
-    button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    if(zenbu_embedded_view) { 
-      button.innerHTML = "E"; 
-      button.setAttribute("onmouseover", "eedbMessageTooltip(\"switch to full ZENBU\",100);");
-    } else { 
-      button.innerHTML = "F";
-      button.setAttribute("onmouseover", "eedbMessageTooltip(\"switch to embedded ZENBU\",100);");
-    }
-
-    var img1 = navCtrlRight.appendChild(document.createElement("img"));
-    img1.setAttribute("src", eedbWebRoot+"/images/reload.png");
-    img1.setAttribute("style", "margin-bottom:-3px; margin-left:5px");
-    img1.setAttribute("onclick", "regionChange('reload')");
-    img1.setAttribute("onmouseover", "eedbMessageTooltip(\"reload view\",80);");
-    img1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  var img1 = navCtrlRight.appendChild(document.createElement("img"));
+  img1.setAttribute("src", eedbWebRoot+"/images/reload.png");
+  img1.setAttribute("style", "margin-bottom:-3px; margin-left:5px");
+  img1.onclick = function() { gLyphsRegionChange(glyphsGB, "reload"); }
+  img1.setAttribute("onmouseover", "eedbMessageTooltip(\"reload view\",80);");
+  img1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
   
-
   glyphsGB.loc_desc = "";
   if(glyphsGB.asm && glyphsGB.chrom) {
     var asm    = glyphsGB.asm;
@@ -963,7 +822,7 @@ function glyphsNavigationControls(glyphsGB) {
     var chromloc = chrom +" " + numberWithCommas(start) + "-" + numberWithCommas(end);
     if(glyphsGB.flip_orientation) { chromloc += "-"; } else { chromloc += "+"; }
     //glyphsGB.loc_desc = asm + ":: " + chromloc + "  [len "+ len + " ]";
-    glyphsGB.loc_desc = chromloc + "  [len "+ len + " ]";
+    glyphsGB.loc_desc = asm +" "+ chromloc + "  [len "+ len + " ]";
   }
 
   if(document.getElementById("regionWidthText")) {
@@ -982,27 +841,27 @@ function glyphsNavigationControls(glyphsGB) {
 
 function gLyphsUpdateLoadingProgress(glyphsGB) {
   if(!glyphsGB) { return; }
-  var glyphset = glyphsGB.gLyphTrackSet;
+  var loadProgress = glyphsGB.load_progress_div;
+  if(!loadProgress) { return; }
 
   //view loading progress
-  var loadProgress = document.getElementById("gLyphs_load_progress_div");
-  var gLyphDivs = glyphset.getElementsByClassName("gLyphTrack");
-  var load_count =0;
-  for(var i=0; i<gLyphDivs.length; i++) {
-    var gLyphDiv = gLyphDivs[i];
-    var trackID = gLyphDiv.getAttribute("id");
+  var load_count =0, total_count=0;
+  for(var trackID in glyphsGB.tracks_hash){
     var glyphTrack = glyphsGB.tracks_hash[trackID];
     if(!glyphTrack) { continue; }
+    total_count++;
     //gLyphsShowTrackLoading(trackID);
     if(!glyphTrack.hideTrack && !glyphTrack.dataLoaded) { load_count++; }
   }
   if(load_count>0 && !zenbu_embedded_view) {
     loadProgress.setAttribute("style", "margin-top:5px; margin-bottom:3px; font-size:12px; display:block; font-weight:bold; color:#F06330; font-size:14px; text-align:center; ");
-    loadProgress.innerHTML = load_count+" of "+gLyphDivs.length+" tracks still loading";
+    loadProgress.innerHTML = load_count+" of "+total_count+" tracks still loading";
   } else {
     loadProgress.setAttribute("style", "margin-top:5px; margin-bottom:3px; font-size:12px; display:none; ");
     loadProgress.innerHTML = "";
   }
+  glyphsGB.load_count = load_count;
+  glyphsGB.trackLoadComplete(); 
 }
 
 
@@ -1013,16 +872,26 @@ function glyphsEditLocation(glyphsGB) {
   var end    = glyphsGB.end;
 
   var chromloc = asm + "::" + chrom +":" + start + "-" + end;
-  eedbSetSearchInput(glyphsGB.searchSetID, chromloc);
+  gLyphsSetSearchInput(glyphsGB, chromloc);
 }
 
 
 function gLyphsReloadRegion(glyphsGB) {
   var glyphset = glyphsGB.gLyphTrackSet;
 
+  if(glyphsGB.display_width_auto) { glyphsGB.display_width = window.innerWidth-50; }
+
   glyphsNavigationControls(glyphsGB);
 
-  glyphsGB.selected_feature = undefined; //clear current feature
+  if(glyphsGB.selected_feature) {
+    console.log("gLyphsReloadRegion glyphsGB has selected_feature "+glyphsGB.selected_feature.id);
+    if((glyphsGB.selected_feature.chrom != glyphsGB.chrom) ||
+       (glyphsGB.selected_feature.start > glyphsGB.end) ||
+       (glyphsGB.selected_feature.end < glyphsGB.start)) {
+      console.log("selected_feature "+(glyphsGB.selected_feature.name)+" off screen so unselect ");
+      glyphsGB.selected_feature = null;
+    }
+  }
 
   var dwidth = glyphsGB.display_width;
   var asm    = glyphsGB.asm;
@@ -1056,47 +925,47 @@ function gLyphsReloadRegion(glyphsGB) {
   var chromloc = chrom +":" + start + "-" + end;
 
   glyphset.setAttribute("style", 'width: '+ (dwidth+10)+'px;');
-
-  var gLyphDivs = glyphset.getElementsByClassName("gLyphTrack");
-  for(var i=0; i<gLyphDivs.length; i++) {
-    var gLyphDiv = gLyphDivs[i];
-    var trackID = gLyphDiv.getAttribute("id");
+  
+  for(var trackID in glyphsGB.tracks_hash){
+    var glyphTrack = glyphsGB.tracks_hash[trackID];
+    if(!glyphTrack) { continue; }
+    if(glyphsGB.selected_feature) { glyphTrack.selected_feature = null; }
     gLyphsShowTrackLoading(trackID);
   }
-  for(var i=0; i<gLyphDivs.length; i++) {
-    var gLyphDiv = gLyphDivs[i];
-    var trackID = gLyphDiv.getAttribute("id");
+  for(var trackID in glyphsGB.tracks_hash){
+    var glyphTrack = glyphsGB.tracks_hash[trackID];
+    if(!glyphTrack) { continue; }
     prepareTrackXHR(trackID);
   }
-
+  
   if(!glyphsGB.view_config_loaded) {
     if(!current_user) {
       //if no configUUID then not a valid config or no access to it
       //assume it exists but user can not see it because they forgot to login
-      gLyphsNoUserWarn("access this view configuration");
+      zenbuGeneralWarn("In order to access this view configuration, you must first log into ZENBU.", "Warning: Not logged into the ZENBU system");
+      eedbLoginAction("login");
     } else {
-      gLyphsGeneralWarn("This view configuration is not available.<br>"+ 
-                        "It has either been deleted from the system, or you do not have privilege to access it.");
+      zenbuGeneralWarn("View has either been deleted from the system, or you do not have privilege to access it.", "Warning: This view configuration is not available");
     }
   }
 }
 
-
-function regionChange(mode, value) {
-  var asm   = current_region.asm;
-  var chrom = current_region.chrom;
-  var start = current_region.start;
-  var end   = current_region.end;
+function gLyphsRegionChange(glyphsGB, mode, value) {
+  if(!glyphsGB) { return; }
+  var asm   = glyphsGB.asm;
+  var chrom = glyphsGB.chrom;
+  var start = glyphsGB.start;
+  var end   = glyphsGB.end;
   var range = end-start+1;
   var center = Math.round( (end+start)/2 );
 
   if(mode == 'redraw') {
-    document.getElementById("message").innerHTML= "redraw view";
+    //document.getElementById("message").innerHTML= "redraw view";
     var starttime = new Date();
-    gLyphsRedrawRegion(current_region);
+    gLyphsRedrawRegion(glyphsGB);
     var endtime = new Date();
     var runtime = (endtime.getTime() - starttime.getTime());
-    document.getElementById("message").innerHTML= "total redraw time " +(runtime)+"msec";
+    //document.getElementById("message").innerHTML= "total redraw time " +(runtime)+"msec";
     return;
   }
   if(mode == 'zoomfactor') {
@@ -1150,9 +1019,9 @@ function regionChange(mode, value) {
     end   -= Math.round(range*.5);
   }
   if(mode == 'reset') {
-    if(current_region.selected_feature) {
-      start = current_region.selected_feature.start;
-      end   = current_region.selected_feature.end;
+    if(glyphsGB.selected_feature) {
+      start = glyphsGB.selected_feature.start;
+      end   = glyphsGB.selected_feature.end;
       var range = end-start;
       start -= Math.round(range*.25);
       end += Math.round(range*.25);
@@ -1164,10 +1033,10 @@ function regionChange(mode, value) {
     active_track_XHRs = new Object();
   }
 
-  gLyphsSetLocation(current_region, asm, chrom, start, end);
+  gLyphsSetLocation(glyphsGB, asm, chrom, start, end);
 
-  gLyphsReloadRegion(current_region);
-  gLyphsChangeDhtmlHistoryLocation();
+  gLyphsReloadRegion(glyphsGB);
+  glyphsGB.urlHistoryUpdate();
 }
 
 
@@ -1184,15 +1053,16 @@ function createAddTrackTool(glyphsGB) {
   var glyphset = glyphsGB.gLyphTrackSet;
   if(!glyphset) { return null; }
 
-  var div_id = "glyphTrack_add_track_div_"+(glyphsGB.uuid);
-  var add_track_div = document.getElementById(div_id);
-  if(add_track_div) { return add_track_div; }
-
+  if(glyphsGB.add_track_div) { 
+    glyphset.appendChild(glyphsGB.add_track_div);
+    return glyphsGB.add_track_div; 
+  }
+  
   var add_track_div = document.createElement('div');
   add_track_div.setAttribute("align","left");
   add_track_div.setAttribute("style", "margin: 0px 0px -2px 0px; border-width: 0px; padding: 0px 0px 0px 0px;");
+  glyphsGB.add_track_div = add_track_div;
 
-  add_track_div.id = div_id;
   glyphset.appendChild(add_track_div);
 
   var svg = createSVG(300, 25);
@@ -1317,6 +1187,7 @@ function gLyphsGB_configDOM(glyphsGB) {
 
   var settings = doc.createElement("settings");
   settings.setAttribute("dwidth", glyphsGB.display_width);
+  if(glyphsGB.display_width_auto) { settings.setAttribute("display_width_auto", "true"); }
   if(glyphsGB.hide_compacted_tracks) { settings.setAttribute("hide_compacted", "true"); }
   if(!glyphsGB.share_exp_panel) { settings.setAttribute("share_exp_panel", "false"); }
   if(glyphsGB.exppanel_subscroll) { settings.setAttribute("exppanel_subscroll", "true"); }
@@ -1354,23 +1225,23 @@ function gLyphsGB_configDOM(glyphsGB) {
 }
 
 
-function gLyphsInitViewConfigUUID(configUUID) {
+function gLyphsInitViewConfigUUID(glyphsGB, configUUID) {
   //given a configUUID, queries the config_server for full XML info.
   //if available, then it parses the XML and reconfigures the view
   //return value is true/false depending on success of reconfig
-
-  if(current_region.configUUID == configUUID) { return true; }
-  current_region.configUUID = configUUID; //make sure to set to we can reload if it fails
+  if(!glyphsGB) { return false; }
+  if(glyphsGB.configUUID == configUUID) { return true; }
+  glyphsGB.configUUID = configUUID; //make sure to set to we can reload if it fails
 
   var id = configUUID + ":::Config";
   var config = eedbFetchObject(id);
-  if(!gLyphsInitFromViewConfig(config)) { return false; }
+  if(!gLyphsInitFromViewConfig(glyphsGB, config)) { return false; }
 
   return true;
 }
 
 
-function gLyphsInitConfigBasename(basename) {
+function gLyphsInitConfigBasename(glyphsGB, basename) {
   var url = eedbConfigCGI + "?configtype=view;basename=" + basename;
   var configXHR=GetXmlHttpObject();
   if(configXHR==null) {
@@ -1387,69 +1258,58 @@ function gLyphsInitConfigBasename(basename) {
   if(xmlDoc.tagName != "configuration") { return false; }
   var config = eedbParseConfigurationData(xmlDoc);
 
-  if(!gLyphsInitFromViewConfig(config)) { return false; }
+  if(!gLyphsInitFromViewConfig(glyphsGB, config)) { return false; }
 
   return true;
 }
 
 
-function gLyphsInitFromViewConfig(config) {
+function gLyphsInitFromViewConfig(glyphsGB, config) {
   //set a global event to catch all mouseup events to end all dragging
   //need in case someone starts drag in a widget but releases the mouse
   //outside of that widget
   document.onmouseup = endDrag;
 
-  var main_div = document.getElementById("genome_region_div");  //TODO: need to change this to dynamic eventually
-  if(!main_div) { return; }
-
   if(!config) { return false; }
+  if(!glyphsGB) { return false; }
   if(!config.uuid) {
-    current_region.view_config_loaded = false;
+    glyphsGB.view_config_loaded = false;
     return false;
   }
   console.log("gLyphsInitFromViewConfig "+config.uuid);
 
-  //
-  // make a new clean genomeBrowser and then init
-  //
-  current_region = new ZenbuGenomeBrowser(main_div);
+  //reset some variables to be safe
+  glyphsGB.highlight_search = "";
+  glyphsGB.init_search_term = "";
+  glyphsGB.active_track_exp_filter = "";
+  glyphsGB.configname = "welcome to ZENBU genome browser";
+  glyphsGB.desc = "";
+  glyphsGB.view_config = null;
+  glyphsGB.config_createdate = "";
+  glyphsGB.config_creator = "";
+  glyphsGB.config_fixed_id = "";
+  glyphsGB.view_config_loaded = false;
+  glyphsGB.active_trackID = undefined;
+  glyphsGB.selected_feature = undefined;
+  glyphsGB.tracks_hash = new Object();
+  glyphsGB.tracks_array = new Array();
 
   current_dragTrack = undefined;
   currentSelectTrackID =undefined;
-  
-  //active_track_XHRs = new Object();
-  //pending_track_XHRs = new Object();
-  //newTrackID = 100;
-
-  //current_region = new Object();
-  //current_region.selected_feature = undefined;
-  //current_region.display_width = gLyphsInitParams.display_width;
-  //current_region.asm = "hg18";
-  //current_region.configname = "eeDB gLyphs";
-  //current_region.desc = "";
-  //current_region.exppanel_subscroll = false;
-  //current_region.express_sort_mode = 'name';
-  //current_region.flip_orientation = false;
-  //current_region.highlight_search = "";
-  //current_region.tracks_hash = new Object();
-  //main_div.innerHTML="";
-  //current_region.main_div = main_div;
-  //current_region.gLyphTrackSet = main_div.appendChild(document.createElement('div'));
-  //current_region.expPanelFrame = main_div.appendChild(document.createElement('div'));
-  //gLyphsSearchInterface(current_region);
-  
+    
   if(config.uuid) { 
-    current_region.configUUID = config.uuid;
+    glyphsGB.configUUID = config.uuid;
+    glyphsGB.config_fixed_id = config.fixed_id;
   } else {
     //if no configUUID then not a valid config
-    current_region.view_config_loaded = false;
+    glyphsGB.view_config_loaded = false;
     //gLyphsNoUserWarn("access this view configuration");
     return false;
   }
 
   var configDOM = config.configDOM;
   if(!configDOM) {
-    current_region.view_config_loaded = false;
+    glyphsGB.view_config_loaded = false;
     return false;
   }
 
@@ -1457,48 +1317,49 @@ function gLyphsInitFromViewConfig(config) {
     var settings = configDOM.getElementsByTagName("settings")[0];
     if(settings) {
       if(settings.getAttribute("dwidth")) {
-        current_region.display_width = parseInt(settings.getAttribute("dwidth"));
+        glyphsGB.display_width = parseInt(settings.getAttribute("dwidth"));
       }
+      if(settings.getAttribute("display_width_auto") == "true") { glyphsGB.display_width_auto = true; }
+      else { glyphsGB.hide_compacted_tracks = false; }
       if(settings.getAttribute("hide_compacted") == "true") {
-        current_region.hide_compacted_tracks = true;
+        glyphsGB.hide_compacted_tracks = true;
       } else {
-        current_region.hide_compacted_tracks = false;
+        glyphsGB.hide_compacted_tracks = false;
       }
       if(settings.getAttribute("share_exp_panel") == "false") { //default is true
-        current_region.share_exp_panel = false;
+        glyphsGB.share_exp_panel = false;
       }
       if(settings.getAttribute("exppanel_subscroll") == "true") {
-        current_region.exppanel_subscroll = true;
+        glyphsGB.exppanel_subscroll = true;
       } else {
-        current_region.exppanel_subscroll = false;
+        glyphsGB.exppanel_subscroll = false;
       }
       if(settings.getAttribute("flip_orientation") == "true") {
-        current_region.flip_orientation = true;
+        glyphsGB.flip_orientation = true;
       } else {
-        current_region.flip_orientation = false;
+        glyphsGB.flip_orientation = false;
       }
       if(settings.getAttribute("global_nocache") == "true") {
-        current_region.nocache = true;
+        glyphsGB.nocache = true;
       } else {
-        current_region.nocache = false;
+        glyphsGB.nocache = false;
       }
     }
   }
 
   //--------------------------------
-  eedbEmptySearchResults(current_region.searchSetID);
+  gLyphsEmptySearchResults(glyphsGB);
 
-  current_region.view_config_loaded = true;
-  current_region.view_config = config;;
-  current_region.config_createdate = config.create_date;
-  current_region.configname = config.name;
-  current_region.desc = config.description;
+  glyphsGB.view_config_loaded = true;
+  glyphsGB.view_config = config;;
+  glyphsGB.config_createdate = config.create_date;
+  glyphsGB.configname = config.name;
+  glyphsGB.desc = config.description;
   if(config.author) {
-    current_region.config_creator = config.author;
+    glyphsGB.config_creator = config.author;
   } else {
-    current_region.config_creator = config.owner_openID;
+    glyphsGB.config_creator = config.owner_openID;
   }
-  gLyphsShowConfigInfo();
 
   //
   // now parse the actual configDOM for tracks and sources
@@ -1522,7 +1383,7 @@ function gLyphsInitFromViewConfig(config) {
     console.log("config has global_express_sort_mode: "+global_express_sort_mode);
   }
 
-  var glyphset = current_region.gLyphTrackSet;
+  var glyphset = glyphsGB.gLyphTrackSet;
   clearKids(glyphset);
 
   var trackset = configDOM.getElementsByTagName("gLyphTracks");
@@ -1532,30 +1393,28 @@ function gLyphsInitFromViewConfig(config) {
   for(var i=0; i<tracks.length; i++) {
     var trackDOM = tracks[i];
 
-    var glyphTrack = gLyphsCreateTrackFromTrackDOM(trackDOM, current_region);
+    var glyphTrack = gLyphsCreateTrackFromTrackDOM(trackDOM, glyphsGB);
     if(!glyphTrack) { continue; }
     //if(global_express_sort_mode && (!glyphTrack.express_sort_mode)) { 
     //TODO: maybe only apply to the active track to mimic the old system behaviour
     //  glyphTrack.express_sort_mode = global_express_sort_mode; 
     //}
-    current_region.tracks_hash[glyphTrack.trackID] = glyphTrack;
+    glyphsGB.tracks_hash[glyphTrack.trackID] = glyphTrack;
     glyphset.appendChild(glyphTrack.trackDiv);
 
     gLyphsDrawTrack(glyphTrack.trackID);  //this creates empty tracks with the "loading" tag
   }
-  createAddTrackTool(current_region);
+  createAddTrackTool(glyphsGB);
   
   if(configDOM.getElementsByTagName("region")) {
     var region = configDOM.getElementsByTagName("region")[0];
     if(region) {
-      gLyphsSetLocation(current_region, region.getAttribute("asm"),
+      gLyphsSetLocation(glyphsGB, region.getAttribute("asm"),
                         region.getAttribute("chrom"),
                         parseInt(region.getAttribute("start")),
                         parseInt(region.getAttribute("end")));
     }
   }
-
-  gLyphsInitSearchFromTracks(current_region);
 
   return true;;
 }
@@ -1566,7 +1425,7 @@ function gLyphsInitFromViewConfig(config) {
 //======================================================================================
 //
 
-function gLyphsAppendTracksViaTrackSet(template) {
+function gLyphsAppendTracksViaTrackSet(glyphsGB, template) {
   if(!template) { return false; }
   if(!template.source_ids) { return false; }
   var dexMode = template.dexMode;
@@ -1581,7 +1440,7 @@ function gLyphsAppendTracksViaTrackSet(template) {
   //--------------------------------
   // now parse the actual configDOM for tracks and sources
   if(!dexMode) {
-    var glyphset = current_region.gLyphTrackSet;
+    var glyphset = glyphsGB.gLyphTrackSet;
     var newtrack_div = glyphset.lastChild;
   }
 
@@ -1589,7 +1448,7 @@ function gLyphsAppendTracksViaTrackSet(template) {
   for(var i=0; i<tracks.length; i++) {
     var trackDOM = tracks[i];
 
-    var glyphTrack = gLyphsCreateTrackFromTrackDOM(trackDOM, current_region);
+    var glyphTrack = gLyphsCreateTrackFromTrackDOM(trackDOM, glyphsGB);
     if(!glyphTrack) { continue; }
     glyphTrack.hideTrack  = false;
     //replace sources with those from templage
@@ -1601,7 +1460,7 @@ function gLyphsAppendTracksViaTrackSet(template) {
     glyphTrack.title = template.title + " " + glyphTrack.title;
 
     //add into view
-    current_region.tracks_hash[glyphTrack.trackID] = glyphTrack;
+    glyphsGB.tracks_hash[glyphTrack.trackID] = glyphTrack;
 
     if(!dexMode) {
       glyphset.insertBefore(glyphTrack.trackDiv, newtrack_div);
@@ -1612,21 +1471,23 @@ function gLyphsAppendTracksViaTrackSet(template) {
   
   removeTrack(template.trackID); //removing the template track
   if(!dexMode) { 
-    gLyphsInitSearchFromTracks(current_region);
-    gLyphsAutosaveConfig();
+    glyphsGB.autosave();
   }
   return true;
 }
 
-//
+
 //======================================================================================
 //
+// new search system, migrated from eedb_search and specialized
+//
+//======================================================================================
 
 function gLyphsSearchInterface(glyphsGB) {
   if(zenbu_embedded_view) { return; }
   if(!glyphsGB) { return; }
   if(!glyphsGB.main_div) { return; }
-  
+
   if(!glyphsGB.searchFrame) { 
     glyphsGB.searchFrame = document.createElement('div');
     if(glyphsGB.main_div.firstChild) {
@@ -1635,43 +1496,67 @@ function gLyphsSearchInterface(glyphsGB) {
       glyphsGB.main_div.appendChild(glyphsGB.searchFrame);
     }
   }
-  
+  if(!glyphsGB.searchInput) { 
+    var searchInput = document.createElement("input");
+    glyphsGB.searchInput = searchInput;
+    searchInput.type = "text";
+    searchInput.className = "sliminput";
+    searchInput.autocomplete = "off";
+    searchInput.default_message = "search for annotations (eg EGR1 or kinase) or set location (eg: chr19:36373808-36403118)";
+    searchInput.onkeyup = function(evnt) { glyphsMainSearchInput(glyphsGB, this.value, evnt); }    
+    searchInput.onclick = function() { gLyphsClearDefaultSearchMessage(glyphsGB); }
+    searchInput.onfocus = function() { gLyphsClearDefaultSearchMessage(glyphsGB); }
+    searchInput.onblur  = function() { gLyphsSearchUnfocus(glyphsGB); }
+    //searchInput.onmouseout  = function() { gLyphsSearchUnfocus(glyphsGB); }    
+    searchInput.value = searchInput.default_message; 
+    searchInput.style.color = "lightgray";
+    searchInput.show_default_message = true;
+  }
+  if(!glyphsGB.searchResults) { 
+    glyphsGB.searchResults = document.createElement('div');
+    glyphsGB.searchResults.glyphsGB = glyphsGB;
+    glyphsGB.searchResults.default_message = "search for annotations (eg EGR1 or kinase) or set location (eg: chr19:36373808-36403118)";
+  }
+  if(!glyphsGB.searchMessage) {
+    var msgDiv = document.createElement("div");
+    glyphsGB.searchMessage = msgDiv;
+  }
+
+  if(!glyphsGB.searchbox_enabled) { 
+    glyphsGB.searchFrame.style.display = "none";
+    return; 
+  }
+
+  glyphsGB.searchFrame.innerHTML = "";
+  glyphsGB.searchFrame.style.display = "block";
+  glyphsGB.searchResults.innerHTML = "";
+  glyphsGB.searchResults.style.display = "none";
+
   var searchFrame = glyphsGB.searchFrame;
-  glyphsGB.searchSetID = glyphsGB.uuid+"_searchset";
-  searchFrame.innerHTML = "";
   
   var form = searchFrame.appendChild(document.createElement('form'));
   form.setAttribute("onsubmit", "return false;");
 
   var span1 = form.appendChild(document.createElement('span'));
-  span1.setAttribute("onclick", "eedbClearSearchResults('"+glyphsGB.searchSetID+"')");
   
-  var searchInput = form.appendChild(document.createElement("input"));
-  searchInput.id = glyphsGB.searchSetID+"_inputID";
-  searchInput.type = "text";
-  searchInput.className = "sliminput";
-  searchInput.autocomplete = "off";
-  searchInput.setAttribute("onkeyup", "glyphsMainSearchInput('"+glyphsGB.searchSetID+"', this.value, event)");
+  var searchInput = glyphsGB.searchInput;
+  form.appendChild(searchInput);
 
   var buttonSpan = form.appendChild(document.createElement('span'));
   var button1 = buttonSpan.appendChild(document.createElement('input'));
   button1.type = "button";
   button1.className = "slimbutton";
   button1.value = "search";
-  button1.setAttribute("onclick", "glyphsMainSearchInput('"+glyphsGB.searchSetID+"', '', event)");
+  button1.onclick = function(envt) { glyphsMainSearchInput(glyphsGB, '', envt); }
 
   var button2 = buttonSpan.appendChild(document.createElement('input'));
   button2.type = "button";
   button2.className = "slimbutton";
   button2.value = "clear";
-  button2.setAttribute("onclick", "eedbClearSearchResults('"+glyphsGB.searchSetID+"')");
+  button2.onclick = function() { gLyphsClearSearchResults(glyphsGB); }
   
-  var searchSet = searchFrame.appendChild(document.createElement("div"));
-  searchSet.id = glyphsGB.searchSetID;
-  searchSet.default_message = "search for annotations (eg EGR1 or kinase) or set location (eg: chr19:36373808-36403118)";
-
-  var msgDiv = searchSet.appendChild(document.createElement("div"));
-  msgDiv.id = glyphsGB.searchSetID+"_messageID";
+  searchFrame.appendChild(glyphsGB.searchResults); //moves to correct location
+  searchFrame.appendChild(glyphsGB.searchMessage); //moves to correct location
   
   //set width
   var buttonsRect = buttonSpan.getBoundingClientRect();
@@ -1680,104 +1565,139 @@ function gLyphsSearchInterface(glyphsGB) {
   searchInput.style.width = ((glyphsGB.display_width - buttonsRect.width)*0.80) +"px"; //glyphsGB.display_width;
   searchInput.style.margin = "0px 0px 5px 0px";
   
-  eedbClearSearchResults(glyphsGB.searchSetID);
+  //gLyphsClearSearchResults(glyphsGB);
 }
 
 
-function gLyphsInitSearchFromTracks(glyphsGB) {
+function glyphsMainSearchInput(glyphsGB, str, e) {
   if(!glyphsGB) { return; }
-  var searchSetID = glyphsGB.searchSetID;
-
-  var searchset = document.getElementById(searchSetID);
-  if(!searchset) { return; }
-  clearKids(searchset);
-
-  var glyphset = glyphsGB.gLyphTrackSet;
-  var gLyphDivs = glyphset.getElementsByClassName("gLyphTrack");
-  for(var i=0; i<gLyphDivs.length; i++) {
-    var gLyphDiv = gLyphDivs[i];
-    var trackID = gLyphDiv.getAttribute("id");
-    var glyphTrack = glyphsGB.tracks_hash[trackID];
-    if(!glyphTrack) { continue; }
-    if(glyphTrack.noNameSearch) { continue; }
-    if(glyphTrack.glyphStyle == "signal-histogram" || glyphTrack.glyphStyle == "xyplot") { continue; }
-    if(glyphTrack.glyphStyle == "split-signal") { continue; }
-    if(glyphTrack.glyphStyle == "cytoband") { continue; }
-    if(!glyphTrack.source_ids) { continue; }
-    //for now only modern tracks with source_ids will be allowed
-
-    var searchTrack = eedbAddSearchTrack(searchSetID, glyphTrack.source_ids, glyphTrack.title);
-    if(searchTrack) {
-      searchTrack.glyphsGB = glyphTrack.glyphsGB;
-      searchTrack.trackID = glyphTrack.trackID;
-      searchTrack.callOutFunction = gLyphsMainSearchResponse; 
-    }
-  }
-}
-
-
-function gLyphsMainSearchResponse(searchID, objID, mode) {
-  var searchTrack = eedbSearchGetSearchTrack(searchID);
-  if(!searchTrack) { return; }
-  var glyphsGB = searchTrack.glyphsGB;
-  console.log("gLyphsMainSearchResponse "+searchTrack.trackID+" fid:"+objID);
-  eedbClearSearchTooltip();
-
-  var object = eedbGetObject(objID); //uses searchCache first
-  if(!object) { return; }
-
-  //eedbClearSearchResults(searchTrack.searchSetID);
-  if(object.classname == "Feature") {
-    console.log("selected feature "+object.name+" "+object.chromloc);
-    current_region.selected_feature = object;
-    gLyphsCenterOnFeature(glyphsGB, object);
-  }
-}
-
-
-function glyphsMainSearchInput(searchSetID, str, e) {
-  var searchset = document.getElementById(searchSetID);
-  if(!searchset) { return; }
   
-  var searchInput = document.getElementById(searchSetID + "_inputID");
+  var searchInput = glyphsGB.searchInput;
   if(searchInput.show_default_message) { return; }
 
-  if(!str) {
-    if(searchInput) { str = searchInput.value; }
-  }
+  if(!str && searchInput) { str = searchInput.value; }
   str = trim_string(str);
   if(!str) {
-    eedbClearSearchResults(searchSetID);
+    gLyphsClearSearchResults(glyphsGB);
     return;
   }
 
-  if(gLyphsParseLocation(str, current_region)) { 
+  if(gLyphsParseLocation(str, glyphsGB)) { 
     var charCode;
     if(e && e.which) charCode=e.which;
     else if(e) charCode = e.keyCode;
     if((charCode==13) || (e.button==0)) { 
-      gLyphsInitLocation(current_region, str);
-      gLyphsReloadRegion(current_region); 
-      gLyphsChangeDhtmlHistoryLocation();
+      gLyphsInitLocation(glyphsGB, str);
+      gLyphsReloadRegion(glyphsGB); 
+      glyphsGB.urlHistoryUpdate();
     }
-    eedbEmptySearchResults(searchSetID);
+    gLyphsEmptySearchResults(glyphsGB);
     return;
   }
 
-  eedbEmptySearchResults(searchSetID);
+  gLyphsEmptySearchResults(glyphsGB);
 
-  var searchDivs = allBrowserGetElementsByClassName(searchset,"EEDBsearch");
-  for(i=0; i<searchDivs.length; i++) {
-    var searchDiv = searchDivs[i];
-    searchDiv.exact_match_autoclick = false;
-    if(current_region.init_search_term) { searchDiv.exact_match_autoclick = true; }
-    eedbSearchSpecificDB(searchSetID, str, e, searchDiv);
+  var charCode;
+  if(e && e.which) charCode=e.which;
+  else if(e) charCode = e.keyCode;
+  if((charCode!=13) && (e.button!=0)) { return; }
+  
+  for(var trackID in glyphsGB.tracks_hash){
+    var glyphTrack = glyphsGB.tracks_hash[trackID];
+    if(!glyphTrack) { continue; }
+    if(glyphTrack.noNameSearch) { continue; }
+    
+    gLyphsTrackSearchNamedFeatures(glyphTrack, str);
+  
+    if(glyphsGB.searchResults && glyphTrack.nameSearchDiv) {
+      glyphsGB.searchResults.style.display = "block";
+      glyphsGB.searchResults.style.margin = "0px 0px 5px 0px";
+      glyphsGB.searchResults.appendChild(glyphTrack.nameSearchDiv);
+    }
+  }  
+}
+
+
+function gLyphsEmptySearchResults(glyphsGB) {
+  //console.log("gLyphsEmptySearchResults "+glyphsGB.uuid);
+  var searchMesg = glyphsGB.searchMessage;
+  if(searchMesg) {  
+    searchMesg.setAttribute("align","left");
+    searchMesg.setAttribute("style", "margin: 0px 0px -2px 0px; border-width: 0px; padding: 0px 0px 0px 0px;");
+    searchMesg.innerHTML=""; 
+  }
+
+  if(glyphsGB.searchResults) {
+    glyphsGB.searchResults.innerHTML = "";
+    glyphsGB.searchResults.style.display = "none";
   }
 }
 
-function eedbSearchGlobalCalloutClick(id) {}
-function singleSearchValue() { }
 
+function gLyphsClearSearchResults(glyphsGB) {
+  console.log("gLyphsClearSearchResults "+glyphsGB.uuid);
+
+  gLyphsEmptySearchResults(glyphsGB);
+  eedbClearSearchTooltip();
+
+  var searchInput = glyphsGB.searchInput;
+  if(searchInput) {
+    searchInput.value = "";
+    searchInput.blur();
+    if(searchInput.default_message) { 
+      searchInput.value = searchInput.default_message; 
+      searchInput.style.color = "lightgray";
+      searchInput.show_default_message = true;
+    }
+  }
+  
+  glyphsGB.selected_feature = null;
+  for(var trackID in glyphsGB.tracks_hash) {
+    var glyphTrack = glyphsGB.tracks_hash[trackID];
+    if(!glyphTrack) { continue; }
+    glyphTrack.selected_feature = null;
+  }
+  gLyphsRedrawRegion(glyphsGB);  
+}
+
+
+function gLyphsClearDefaultSearchMessage(glyphsGB) {
+  if(!glyphsGB) { return; }
+  console.log("gLyphsClearDefaultSearchMessage "+glyphsGB.uuid);
+  var searchInput = glyphsGB.searchInput;
+  if(!searchInput) { return; }
+
+  if(searchInput.show_default_message) { searchInput.value = ""; }
+  searchInput.show_default_message = false;
+  searchInput.style.color = "black";
+}
+
+
+function gLyphsSearchUnfocus(glyphsGB) {
+  if(!glyphsGB) { return; }
+  console.log("gLyphsSearchUnfocus "+glyphsGB.uuid);
+  var searchInput = glyphsGB.searchInput;
+  if(!searchInput) { return; }
+  searchInput.blur();
+  if(searchInput.show_default_message) { return; }
+  if(searchInput.value != "") { return; }
+
+  gLyphsClearSearchResults(glyphsGB);
+}
+
+
+function gLyphsSetSearchInput(glyphsGB, strvalue) {
+  //sets the input value to allow editing
+  if(!glyphsGB) { return; }
+  if(!strvalue) { return; }
+
+  var searchInput = glyphsGB.searchInput;
+  if(!searchInput) { return; }
+
+  searchInput.style.color = "black";
+  searchInput.show_default_message = false;
+  searchInput.value = strvalue;
+}
 
 
 //----------------------------------------------------
@@ -1802,8 +1722,8 @@ function configureExportSVG(glyphsGB) {
   divFrame.setAttribute('style', "position:absolute; text-align:left; padding: 3px 3px 3px 3px; " 
                                 +"background-color:rgb(235,235,240); "  
                                 +"border:2px solid #808080; border-radius: 4px; "
-                                +"left:"+(navRect.left+glyphsGB.display_width-370)+"px; "
-                                +"top:"+(navRect.top+20)+"px; "
+                                +"left:"+(navRect.left+window.scrollX+glyphsGB.display_width-370)+"px; "
+                                +"top:"+(navRect.top+window.scrollY+20)+"px; "
                                 +"width:350px; z-index:90; "
                              );
   divFrame.innerHTML = "";
@@ -2115,8 +2035,8 @@ function gLyphsGlobalSettingsPanel(glyphsGB) {
   divFrame.setAttribute('style', "position:absolute; text-align:left; padding: 3px 3px 10px 3px; " 
                                 + "background-color:rgb(235,235,240); "  
                                 + "border:2px solid #808080; border-radius: 4px; "
-                                +"left:"+(navRect.left+glyphsGB.display_width-430)+"px; "
-                                +"top:"+(navRect.top+20)+"px; "
+                                +"left:"+(navRect.left+window.scrollX+glyphsGB.display_width-430)+"px; "
+                                +"top:"+(navRect.top+window.scrollY+20)+"px; "
                                 +"width:350px; z-index:90; "
                              );
   divFrame.innerHTML = "";
@@ -2160,6 +2080,7 @@ function gLyphsGlobalSettingsPanel(glyphsGB) {
   widthInput.setAttribute("size", "5");
   widthInput.setAttribute("style", "font-size:10px;");
   widthInput.setAttribute("value", glyphsGB.display_width);
+  if(glyphsGB.display_width_auto) { widthInput.setAttribute("value", "auto"); }
   widthInput.onkeyup = function(evt) { 
     //console.log("width onkeyup value["+(this.value)+"]");
     //console.log("event.keyCode :"+(evt.keyCode));
@@ -2238,7 +2159,13 @@ function gLyphsChangeGlobalSetting(glyphsGB, param, value) {
   var need_to_reload = false;
 
   if(param =="dwidth") {
+    glyphsGB.display_width_auto = false;
     var new_width = Math.floor(value);
+    if(isNaN(new_width)) { new_width=640; } 
+    if(value=="auto") { 
+      new_width = window.innerWidth-50; 
+      glyphsGB.display_width_auto = true;
+    }
     if(new_width < 640) { new_width=640; }
     if(new_width != glyphsGB.display_width) { need_to_reload = true; }
     glyphsGB.display_width = new_width;
@@ -2252,7 +2179,7 @@ function gLyphsChangeGlobalSetting(glyphsGB, param, value) {
   if(param =="flip_orientation") {
     glyphsGB.flip_orientation = value;
     need_to_reload = true;    
-    gLyphsChangeDhtmlHistoryLocation();
+    glyphsGB.urlHistoryUpdate();
   }
   if(param =="auto_flip") {
     glyphsGB.auto_flip = value;
@@ -2262,7 +2189,7 @@ function gLyphsChangeGlobalSetting(glyphsGB, param, value) {
   }
   if(param =="highlight_search") {
     glyphsGB.highlight_search = value;
-    gLyphsChangeDhtmlHistoryLocation();
+    glyphsGB.urlHistoryUpdate();
     gLyphsRedrawRegion(glyphsGB);
   }
   if(param =="share_exp_panel") {
@@ -2321,11 +2248,8 @@ function gLyphsAddCustomTrack(glyphsGB) {
   
   //configureNewTrack(glyphTrack);
 
-  createAddTrackTool(glyphsGB); //probably don't need but just in case
-  var add_track_div = document.getElementById("glyphTrack_add_track_div_"+(glyphsGB.uuid));
-
-  //insert new trackDiv before the"add" button div
-  glyphsGB.gLyphTrackSet.insertBefore(glyphTrack.trackDiv, add_track_div);
+  glyphsGB.gLyphTrackSet.appendChild(glyphTrack.trackDiv);
+  createAddTrackTool(glyphsGB); //so it moves to end
   
   gLyphsRenderTrack(glyphTrack);
   gLyphsDrawTrack(glyphTrack.trackID);
@@ -2895,7 +2819,7 @@ function gLyphsAddSelectedPredefinedTracks(glyphsGB) {
     var config = tracks_hash[uuid];
     if(config && config.selected) { gLyphsLoadTrackConfigUUID(glyphsGB, uuid); }
   }  
-  gLyphsAutosaveConfig();
+  glyphsGB.autosave();
   gLyphsClosePredefinedTracksPanel(glyphsGB);
 }
 

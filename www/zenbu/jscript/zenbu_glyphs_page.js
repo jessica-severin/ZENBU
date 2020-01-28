@@ -81,10 +81,14 @@ function gLyphsInit() {
   //outside of that widget
   document.onmouseup = endDrag;
 
+  window.onresize = gLyphsWindowReSize;
+
   var main_div = document.getElementById("genome_region_div");  //TODO: need to change this to dynamic eventually
   if(!main_div) { return; }
 
   current_region = new ZenbuGenomeBrowser(main_div);
+  current_region.autosave = gLyphsAutosaveConfig;
+  current_region.urlHistoryUpdate = gLyphsChangeDhtmlHistoryLocation;
   /*
   if(!current_region) {
     current_region = new Object();
@@ -142,7 +146,7 @@ function gLyphsInit() {
     gLyphsChangeDhtmlHistoryLocation();
   } else {
     if(gLyphsInitParams.uuid !== undefined) { 
-      gLyphsInitViewConfigUUID(gLyphsInitParams.uuid); 
+      gLyphsInitViewConfigUUID(current_region, gLyphsInitParams.uuid); 
       if(gLyphsInitParams.loc) { gLyphsInitLocation(current_region, gLyphsInitParams.loc); }
       if(gLyphsInitParams.display_width) { current_region.display_width = gLyphsInitParams.display_width; }
       gLyphsReloadRegion(current_region);
@@ -151,6 +155,7 @@ function gLyphsInit() {
     }
     gLyphsChangeDhtmlHistoryLocation();
   }
+  gLyphsShowConfigInfo();
 
   current_region.first_init = true;
   window.addEventListener("hashchange", gLyphsHandleHistoryChange, false);
@@ -162,11 +167,11 @@ function gLyphsInit() {
   }
 
   if(current_region.init_search_term) {
-    eedbSetSearchInput(current_region.searchSetID, current_region.init_search_term);
+    gLyphsSetSearchInput(current_region, current_region.init_search_term);
     var e = new Object;
     e.type = "click"; //fake a click event
     e.keyCode = 13;
-    glyphsMainSearchInput(current_region.searchSetID, "",e);
+    glyphsMainSearchInput(current_region, "",e);
     current_region.init_search_term = undefined;
   }
 }
@@ -174,19 +179,51 @@ function gLyphsInit() {
 
 function gLyphsChangeDhtmlHistoryLocation() {
   if(zenbu_embedded_view) { return; }
+  var urlID = current_region.configUUID;
+  if((current_region.view_config.type != "AUTOSAVE") && current_region.config_fixed_id) { 
+    urlID = current_region.config_fixed_id;
+  }
+
   var chromloc = current_region.regionLocation();
-  var newurl = "#config="+current_region.configUUID +";loc="+chromloc
+  var newurl = "#config="+urlID +";loc="+chromloc
   if(current_region.active_track_exp_filter) {
     newurl +=";active_track_exp_filter="+current_region.active_track_exp_filter;
   }
   if(current_region.highlight_search) {
     newurl +=";highlight_search="+current_region.highlight_search;
   }
+  //console.log("window.location.href: "+window.location.href);
+  var p1 = window.location.href.indexOf("#config");
+  if(p1>=0) {
+    var url_params = window.location.href.substring(p1);
+    //console.log("current url_params "+ url_params);
+    if(newurl == url_params) { 
+      console.log("gLyphsChangeDhtmlHistoryLocation no change");
+      return;
+    }
+  }
   console.log("gLyphsChangeDhtmlHistoryLocation url:"+newurl);
   window.history.pushState({}, "", newurl);
 }
 
- 
+
+function gLyphsWindowReSize() {
+  if(!current_region) { return; }
+  if(!current_region.display_width_auto) { return; }
+    
+  if(current_region.autowidthInterval) {
+    window.clearInterval(current_region.autowidthInterval);
+    current_region.autowidthInterval = undefined;
+  }
+  current_region.autowidthInterval = setInterval(
+    function(){ 
+      window.clearInterval(current_region.autowidthInterval);
+      current_region.autowidthInterval = undefined;
+      gLyphsReloadRegion(current_region);
+    }, 1000); //1 second delay
+}
+
+
 //----------------------------------------------
 //
 // global source load/cache system 
@@ -505,18 +542,19 @@ function parseConfigFromURL(urlConfig) {
   //document.getElementById("message").innerHTML += "parseConfigFromURL [" + urlConfig +"]";
   if(!urlConfig) { return gLyphsLastSessionConfig(); }
 
-  //reset some variables
-  if(current_region) {
-    current_region.highlight_search = "";
-    current_region.init_search_term = "";
-    current_region.active_track_exp_filter = "";
-  }
   //console.log("window.location.href: "+window.location.href);
   //console.log("window.location.hostname: "+window.location.hostname);
   //console.log("window.location.pathname: "+window.location.pathname);
   //console.log("window.location.protocol: "+window.location.protocol);
   //console.log("window.location.port: "+window.location.port);
-  
+    
+  // make a new clean genomeBrowser and then init
+  var main_div = document.getElementById("genome_region_div");
+  if(!main_div) { return; }
+  current_region = new ZenbuGenomeBrowser(main_div);
+  current_region.autosave = gLyphsAutosaveConfig;
+  current_region.urlHistoryUpdate = gLyphsChangeDhtmlHistoryLocation;
+
   var p1 = urlConfig.indexOf(window.location.pathname);
   if(p1>=0) {
     var p2 = p1 + window.location.pathname.length;
@@ -539,11 +577,11 @@ function parseConfigFromURL(urlConfig) {
     var tagvalue = param.split("=");
     if(tagvalue.length != 2) { continue; }
     if(!rtnval && (tagvalue[0] == "config")) {
-      gLyphsInitViewConfigUUID(tagvalue[1]);
+      gLyphsInitViewConfigUUID(current_region, tagvalue[1]);
       rtnval = true;
     }
     if(!rtnval && ((tagvalue[0] == "configbase") || (tagvalue[0] == "basename"))) {
-      gLyphsInitConfigBasename(tagvalue[1]);
+      gLyphsInitConfigBasename(current_region, tagvalue[1]);
       rtnval = true;
     }
     if(tagvalue[0] == "loc") {
@@ -574,6 +612,7 @@ function parseConfigFromURL(urlConfig) {
   //document.getElementById("message").innerHTML += " parseConfigFromURL="+rtnval;
   if(!rtnval) { rtnval = gLyphsLastSessionConfig(); }
 
+  gLyphsShowConfigInfo();
   return rtnval;
 }
 
@@ -584,7 +623,7 @@ function gLyphsHandleHistoryChange() {
     return;
   }
   //document.getElementById("message").innerHTML += " gLyphsHandleHistoryChange["+window.location.href+"]";
-  eedbEmptySearchResults(current_region.searchSetID);
+  gLyphsEmptySearchResults(current_region);
   if(parseConfigFromURL(window.location.href)) { 
     gLyphsReloadRegion(current_region); 
     if(current_region.active_track_exp_filter) { 
@@ -592,11 +631,11 @@ function gLyphsHandleHistoryChange() {
       gLyphsSubmitExpExpressFilterSearch(activeTrack);
     }
     if(current_region.init_search_term) {
-      eedbSetSearchInput(current_region.searchSetID, current_region.init_search_term);
+      gLyphsSetSearchInput(current_region, current_region.init_search_term);
       var e = new Object;
       e.type = "click"; //fake a click event
       e.keyCode = 13;
-      glyphsMainSearchInput(current_region.searchSetID, "",e);
+      glyphsMainSearchInput(current_region, "",e);
       current_region.init_search_term = undefined;
     }
   }
@@ -655,7 +694,8 @@ function gLyphsNoUserWarn(message) {
   var a1 = tdiv.appendChild(document.createElement('a'));
   a1.setAttribute("target", "top");
   a1.setAttribute("href", "./");
-  a1.setAttribute("onclick", "gLyphsSaveConfigParam('cancel'); return false;");
+  //a1.setAttribute("onclick", "gLyphsSaveConfigParam('cancel'); return false;");
+  a1.setAttribute("onclick", "zenbuClearGlobalPanelLayer(); return false;");
   var img1 = a1.appendChild(document.createElement('img'));
   img1.setAttribute("src", eedbWebRoot+"/images/close_icon16px_gray.png");
   img1.setAttribute("style", "float: right;");
@@ -698,7 +738,8 @@ function gLyphsGeneralWarn(message) {
   var a1 = tdiv.appendChild(document.createElement('a'));
   a1.setAttribute("target", "top");
   a1.setAttribute("href", "./");
-  a1.setAttribute("onclick", "gLyphsSaveConfigParam('cancel'); return false;");
+  //a1.setAttribute("onclick", "gLyphsSaveConfigParam('cancel'); return false;");
+  a1.setAttribute("onclick", "zenbuClearGlobalPanelLayer(); return false;");
   var img1 = a1.appendChild(document.createElement('img'));
   img1.setAttribute("src", eedbWebRoot+"/images/close_icon16px_gray.png");
   img1.setAttribute("style", "float: right;");
@@ -712,170 +753,93 @@ function gLyphsGeneralWarn(message) {
   tspan.innerHTML = message;
 }
 
-
 function gLyphsSaveConfig() {
-  var saveConfigDiv = document.getElementById("global_panel_layer");
-  if(!saveConfigDiv) { return; }
-  
-  eedbShowLogin();
+  var global_layer_div = document.getElementById("global_panel_layer");
+  if(!global_layer_div) { return; }
+  global_layer_div.innerHTML ="";
+
   if(!current_user) {
-    gLyphsNoUserWarn("save a view configuration");
-    return;
+    zenbuGeneralWarn("In order to save this view configuration, you must first log into ZENBU.", "Warning: Not logged into the ZENBU system");
+    eedbLoginAction("login");
+    return; 
   }
 
-  if(current_region.saveconfig == undefined) { 
-    current_region.saveconfig = new Object;
-    current_region.saveconfig.desc  = current_region.desc;
-    current_region.saveconfig.name  = current_region.configname;
+  zenbuCI = zenbuConfigurationInterface(current_region.uuid);
+  global_layer_div.appendChild(zenbuCI);
+  
+  zenbuCI.glyphsGB = current_region;
+
+  zenbuCI.panel_title = "Save view configuration";
+  zenbuCI.config_type = "VIEW";
+  zenbuCI.configUUID  = current_region.configUUID;
+  zenbuCI.title       = current_region.configname;
+  zenbuCI.description = current_region.desc;
+
+  zenbuCI.fixed_id = current_region.config_fixed_id;
+  zenbuCI.edit_fixed_id = false;
+  zenbuCI.validation_status = "valid";
+  zenbuCI.validation_message = "no fixed ID";
+
+  zenbuCI.uploadCallOutFunction = gLyphsUploadViewConfigXML;
+  //zenbuCI.configDOM = gLyphsGB_configDOM(current_region);
+  //zenbuCI.uploadCompleteFunction = gLyphsUploadCompleted;
+
+  current_region.saveconfig = zenbuCI;
+
+  if(zenbuCI.fixed_id) {
+    zenbuCI.validation_status = "checking";
+    zenbuCI.validation_message = "";
   }
 
-  //var mymatch = /^temporary\.(.+)$/.exec(current_region.saveconfig.name);
-  var mymatch = /(.+) \(modified\)$/.exec(current_region.saveconfig.name);
+  //var mymatch = /^temporary\.(.+)$/.exec(zenbuCI.title);
+  var mymatch = /(.+) \(modified\)$/.exec(zenbuCI.title);
   if(mymatch && (mymatch.length == 2)) {
-    current_region.saveconfig.name = mymatch[1];
+    zenbuCI.title = mymatch[1];
   }
-  mymatch = /^(.+)\.(\d+)$/.exec(current_region.saveconfig.name);
+  mymatch = /^(.+)\.(\d+)$/.exec(zenbuCI.title);
   if(mymatch && (mymatch.length == 3)) {
-    current_region.saveconfig.name =  mymatch[1] + "." + (parseInt(mymatch[2])+1);
+    zenbuCI.title =  mymatch[1] + "." + (parseInt(mymatch[2])+1);
   } else {
-    current_region.saveconfig.name += ".1";
+    zenbuCI.title += ".1";
   }
-
-  //clear/reset previous autosave 
-  if(current_region.autosaveInterval) {
-    window.clearInterval(current_region.autosaveInterval);
-    current_region.autosaveInterval = undefined;
-  }
-  current_region.modified = false;
-  current_region.saveConfigXHR = undefined;
-
-  var e = window.event
-  toolTipWidth=350;
-  moveToMouseLoc(e);
-  var xpos = toolTipSTYLE.xpos;
-  var ypos = toolTipSTYLE.ypos + 10;
-
-  var divFrame = document.createElement('div');
-  divFrame.setAttribute('style', "position:absolute; background-color:LightYellow; text-align:left; "
-                            +"border:inset; border-width:1px; padding: 3px 3px 3px 3px; "
-                            //+"left:" + ((winW/2)-250) +"px; top:200px; "
-                            +"left:"+(xpos-350)+"px; top:"+(ypos)+"px; "
-                            +"width:350px; z-index:90;"
-                             );
-  var tdiv, tspan, tinput;
-
-  //close button
-  tdiv = divFrame.appendChild(document.createElement('div'));
-  tdiv.setAttribute('style', "float:right; margin: 0px 4px 4px 4px;");
-  var a1 = tdiv.appendChild(document.createElement('a'));
-  a1.setAttribute("target", "top");
-  a1.setAttribute("href", "./");
-  a1.setAttribute("onclick", "gLyphsSaveConfigParam('cancel'); return false;");
-  var img1 = a1.appendChild(document.createElement('img'));
-  img1.setAttribute("src", eedbWebRoot+"/images/close_icon16px_gray.png");
-  img1.setAttribute("width", "12");
-  img1.setAttribute("height", "12");
-  img1.setAttribute("alt","close");
-
-
-  tdiv = document.createElement('h3');
-  tdiv.setAttribute('align', "center");
-  tdiv.innerHTML = "Save view configuration";
-  divFrame.appendChild(tdiv)
-
-  //----------
-  var userDiv = divFrame.appendChild(document.createElement('div'));
-  userDiv.setAttribute('style', "margin: 0px 0px 3px 0px; font-size:12px; font-family:arial,helvetica,sans-serif;");
-  var userSpan = userDiv.appendChild(document.createElement('span'));
-  userSpan.setAttribute('style', "padding:0px 0px 0px 0px;");
-  userSpan.innerHTML = "user:";
-  var name_span = userDiv.appendChild(document.createElement('span'));
-  name_span.setAttribute("style", "padding:0px 0px 0px 10px; font-weight:bold; color:rgb(94,115,153);");
-  name_span.innerHTML = "guest";
-  if(current_user) { 
-    if(current_user.nickname) { name_span.innerHTML = current_user.nickname; }
-    else { name_span.innerHTML = current_user.openID; }
-  }
-
-  var div1 = divFrame.appendChild(document.createElement('div'));
-  var collabWidget = eedbCollaborationSelectWidget();
-  div1.appendChild(collabWidget);
-
-  //----------
-  var div1 = divFrame.appendChild(document.createElement('div'));
-  div1.setAttribute('style', "margin: 0px 0px 3px 0px;");
-  var span0 = document.createElement('span');
-  span0.setAttribute('style', "padding: 0px 2px 0px 0px; font-size:12px; font-family:arial,helvetica,sans-serif;");
-  span0.innerHTML = "configuration name:";
-  div1.appendChild(span0);
-  var titleInput = document.createElement('input');
-  titleInput.setAttribute('style', "width:200px; margin: 1px 1px 1px 1px; font-size:10px; font-family:arial,helvetica,sans-serif;");
-  titleInput.setAttribute('type', "text");
-  titleInput.setAttribute('value', current_region.saveconfig.name);
-  titleInput.setAttribute("onkeyup", "gLyphsSaveConfigParam('name', this.value);");
-  div1.appendChild(titleInput);
-
-  //----------
-  var descSpan = document.createElement('span');
-  descSpan.setAttribute('style', "font-size:12px; font-family:arial,helvetica,sans-serif;");
-  descSpan.innerHTML = "description:";
-  divFrame.appendChild(descSpan);
-  var descInput = document.createElement('textarea');
-  descInput.setAttribute('style', "width:340px; margin: 3px 5px 3px 5px; font-size:10px; font-family:arial,helvetica,sans-serif;");
-  descInput.setAttribute('rows', 7);
-  descInput.setAttribute('value', current_region.saveconfig.desc);
-  descInput.innerHTML = current_region.saveconfig.desc;
-  descInput.setAttribute("onkeyup", "gLyphsSaveConfigParam('desc', this.value);");
-  divFrame.appendChild(descInput);
-
-
-  //----------
-  divFrame.appendChild(document.createElement('hr'));
-  //----------
-  var button1 = document.createElement('input');
-  button1.setAttribute("type", "button");
-  button1.setAttribute("value", "cancel");
-  button1.className = "medbutton";
-  button1.style.float = "left";
-  button1.setAttribute("onclick", "gLyphsSaveConfigParam('cancel');");
-  divFrame.appendChild(button1);
-
-  var button2 = document.createElement('input');
-  button2.setAttribute("type", "button");
-  button2.setAttribute("value", "save view");
-  button2.className = "medbutton";
-  button2.style.float = "right";
-  button2.setAttribute("onclick", "gLyphsSaveConfigParam('accept');");
-  divFrame.appendChild(button2);
-
-  saveConfigDiv.innerHTML ="";
-  saveConfigDiv.appendChild(divFrame);
+  
+  zenbuConfigurationInterfaceUpdate(current_region.uuid);
 }
 
 
-function gLyphsSaveConfigParam(param, value) {
-  var saveConfigDiv = document.getElementById("global_panel_layer");
-  if(!saveConfigDiv) { return; }
+function gLyphsUploadCompleted(zenbuCI) {
+  if(!zenbuCI) { return; }
+  var glyphsGB = zenbuCI.glyphsGB;
+  if(!glyphsGB) { return; }
+  
+  if(zenbuCI.config) {
+    glyphsGB.view_config = zenbuCI.config;
+    glyphsGB.configUUID = zenbuCI.config.uuid;
+    glyphsGB.fixed_id = zenbuCI.config.fixed_id;
+    
+    glyphsGB.config_createdate = zenbuCI.config.create_date;
+    glyphsGB.configname = zenbuCI.config.name;
+    glyphsGB.desc = zenbuCI.config.description;
+    if(zenbuCI.config.author) {
+      glyphsGB.config_creator = zenbuCI.config.author;
+    } else {
+      glyphsGB.config_creator = zenbuCI.config.owner_openID;
+    }
 
-  var saveconfig = current_region.saveconfig;
-  if(saveconfig === undefined) { 
-    if(saveConfigDiv) { saveConfigDiv.innerHTML =""; }
-    return;
+    // console.log("title:"+zenbuCI.config.title);
+    // console.log("name:"+zenbuCI.config.name);
+    // console.log("description:"+zenbuCI.config.description);
+    // console.log("author:"+zenbuCI.config.author);
+    // console.log("owner_identity:"+zenbuCI.config.owner_identity);
+    // console.log("uuid:"+zenbuCI.config.uuid);
+    // console.log("fixed_id:"+zenbuCI.config.fixed_id);
+    // console.log("create_date:"+zenbuCI.config.create_date);
+    // console.log("type:"+zenbuCI.config.type);
   }
 
-  if(param == "name") { saveconfig.name = value; }
-  if(param == "desc")  { saveconfig.desc = value; }
-  if(param == "cancel") {
-    saveConfigDiv.innerHTML ="";
-    current_region.saveconfig = undefined;
-    current_region.modified = false;
-    current_region.saveConfigXHR = undefined;
-  }
-
-  if(param == "accept") {
-    current_region.saveConfigXHR = undefined;
-    gLyphsUploadViewConfigXML();
-    saveConfigDiv.innerHTML ="";
+  if(glyphsGB.configUUID) {
+    gLyphsChangeDhtmlHistoryLocation();
+    gLyphsShowConfigInfo();
   }
 }
 
@@ -893,8 +857,8 @@ function gLyphsAutosaveConfig() {
 function gLyphsSendAutosaveConfig() {
   var saveconfig = new Object;
   current_region.saveconfig = saveconfig;
-  saveconfig.name     = "tempsave";
-  saveconfig.desc     = current_region.desc;
+  saveconfig.title         = "tempsave";
+  saveconfig.description   = current_region.desc;
   saveconfig.autosave = true;
 
   var mymatch = /^temporary\.(.+)/.exec(current_region.configname);
@@ -909,19 +873,19 @@ function gLyphsSendAutosaveConfig() {
   if(mymatch && (mymatch.length == 2)) {
     current_region.configname = mymatch[1];
   }
-  saveconfig.name = current_region.configname + " (modified)";
+  saveconfig.title = current_region.configname + " (modified)";
 
   /*
   //mymatch = /^temporary\.(.+)$/.exec(current_region.configname);
   mymatch = /(.+) \(modified\)$/.exec(current_region.configname);
   if(mymatch && (mymatch.length == 2)) {
-    saveconfig.name = current_region.configname;
+    saveconfig.title = current_region.configname;
   } else {
-    saveconfig.name = current_region.configname + " (modified)";
+    saveconfig.title = current_region.configname + " (modified)";
   }
    */
 
-  gLyphsUploadViewConfigXML();
+  gLyphsUploadViewConfigXML(saveconfig);
 
   if(current_region.autosaveInterval) {
     window.clearInterval(current_region.autosaveInterval);
@@ -930,95 +894,53 @@ function gLyphsSendAutosaveConfig() {
 }
 
 
-function gLyphsGenerateViewConfigDOM() {
+function gLyphsGenerateViewConfigDOM(saveconfig) {
   //the reason I am using the DOM api is that all the nice
   //formating and character conversion is handled by the XMLSerializer
 
+  if(!saveconfig) { saveconfig = current_region.saveconfig; }
+  if(!saveconfig) { return; }
+
   var doc = document.implementation.createDocument("", "", null);
   
-  var saveconfig = current_region.saveconfig;
-
   //var config = doc.createElement("eeDBgLyphsConfig");
   var config = gLyphsGB_configDOM(current_region);
   doc.appendChild(config);
 
-  var collab = config.appendChild(doc.createElement("collaboration"));
-  collab.setAttribute("uuid", current_collaboration.uuid);
-  collab.setAttribute("name", current_collaboration.name);
+  if(saveconfig.collabWidget) {
+    var collab = config.appendChild(doc.createElement("collaboration"));
+    collab.setAttribute("uuid", saveconfig.collabWidget.collaboration_uuid);
+    collab.setAttribute("name", saveconfig.collabWidget.collaboration_name);
+  }
   
   if(saveconfig.autosave) {
-    var autosave = doc.createElement("autoconfig");
+    var autosave = config.appendChild(doc.createElement("autoconfig"));
     autosave.setAttribute("value", "public");
-    config.appendChild(autosave);
   }
 
-  var summary = doc.createElement("summary");
-  if(saveconfig.name) { summary.setAttribute("name", saveconfig.name); }
+  var summary = config.appendChild(doc.createElement("summary"));
+  if(saveconfig.title) { summary.setAttribute("name", saveconfig.title); }
   if(current_user) { 
     summary.setAttribute("user", current_user.nickname); 
     summary.setAttribute("creator_openID", current_user.openID); 
   }
-  if(saveconfig.desc) { summary.setAttribute("desc", saveconfig.desc); }
-  config.appendChild(summary);
-
-  /*
-  var loc = doc.createElement("region");
-  loc.setAttribute("asm",    current_region.asm);
-  loc.setAttribute("chrom",  current_region.chrom);
-  loc.setAttribute("start",  current_region.start);
-  loc.setAttribute("end",    current_region.end);
-  config.appendChild(loc);
-
-  var settings = doc.createElement("settings");
-  settings.setAttribute("dwidth", current_region.display_width);
-  if(current_region.hide_compacted_tracks) { settings.setAttribute("hide_compacted", "true"); }
-  if(!current_region.share_exp_panel) { settings.setAttribute("share_exp_panel", "false"); }
-  if(current_region.exppanel_subscroll) { settings.setAttribute("exppanel_subscroll", "true"); }
-  if(current_region.flip_orientation) { settings.setAttribute("flip_orientation", "true"); }
-  if(current_region.nocache) { settings.setAttribute("global_nocache", "true"); }
-  config.appendChild(settings);
-
-  if(current_region.selected_feature) { 
-    var feat = doc.createElement("feature");
-    //if(current_region.selected_feature.getAttribute("peer")) {
-    //  feat.setAttribute("peer", current_region.selected_feature.getAttribute("peer"));
-    //}
-    feat.setAttribute("id",   current_region.selected_feature.id);
-    feat.setAttribute("name", current_region.selected_feature.name);
-    config.appendChild(feat);
-  }  
-
-  var tracks = doc.createElement("gLyphTracks");
-  tracks.setAttribute("next_trackID", newTrackID);
-  config.appendChild(tracks);
-
-  var glyphset = current_region.gLyphTrackSet;
-  var gLyphDivs = glyphset.getElementsByClassName("gLyphTrack");
-  for(var i=0; i<gLyphDivs.length; i++) {
-    var gLyphDiv = gLyphDivs[i];
-    var trackID = gLyphDiv.getAttribute("id");
-    var glyphTrack = current_region.tracks_hash[trackID];
-    if(!glyphTrack) { continue; }
-    
-    var trackDOM = glyphsGenerateTrackDOM(glyphTrack);
-    tracks.appendChild(trackDOM);
-  }
-  */
+  if(saveconfig.description) { summary.setAttribute("desc", saveconfig.description); }
   
   return doc;
 }
 
 
-function gLyphsUploadViewConfigXML() {
+function gLyphsUploadViewConfigXML(saveconfig) {
   if(current_region.saveConfigXHR) {
     //a save already in operation. flag for resave when finished
     current_region.modified = true;
     return;
   }
-  if(!current_region.saveconfig) { return; }
+  if(!saveconfig) { saveconfig = current_region.saveconfig; }
+  if(!saveconfig) { return; }
 
   //zenbu2.6
-  var configDOM = gLyphsGenerateViewConfigDOM();
+  var configDOM = gLyphsGenerateViewConfigDOM(saveconfig);
 
   var serializer = new XMLSerializer();
   var configXML  = serializer.serializeToString(configDOM);
@@ -1027,33 +949,33 @@ function gLyphsUploadViewConfigXML() {
   var idx1 = configXML.indexOf("<eeDBgLyphsConfig>");
   if(idx1 > 0) { configXML = configXML.substr(idx1); }
 
-  var saveconfig = current_region.saveconfig;
   current_region.view_config = undefined; //clear old config object since it is not valid anymore
 
   //build the zenbu_query
   var paramXML = "<zenbu_query>\n";
   paramXML += "<mode>saveconfig</mode>\n";
-  if(saveconfig.name) { paramXML += "<configname>"+ encodehtml(saveconfig.name) + "</configname>"; }
-  if(saveconfig.desc) { paramXML += "<description>"+ encodehtml(saveconfig.desc) + "</description>"; }
+  if(saveconfig.fixed_id) { paramXML += "<fixed_id>"+saveconfig.fixed_id+"</fixed_id>\n"; }
+  if(saveconfig.title) { paramXML += "<configname>"+ encodehtml(saveconfig.title) + "</configname>"; }
+  if(saveconfig.description) { paramXML += "<description>"+ encodehtml(saveconfig.description) + "</description>"; }
 
   if(saveconfig.autosave) {
     paramXML += "<autosave>true</autosave>\n";
   } else {
     paramXML += "<collaboration_uuid>"+ current_collaboration.uuid +"</collaboration_uuid>\n";
 
-    current_region.exportSVGconfig = new Object;
-    current_region.exportSVGconfig.title = current_region.configname;
-    current_region.exportSVGconfig.savefile = false;
-    current_region.exportSVGconfig.hide_widgets = false;
-    current_region.exportSVGconfig.hide_sidebar = false;
-    current_region.exportSVGconfig.hide_titlebar = false;
-    current_region.exportSVGconfig.hide_experiment_graph = true;
-    current_region.exportSVGconfig.hide_compacted_tracks = true;
-
-    var svgXML = generateSvgXML();
-    paramXML += "<svgXML>" + svgXML + "</svgXML>";
-
-    current_region.exportSVGconfig = undefined;
+    // current_region.exportSVGconfig = new Object;
+    // current_region.exportSVGconfig.title = current_region.configname;
+    // current_region.exportSVGconfig.savefile = false;
+    // current_region.exportSVGconfig.hide_widgets = false;
+    // current_region.exportSVGconfig.hide_sidebar = false;
+    // current_region.exportSVGconfig.hide_titlebar = false;
+    // current_region.exportSVGconfig.hide_experiment_graph = true;
+    // current_region.exportSVGconfig.hide_compacted_tracks = true;
+    // 
+    // var svgXML = generateSvgXML();
+    // paramXML += "<svgXML>" + svgXML + "</svgXML>";
+    // 
+    // current_region.exportSVGconfig = undefined;
   }
 
   paramXML += "<configXML>" + configXML + "</configXML>";
@@ -1104,20 +1026,31 @@ function gLyphsUploadViewConfigXMLResponse() {
     var configXML = xmlDoc.getElementsByTagName("configuration")[0];
     current_region.view_config = eedbParseConfigurationData(configXML);
     if(current_region.view_config) {
-      current_region.configUUID = current_region.view_config.uuid;
+      current_region.configUUID = current_region.view_config.uuid;      
+      current_region.config_createdate = current_region.view_config.create_date;
+      current_region.configname = current_region.view_config.name;
+      current_region.desc = current_region.view_config.description;
+      if(current_region.view_config.author) {
+        current_region.config_creator = current_region.view_config.author;
+      } else {
+        current_region.config_creator = current_region.view_config.owner_openID;
+      }
+      if(current_region.view_config.type != "AUTOSAVE") {
+        current_region.config_fixed_id = current_region.view_config.fixed_id;
+      }
+      console.log("gLyphsUploadViewConfigXMLResponse got config back");
     }
   }
 
   if(current_region.configUUID) {
     gLyphsChangeDhtmlHistoryLocation();
-
-    current_region.desc           = current_region.saveconfig.desc;
-    current_region.configname     = current_region.saveconfig.name;
-    current_region.config_creator = "guest";
-    if(current_user) { 
-      if(current_user.nickname) { current_region.config_creator = current_user.nickname; }
-      if(current_user.openID)   { current_region.config_creator = current_user.openID; }
-    }
+    // current_region.desc           = current_region.saveconfig.description;
+    // current_region.configname     = current_region.saveconfig.title;
+    // current_region.config_creator = "guest";
+    // if(current_user) { 
+    //   if(current_user.nickname) { current_region.config_creator = current_user.nickname; }
+    //   if(current_user.openID)   { current_region.config_creator = current_user.openID; }
+    // }
     gLyphsShowConfigInfo();
   }
   
@@ -1220,8 +1153,14 @@ function gLyphsLastSessionConfig() {
   if(xmlDoc.tagName != "configuration") { return false; }
   var config = eedbParseConfigurationData(xmlDoc);
 
-  if(!gLyphsInitFromViewConfig(config)) { return false; }
+  var main_div = document.getElementById("genome_region_div");
+  if(!main_div) { return; }
+  current_region = new ZenbuGenomeBrowser(main_div);
+  current_region.autosave = gLyphsAutosaveConfig;
+  current_region.urlHistoryUpdate = gLyphsChangeDhtmlHistoryLocation;
 
+  if(!gLyphsInitFromViewConfig(current_region, config)) { return false; }
+  gLyphsShowConfigInfo();
   return true;
 }
 

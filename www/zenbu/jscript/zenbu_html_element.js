@@ -119,12 +119,7 @@ function zenbuHtmlElement_generateConfigDOM() {
 //TODO: these are placeholders for now, still need to figure out how to integrate subclass into main code
 
 function zenbuHtmlElement_elementEvent(mode, value, value2) {
-  //var datasourceElement = this;
-  //if(this.datasourceElementID) {
-  //  var ds = current_report.elements[this.datasourceElementID];
-  //  if(ds) { datasourceElement = ds; }
-  //  else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  //}
+  //var datasourceElement = this.datasource();
 }
 
 
@@ -195,12 +190,7 @@ function zenbuHtmlElement_draw() {
   var main_div = this.main_div;
   if(!main_div) { return; }
   
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
   
   var selected_feature = datasourceElement.selected_feature;
   var selected_edge = datasourceElement.selected_edge;
@@ -321,12 +311,7 @@ function zenbuHtmlElement_configSubpanel() {
   
   var configdiv = this.config_options_div;
   
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
   
   configdiv.appendChild(document.createElement('hr'));
   

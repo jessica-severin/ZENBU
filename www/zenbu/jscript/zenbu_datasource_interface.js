@@ -99,7 +99,7 @@ function zenbuDatasourceInterface(uniqID) {
     //zenbuDSI.query_filter = "F6_KD_CAGE:=true";
     //zenbuDSI.query_format = "fullxml";
 
-    zenbuDSI.datasource_mode = "feature";  //feature, edge, shared_element
+    zenbuDSI.datasource_mode = "feature";  //feature, edge, source, shared_element, all_data(all datasources)
     zenbuDSI.source_ids = "";
     zenbuDSI.query_filter = "";
     zenbuDSI.query_format = "fullxml";
@@ -110,6 +110,9 @@ function zenbuDatasourceInterface(uniqID) {
     zenbuDSI.enableResultFilter = true;
     zenbuDSI.allowMultipleSelect = true;
     zenbuDSI.query_edge_search_depth = 1;
+    zenbuDSI.show_exp=true;
+    zenbuDSI.show_fsrc=true;
+    zenbuDSI.show_esrc=true;
 
     zenbuDSI.newconfig = new Object();
 
@@ -301,18 +304,53 @@ function zenbuDatasourceInterfaceUpdate(uniqID) {
   var tdiv = zenbuDSI.appendChild(document.createElement('div')); //to break the floating collabWidget
   tdiv.setAttribute('style', "clear:right;");
 
-  if((datasource_mode == "edge") || (datasource_mode == "feature")) {  
+  if((datasource_mode == "edge") || (datasource_mode == "feature") || (datasource_mode == "all_data")) {  
+    var altOptsDiv = zenbuDSI.appendChild(document.createElement('div'));
+    altOptsDiv.setAttribute('style', "margin: 0px 1px 0px 0px; font-size:10px;");
+
     if(zenbuDSI.species_filter) {
       var species_filter = zenbuDSI.species_filter;
       if(zenbuDSI.newconfig && zenbuDSI.newconfig.species_filter != undefined) { species_filter = zenbuDSI.newconfig.species_filter; }
-      var speciesDiv = zenbuDSI.appendChild(document.createElement('div'));
-      speciesDiv.setAttribute('style', "margin: 0px 1px 0px 0px; font-size:10px;");
-      var speciesCheck = speciesDiv.appendChild(document.createElement('input'));
+      var speciesCheck = altOptsDiv.appendChild(document.createElement('input'));
       speciesCheck.setAttribute('type', "checkbox");
       if(species_filter) { speciesCheck.setAttribute("checked", "checked"); }
       speciesCheck.setAttribute("onchange", "zenbuDatasourceInterfaceReconfigParam(\""+ zenbuDSI.id +"\", 'species_filter', this.value);");
-      var speciesLabel = speciesDiv.appendChild(document.createElement('span'));
+      var speciesLabel = altOptsDiv.appendChild(document.createElement('span'));
       speciesLabel.innerHTML = "restrict search to current species/assembly";
+    }
+    if(datasource_mode == "all_data") {
+      var show_exp  = zenbuDSI.show_exp;
+      var show_fsrc = zenbuDSI.show_fsrc;
+      var show_esrc = zenbuDSI.show_esrc;      
+
+      var t_label = altOptsDiv.appendChild(document.createElement('span'));
+      t_label.style.marginLeft = "15px";
+      t_label.innerHTML = "show search:";
+
+      var expCheck = altOptsDiv.appendChild(document.createElement('input'));
+      expCheck.style.marginLeft = "5px";
+      expCheck.setAttribute('type', "checkbox");
+      expCheck.setAttribute("onchange", "zenbuDatasourceInterfaceReconfigParam(\""+ zenbuDSI.id +"\", 'show_exp', this.value);");
+      var t_label = altOptsDiv.appendChild(document.createElement('span'));
+      t_label.innerHTML = "Experiments";
+
+      var fsrcCheck = altOptsDiv.appendChild(document.createElement('input'));
+      fsrcCheck.style.marginLeft = "5px";
+      fsrcCheck.setAttribute('type', "checkbox");
+      fsrcCheck.setAttribute("onchange", "zenbuDatasourceInterfaceReconfigParam(\""+ zenbuDSI.id +"\", 'show_fsrc', this.value);");
+      var t_label = altOptsDiv.appendChild(document.createElement('span'));
+      t_label.innerHTML = "FeatureSources";
+
+      var esrcCheck = altOptsDiv.appendChild(document.createElement('input'));
+      esrcCheck.style.marginLeft = "5px";
+      esrcCheck.setAttribute('type', "checkbox");
+      esrcCheck.setAttribute("onchange", "zenbuDatasourceInterfaceReconfigParam(\""+ zenbuDSI.id +"\", 'show_esrc', this.value);");
+      var t_label = altOptsDiv.appendChild(document.createElement('span'));
+      t_label.innerHTML = "EdgeSources";
+
+      if(show_exp)  { expCheck.setAttribute("checked", "checked"); }
+      if(show_fsrc) { fsrcCheck.setAttribute("checked", "checked"); }
+      if(show_esrc) { esrcCheck.setAttribute("checked", "checked"); }
     }
 
     //----------
@@ -426,7 +464,7 @@ function zenbuDatasourceInterfaceUpdate(uniqID) {
   }
   
   //query_edge_search_depth
-  if(datasource_mode == "edge") {
+  if((datasource_mode == "edge") || (datasource_mode == "all_data")) {
     var span0 = div1.appendChild(document.createElement('span'));
     span0.setAttribute('style', "font-size:12px; font-family:arial,helvetica,sans-serif;");
     span0.innerHTML = "edge network search depth:";
@@ -499,6 +537,10 @@ function zenbuDatasourceInterfaceReconfigParam(uniqID, param, value, altvalue) {
     else if(!zenbuDSI.newconfig.species_filter) { zenbuDSI.newconfig.species_filter = zenbuDSI.species_filter; }
     else { zenbuDSI.newconfig.species_filter = ""; }
   }
+
+  if(param == "show_exp")  { zenbuDSI.show_exp = !(zenbuDSI.show_exp); }
+  if(param == "show_fsrc") { zenbuDSI.show_fsrc = !(zenbuDSI.show_fsrc); }
+  if(param == "show_esrc") { zenbuDSI.show_esrc = !(zenbuDSI.show_esrc); }
   
   //accept/reset
   if(param == "cancel-reconfig") {
@@ -626,7 +668,7 @@ function zenbuDatasourceInterfaceSubmitSearch(uniqID, filter) {
 
   var paramXML = "<zenbu_query><format>descxml</format>\n";
   //if(datasource_mode == "feature") { paramXML += "<mode>feature_sources</mode>"; }
-  if(datasource_mode == "feature") { paramXML += "<mode>sources</mode>"; }
+  if((datasource_mode == "feature") || (datasource_mode == "all_data")) { paramXML += "<mode>sources</mode>"; }
   else if(datasource_mode == "edge") { paramXML += "<mode>edge_sources</mode>"; }
   else { paramXML += "<mode>sources</mode>";  }
   if(zenbuDSI.collabWidget) {
@@ -747,12 +789,18 @@ function zenbuDatasourceInterfaceShowSearchResult(uniqID) {
   }
   var sources_array = new Array();
   var sources_hash = zenbuDSI.newconfig.sources_hash;
-  
+
   var select_count = 0;
   for(var srcid in sources_hash) {
     var source = sources_hash[srcid];
     if(!source) { continue; }
+    source.hide = false;
     if(source.selected) { select_count++; }
+    else {
+      if(source.classname == "Experiment" && !zenbuDSI.show_exp) { source.hide = true; continue; }
+      if(source.classname == "FeatureSource" && !zenbuDSI.show_fsrc) { source.hide = true; continue; }
+      if(source.classname == "EdgeSource" && !zenbuDSI.show_esrc) { source.hide = true; continue; }
+    }
     sources_array.push(source);
   }
   sources_array.sort(zenbuDatasourceInterface_sources_sort_func);
@@ -850,8 +898,8 @@ function zenbuDatasourceInterfaceUpdateSearchCounts(uniqID) {
   for(var srcid in sources_hash) {
     var source = sources_hash[srcid];
     if(!source) { continue; }
-    total_count++;
-    if(source.selected) { select_count++; }
+    if(source.selected) { select_count++; total_count++; }
+    else if(!source.hide) { total_count++; }
   }
   
   if(total_count>0) {
@@ -892,7 +940,9 @@ function zenbuDatasourceInterfaceSelectSource(uniqID, srcID, mode) {
   if(srcID == "all") {
     for(var srcid in sources_hash) {
       var source = sources_hash[srcid];
-      if(source) { source.selected = true; }
+      if(!source) { continue; }
+      if(source.hide) { continue; }
+      source.selected = true;
     }
     zenbuDatasourceInterfaceShowSearchResult(uniqID);
   } else {

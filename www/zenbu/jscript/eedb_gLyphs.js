@@ -3445,7 +3445,7 @@ function gLyphsTrackCalcMetadataGrouping(trackID) {
     for(var j=0; j<group_mdkey_array.length; j++) {
       var mdkey = group_mdkey_array[j];
 
-      if(experiment.mdata[mdkey]) { 
+      if(experiment.mdata && experiment.mdata[mdkey]) { 
         var value_array = experiment.mdata[mdkey];
         for(var idx3=0; idx3<value_array.length; idx3++) {
           var value = value_array[idx3];
@@ -3571,7 +3571,7 @@ function gLyphsTrackSourcesMissingMetadataLoad(glyphTrack, mdkeys) {
     for(var j=0; j<mdkey_array.length; j++) {
       var mdkey = mdkey_array[j];
       var key_ok=false; //find in either my mdata or my parent mdata
-      if(experiment.mdata[mdkey]) { key_ok=true; }
+      if(experiment.mdata && experiment.mdata[mdkey]) { key_ok=true; }
       //if(experiment.parent_source && experiment.parent_source.mdata[mdkey]) { key_ok=true; }
       if(!key_ok) { exp_ok=false; } //if any key missing then exp needs reload
     }
