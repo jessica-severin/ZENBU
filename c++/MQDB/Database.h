@@ -1,4 +1,4 @@
-/* $Id: Database.h,v 1.90 2016/06/20 06:34:28 severin Exp $ */
+/* $Id: Database.h,v 1.91 2019/08/01 01:19:15 severin Exp $ */
 
 /***
 NAME - MQDB::Database
@@ -101,7 +101,6 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <boost/uuid/uuid_generators.hpp>
 
 #include <sqlite3.h>
-#include <my_global.h>
 #include <mysql.h>
 
 using namespace std;
