@@ -49,6 +49,9 @@
 #include <EEDB/SPStreams/RemoteServerStream.h>
 #include <EEDB/SPStreams/MannWhitneyRanksum.h>
 #include <EEDB/SPStreams/OverlapMerge.h>
+#include <EEDB/SPStreams/SiteFinder.h>
+#include <EEDB/SPStreams/DemultiplexSource.h>
+#include <EEDB/SPStreams/AppendExpression.h>
 
 #include <EEDB/Tools/OSCFileParser.h>
 #include <EEDB/Tools/LSArchiveImport.h>
@@ -155,6 +158,17 @@ void check_view_collaboration_security_sharing();
 void check_duplicate_uploads();
 void fantom6_bam_links();
 bool zdx_patch_assembly();
+void test_site_finder();
+void test_fetch_features();
+void test_load_GO_obo();
+bool test_edge_oscfile_build();
+bool test_edge_oscfile_read();
+bool test_edge_oscfile_read2();
+void test_assembly_ncbi_fetch_info();
+bool test_demux_single_cell();
+bool test_append_expression();
+void test_region_download();
+void test_region_server_track_cache(); 
 
 EEDB::User* get_cmdline_user();
 
@@ -181,7 +195,28 @@ int main() {
   seedpeers.push_back(EEDB::Peer::new_from_url("sqlite:///zenbu/dbs/zenbu_main_registry.sqlite"));
   seedpeers.push_back(EEDB::Peer::new_from_url("sqlite:///eeDB/dbs/eedb_fantom46_registry2.sqlite"));
 
-  zdx_patch_assembly(); exit(0);
+  //test_region_server_track_cache(); exit(0);
+
+  //test_region_download(); exit(0);
+
+  //test_append_expression(); exit(0);
+
+  //test_demux_single_cell(); exit(0);
+
+  //test_assembly_ncbi_fetch_info(); exit(0);
+
+  //test_edge_oscfile_build();
+  //test_edge_oscfile_read();
+  //test_edge_oscfile_read2();
+  //exit(0);
+
+  //test_load_GO_obo(); exit(0);
+
+  //test_fetch_features(); exit(0);
+
+  //test_site_finder(); exit(0);
+
+  //zdx_patch_assembly(); exit(0);
 
   test_region_server3(); exit(0);
   //fantom6_bam_links(); exit(0);
@@ -6184,9 +6219,17 @@ void test_region_server3() {
   gettimeofday(&endtime, NULL); timersub(&endtime, &starttime, &difftime);
   printf("  after parse %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
 
-string post_data ="<zenbu_query><trackcache>9e229d1bf9e3281d908346abd07b8487c12f7960cea7967b918d3fdcdc7bfe</trackcache><track_title>FANTOM5 CAGE phase 1and2 human tracks pooled (q20 filtered TPM, hg38)</track_title> <view_uuid>m31gAA3yJtRuEfYuLigxEC</view_uuid> <exptype>q20_tpm</exptype> <asm>hg38</asm> <loc>chr10:102431883..102439529</loc> <mode>region</mode> <source_outmode>full_feature</source_outmode> <display_width>970</display_width> <expression_visualize/> <format>fullxml</format> </zenbu_query>";
+//string post_data ="<zenbu_query><trackcache>9e229d1bf9e3281d908346abd07b8487c12f7960cea7967b918d3fdcdc7bfe</trackcache><track_title>FANTOM5 CAGE phase 1and2 human tracks pooled (q20 filtered TPM, hg38)</track_title> <view_uuid>m31gAA3yJtRuEfYuLigxEC</view_uuid> <exptype>q20_tpm</exptype> <asm>hg38</asm> <loc>chr10:102431883..102439529</loc> <mode>region</mode> <source_outmode>full_feature</source_outmode> <display_width>970</display_width> <expression_visualize/> <format>fullxml</format> </zenbu_query>";
+  
+  string post_data="<zenbu_query><source_ids>022103AD-BAB6-4161-8F39-0709BD891706::5:::Experiment,022103AD-BAB6-4161-8F39-0709BD891706::1:::FeatureSource</source_ids><exptype>tagcount</exptype><asm>oDI_i69-2</asm><loc>scaffold_1:1..73656</loc><mode>region</mode><source_outmode>full_feature</source_outmode><format>fullxml</format></zenbu_query>";
 
   webservice->init_service_request();
+
+  MQDB::Database *userdb = webservice->userDB();
+  //EEDB::User *user = EEDB::User::fetch_by_email(userdb, "jessica.severin@gmail.com");
+  EEDB::User *user = EEDB::User::fetch_by_email(userdb, "jessica.severin@riken.jp");
+  fprintf(stderr, "%s\n", user->xml().c_str());
+  webservice->set_user_profile(user);
 
   webservice->set_post_data(post_data);
 
@@ -6246,3 +6289,1279 @@ bool zdx_patch_assembly() {
   zdxstream->release();
   return true;
 }
+
+
+void test_site_finder() {
+  struct timeval                        starttime,endtime,difftime;
+  double                                last_update = 0.0;
+  EEDB::SPStream                        *stream = NULL;
+  EEDB::WebServices::RegionServer       *webservice = new EEDB::WebServices::RegionServer();
+  
+  printf("\n== test_site_finder \n");
+  webservice->parse_config_file("/etc/zenbu/zenbu.conf");
+  webservice->init_service_request();
+
+  //EEDB::User* user = get_cmdline_user();
+  //webservice->set_user_profile(user);
+  MQDB::Database *userdb = webservice->userDB();
+  EEDB::User *user = EEDB::User::fetch_by_email(userdb, "jessica.severin@gmail.com");
+  fprintf(stderr, "%s\n", user->xml().c_str());
+  webservice->set_user_profile(user);
+
+  webservice->set_parameter("nocache", "true");
+  webservice->set_parameter("trackcache", "4648f555a7359c7878257fb71c241d4de0dbdba456422656a77cc9555489745");
+  webservice->set_parameter("mode", "sources");
+  webservice->postprocess_parameters();
+  
+  EEDB::Assembly *asmb1 = webservice->find_assembly("hg38");
+  printf("%s\n", asmb1->xml().c_str());
+
+  EEDB::Assembly *asmb2 = EEDB::Assembly::cache_get_assembly("hg38");
+  if(!asmb2) { fprintf(stderr, "unable to get assembly from cache\n"); }
+  else { printf("%s\n", asmb2->xml().c_str()); }
+
+
+  stream = webservice->region_stream();
+
+  EEDB::SPStreams::SiteFinder *sitef = new EEDB::SPStreams::SiteFinder();
+  //sitef->iupac_sequence("GAATTC");
+  sitef->iupac_sequence("NNNNNNNNNNNNNNNNNNNNNGG");
+  //sitef->ignore_strand(false);
+  //sitef->expression_mode(EEDB::CL_SUM);
+  //sitef->overlap_check_subfeatures(true);
+  //sitef->merge_subfeatures(false);
+  sitef->source_stream(stream);
+  stream = sitef;
+
+  stream->stream_clear();
+  printf("%s\n", stream->xml().c_str());
+
+  //EEDB::TrackCache* track_cache = webservice->track_cache(); //generates or fetches based on region config
+  //printf("%s\n", track_cache->track_configxml().c_str());
+  
+  long count=0;
+  gettimeofday(&starttime, NULL);
+  
+  /*
+  map<string, EEDB::Peer*>    t_peers;
+  count=0;
+  stream->stream_data_sources("");
+  while(EEDB::DataSource *source = (EEDB::DataSource*)stream->next_in_stream()) {
+    printf("%s", source->simple_xml().c_str());
+    count++;
+    
+    string uuid = source->peer_uuid();
+    EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
+    if(peer) { 
+      t_peers[uuid] = peer; 
+    }
+  }
+  printf("%ld sources\n", count);
+  
+  count=0;
+  map<string, EEDB::Peer*>::iterator  it2;
+  for(it2 = t_peers.begin(); it2 != t_peers.end(); it2++) {
+    printf("%s\n", (*it2).second->xml().c_str());
+    count++;
+  }  
+  printf("%ld peers\n", count);
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("%ld in %1.6f sec \n", count, (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+  printf("%1.3f obj/sec\n\n", count /((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+  */
+
+
+  //phase2 open-end read test
+  printf("== read features\n");
+
+  gettimeofday(&starttime, NULL);
+  count=0;
+  stream->stream_clear();
+  //stream->stream_by_named_region("hg38","chr22", 30968161, 30971268);
+  //stream->stream_by_named_region("hg38","chr22", 30968161, -1);
+  stream->stream_by_named_region("hg38","chr22", -1, -1);
+  printf("region hg38::chr22:30968161-30971268\n");
+  
+  while(EEDB::Feature *feature = (EEDB::Feature*)stream->next_in_stream()) { 
+    if(!feature) { continue; }
+    
+    //printf("%s\n", feature->xml().c_str());
+    count++;    
+    
+    //if(count%5000 == 0) {
+    gettimeofday(&endtime, NULL);
+    timersub(&endtime, &starttime, &difftime);
+    double runtime = (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0;
+    //if(count%5000 == 0) {
+    if(runtime > last_update + 2.0) {
+      //printf("%ld in %1.6f sec \n", count, (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+      printf("%1.3f obj/sec [%ld obj]\n", count / runtime, count);
+      last_update = runtime;
+    }
+    feature->release();
+  }
+  
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("%1.3f obj/sec [%ld obj in %1.6f sec]\n", count /((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0),
+                                                   count , ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+}
+
+
+void test_fetch_features() {
+  struct timeval                        starttime,endtime,difftime;
+  double                                last_update = 0.0;
+  EEDB::SPStream                        *stream = NULL;
+  EEDB::WebServices::MetaSearch         *webservice = new EEDB::WebServices::MetaSearch();
+  
+  printf("\n== test_fetch_features \n");
+  webservice->parse_config_file("/etc/zenbu/zenbu.conf");
+  webservice->init_service_request();
+
+  MQDB::Database *userdb = webservice->userDB();
+  EEDB::User *user = EEDB::User::fetch_by_email(userdb, "jessica.severin@gmail.com");
+  fprintf(stderr, "%s\n", user->xml().c_str());
+  webservice->set_user_profile(user);
+
+  //webservice->set_parameter("peers", "CCFED83C-F889-43DC-BA41-7843FCB90095");
+  webservice->set_parameter("source_ids", "A59C9253-FCD1-48D3-AB8C-75810F7D5AD0::1:::FeatureSource, CCFED83C-F889-43DC-BA41-7843FCB90095::1:::EdgeSource,CCFED83C-F889-43DC-BA41-7843FCB90095::2:::EdgeSource,CCFED83C-F889-43DC-BA41-7843FCB90095::14:::EdgeSource");
+
+  webservice->postprocess_parameters();
+  
+  EEDB::Assembly *asmb1 = webservice->find_assembly("hg38");
+  printf("%s\n", asmb1->xml().c_str());
+
+  EEDB::Assembly *asmb2 = EEDB::Assembly::cache_get_assembly("hg38");
+  if(!asmb2) { fprintf(stderr, "unable to get assembly from cache\n"); }
+  else { printf("%s\n", asmb2->xml().c_str()); }
+
+  stream = webservice->source_stream();
+
+  stream->stream_clear();
+  printf("%s\n", stream->xml().c_str());
+
+  
+  printf("== read features\n");
+  long count=0;
+  gettimeofday(&starttime, NULL);
+
+  map<string, EEDB::Feature*> fid_hash;
+  //fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::238424"] = NULL;
+  //fid_hash["238424,7AA26B8D-8634-45A4-8F74-DF3E04B3456A::15516"] = NULL;  //entrez gene
+  //fid_hash["7AA26B8D-8634-45A4-8F74-DF3E04B3456A::9123"] = NULL; //Dancr entrez
+  //fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124121"] = NULL;
+  //fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124811"] = NULL;
+  fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124812"] = NULL;
+  //fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124813"] = NULL;
+  //fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124814"] = NULL;
+  //fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124815"] = NULL;
+
+  //CCFED83C-F889-43DC-BA41-7843FCB90095::1:::EdgeSource,CCFED83C-F889-43DC-BA41-7843FCB90095::2:::EdgeSource,CCFED83C-F889-43DC-BA41-7843FCB90095::10:::EdgeSource;
+  //feature_ids=CCFED83C-F889-43DC-BA41-7843FCB90095::238424,7AA26B8D-8634-45A4-8F74-DF3E04B3456A::15516
+
+
+  if(!stream->fetch_features(fid_hash)) {
+    printf("failed to fetch\n");
+  }
+  count = fid_hash.size();
+
+  map<string, EEDB::Feature*>::iterator it1;
+
+  for(it1=fid_hash.begin(); it1!=fid_hash.end(); it1++) {
+    EEDB::Feature *feature = (*it1).second;
+    if(feature) {
+      fprintf(stderr, "%s :: %s %s\n", (*it1).first.c_str(), feature->primary_name().c_str(), feature->chrom_location().c_str());
+    } else {
+      fprintf(stderr, "%s :: not fetched\n", (*it1).first.c_str());
+    }
+  }
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("fetch initial features %1.6f sec\n", ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+
+  gettimeofday(&starttime, NULL);
+  long edge_count = 0;
+  stream->stream_edges(fid_hash);
+  while(EEDB::Edge *edge = (EEDB::Edge*)stream->next_in_stream()) { 
+    if(!edge) { continue; }
+    
+    //printf("%s", edge->simple_xml().c_str());
+    edge_count++;    
+
+    //if edges include new features, add to the fid_hash
+    if(fid_hash.find(edge->feature1_dbid()) == fid_hash.end()) {
+      //fprintf(stderr, "add edge feature %s\n", edge->feature1_dbid().c_str());
+      fid_hash[edge->feature1_dbid()] = NULL;
+    }
+    if(fid_hash.find(edge->feature2_dbid()) == fid_hash.end()) {
+      //fprintf(stderr, "add edge feature %s\n", edge->feature2_dbid().c_str());
+      fid_hash[edge->feature2_dbid()] = NULL;
+    }
+    edge->release();
+  }
+  printf("streamed %ld edges for query of %ld features\n", edge_count, count);
+  printf("need to fetch %ld features for nodes\n", fid_hash.size());
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("fetch edges in %1.6f sec\n", ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+
+  gettimeofday(&starttime, NULL);
+  //get remaining features which were found by the edges
+  if(!stream->fetch_features(fid_hash)) {
+    printf("<note>failed to post-fetch features</note>\n");
+  }
+  printf("after fetch fid_hash\n");
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("fetch connected features in %1.6f sec\n", ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+
+  for(it1=fid_hash.begin(); it1!=fid_hash.end(); it1++) {
+    EEDB::Feature *feature = (*it1).second;
+    if(feature) {
+      feature->metadataset();
+      //printf("%s  \t  %s\n", feature->primary_name().c_str(), feature->db_id().c_str());
+    } else {
+      printf("<note>%s :: not fetched</note>\n", (*it1).first.c_str());
+    }
+  }
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("fetch connected features in %1.6f sec\n", ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("%1.3f obj/sec [%ld obj in %1.6f sec]\n", count /((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0),
+                                                   count , ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+
+  /*
+  //round two
+  count=0;
+  //gettimeofday(&starttime, NULL);
+  fprintf(stderr, "round2\n");
+  stream->stream_edges(fid_hash);
+  fprintf(stderr, " after stream_edges\n");
+  while(EEDB::Edge *edge = (EEDB::Edge*)stream->next_in_stream()) { 
+    if(!edge) { continue; }
+    
+    //printf("%s", edge->simple_xml().c_str());
+    count++;    
+
+    //if edges include new features, add to the fid_hash
+    if(fid_hash.find(edge->feature1_dbid()) == fid_hash.end()) {
+   //   fprintf(stderr, "add edge feature %s\n", edge->feature1_dbid().c_str());
+      fid_hash[edge->feature1_dbid()] = NULL;
+    }
+    if(fid_hash.find(edge->feature2_dbid()) == fid_hash.end()) {
+  //    fprintf(stderr, "add edge feature %s\n", edge->feature2_dbid().c_str());
+      fid_hash[edge->feature2_dbid()] = NULL;
+    }
+    edge->release();
+  }
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("%1.3f obj/sec [%ld obj in %1.6f sec]\n", count /((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0),
+                                                   count , ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+  */
+
+  /*
+  //round three
+  count=0;
+  //gettimeofday(&starttime, NULL);
+  stream->stream_edges(fid_hash);
+  while(EEDB::Edge *edge = (EEDB::Edge*)stream->next_in_stream()) { 
+    if(!edge) { continue; }
+    
+    //printf("%s", edge->simple_xml().c_str());
+    count++;    
+
+    //if edges include new features, add to the fid_hash
+    if(fid_hash.find(edge->feature1_dbid()) == fid_hash.end()) {
+ //     fprintf(stderr, "add edge feature %s\n", edge->feature1_dbid().c_str());
+      fid_hash[edge->feature1_dbid()] = NULL;
+    }
+    if(fid_hash.find(edge->feature2_dbid()) == fid_hash.end()) {
+//      fprintf(stderr, "add edge feature %s\n", edge->feature2_dbid().c_str());
+      fid_hash[edge->feature2_dbid()] = NULL;
+    }
+    edge->release();
+  }
+  */
+    
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("%1.3f obj/sec [%ld obj in %1.6f sec]\n", count /((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0),
+                                                   count , ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+}
+
+
+void test_load_GO_obo() {
+  struct timeval                        starttime,endtime,difftime;
+  int                                   count, idx;
+  int                                   loop=1;
+  string                                filter;
+  vector<MQDB::DBObject*>               peers;
+  map<string, string>                   library_ids;
+  map<string, EEDB::Experiment*>        ctss_experiments;
+  map<string, EEDB::Experiment*>        remap_experiments;
+
+  printf("\n====== test_load_GO_obo == \n");
+  gettimeofday(&starttime, NULL);
+
+  //EEDB::WebServices::UserSystem*   webservice = new EEDB::WebServices::UserSystem();
+  //EEDB::WebServices::RegionServer* regionserver = new EEDB::WebServices::RegionServer();
+  EEDB::WebServices::MetaSearch*   webservice = new EEDB::WebServices::MetaSearch();
+  webservice->parse_config_file("/etc/zenbu/zenbu.conf");
+  webservice->init_service_request();
+
+  MQDB::Database *userdb = webservice->userDB();
+  printf("%s\n", userdb->xml().c_str());
+  EEDB::User *user = EEDB::User::fetch_by_email(userdb, "jessica.severin@gmail.com");
+  fprintf(stderr, "%s\n", user->xml().c_str());
+  webservice->set_user_profile(user);
+
+  webservice->postprocess_parameters(); //must do after all init and setting of user
+  if(userdb) { printf("%s\n", userdb->xml().c_str()); }
+
+  EEDB::Peer*  peer = NULL;
+  //EEDB::Peer*  peer = uploader->load_genome_from_NCBI(ncbi_acc);
+  //peer = uploader->load_genome_from_NCBI("canFam3");
+  //peer = uploader->load_genome_from_NCBI("rn6");
+  //peer = uploader->load_genome_from_NCBI("felCat8");
+
+  //vector<EEDB::Assembly*> assembly_array = EEDB::Assembly::fetch_from_NCBI_by_search("canfam3");
+  //vector<EEDB::Assembly*> assembly_array = EEDB::Assembly::fetch_from_NCBI_by_search("rattus");
+  //vector<EEDB::Assembly*> assembly_array = EEDB::Assembly::fetch_from_NCBI_by_search("homo");
+
+  //./zenbu_sql_load_oscfile -file ~/data/fantom6/F6_CAT/F6_CAT.gene.linkage2.osc  -assembly hg38 -edgesource CCFED83C-F889-43DC-BA41-7843FCB90095::10:::EdgeSource -edges -url "mysql://zenbu_admin:zenbu_admin@zenbu:3308/zenbu_fantom6"
+
+  //MQDB::Database *f6db = new MQDB::Database("mysql://zenbu_admin:zenbu_admin@zenbu.gsc.riken.jp:3308/zenbu_fantom6");
+  EEDB::Peer* f6_peer = EEDB::Peer::new_from_url("mysql://zenbu_admin:zenbu_admin@zenbu.gsc.riken.jp:3308/zenbu_fantom6");
+  printf("%s\n", f6_peer->xml().c_str());
+  MQDB::Database *f6db = f6_peer->peer_database();
+  f6db->disconnect();
+  f6db->user("zenbu_admin");
+  f6db->password("zenbu_admin");
+  printf("%s\n", f6db->xml().c_str());
+
+  string infile = "/home/severin/data/fantom6/go.obo";
+
+  //make the GO feature source
+  EEDB::FeatureSource *fsource = new EEDB::FeatureSource();
+  fsource->name("Gene Ontology Terms : releases/2017-06-16");  
+  fsource->category("GO:Term");
+  fsource->create_date(time(NULL));
+  fsource->owner_identity("jessica.severin@gmail.com");
+  fsource->import_source("http://www.geneontology.org/");
+  fsource->is_active(true);
+  fsource->is_visible(true);
+  fsource->metadataset()->add_metadata("description", "Gene Ontology Terms 2017-06-16. The GO defines concepts/classes used to describe gene function, and relationships between these concepts. It classifies functions along three aspects: molecular function,  cellular component, biological process.");
+  printf("%s\n", fsource->xml().c_str());
+  fsource->store(f6db);
+
+  EEDB::EdgeSource *esource = new EEDB::EdgeSource();
+  esource->name("Gene Ontology edges : releases/2017-06-16");  
+  esource->category("");
+  esource->create_date(time(NULL));
+  esource->owner_identity("jessica.severin@gmail.com");
+  esource->is_active(true);
+  esource->is_visible(true);
+  esource->metadataset()->add_metadata("description", "Gene Ontology graph edges 2017-06-16. The GO defines concepts/classes used to describe gene function, and relationships between these concepts. It classifies functions along three aspects: molecular function,  cellular component, biological process.");
+  esource->metadataset()->add_metadata("import_source", "http://www.geneontology.org/");
+  esource->feature_source1(fsource);
+  esource->feature_source2(fsource);
+  printf("%s\n", esource->xml().c_str());
+  esource->store(f6db);
+
+  long long buflen = 10*1024*1024; //10MB
+  char*  _data_buffer = (char*)malloc(buflen);
+  bzero(_data_buffer, buflen);
+
+  //first count lines of input file to adjust segment size
+  gzFile gz = gzopen(infile.c_str(), "rb");
+  if(!gz) {
+    fprintf(stderr, "failed to gzopen input file\n");
+    return;
+  }
+  count=0;
+  while(gzgets(gz, _data_buffer, buflen) != NULL) {
+    if(_data_buffer[0] == '#') { continue; }
+    count++;
+  }
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  fprintf(stderr, "input file %ld lines in %1.6f sec \n", count, (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+  gzrewind(gz);
+
+  map<string, EEDB::Feature*>  go_terms;
+  EEDB::Feature *feature = NULL;
+  count =0;
+  long line_count=0;
+  while(gzgets(gz, _data_buffer, buflen) != NULL) {
+    line_count++;
+
+    if(_data_buffer[0] == '#') { continue; }
+    if(strlen(_data_buffer) == 0) { continue; }
+
+    char *t1 = _data_buffer + strlen(_data_buffer);;
+    while((*t1 == '\n') || (*t1 == '\r') || (*t1 == '\0')) {
+      *t1 = '\0';
+      t1--;
+    }
+    if(strlen(_data_buffer) == 0) { continue; }
+    //printf("line %ld :: %s\n", line_count, _data_buffer);
+
+
+    if(_data_buffer[0] == '[') { 
+      count++;
+      if(feature) {
+        if(feature->metadataset()->has_metadata_like("GO:is_obsolete", "true")) {
+          //printf("!!!!!OBSOLETE!!!!!!!!!!!!!!!!!\n");
+        } else {
+          //store into hash
+          //printf("%ld :: %s\n", count, feature->xml().c_str());
+          EEDB::Metadata *md1 = feature->metadataset()->find_metadata("GO:id", "");
+          feature->primary_name(md1->data());
+          go_terms[md1->data()] = feature;
+        }
+        //feature->release();
+        feature = NULL;
+        //if(count>10) { return; }
+      }
+      char *s1 = index(_data_buffer, ']');
+      if(s1) { *s1 = '\0'; }
+      string type = _data_buffer +1;
+      //printf("new element type [%s]\n", type.c_str());
+
+      if(type == "Term") {
+        feature = new EEDB::Feature();
+        feature->feature_source(fsource);
+        feature->metadataset()->add_metadata("GO:stanza_type", type);
+      }
+    }
+
+    if(!feature) { continue; }
+
+    char *s1 = index(_data_buffer, ':');
+    if(!s1) { continue; }
+    *s1 = '\0';
+    string tag = string("GO:") + _data_buffer;
+    char* value = s1 + 1;
+    while((*value == ' ') || (*value == '\t')) { value++; } //eat leading whitespace
+    string val2 = value;
+    boost::algorithm::replace_all(val2, "\"", "");
+    //printf("tag [%s]  value[%s]\n", tag.c_str(), value);
+    feature->metadataset()->add_metadata(tag, val2);
+    if(tag == "GO:id") { feature->primary_name(val2); }
+
+
+    /*
+    //if(_data_buffer[strlen(_data_buffer)-1] == '\n') { _data_buffer[strlen(_data_buffer)-1] = '\0'; }
+    long colnum=1;
+    string filename, display_name, description, gff_mdata;
+    char *tok, *line=_data_buffer;
+    while((tok = strsep(&line, "\t\n")) != NULL) {
+      switch(colnum) {
+        case 1: filename = tok; break;
+        case 2: display_name = tok; break;
+        case 3: description = tok; break;
+        case 4: gff_mdata = tok; break;
+        default: break;
+      }
+      colnum++;
+    }
+    if(filename.empty()) { continue; }
+    //CNhs10650.10043-101F7.hg38
+    std::size_t p1 = filename.find("CNhs");
+    string libID = filename.substr(p1);
+    //p1 = libID.find(".hg38");
+    p1 = libID.find(".mm10");
+    libID.resize(p1);
+    p1 = libID.find(".");
+    string rnaID = libID.substr(p1+1);
+    libID.resize(p1);
+    //fprintf(stderr, "[%s] [%s]  %s\n", libID.c_str(), rnaID.c_str(), filename.c_str());
+    library_ids[libID] = filename;
+
+    if(ctss_experiments.find(libID) == ctss_experiments.end()) {
+      fprintf(stderr, "WARN unable to find old ctss experiment [%s]\n", libID.c_str());
+      continue;
+    }
+    if(remap_experiments.find(filename) == remap_experiments.end()) {
+      fprintf(stderr, "WARN unable to find new remap experiment [%s]\n", filename.c_str());
+      continue;
+    }
+
+    //TODO: merge the metadata from the old experiment to the new experiment
+    EEDB::Experiment *ctss_exp  = ctss_experiments[libID];
+    EEDB::Experiment *remap_exp = remap_experiments[filename];
+    */
+  }
+  printf("%ld TERMS found\n", count);
+  printf("%ld TERMS loaded into hash\n", go_terms.size());
+  sleep(2);
+
+  //Term stoage loop
+  count=1;
+  map<string, EEDB::Feature*>::iterator  go_it;
+  for(go_it=go_terms.begin(); go_it!=go_terms.end(); go_it++) {
+    EEDB::Feature *feature = (*go_it).second;
+    string goID = feature->primary_name();
+    EEDB::Feature *f2 = EEDB::Feature::fetch_by_source_primary_name(fsource, goID);
+    if(f2) {
+      (*go_it).second->release();
+      (*go_it).second = f2;
+      feature = f2;
+      printf("%s already loaded [%s]\n", goID.c_str(), feature->db_id().c_str());
+    }
+    else {
+      feature->store(f6db);
+      printf("%ld :: %s\n", count++, feature->xml().c_str());
+    }
+    //printf("%ld :: %s\n", count++, feature->xml().c_str());
+    //if(count>5) { return; }
+  }
+
+  //edge creation loop
+  map<string, EEDB::Edge*>            go_edges;
+  map<string, EEDB::Edge*>::iterator  e_it;
+
+  count=0;
+  for(go_it=go_terms.begin(); go_it!=go_terms.end(); go_it++) {
+    EEDB::Feature *feature = (*go_it).second;
+    string goID = feature->primary_name();
+    //string goID = "GO:2001275";
+    //feature = go_terms[goID];
+
+    vector<EEDB::Metadata*> mdlist = feature->metadataset()->metadata_list();
+    for(unsigned j=0; j<mdlist.size(); j++) {
+      EEDB::Metadata *md1 = mdlist[j];
+      if(!md1) { continue; }
+
+      if((md1->type() != "GO:is_a") && (md1->type() != "GO:intersection_of") && (md1->type() != "GO:relationship")) { continue; }
+ 
+      printf("make edge for %s", md1->xml().c_str());
+
+      EEDB::Edge *edge = NULL;
+
+      string go2id;
+      string comment;
+      string type = "";
+
+      if(md1->type() == "GO:is_a")            { type = "is_a"; }
+      if(md1->type() == "GO:intersection_of") { type = "intersection_of"; }
+      if(md1->type() == "GO:relationship")    { type = "relationship"; }
+      //if(md1->type() == "GO:is_a")            { edge->add_edgeweight(esource, "is_a", 0.0); }
+      //if(md1->type() == "GO:intersection_of") { edge->add_edgeweight(esource, "intersection_of", 0.0); }
+      //if(md1->type() == "GO:relationship")    { edge->add_edgeweight(esource, "relationship", 0.0); }
+
+      string data = md1->data();
+      std::size_t p2 = data.find('!');
+      if(p2!=std::string::npos) {
+        comment = data.substr(p2);
+        while((comment[0] == '!') || (comment[0] == ' ')) {
+          comment.erase(0,1);
+          go2id = data.substr(0,p2);
+        }
+      }
+      p2 = go2id.find("GO:");
+      if(p2!=std::string::npos && p2!=0) {
+        type = go2id.substr(0,p2);
+        go2id.erase(0,p2);
+      }
+      boost::algorithm::replace_all(go2id, " ", "");
+      boost::algorithm::replace_all(type, " ", "");
+
+      //printf("link to : [%s]\n", go2id.c_str());
+      //printf("comment : [%s]\n", comment.c_str());
+      //printf("type    : [%s]\n", type.c_str());
+
+      EEDB::Feature *feature2 = go_terms[go2id];
+      if(!feature2) {
+        printf("  ERROR could not find go_term [%s]\n", go2id.c_str());
+        continue;
+      }
+
+      bool show_merge=false;
+      string edge_key = feature->db_id() + feature2->db_id();
+      if(go_edges.find(edge_key) != go_edges.end()) {
+        printf("  found previous edge [%s -- %s] so add types and mdata to it (total so far %d)\n", goID.c_str(), go2id.c_str(), go_edges.size());
+        edge = go_edges[edge_key];
+        show_merge = true;
+        //printf("%s\n", edge->xml().c_str());
+      } else {
+        edge = new EEDB::Edge();
+        edge->edge_source(esource);
+        edge->feature1(feature);
+        edge->feature2(feature2);
+        go_edges[edge_key] = edge;
+      }
+      edge->add_edgeweight(esource, type, 0.0);
+      //edge->metadataset()->add_metadata("comment", comment);
+
+      //if(show_merge) { printf("%s\n", edge->xml().c_str());  sleep(1); }
+      count++;
+    }
+    //if(count>=10) { return; }
+  }
+
+  printf("made %d edges\n", go_edges.size());
+
+  //edge stoage loop
+  count=1;
+  for(e_it=go_edges.begin(); e_it!=go_edges.end(); e_it++) {
+    EEDB::Edge *edge = (*e_it).second;
+    printf("%s\n", edge->xml().c_str());
+
+    edge->store(f6db);
+
+    //string goID = feature->primary_name();
+    //EEDB::Feature *f2 = EEDB::Feature::fetch_by_source_primary_name(fsource, goID);
+    //if(f2) {
+    //  (*go_it).second->release();
+    //  (*go_it).second = f2;
+     // feature = f2;
+      //printf("%s already loaded [%s]\n", goID.c_str(), feature->db_id().c_str());
+    //}
+    //else {
+    //  feature->store(f6db);
+    //  printf("%ld :: %s\n", count++, feature->xml().c_str());
+    //}
+    //printf("%ld :: %s\n", count++, feature->xml().c_str());
+    //if(count>5) { return; }
+  }
+
+  return;
+}
+
+
+bool test_edge_oscfile_build() {
+  /*
+  <parameters>
+    <orig_filename>gencode.v23.annotation.gff3.gz</orig_filename>
+    <input_file>/zenbu/users/hOg5uv153xG1PgVgiU35hg/gencode.v23.annotation_WwGjHy.gff3.gz</input_file>
+    <filetype>gff3</filetype>
+    <display_name>gencode.v23.annotation test code</display_name>
+    <description>gencode.v23.annotation</description>
+    <genome_assembly>hg38</genome_assembly>
+  </parameters>
+
+  ./zenbu_sql_load_oscfile -edges -file ~/data/fantom6/DE/HDF_ASO_nAnT-iCAGE_DE_oligo_single_annot_DESeq2_edges_trimmed.osc  -assembly hg38 -featuresource1 CCFED83C-F889-43DC-BA41-7843FCB90095::7:::FeatureSource -featuresource2 A59C9253-FCD1-48D3-AB8C-75810F7D5AD0::1:::FeatureSource -url mysql://read:read@zenbu.gsc.riken.jp:3308/zenbu_fantom6
+
+  */
+
+  struct timeval           starttime,endtime,difftime;  
+  gettimeofday(&starttime, NULL);
+
+  EEDB::SPStreams::OSCFileDB *oscdb = new EEDB::SPStreams::OSCFileDB();
+
+  //oscdb->set_parameter("orig_filename", "");
+  //oscdb->set_parameter("filetype", "osc");
+  //oscdb->set_parameter("display_name", "");
+  //oscdb->set_parameter("description", "");
+  //oscdb->set_parameter("genome_assembly", "");
+  //oscdb->set_parameter("build_dir","/tmp/");
+  //oscdb->set_parameter("deploy_dir", _user_profile->user_directory());
+  //oscdb->set_parameter("input_file", "");
+  oscdb->set_parameter("owner_identity", "jessica.severin@gmail.com");
+
+  //string input_file = "/home/severin/data/fantom6/DE/de_merge_20170818_strong_v3b.osc";
+  string input_file = "/home/severin/data/fantom6/DE/HDF_ASO_nAnT-iCAGE_DE_oligo_single_annot_DESeq2_edges_trimmed_20170818.osc";
+  //string input_file = "/home/severin/data/fantom6/DE/HDF_ASO_nAnT-iCAGE_DE_oligo_single_annot_DESeq2_edges_trimmed.osc";
+
+  oscdb->set_parameter("featuresource1", "CCFED83C-F889-43DC-BA41-7843FCB90095::7:::FeatureSource");
+  oscdb->set_parameter("featuresource2", "A59C9253-FCD1-48D3-AB8C-75810F7D5AD0::1:::FeatureSource");
+    
+  string oscpath = oscdb->create_db_for_file(input_file);
+  if(oscpath.empty()) {
+    //something went wrong
+    fprintf(stderr,"BUILD ERROR [%s]\n", oscdb->error_message().c_str());
+    return false;
+  }
+  fprintf(stderr, "new oscdb url [%s]\n", oscpath.c_str());
+    
+  //registry new oscdb peer into user registry
+  //EEDB::Peer *user_reg = _current_job->user()->user_registry();
+  EEDB::Peer *oscdb_peer = oscdb->peer();
+  oscdb_peer->db_url(oscpath);  //set peer db_url to full URL location
+  fprintf(stderr, "%s\n", oscdb_peer->xml().c_str());
+  //oscdb_peer->store(user_reg->peer_database());
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("total build time %1.6f sec \n\n", (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+
+  oscdb->release();
+}
+
+
+bool test_edge_oscfile_read() {
+  struct timeval           starttime,endtime,difftime;  
+  gettimeofday(&starttime, NULL);
+
+  //string oscpath = "oscdb:///home/severin/data/fantom6/DE/de_merge_20170818_strong_v3b.oscdb";
+  //string oscpath = "oscdb:///home/severin/data/fantom6/DE/HDF_ASO_nAnT-iCAGE_DE_oligo_single_annot_DESeq2_edges_trimmed_20170818.oscdb";
+  string oscpath = "oscdb:///home/severin/data/fantom6/DE/HDF_ASO_nAnT-iCAGE_DE_oligo_single_annot_DESeq2_edges_trimmed.oscdb";
+
+  fprintf(stderr, "test read edge oscdb===\n");
+  gettimeofday(&starttime, NULL);
+  EEDB::SPStreams::OSCFileDB *oscdb = EEDB::SPStreams::OSCFileDB::new_from_url(oscpath);
+  if(oscdb == NULL) {
+    gettimeofday(&endtime, NULL);
+    timersub(&endtime, &starttime, &difftime);
+    printf("%1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+    printf("unable to connect to [%s]\n", oscpath.c_str());
+    return false;;
+  }
+  //oscdb->oscfileparser();
+  oscdb->oscfileparser()->display_info();
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("connect %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+
+  //oscp = oscdb->oscfileparser();
+  //oscdb->oscfileparser()->display_info();
+  //printf("%s", oscp->xml().c_str());
+
+  gettimeofday(&starttime, NULL);
+  EEDB::Edge *edge = oscdb->_fetch_edge_by_id(1234);
+  if(edge) { printf("%s\n", edge->xml().c_str()); }
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("fetch single edge by id %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+
+  //
+  // stream_edges test
+  //
+  fprintf(stderr, "\n======= test stream_edges\n");
+  gettimeofday(&starttime, NULL);
+  EEDB::WebServices::MetaSearch*   webservice = new EEDB::WebServices::MetaSearch();
+  webservice->parse_config_file("/etc/zenbu/zenbu.conf");
+  webservice->init_service_request();
+
+  MQDB::Database *userdb = webservice->userDB();
+  printf("%s\n", userdb->xml().c_str());
+  EEDB::User *user = EEDB::User::fetch_by_email(userdb, "jessica.severin@gmail.com");
+  fprintf(stderr, "%s\n", user->xml().c_str());
+  webservice->set_user_profile(user);
+  webservice->set_parameter("source_ids", "A59C9253-FCD1-48D3-AB8C-75810F7D5AD0::1:::FeatureSource, CCFED83C-F889-43DC-BA41-7843FCB90095::1:::EdgeSource,CCFED83C-F889-43DC-BA41-7843FCB90095::2:::EdgeSource,CCFED83C-F889-43DC-BA41-7843FCB90095::14:::EdgeSource");
+  webservice->postprocess_parameters(); //must do after all init and setting of user
+  if(userdb) { printf("%s\n", userdb->xml().c_str()); }
+
+  EEDB::SPStream *stream = webservice->source_stream();
+  stream->stream_clear();
+
+  map<string, EEDB::Feature*> fid_hash;
+  map<string, EEDB::Feature*>::iterator it1;
+
+  //fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124121"] = NULL;
+  fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124811"] = NULL;
+  fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124812"] = NULL;
+  fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124813"] = NULL;
+  fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124814"] = NULL;
+  fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124815"] = NULL;
+
+  //fid_hash["A59C9253-FCD1-48D3-AB8C-75810F7D5AD0::36095"] = NULL;
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("setup %1.6f sec\n\n", ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+
+  gettimeofday(&starttime, NULL);
+  if(!stream->fetch_features(fid_hash)) {
+    fprintf(stderr, "failed to fetch\n");
+  }
+  long count = fid_hash.size();
+
+  for(it1=fid_hash.begin(); it1!=fid_hash.end(); it1++) {
+    EEDB::Feature *feature = (*it1).second;
+    if(feature) {
+      fprintf(stderr, "%s :: %s %s\n", (*it1).first.c_str(), feature->primary_name().c_str(), feature->chrom_location().c_str());
+    } else {
+      fprintf(stderr, "%s :: not fetched\n", (*it1).first.c_str());
+    }
+  }
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("fetch initial features %1.6f sec\n\n", ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+
+  gettimeofday(&starttime, NULL);
+  oscdb->stream_edges(fid_hash);
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("stream_edges %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+  
+  return true;
+}
+
+
+bool test_edge_oscfile_read2() {
+  struct timeval           starttime,endtime,difftime;  
+  gettimeofday(&starttime, NULL);
+
+  //
+  // stream_edges test
+  //
+  fprintf(stderr, "\n======= test stream_edges2\n");
+  gettimeofday(&starttime, NULL);
+  EEDB::WebServices::MetaSearch*   webservice = new EEDB::WebServices::MetaSearch();
+  webservice->parse_config_file("/etc/zenbu/zenbu.conf");
+  webservice->init_service_request();
+
+  MQDB::Database *userdb = webservice->userDB();
+  printf("%s\n", userdb->xml().c_str());
+  EEDB::User *user = EEDB::User::fetch_by_email(userdb, "jessica.severin@gmail.com");
+  fprintf(stderr, "%s\n", user->xml().c_str());
+  webservice->set_user_profile(user);
+  //webservice->set_parameter("source_ids", "A59C9253-FCD1-48D3-AB8C-75810F7D5AD0::1:::FeatureSource, CCFED83C-F889-43DC-BA41-7843FCB90095::1:::EdgeSource,CCFED83C-F889-43DC-BA41-7843FCB90095::2:::EdgeSource,CCFED83C-F889-43DC-BA41-7843FCB90095::14:::EdgeSource");
+//<zenbu_query><format>fullxml</format><mode>edges</mode><source_ids>
+  webservice->set_parameter("mode", "edges");
+  webservice->set_parameter("format", "none");
+  webservice->set_parameter("source_ids", "6F90A065-4234-4C36-93D4-546878DEF3CB::1:::EdgeSource");
+  webservice->set_parameter("feature_ids", "CCFED83C-F889-43DC-BA41-7843FCB90095::124079,7AA26B8D-8634-45A4-8F74-DF3E04B3456A::4959,CCFED83C-F889-43DC-BA41-7843FCB90095::124079,CCFED83C-F889-43DC-BA41-7843FCB90095::124516,CCFED83C-F889-43DC-BA41-7843FCB90095::124517,CCFED83C-F889-43DC-BA41-7843FCB90095::124518,CCFED83C-F889-43DC-BA41-7843FCB90095::124519,CCFED83C-F889-43DC-BA41-7843FCB90095::124520,CCFED83C-F889-43DC-BA41-7843FCB90095::124521,CCFED83C-F889-43DC-BA41-7843FCB90095::124522,CCFED83C-F889-43DC-BA41-7843FCB90095::124523,CCFED83C-F889-43DC-BA41-7843FCB90095::124524,CCFED83C-F889-43DC-BA41-7843FCB90095::124525,CCFED83C-F889-43DC-BA41-7843FCB90095::225212");
+
+  webservice->postprocess_parameters(); //must do after all init and setting of user
+  if(userdb) { printf("%s\n", userdb->xml().c_str()); }
+
+  /*
+  EEDB::SPStream *stream = webservice->source_stream();
+  stream->stream_clear();
+
+  map<string, EEDB::Feature*> fid_hash;
+  map<string, EEDB::Feature*>::iterator it1;
+
+  //fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124121"] = NULL;
+  fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124811"] = NULL;
+  fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124812"] = NULL;
+  fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124813"] = NULL;
+  fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124814"] = NULL;
+  fid_hash["CCFED83C-F889-43DC-BA41-7843FCB90095::124815"] = NULL;
+
+  //fid_hash["A59C9253-FCD1-48D3-AB8C-75810F7D5AD0::36095"] = NULL;
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("setup %1.6f sec\n\n", ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+
+  gettimeofday(&starttime, NULL);
+  if(!stream->fetch_features(fid_hash)) {
+    fprintf(stderr, "failed to fetch\n");
+  }
+  long count = fid_hash.size();
+
+  for(it1=fid_hash.begin(); it1!=fid_hash.end(); it1++) {
+    EEDB::Feature *feature = (*it1).second;
+    if(feature) {
+      fprintf(stderr, "%s :: %s %s\n", (*it1).first.c_str(), feature->primary_name().c_str(), feature->chrom_location().c_str());
+    } else {
+      fprintf(stderr, "%s :: not fetched\n", (*it1).first.c_str());
+    }
+  }
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("fetch initial features %1.6f sec\n\n", ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+  */
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("stream_edges2 prior to show_edges %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+
+  webservice->show_edges();
+
+  //gettimeofday(&starttime, NULL);
+  //oscdb->stream_edges(fid_hash);
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("stream_edges2 %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+  
+  return true;
+}
+
+
+void test_assembly_ncbi_fetch_info() {
+  struct timeval                        starttime,endtime,difftime;
+  double                                last_update = 0.0;
+  EEDB::SPStream                        *stream = NULL;
+  EEDB::WebServices::MetaSearch         *webservice = new EEDB::WebServices::MetaSearch();
+  
+  printf("\n== test_assembly_ncbi_fetch_info \n");
+  webservice->parse_config_file("/etc/zenbu/zenbu.conf");
+  webservice->init_service_request();
+
+  MQDB::Database *userdb = webservice->userDB();
+  EEDB::User *user = EEDB::User::fetch_by_email(userdb, "jessica.severin@gmail.com");
+  fprintf(stderr, "%s\n", user->xml().c_str());
+  webservice->set_user_profile(user);
+
+  webservice->postprocess_parameters();
+  
+  EEDB::Assembly *asmb1 = webservice->find_assembly("hg38");
+  printf("%s\n", asmb1->xml().c_str());
+
+
+  asmb1->fetch_NCBI_taxonomy_info();
+  printf("%s\n", asmb1->xml().c_str());
+}
+
+
+
+bool test_demux_single_cell() {
+  //
+  // testing the new DemultiplexSource module for CellID and single-cell 10x type data
+  //
+  fprintf(stderr, "\n======= test_demux_single_cell\n");
+
+  struct timeval                        starttime,endtime,difftime;
+  double                                last_update = 0.0;
+  EEDB::SPStream                        *stream = NULL;
+  EEDB::WebServices::RegionServer       *webservice = new EEDB::WebServices::RegionServer();
+  
+  printf("\n== test_site_finder \n");
+  webservice->parse_config_file("/etc/zenbu/zenbu.conf");
+  webservice->init_service_request();
+
+  MQDB::Database *userdb = webservice->userDB();
+  EEDB::User *user = EEDB::User::fetch_by_email(userdb, "jessica.severin@gmail.com");
+  fprintf(stderr, "%s\n", user->xml().c_str());
+  webservice->set_user_profile(user);
+
+  webservice->set_parameter("nocache", "true");
+  webservice->set_parameter("trackcache", "999d13c8789cab542734afac48e6c6fb73c866977534ca09d1ac76d18cb2b3");
+  webservice->set_parameter("mode", "sources");
+  webservice->postprocess_parameters();
+  
+  EEDB::Assembly *asmb1 = webservice->find_assembly("hg19");
+  printf("%s\n", asmb1->xml().c_str());
+
+  EEDB::Assembly *asmb2 = EEDB::Assembly::cache_get_assembly("hg19");
+  if(!asmb2) { fprintf(stderr, "unable to get assembly from cache\n"); }
+  else { printf("%s\n", asmb2->xml().c_str()); }
+
+
+  stream = webservice->region_stream();
+
+  EEDB::SPStreams::DemultiplexSource *demux = new EEDB::SPStreams::DemultiplexSource();
+  demux->set_demux_source_mode("experiment");
+  demux->add_demux_mdata_keys("eedb:name");
+  demux->source_stream(stream);
+  stream = demux;
+
+  stream->stream_clear();
+  printf("%s\n", stream->xml().c_str());
+
+  long count=0;
+  gettimeofday(&starttime, NULL);
+  
+  //phase2 open-end read test
+  printf("== read features\n");
+
+  gettimeofday(&starttime, NULL);
+  count=0;
+  stream->stream_clear();
+  stream->stream_by_named_region("hg19","chr19", 50161252, 50170707);
+  printf("region hg19::chr19:50161252-50170707\n");
+  
+  while(EEDB::Feature *feature = (EEDB::Feature*)stream->next_in_stream()) { 
+    if(!feature) { continue; }
+    
+    printf("%s", feature->xml().c_str());
+    count++;    
+    
+    //if(count%5000 == 0) {
+    gettimeofday(&endtime, NULL);
+    timersub(&endtime, &starttime, &difftime);
+    double runtime = (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0;
+    //if(count%5000 == 0) {
+    if(runtime > last_update + 2.0) {
+      //printf("%ld in %1.6f sec \n", count, (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+      printf("%1.3f obj/sec [%ld obj]\n", count / runtime, count);
+      last_update = runtime;
+    }
+    feature->release();
+  }
+
+  printf("\n============= stream sources and peers last\n");
+  map<string, EEDB::Peer*>    t_peers;
+  count=0;
+  stream->stream_data_sources("");
+  while(EEDB::DataSource *source = (EEDB::DataSource*)stream->next_in_stream()) {
+    printf("%s", source->xml().c_str());
+    count++;
+    string uuid = source->peer_uuid();
+    EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
+    if(peer) { t_peers[uuid] = peer; }
+  }
+  printf("%ld sources\n", count);
+  
+  count=0;
+  map<string, EEDB::Peer*>::iterator  it2;
+  for(it2 = t_peers.begin(); it2 != t_peers.end(); it2++) {
+    printf("%s\n", (*it2).second->xml().c_str());
+    count++;
+  }  
+  printf("%ld peers\n", count);
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("%1.3f obj/sec [%ld obj in %1.6f sec]\n", count /((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0),
+                                                   count , ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+}
+
+
+bool test_append_expression() {
+  //
+  // testing the new AppendExpression module to dynamic creation of experiment mirroring FeatureSource and adding expression on demand
+  //
+  fprintf(stderr, "\n======= test_append_expression\n");
+
+  struct timeval                        starttime,endtime,difftime;
+  double                                last_update = 0.0;
+  EEDB::SPStream                        *stream = NULL;
+  EEDB::WebServices::RegionServer       *webservice = new EEDB::WebServices::RegionServer();
+  
+  webservice->parse_config_file("/etc/zenbu/zenbu.conf");
+  webservice->init_service_request();
+
+  MQDB::Database *userdb = webservice->userDB();
+  EEDB::User *user = EEDB::User::fetch_by_email(userdb, "jessica.severin@gmail.com");
+  fprintf(stderr, "%s\n", user->xml().c_str());
+  webservice->set_user_profile(user);
+
+  webservice->set_parameter("nocache", "true");
+  webservice->set_parameter("source_ids", "8A1AA381-1E01-42EC-8BB8-D0295606EA53::1:::FeatureSource");
+  webservice->postprocess_parameters();
+  
+  stream = webservice->region_stream();
+
+  EEDB::SPStreams::AppendExpression *addExpr = new EEDB::SPStreams::AppendExpression();
+  addExpr->source_stream(stream);
+  stream = addExpr;
+
+  stream->stream_clear();
+  printf("%s\n", stream->xml().c_str());
+
+  long count=0;
+  gettimeofday(&starttime, NULL);
+  
+  map<string, EEDB::Peer*>    t_peers;
+  map<string, EEDB::Peer*>::iterator  it2;
+  /*
+  printf("\n============= initial stream sources and peers\n");
+  count=0;
+  stream->stream_data_sources("");
+  while(EEDB::DataSource *source = (EEDB::DataSource*)stream->next_in_stream()) {
+    printf("%s", source->xml().c_str());
+    count++;
+    string uuid = source->peer_uuid();
+    EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
+    if(peer) { t_peers[uuid] = peer; }
+  }
+  printf("%ld sources\n", count);
+  
+  count=0;
+  for(it2 = t_peers.begin(); it2 != t_peers.end(); it2++) {
+    printf("%s\n", (*it2).second->xml().c_str());
+    count++;
+  }  
+  printf("%ld peers\n", count);
+  */
+
+
+  printf("== read features\n");
+  gettimeofday(&starttime, NULL);
+  count=0;
+  stream->stream_clear();
+  //stream->stream_by_named_region("hg38","chr19", 49657992,49667452);
+  stream->stream_by_named_region("hg38","chr19", 49663677, 49664097);
+  printf("region hg38::chr19:49657992-49667452\n");
+  
+  while(EEDB::Feature *feature = (EEDB::Feature*)stream->next_in_stream()) { 
+    if(!feature) { continue; }
+    
+    printf("%s", feature->xml().c_str());
+    count++;    
+    
+    //if(count%5000 == 0) {
+    gettimeofday(&endtime, NULL);
+    timersub(&endtime, &starttime, &difftime);
+    double runtime = (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0;
+    //if(count%5000 == 0) {
+    if(runtime > last_update + 2.0) {
+      //printf("%ld in %1.6f sec \n", count, (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+      //printf("%1.3f obj/sec [%ld obj]\n", count / runtime, count);
+      last_update = runtime;
+    }
+    feature->release();
+  }
+
+  printf("\n============= end stream sources and peers\n");
+  t_peers.clear();;
+  count=0;
+  stream->stream_data_sources("");
+  while(EEDB::DataSource *source = (EEDB::DataSource*)stream->next_in_stream()) {
+    printf("%s", source->xml().c_str());
+    count++;
+    string uuid = source->peer_uuid();
+    EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
+    if(peer) { t_peers[uuid] = peer; }
+  }
+  printf("%ld sources\n", count);
+  
+  count=0;
+  for(it2 = t_peers.begin(); it2 != t_peers.end(); it2++) {
+    printf("%s\n", (*it2).second->xml().c_str());
+    count++;
+  }  
+  printf("%ld peers\n", count);
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("%1.3f obj/sec [%ld obj in %1.6f sec]\n", count /((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0),
+                                                   count , ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+}
+
+
+void test_region_download() {
+  struct timeval                        starttime,endtime,difftime;
+
+  gettimeofday(&starttime, NULL);
+
+/*
+  var paramXML = "<zenbu_query>\n";
+  paramXML += "<format>"+glyphTrack.download.format+"</format>\n";
+  paramXML += "<track_title>"+ encodehtml(glyphTrack.title)+"</track_title>\n";
+  paramXML += "<view_uuid>"+ current_region.configUUID +"</view_uuid>\n";
+
+  paramXML += "<export_subfeatures>"+glyphTrack.download.subfeatures+"</export_subfeatures>\n";
+  paramXML += "<export_feature_metadata>"+glyphTrack.download.feature_metadata+"</export_feature_metadata>\n";
+  paramXML += "<export_experiment_metadata>"+glyphTrack.download.experiment_metadata+"</export_experiment_metadata>\n";
+  paramXML += "<export_osc_metadata>"+glyphTrack.download.osc_metadata+"</export_osc_metadata>\n";
+
+  paramXML += "<asm>"+current_region.asm+"</asm>\n";
+
+  if(glyphTrack.download.mode == "selection") {
+    var ss = glyphTrack.selection.chrom_start;
+    var se = glyphTrack.selection.chrom_end;
+    if(ss>se) { var t=ss; ss=se; se=t; }
+    chromloc = chrom +":" + ss + ".." + se;
+    paramXML += "<loc>"+chromloc+"</loc>\n";
+  }
+  if(glyphTrack.download.mode == "visible") {
+    paramXML += "<loc>"+chromloc+"</loc>\n";
+  }
+  if(glyphTrack.download.mode == "genome") {
+    paramXML += "<genome_scan>genome</genome_scan>\n";
+  }
+  if(glyphTrack.download.mode == "location") {
+    paramXML += "<loc>"+glyphTrack.download.location+"</loc>\n";
+  }
+
+  if(glyphTrack.download.savefile) { paramXML += "<savefile>true</savefile>\n"; }
+
+  paramXML += "<mode>region</mode>\n";
+  paramXML += "<output_datatype>" + glyphTrack.datatype + "</output_datatype>\n";
+
+  paramXML += "<trackcache>"+ glyphTrack.hashkey+"</trackcache>\n";
+
+  paramXML += "</zenbu_query>\n";
+
+*/
+
+  printf("\n== test_region_download\n");
+  EEDB::WebServices::RegionServer  *regionserver = new EEDB::WebServices::RegionServer();
+  regionserver->parse_config_file("/etc/zenbu/zenbu.conf");
+
+  regionserver->set_parameter("format", "osc");
+  regionserver->set_parameter("asm", "hg19");
+  regionserver->set_parameter("genome_scan", "genome");
+  regionserver->set_parameter("mode", "genome_scan");
+  regionserver->set_parameter("trackcache", "1417873d1527dbf2c5d2903021d5942a79e94671ca3d677181b6d02de37c88");
+  regionserver->set_parameter("export_subfeatures", "bed");
+  regionserver->set_parameter("export_feature_metadata", "true");
+  regionserver->set_parameter("export_experiment_metadata", "true");
+  regionserver->set_parameter("export_osc_metadata", "true");
+  regionserver->set_parameter("/output_datatype", "q20_tpm");
+  regionserver->postprocess_parameters();
+
+  //regionserver->init_from_track_cache("1417873d1527dbf2c5d2903021d5942a79e94671ca3d677181b6d02de37c88");
+
+  regionserver->track_cache();
+
+  string configXML = regionserver->generate_configXML();
+  string hashkey   = MQDB::sha256(configXML);
+
+  printf("%s\n", configXML.c_str());
+  printf("hashkey [%s] %ld\n", hashkey.c_str(), (long)hashkey.length());
+
+  regionserver->execute_request();
+
+}
+
+
+void test_region_server_track_cache() {
+  struct timeval                        starttime,endtime,difftime;
+  EEDB::WebServices::RegionServer      *webservice = new EEDB::WebServices::RegionServer();
+
+  gettimeofday(&starttime, NULL);
+
+  printf("\n== test_region_server_track_cache\n");
+  webservice->parse_config_file("/etc/zenbu/zenbu.conf");
+
+  gettimeofday(&endtime, NULL); timersub(&endtime, &starttime, &difftime);
+  printf("  after parse %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+
+  //string post_data ="<zenbu_query><format>xml</format><mode>trackcache_stats</mode> <trackcache>b272d26b139e39fa7a6311f8a45315788c638806663cba82416b8ca92e</trackcache> <asm>hg19</asm> <loc>chr19:36393243..36395276</loc> </zenbu_query>";
+  string post_data = "<zenbu_query><track_title>Encode Gingeras CSHL LongRnaSeq (Gm12878, Hela, Nhek)</track_title> <view_uuid>5i8orqlTG1xiw_rAzXbuCC</view_uuid> <source_ids>B63DA9C2-0EA1-4709-B97D-6745DCDC3577::2:::Experiment,2E16B476-7037-4FE3-B35A-E7292502B3A1::2:::Experiment,C50C982C-2CD0-4906-AD48-BC6B2DDA9619::2:::Experiment,D0BDD2B4-48B0-4F0B-B342-5E967A70635F::2:::Experiment,91BBFC61-B9B5-4F9B-BCCD-A5052E369E68::2:::Experiment,629F301B-E6AA-4126-9EBF-C2468A42B97B::2:::Experiment,8D591B95-35BA-4B89-B01A-3FDD3040B399::2:::Experiment,84AF666B-1C18-41DE-B427-22E54CF8DDC2::2:::Experiment,12EFE3C7-CBA9-49A7-8E2F-EB152D7787EF::2:::Experiment,B55245CF-1EF9-4760-87C5-74ABF1E82739::2:::Experiment,2D1AB7DA-D910-4F18-93F3-F40C930006C6::2:::Experiment,26515F23-8A26-46FF-ADE2-356A07BA1C62::2:::Experiment,E9478399-23BD-45C6-BE5A-D7B3765C3432::2:::Experiment,EF6D9D5C-35BA-4BE4-96E7-CF3F0C198822::2:::Experiment</source_ids> <exptype>q20_tpm</exptype> <asm>hg19</asm> <loc>chr19:36377615..36399522</loc> <mode>region</mode> <source_outmode>full_feature</source_outmode> <overlap_check_subfeatures>true</overlap_check_subfeatures> <display_width>970</display_width> <binning>sum</binning> <overlap_mode>height</overlap_mode> <expression_binning>true</expression_binning> <expression_visualize/> <format>fullxml</format> </zenbu_query>";
+
+  webservice->init_service_request();
+
+  //reinitialize variables
+  //_stream_processing_head  = NULL;
+  //_stream_processing_tail  = NULL;
+  //_region_start            = -1;
+  //_region_end              = -1;
+  //_display_width           = 640;
+  //_total_count             = 0;
+  //_raw_count               = 0;
+
+  webservice->get_url_parameters();  //from super class
+
+  webservice->set_post_data(post_data);
+
+  webservice->process_xml_parameters();
+  gettimeofday(&endtime, NULL); timersub(&endtime, &starttime, &difftime);
+  printf("  after process_xml_parameters %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+
+  webservice->postprocess_parameters();
+  gettimeofday(&endtime, NULL); timersub(&endtime, &starttime, &difftime);
+  printf("  after postprocess_parameters %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+
+  webservice->show_api();
+
+  EEDB::TrackCache *cache = webservice->track_cache();
+  printf("hashkey = %s\n", cache->track_hashkey().c_str());
+  printf("%s\n", cache->track_configxml().c_str());
+
+  webservice->execute_request();
+  gettimeofday(&endtime, NULL); timersub(&endtime, &starttime, &difftime);
+  printf("  after execute_request %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+
+  webservice->disconnect();
+  //sleep(100);
+
+
+  
+  //get_post_data();
+  //if(!_post_data.empty()) { process_xml_parameters(); }
+  //postprocess_parameters();
+  //return execute_request();
+
+
+}
+
