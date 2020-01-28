@@ -30,6 +30,13 @@ CREATE TABLE `assembly` (
   PRIMARY KEY  (`assembly_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
+CREATE TABLE `assembly_2_metadata` (
+  `assembly_id` int(11) default NULL,
+  `metadata_id` int(11) default NULL,
+  KEY `assembly_id` (`assembly_id`),
+  KEY `metadata_id` (`metadata_id`)
+) ENGINE=MyISAM;
+
 --
 -- Table structure for table `chrom`
 --
@@ -39,12 +46,12 @@ CREATE TABLE `chrom` (
   `chrom_name` char(64) default NULL,
   `assembly_id` int(11) default NULL,
   `chrom_length` int(11) default NULL,
-  `chrom_type` char(64) default NULL,
-  `ncbi_chrom_name` char(64) default NULL,
-  `ncbi_chrom_acc` char(64) default NULL,
-  `refseq_chrom_acc` char(64) default NULL,
-  `chrom_name_alt1` char(64) default NULL,
-  `description` char(255) default NULL,
+  `chrom_type` char(64) default '',
+  `ncbi_chrom_name` char(64) default '',
+  `ncbi_chrom_acc` char(64) default '',
+  `refseq_chrom_acc` char(64) default '',
+  `chrom_name_alt1` char(64) default '',
+  `description` char(255) default '',
   PRIMARY KEY  (`chrom_id`),
   UNIQUE KEY `uqname` (`chrom_name`,`assembly_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
