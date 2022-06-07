@@ -11,7 +11,7 @@
 -- Table structure for table `user`
 --
 
-CREATE TABLE `user` (
+CREATE TABLE IF NOT EXISTS `user` (
   `user_id` int(11) NOT NULL auto_increment,
   `user_uuid` varchar(64),
   `email_identity` text NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE `user` (
 -- Table structure for table `user_2_metadata`
 --
 
-CREATE TABLE `user_2_metadata` (
+CREATE TABLE IF NOT EXISTS `user_2_metadata` (
   `user_id` int(11) default NULL,
   `metadata_id` int(11) default NULL,
   UNIQUE KEY `user_metadata_unq` USING BTREE (`user_id`,`metadata_id`),
@@ -40,7 +40,7 @@ CREATE TABLE `user_2_metadata` (
 -- Table structure for table `user_2_symbol`
 --
 
-CREATE TABLE `user_2_symbol` (
+CREATE TABLE IF NOT EXISTS `user_2_symbol` (
   `user_id` int(11) default NULL,
   `symbol_id` int(11) default NULL,
   UNIQUE KEY `user_symbol_unq` (`user_id`,`symbol_id`),
@@ -49,13 +49,13 @@ CREATE TABLE `user_2_symbol` (
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
 
-CREATE TABLE `user_authentication` (
+CREATE TABLE IF NOT EXISTS `user_authentication` (
   `user_id` int(11) default NULL,
   `openID` text NOT NULL
 );
 
 
-CREATE TABLE `user_email_validation` (
+CREATE TABLE IF NOT EXISTS `user_email_validation` (
   `email` varchar(255) NOT NULL,
   `validation_code` text NOT NULL,
   `create_time` timestamp NOT NULL default CURRENT_TIMESTAMP,
@@ -67,7 +67,7 @@ CREATE TABLE `user_email_validation` (
 -- Table structure for table `collaboration`
 --
 
-CREATE TABLE `collaboration` (
+CREATE TABLE IF NOT EXISTS `collaboration` (
   `collaboration_id` int(11) NOT NULL auto_increment,
   `display_name` varchar(255) NOT NULL default '',
   `uuid` varchar(48) NOT NULL default '',
@@ -84,7 +84,7 @@ CREATE TABLE `collaboration` (
 -- Table structure for table `collaboration_2_metadata`
 --
 
-CREATE TABLE `collaboration_2_metadata` (
+CREATE TABLE IF NOT EXISTS `collaboration_2_metadata` (
   `collaboration_id` int(11) default NULL,
   `metadata_id` int(11) default NULL,
   UNIQUE KEY `collab_metadata_unq` USING BTREE (`collaboration_id`,`metadata_id`),
@@ -96,7 +96,7 @@ CREATE TABLE `collaboration_2_metadata` (
 -- Table structure for table `collaboration_2_symbol`
 --
 
-CREATE TABLE `collaboration_2_symbol` (
+CREATE TABLE IF NOT EXISTS `collaboration_2_symbol` (
   `collaboration_id` int(11) default NULL,
   `symbol_id` int(11) default NULL,
   UNIQUE KEY `collab_symbol_unq` USING BTREE (`collaboration_id`,`symbol_id`),
@@ -108,10 +108,10 @@ CREATE TABLE `collaboration_2_symbol` (
 -- Table structure for table `collaboration_2_user`
 --
 
-CREATE TABLE `collaboration_2_user` (
+CREATE TABLE IF NOT EXISTS `collaboration_2_user` (
   `collaboration_id` int(11) NOT NULL default '0',
   `user_id` int(11) NOT NULL default '0',
-  `member_status` enum('REQUEST','MEMBER','REJECTED','INACTIVE','INVITED') NOT NULL default 'REQUEST',
+  `member_status` enum('REQUEST','MEMBER','ADMIN','REJECTED','INACTIVE','INVITED') NOT NULL default 'REQUEST',
   PRIMARY KEY  (`collaboration_id`,`user_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
@@ -119,7 +119,7 @@ CREATE TABLE `collaboration_2_user` (
 -- Table structure for table `collaboration_2_configuration`
 --
 
-CREATE TABLE `collaboration_2_configuration` (
+CREATE TABLE IF NOT EXISTS `collaboration_2_configuration` (
   `collaboration_id` int(11) NOT NULL default '0',
   `configuration_id` int(11) NOT NULL default '0',
   PRIMARY KEY  (`collaboration_id`,`configuration_id`),
@@ -131,7 +131,7 @@ CREATE TABLE `collaboration_2_configuration` (
 -- Table structure for table `sessions`
 --
 
-CREATE TABLE `sessions` (
+CREATE TABLE IF NOT EXISTS `sessions` (
   `id` varchar(64) NOT NULL default '',
   `create_time` datetime NOT NULL,
   `last_access` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
@@ -145,7 +145,7 @@ CREATE TABLE `sessions` (
 -- Table structure for table `region_cache`
 --
 
-CREATE TABLE `region_cache` (
+CREATE TABLE IF NOT EXISTS `region_cache` (
   `region_cache_id` int(11) NOT NULL auto_increment,
   `uuid`        char(48) NOT NULL default '',
   `assembly`    char(32) NOT NULL default '',
@@ -162,7 +162,7 @@ CREATE TABLE `region_cache` (
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
 
-CREATE TABLE `region_cache_2_metadata` (
+CREATE TABLE IF NOT EXISTS `region_cache_2_metadata` (
   `region_cache_id` int(11) default NULL,
   `metadata_id` int(11) default NULL,
   UNIQUE KEY `regioncache_metadata_unq` USING BTREE (`region_cache_id`,`metadata_id`),
@@ -171,7 +171,7 @@ CREATE TABLE `region_cache_2_metadata` (
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
 
-CREATE TABLE `region_cache_history` (
+CREATE TABLE IF NOT EXISTS `region_cache_history` (
   `region_cache_id` int(11) default NULL,
   `user_id` int(11) default NULL,
   `access_time` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
@@ -185,7 +185,7 @@ CREATE TABLE `region_cache_history` (
 -- Table structure for table `track_cache` system
 --
 
-CREATE TABLE `track_cache` (
+CREATE TABLE IF NOT EXISTS `track_cache` (
   `track_cache_id`    int(11) NOT NULL auto_increment,
   `hashkey`           char(128) NOT NULL default '',
   `hit_count`         int(11) NOT NULL default 1,
@@ -201,7 +201,7 @@ CREATE TABLE `track_cache` (
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
 
-CREATE TABLE `track_cache_2_metadata` (
+CREATE TABLE IF NOT EXISTS `track_cache_2_metadata` (
   `track_cache_id` int(11) default NULL,
   `metadata_id`    int(11) default NULL,
   
@@ -211,7 +211,7 @@ CREATE TABLE `track_cache_2_metadata` (
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
 
-CREATE TABLE `track_cache_history` (
+CREATE TABLE IF NOT EXISTS `track_cache_history` (
   `track_cache_id` int(11) default NULL,
   `user_id` int(11) default NULL,
   `assembly` char(32) NOT NULL default '',
@@ -226,7 +226,7 @@ CREATE TABLE `track_cache_history` (
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
 
-CREATE TABLE `track_request` (
+CREATE TABLE IF NOT EXISTS `track_request` (
   `track_request_id` int(11) NOT NULL auto_increment,
   `track_cache_id` int(11) default NULL,
   `user_id` int(11) default NULL,
@@ -251,7 +251,7 @@ CREATE TABLE `track_request` (
 -- Table structure for table `track_builder`
 --
 
-CREATE TABLE `track_builder` (
+CREATE TABLE IF NOT EXISTS `track_builder` (
   `track_builder_id` int(11) NOT NULL auto_increment,
   `track_cache_id` int(11) NOT NULL,
   `host` varchar(64) NOT NULL default '',
@@ -269,7 +269,7 @@ CREATE TABLE `track_builder` (
 -- Table structure for table `configuration` system
 --
 
-CREATE TABLE `configuration` (
+CREATE TABLE IF NOT EXISTS `configuration` (
   `configuration_id` int(11) NOT NULL auto_increment,
   `user_id`          int(11) default -1,
   `uuid`             char(64) NOT NULL default '',
@@ -286,37 +286,37 @@ CREATE TABLE `configuration` (
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 
-CREATE TABLE `configuration_2_metadata` (
+CREATE TABLE IF NOT EXISTS `configuration_2_metadata` (
   `configuration_id` int(11) default NULL,
   `metadata_id` int(11) default NULL,
   KEY `configuration_id` (`configuration_id`),
   KEY `metadata_id` (`metadata_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
-CREATE TABLE `configuration_2_symbol` (
+CREATE TABLE IF NOT EXISTS `configuration_2_symbol` (
   `configuration_id` int(11) default NULL,
   `symbol_id` int(11) default NULL,
   KEY `configuration_id` (`configuration_id`),
   KEY `symbol_id` (`symbol_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
-CREATE TABLE `configuration_fixed_editors` (
+CREATE TABLE IF NOT EXISTS `configuration_fixed_editors` (
   `fixed_id` varchar(128) NOT NULL,
   `user_id` int(11) NOT NULL,
   `editor_status` enum('OWNER','EDITOR') NOT NULL default 'EDITOR',
   KEY `fixed_id` (`fixed_id`),
   KEY `user_id` (`user_id`),
-  UNIQUE 'editor' (fixed_id, user_id)
+  UNIQUE (fixed_id, user_id)
 );
 
-CREATE TABLE `configuration_fixed_history` (
+CREATE TABLE IF NOT EXISTS `configuration_fixed_history` (
   `fixed_id`         varchar(128) NOT NULL,
   `configuration_id` int(11) NOT NULL,
   KEY `fixed_id` (`fixed_id`),
   KEY `configuration_id` (`configuration_id`)
 );
 
-CREATE TABLE `configuration_fixed` (
+CREATE TABLE IF NOT EXISTS `configuration_fixed` (
   `fixed_id`         varchar(128) NOT NULL,
   `editor_mode`      enum('OWNER_ONLY','COLLABORATORS','USER_LIST') NOT NULL default 'COLLABORATORS',
   PRIMARY KEY (`fixed_id`)
@@ -327,7 +327,7 @@ CREATE TABLE `configuration_fixed` (
 -- Table structure for job queueing system
 --
 
-CREATE TABLE worker (
+CREATE TABLE IF NOT EXISTS worker (
   worker_id        int NOT NULL auto_increment,
   analysis_id      int NOT NULL,
   beekeeper        varchar(80) DEFAULT '' NOT NULL,
@@ -341,9 +341,9 @@ CREATE TABLE worker (
   PRIMARY KEY (worker_id)
 );
 
-CREATE TABLE analysis (
+CREATE TABLE IF NOT EXISTS analysis (
   analysis_id           int unsigned NOT NULL auto_increment, # unique internal id
-  name                  varchar(255) not null,
+  name                  varchar(128) not null,
   module                varchar(255),
   parameters            text,
   hive_capacity         int default 1 NOT NULL,
@@ -363,7 +363,7 @@ CREATE TABLE analysis (
   UNIQUE (name)
 );
 
-CREATE TABLE job_dataflow (
+CREATE TABLE IF NOT EXISTS job_dataflow (
   dataflow_id           int unsigned not null auto_increment,
   from_analysis_id      int unsigned NOT NULL,
   to_analysis_id        int unsigned NOT NULL,
@@ -373,7 +373,7 @@ CREATE TABLE job_dataflow (
   UNIQUE (from_analysis_id, to_analysis_id)
 );
 
-CREATE TABLE job (
+CREATE TABLE IF NOT EXISTS job (
   job_id                    int NOT NULL auto_increment,
   analysis_id               int NOT NULL,
   user_id                   int NOT NULL,
@@ -395,7 +395,7 @@ CREATE TABLE job (
   INDEX worker_id              (worker_id)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
-CREATE TABLE job_2_metadata (
+CREATE TABLE IF NOT EXISTS job_2_metadata (
   job_id int(11) default NULL,
   metadata_id int(11) default NULL,
   KEY job_id (job_id),

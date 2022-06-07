@@ -2,7 +2,7 @@
 -- Table structure for table assembly
 --
 
-CREATE TABLE assembly (
+CREATE TABLE IF NOT EXISTS assembly (
   assembly_id integer PRIMARY KEY AUTOINCREMENT,
   taxon_id integer default NULL,
   assembly_name varchar(64) default '',
@@ -15,18 +15,18 @@ CREATE TABLE assembly (
   UNIQUE (taxon_id,ncbi_version,ucsc_name)
 );
 
-CREATE TABLE assembly_2_metadata (
+CREATE TABLE IF NOT EXISTS assembly_2_metadata (
   assembly_id integer default NULL,
   metadata_id integer default NULL
 );
-CREATE INDEX a2m_aid on assembly_2_metadata (assembly_id);
-CREATE INDEX a2m_mid on assembly_2_metadata (metadata_id);
+CREATE INDEX IF NOT EXISTS a2m_aid on assembly_2_metadata (assembly_id);
+CREATE INDEX IF NOT EXISTS a2m_mid on assembly_2_metadata (metadata_id);
 
 --
 -- Table structure for table chrom
 --
 
-CREATE TABLE chrom (
+CREATE TABLE IF NOT EXISTS chrom (
   chrom_id integer PRIMARY KEY AUTOINCREMENT,
   chrom_name char(64) default NULL,
   assembly_id integer default NULL,
@@ -44,7 +44,7 @@ CREATE TABLE chrom (
 -- Table structure for table chrom_chunk
 --
 
-CREATE TABLE chrom_chunk (
+CREATE TABLE IF NOT EXISTS chrom_chunk (
   chrom_chunk_id integer PRIMARY KEY AUTOINCREMENT,
   chrom_id integer default NULL,
   chrom_start integer default NULL,
@@ -52,13 +52,13 @@ CREATE TABLE chrom_chunk (
   chunk_len integer default NULL,
   UNIQUE (chrom_id,chrom_start,chrom_end)
 );
-CREATE INDEX chrom_chunk_chrom_id on chrom_chunk (chrom_id);
+CREATE INDEX IF NOT EXISTS chrom_chunk_chrom_id on chrom_chunk (chrom_id);
 
 --
 -- Table structure for table chrom_chunk_seq
 --
 
-CREATE TABLE chrom_chunk_seq (
+CREATE TABLE IF NOT EXISTS chrom_chunk_seq (
   chrom_chunk_id integer NOT NULL primary key autoincrement,
   length integer NOT NULL default '0',
   sequence longtext NOT NULL
@@ -72,7 +72,7 @@ CREATE TABLE chrom_chunk_seq (
 -- Table structure for table feature_source
 --
 
-CREATE TABLE feature_source (
+CREATE TABLE IF NOT EXISTS feature_source (
   feature_source_id integer PRIMARY KEY AUTOINCREMENT,
   name varchar(255) default NULL,
   category varchar(255) default NULL,
@@ -90,7 +90,7 @@ CREATE TABLE feature_source (
 -- Table structure for table feature_source_2_metadata
 --
 
-CREATE TABLE feature_source_2_metadata (
+CREATE TABLE IF NOT EXISTS feature_source_2_metadata (
   feature_source_id int(11) default NULL,
   metadata_id int(11) default NULL,
   added_by_user_id integer default NULL,
@@ -98,14 +98,14 @@ CREATE TABLE feature_source_2_metadata (
   deleted_on timestamp default NULL,
   UNIQUE (metadata_id,feature_source_id)
 );
-CREATE INDEX fsrc2m_fsrc_id on feature_source_2_metadata (feature_source_id);
-CREATE INDEX fsrc2m_mdata_id on feature_source_2_metadata (metadata_id);
+CREATE INDEX IF NOT EXISTS fsrc2m_fsrc_id on feature_source_2_metadata (feature_source_id);
+CREATE INDEX IF NOT EXISTS fsrc2m_mdata_id on feature_source_2_metadata (metadata_id);
 
 --
 -- Table structure for table feature_source_2_symbol
 --
 
-CREATE TABLE feature_source_2_symbol (
+CREATE TABLE IF NOT EXISTS feature_source_2_symbol (
   feature_source_id int(11) default NULL,
   symbol_id int(11) default NULL,
   added_by_user_id integer default NULL,
@@ -113,26 +113,26 @@ CREATE TABLE feature_source_2_symbol (
   deleted_on timestamp default NULL,
   UNIQUE (symbol_id,feature_source_id)
 );
-CREATE INDEX fsrc2s_fsrc_id on feature_source_2_symbol (feature_source_id);
-CREATE INDEX fsrc2s_symbol_id on feature_source_2_symbol (symbol_id);
+CREATE INDEX IF NOT EXISTS fsrc2s_fsrc_id on feature_source_2_symbol (feature_source_id);
+CREATE INDEX IF NOT EXISTS fsrc2s_symbol_id on feature_source_2_symbol (symbol_id);
 
 --
 -- Table structure for table `feature_source_2_datatype`
 --
 
-CREATE TABLE feature_source_2_datatype (
+CREATE TABLE IF NOT EXISTS feature_source_2_datatype (
   feature_source_id int(11) default NULL,
   datatype_id int(11) default NULL,
   UNIQUE (feature_source_id, datatype_id)
 );
-CREATE INDEX fsrc2dt_fsrc_id on feature_source_2_datatype (feature_source_id);
-CREATE INDEX fsrc2dt_datatype_id on feature_source_2_datatype (datatype_id);
+CREATE INDEX IF NOT EXISTS fsrc2dt_fsrc_id on feature_source_2_datatype (feature_source_id);
+CREATE INDEX IF NOT EXISTS fsrc2dt_datatype_id on feature_source_2_datatype (datatype_id);
 
 --
 -- Table structure for table feature
 --
 
-CREATE TABLE feature (
+CREATE TABLE IF NOT EXISTS feature (
   feature_id integer PRIMARY KEY AUTOINCREMENT,
   chrom_id integer default NULL,
   feature_source_id integer NOT NULL default '0',
@@ -143,42 +143,42 @@ CREATE TABLE feature (
   significance double default '1',
   last_update timestamp NOT NULL default CURRENT_TIMESTAMP
 );
-CREATE INDEX feature_chromid on feature(chrom_id);
-CREATE INDEX feature_name on feature(primary_name);
-CREATE INDEX feature_fsid on feature(feature_source_id);
+CREATE INDEX IF NOT EXISTS feature_chromid on feature(chrom_id);
+CREATE INDEX IF NOT EXISTS feature_name on feature(primary_name);
+CREATE INDEX IF NOT EXISTS feature_fsid on feature(feature_source_id);
 
 --
 -- Table structure for table feature_2_chunk
 --
 
-CREATE TABLE feature_2_chunk (
+CREATE TABLE IF NOT EXISTS feature_2_chunk (
   feature_id integer default NULL,
   chrom_chunk_id integer default NULL
 );
-CREATE INDEX f2c_fid on feature_2_chunk (feature_id);
-CREATE INDEX f2c_ccid on feature_2_chunk (chrom_chunk_id);
+CREATE INDEX IF NOT EXISTS f2c_fid on feature_2_chunk (feature_id);
+CREATE INDEX IF NOT EXISTS f2c_ccid on feature_2_chunk (chrom_chunk_id);
 
 --
 -- Table structure for table feature_2_metadata
 --
 
-CREATE TABLE feature_2_metadata (
+CREATE TABLE IF NOT EXISTS feature_2_metadata (
   feature_id integer default NULL,
   metadata_id integer default NULL
 );
-CREATE INDEX f2m_fid on feature_2_metadata (feature_id);
-CREATE INDEX f2m_mid on feature_2_metadata (metadata_id);
+CREATE INDEX IF NOT EXISTS f2m_fid on feature_2_metadata (feature_id);
+CREATE INDEX IF NOT EXISTS f2m_mid on feature_2_metadata (metadata_id);
 
 --
 -- Table structure for table feature_2_symbol
 --
 
-CREATE TABLE feature_2_symbol (
+CREATE TABLE IF NOT EXISTS feature_2_symbol (
   feature_id integer default NULL,
   symbol_id integer default NULL
 );
-CREATE INDEX f2s_fid on feature_2_symbol(feature_id);
-CREATE INDEX f2s_sid on feature_2_symbol(symbol_id);
+CREATE INDEX IF NOT EXISTS f2s_fid on feature_2_symbol(feature_id);
+CREATE INDEX IF NOT EXISTS f2s_sid on feature_2_symbol(symbol_id);
 
 --
 -- ------------------------------------------------------------------------------------------------
@@ -188,7 +188,7 @@ CREATE INDEX f2s_sid on feature_2_symbol(symbol_id);
 -- Table structure for table experiment
 --
 
-CREATE TABLE experiment (
+CREATE TABLE IF NOT EXISTS experiment (
   experiment_id integer PRIMARY KEY AUTOINCREMENT,
   platform varchar(64) default NULL,
   exp_accession varchar(255) default NULL,
@@ -201,13 +201,13 @@ CREATE TABLE experiment (
   last_update timestamp NOT NULL default CURRENT_TIMESTAMP,
   UNIQUE (exp_accession)
 );
-CREATE INDEX experiment_library_name on experiment(exp_accession);
+CREATE INDEX IF NOT EXISTS experiment_library_name on experiment(exp_accession);
 
 --
 -- Table structure for table experiment_2_metadata
 --
 
-CREATE TABLE experiment_2_metadata (
+CREATE TABLE IF NOT EXISTS experiment_2_metadata (
   experiment_id integer default NULL,
   metadata_id integer default NULL,
   added_by_user_id integer default NULL,
@@ -215,14 +215,14 @@ CREATE TABLE experiment_2_metadata (
   deleted_on timestamp default NULL,
   UNIQUE (experiment_id,metadata_id)
 );
-CREATE INDEX exp2m_expid on experiment_2_metadata(experiment_id);
-CREATE INDEX exp2m_mdid on experiment_2_metadata(metadata_id);
+CREATE INDEX IF NOT EXISTS exp2m_expid on experiment_2_metadata(experiment_id);
+CREATE INDEX IF NOT EXISTS exp2m_mdid on experiment_2_metadata(metadata_id);
 
 --
 -- Table structure for table experiment_2_symbol
 --
 
-CREATE TABLE experiment_2_symbol (
+CREATE TABLE IF NOT EXISTS experiment_2_symbol (
   experiment_id integer default NULL,
   symbol_id integer default NULL,
   added_by_user_id integer default NULL,
@@ -230,27 +230,27 @@ CREATE TABLE experiment_2_symbol (
   deleted_on timestamp default NULL,
   UNIQUE (experiment_id,symbol_id)
 );
-CREATE INDEX exp2s_expid on experiment_2_symbol(experiment_id);
-CREATE INDEX exp2s_symbol_id on experiment_2_symbol(symbol_id);
+CREATE INDEX IF NOT EXISTS exp2s_expid on experiment_2_symbol(experiment_id);
+CREATE INDEX IF NOT EXISTS exp2s_symbol_id on experiment_2_symbol(symbol_id);
 
 --
 -- Table structure for table `feature_source_2_datatype`
 --
 
-CREATE TABLE experiment_2_datatype (
+CREATE TABLE IF NOT EXISTS experiment_2_datatype (
   experiment_id int(11) default NULL,
   datatype_id int(11) default NULL,
   UNIQUE (experiment_id, datatype_id)
 );
-CREATE INDEX exp2dt_expid       on experiment_2_datatype (experiment_id);
-CREATE INDEX exp2dt_datatype_id on experiment_2_datatype (datatype_id);
+CREATE INDEX IF NOT EXISTS exp2dt_expid       on experiment_2_datatype (experiment_id);
+CREATE INDEX IF NOT EXISTS exp2dt_datatype_id on experiment_2_datatype (datatype_id);
 
 
 --
 -- Table structure for table expression
 --
 
-CREATE TABLE expression (
+CREATE TABLE IF NOT EXISTS expression (
   expression_id integer PRIMARY KEY AUTOINCREMENT,
   experiment_id integer NOT NULL default '0',
   feature_id integer NOT NULL default '0',
@@ -258,13 +258,13 @@ CREATE TABLE expression (
   value double default NULL,
   sig_error double default NULL
 );
-CREATE INDEX expression_fid on expression(feature_id);
+CREATE INDEX IF NOT EXISTS expression_fid on expression(feature_id);
 
 --
 -- Table structure for table expression_datatype
 --
 
-CREATE TABLE expression_datatype (
+CREATE TABLE IF NOT EXISTS expression_datatype (
   datatype_id integer PRIMARY KEY AUTOINCREMENT,
   datatype char(64) NOT NULL default '',
   UNIQUE(datatype)
@@ -279,7 +279,7 @@ CREATE TABLE expression_datatype (
 -- Table structure for table edge_source
 --
 
-CREATE TABLE edge_source (
+CREATE TABLE IF NOT EXISTS edge_source (
   edge_source_id integer PRIMARY KEY AUTOINCREMENT,
   name varchar(255) default NULL,
   display_name varchar(255) default NULL,
@@ -296,11 +296,12 @@ CREATE TABLE edge_source (
   UNIQUE (name)
 );
 
+
 --
 -- Table structure for table edge_source_2_metadata
 --
 
-CREATE TABLE edge_source_2_metadata (
+CREATE TABLE IF NOT EXISTS edge_source_2_metadata (
   edge_source_id integer default NULL,
   metadata_id integer default NULL,
   added_by_user_id integer default NULL,
@@ -308,14 +309,14 @@ CREATE TABLE edge_source_2_metadata (
   deleted_on timestamp default NULL,
   UNIQUE (edge_source_id,metadata_id)
 );
-CREATE INDEX esrc2m_esrc_id on edge_source_2_metadata(edge_source_id);
-CREATE INDEX esrc2m_mdata_id on edge_source_2_metadata(metadata_id);
+CREATE INDEX IF NOT EXISTS esrc2m_esrc_id on edge_source_2_metadata(edge_source_id);
+CREATE INDEX IF NOT EXISTS esrc2m_mdata_id on edge_source_2_metadata(metadata_id);
 
 --
 -- Table structure for table edge_source_2_symbol
 --
 
-CREATE TABLE edge_source_2_symbol (
+CREATE TABLE IF NOT EXISTS edge_source_2_symbol (
   edge_source_id integer default NULL,
   symbol_id integer default NULL,
   added_by_user_id integer default NULL,
@@ -323,14 +324,14 @@ CREATE TABLE edge_source_2_symbol (
   deleted_on timestamp default NULL,
   UNIQUE (edge_source_id,symbol_id)
 );
-CREATE INDEX esrc2s_esrc_id on edge_source_2_symbol(edge_source_id);
-CREATE INDEX esrc2m_symbol_id on edge_source_2_symbol(symbol_id);
+CREATE INDEX IF NOT EXISTS esrc2s_esrc_id on edge_source_2_symbol(edge_source_id);
+CREATE INDEX IF NOT EXISTS esrc2m_symbol_id on edge_source_2_symbol(symbol_id);
 
 --
 -- Table structure for table edge
 --
 
-CREATE TABLE edge (
+CREATE TABLE IF NOT EXISTS edge (
   edge_id integer PRIMARY KEY AUTOINCREMENT,
   edge_source_id integer default NULL,
   feature1_id integer default NULL,
@@ -339,31 +340,31 @@ CREATE TABLE edge (
   sub_type char(16) default NULL,
   weight float default NULL
 );
-CREATE INDEX edge_f1 on edge(feature1_id);
-CREATE INDEX edge_f2 on edge(feature2_id);
-CREATE INDEX edge_srcid on edge(edge_source_id);
+CREATE INDEX IF NOT EXISTS edge_f1 on edge(feature1_id);
+CREATE INDEX IF NOT EXISTS edge_f2 on edge(feature2_id);
+CREATE INDEX IF NOT EXISTS edge_srcid on edge(edge_source_id);
 
 --
 -- Table structure for table edge_2_metadata
 --
 
-CREATE TABLE edge_2_metadata (
+CREATE TABLE IF NOT EXISTS edge_2_metadata (
   edge_id integer default NULL,
   metadata_id integer default NULL
 );
-CREATE INDEX e2m_edge_id on edge_2_metadata(edge_id);
-CREATE INDEX e2m_mdata_id on edge_2_metadata(metadata_id);
+CREATE INDEX IF NOT EXISTS e2m_edge_id on edge_2_metadata(edge_id);
+CREATE INDEX IF NOT EXISTS e2m_mdata_id on edge_2_metadata(metadata_id);
 
 --
 -- Table structure for table edge_2_symbol
 --
 
-CREATE TABLE edge_2_symbol (
+CREATE TABLE IF NOT EXISTS edge_2_symbol (
   edge_id integer default NULL,
   symbol_id integer default NULL
 );
-CREATE INDEX e2s_edge_id on edge_2_symbol(edge_id);
-CREATE INDEX e2s_symbol_id on edge_2_symbol(symbol_id);
+CREATE INDEX IF NOT EXISTS e2s_edge_id on edge_2_symbol(edge_id);
+CREATE INDEX IF NOT EXISTS e2s_symbol_id on edge_2_symbol(symbol_id);
 
 
 
@@ -375,7 +376,7 @@ CREATE INDEX e2s_symbol_id on edge_2_symbol(symbol_id);
 -- Table structure for table peer
 --
 
-CREATE TABLE peer (
+CREATE TABLE IF NOT EXISTS peer (
   uuid varchar(255) NOT NULL default '',
   alias varchar(255) NOT NULL default '',
   is_self tinyint(1) default '0',
@@ -388,34 +389,34 @@ CREATE TABLE peer (
 -- Table structure for table metadata
 --
 
-CREATE TABLE metadata (
+CREATE TABLE IF NOT EXISTS metadata (
   metadata_id integer PRIMARY KEY AUTOINCREMENT,
   data_type varchar(255) default NULL,
   data mediumtext 
 );
-CREATE INDEX metadata_type on metadata (data_type);
-CREATE INDEX metadata_data on metadata (data);
+CREATE INDEX IF NOT EXISTS metadata_type on metadata (data_type);
+CREATE INDEX IF NOT EXISTS metadata_data on metadata (data);
 
 --
 --
 -- Table structure for table symbol
 --
 
-CREATE TABLE symbol (
+CREATE TABLE IF NOT EXISTS symbol (
   symbol_id integer PRIMARY KEY AUTOINCREMENT,
   sym_type char(32) default NULL,
   sym_value char(255) default NULL,
   UNIQUE (sym_type,sym_value)
 );
-CREATE INDEX symbol_type on symbol (sym_type);
-CREATE INDEX symbol_value on symbol (sym_value);
+CREATE INDEX IF NOT EXISTS symbol_type on symbol (sym_type);
+CREATE INDEX IF NOT EXISTS symbol_value on symbol (sym_value);
 
 
 --
 -- Table structure for table taxon
 --
 
-CREATE TABLE taxon (
+CREATE TABLE IF NOT EXISTS taxon (
   taxon_id integer NOT NULL default '0',
   genus varchar(50) default NULL,
   species varchar(50) default NULL,
@@ -424,14 +425,14 @@ CREATE TABLE taxon (
   classification mediumtext,
   PRIMARY KEY  (taxon_id)
 ); 
-CREATE INDEX taxon_genus on taxon (genus,species);
-CREATE INDEX taxon_cname on taxon (common_name);
+CREATE INDEX IF NOT EXISTS taxon_genus on taxon (genus,species);
+CREATE INDEX IF NOT EXISTS taxon_cname on taxon (common_name);
 
 --
 -- Table structure for table tissue
 --
 
-CREATE TABLE tissue (
+CREATE TABLE IF NOT EXISTS tissue (
   tissue_id integer PRIMARY KEY AUTOINCREMENT,
   emap_id integer NOT NULL default '0',
   tissue_name varchar(128) default NULL,
@@ -446,7 +447,7 @@ CREATE TABLE tissue (
 -- Table structure for table collaboration
 --
 
-CREATE TABLE collaboration (
+CREATE TABLE IF NOT EXISTS collaboration (
   collaboration_id integer PRIMARY KEY AUTOINCREMENT,
   display_name varchar(255) NOT NULL default '',
   uuid varchar(48) NOT NULL default '',
@@ -456,37 +457,37 @@ CREATE TABLE collaboration (
   open_to_public char(1) NOT NULL default '',
   UNIQUE (uuid)
 );
-CREATE INDEX collab_openid on collaboration (owner_openid);
+CREATE INDEX IF NOT EXISTS collab_openid on collaboration (owner_openid);
 
 --
 -- Table structure for table collaboration_2_metadata
 --
 
-CREATE TABLE collaboration_2_metadata (
+CREATE TABLE IF NOT EXISTS collaboration_2_metadata (
   collaboration_id integer default NULL,
   metadata_id integer default NULL,
   UNIQUE (collaboration_id,metadata_id)
 );
-CREATE INDEX collab2m_collab_id on collaboration_2_metadata(collaboration_id);
-CREATE INDEX collab2m_metadata_id on collaboration_2_metadata(metadata_id);
+CREATE INDEX IF NOT EXISTS collab2m_collab_id on collaboration_2_metadata(collaboration_id);
+CREATE INDEX IF NOT EXISTS collab2m_metadata_id on collaboration_2_metadata(metadata_id);
 
 --
 -- Table structure for table collaboration_2_symbol
 --
 
-CREATE TABLE collaboration_2_symbol (
+CREATE TABLE IF NOT EXISTS collaboration_2_symbol (
   collaboration_id integer default NULL,
   symbol_id integer default NULL,
   UNIQUE (collaboration_id,symbol_id)
 );
-CREATE INDEX collab2s_collab_id on collaboration_2_symbol(collaboration_id);
-CREATE INDEX collab2s_symbol_id on collaboration_2_symbol(symbol_id);
+CREATE INDEX IF NOT EXISTS collab2s_collab_id on collaboration_2_symbol(collaboration_id);
+CREATE INDEX IF NOT EXISTS collab2s_symbol_id on collaboration_2_symbol(symbol_id);
 
 --
 -- Table structure for table collaboration_2_user
 --
 
-CREATE TABLE collaboration_2_user (
+CREATE TABLE IF NOT EXISTS collaboration_2_user (
   collaboration_id integer default NULL,
   user_id integer default NULL,
   member_status char(16) NOT NULL DEFAULT "REQUEST",  --enum('REQUEST','MEMBER','REJECTED','INACTIVE','INVITED')
@@ -498,7 +499,7 @@ CREATE TABLE collaboration_2_user (
 -- Table structure for table user
 --
 
-CREATE TABLE user (
+CREATE TABLE IF NOT EXISTS user (
   user_id integer PRIMARY KEY AUTOINCREMENT,
   openID text NOT NULL,
   email_address text NOT NULL default '',
@@ -509,23 +510,23 @@ CREATE TABLE user (
 -- Table structure for table user_2_metadata
 --
 
-CREATE TABLE user_2_metadata (
+CREATE TABLE IF NOT EXISTS user_2_metadata (
   user_id integer default NULL,
   metadata_id integer default NULL,
   UNIQUE (user_id,metadata_id)
 );
-CREATE INDEX user2m_user_id on user_2_metadata(user_id);
-CREATE INDEX user2m_metadata_id on user_2_metadata(metadata_id);
+CREATE INDEX IF NOT EXISTS user2m_user_id on user_2_metadata(user_id);
+CREATE INDEX IF NOT EXISTS user2m_metadata_id on user_2_metadata(metadata_id);
 
 --
 -- Table structure for table user_2_symbol
 --
 
-CREATE TABLE user_2_symbol (
+CREATE TABLE IF NOT EXISTS user_2_symbol (
   user_id integer default NULL,
   symbol_id integer default NULL,
   UNIQUE (user_id,symbol_id)
 );
-CREATE INDEX user2s_user_id on user_2_symbol(user_id);
-CREATE INDEX user2s_symbol_id on user_2_symbol(symbol_id);
+CREATE INDEX IF NOT EXISTS user2s_user_id on user_2_symbol(user_id);
+CREATE INDEX IF NOT EXISTS user2s_symbol_id on user_2_symbol(symbol_id);
 
