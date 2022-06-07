@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w 
 BEGIN{
-    unshift(@INC, "/zenbu/src/ZENBU_2.11.3/lib");
+    unshift(@INC, "/zenbu/src/ZENBU_3.0.0/lib");
 }
 
 =head1 NAME - eedb_sync_entrezgene.pl 
@@ -127,6 +127,7 @@ unless($entrez_source) {
   $entrez_source->is_active("y");
   $entrez_source->is_visible("y");
   $entrez_source->metadataset->add_tag_data("import_url", "http://www.ncbi.nlm.nih.gov/sites/entrez?db=gene");
+  $entrez_source->metadataset->add_tag_data("description", "NCBI Entrez Gene " . $assembly_name);
   unless($nostore) { $entrez_source->store($eeDB); }
   printf("Needed to create:: %s\n", $entrez_source->display_desc);
 }
