@@ -1,4 +1,4 @@
-# $Id: Feature.pm,v 1.167 2013/06/24 11:04:41 severin Exp $
+# $Id: Feature.pm,v 1.168 2022/04/28 01:25:52 severin Exp $
 =head1 NAME - EEDB::Feature
 
 =head1 SYNOPSIS
@@ -1644,6 +1644,26 @@ sub fetch_all_with_symbols {
   #print($sql, "\n", );
   return $class->fetch_multiple($db, $sql);
 }
+
+
+sub fetch_by_source_primary_name {
+  my $class = shift;
+  my $source = shift; #FeatureSource object
+  my $name = shift;
+  
+  if(!defined($source)) { return undef; }
+  if(defined($source) && !($source->isa('EEDB::FeatureSource'))) {
+    die('second parameter [source] must be a EEDB::FeatureSource');
+  }
+  if(!defined($source->database) or !defined($source->primary_id)) { return undef; }
+
+  my $sql = "SELECT * from feature WHERE feature_source_id=? and primary_name=? ORDER BY feature_id LIMIT 1";
+  #fprintf(stderr, "%s\n", sql.c_str());
+  #return (EEDB::Feature*) MQDB::fetch_single(EEDB::Feature::create, db, sql.c_str(), "ds", source->primary_id(), name.c_str());
+  return $class->fetch_single($source->database, $sql, $source->primary_id, $name);
+}
+
+
 
 ###############################################################################################
 #
