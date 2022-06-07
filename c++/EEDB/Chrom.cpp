@@ -1,4 +1,4 @@
-/* $Id: Chrom.cpp,v 1.82 2018/08/13 03:38:17 severin Exp $ */
+/* $Id: Chrom.cpp,v 1.83 2020/02/03 08:03:27 severin Exp $ */
 
 /******
 
@@ -559,13 +559,16 @@ void  EEDB::Chrom::init_from_row_map(map<string, dynadata> &row_map) {
   _chrom_type      = row_map["chrom_type"].i_string;
   _description     = row_map["description"].i_string;
   if(row_map["ncbi_chrom_name"].type == MQDB::STRING) {
-    _ncbi_accession = row_map["ncbi_chrom_name"].i_string;
+    _ncbi_chrom_name = row_map["ncbi_chrom_name"].i_string;
   }
   if(row_map["ncbi_chrom_acc"].type == MQDB::STRING) {
     _ncbi_accession = row_map["ncbi_chrom_acc"].i_string;
   }
   if(row_map["refseq_chrom_acc"].type == MQDB::STRING) {
-    _ncbi_accession = row_map["refseq_chrom_acc"].i_string;
+    _refseq_accession = row_map["refseq_chrom_acc"].i_string;
+  }
+  if(row_map["chrom_name_alt1"].type == MQDB::STRING) {
+    _chrom_name_alt1 = row_map["chrom_name_alt1"].i_string;
   }
 
   _assembly_id     = row_map["assembly_id"].i_int;

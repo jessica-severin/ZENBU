@@ -1,8 +1,8 @@
-/* $Id: FeatureLengthFilter.cpp,v 1.11 2021/07/12 05:41:36 severin Exp $ */
+/* $Id: EdgeLengthFilter.cpp,v 1.2 2020/04/01 01:50:41 severin Exp $ */
 
 /***
 
-NAME - EEDB::SPStreams::FeatureLengthFilter
+NAME - EEDB::SPStreams::EdgeLengthFilter
 
 SYNOPSIS
 
@@ -58,48 +58,48 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <boost/algorithm/string.hpp>
 #include <EEDB/Experiment.h>
 #include <EEDB/Symbol.h>
-#include <EEDB/Feature.h>
+#include <EEDB/Edge.h>
 #include <EEDB/SPStream.h>
-#include <EEDB/SPStreams/FeatureLengthFilter.h>
+#include <EEDB/SPStreams/EdgeLengthFilter.h>
 
 using namespace std;
 using namespace MQDB;
 
-const char*  EEDB::SPStreams::FeatureLengthFilter::class_name = "EEDB::SPStreams::FeatureLengthFilter";
+const char*  EEDB::SPStreams::EdgeLengthFilter::class_name = "EEDB::SPStreams::EdgeLengthFilter";
 
 //function prototypes
-void _spstream_featurelengthfilter_delete_func(MQDB::DBObject *obj) { 
-  delete (EEDB::SPStreams::FeatureLengthFilter*)obj;
+void _spstream_edgelengthfilter_delete_func(MQDB::DBObject *obj) { 
+  delete (EEDB::SPStreams::EdgeLengthFilter*)obj;
 }
-MQDB::DBObject* _spstream_featurelengthfilter_next_in_stream_func(EEDB::SPStream* node) {
-  return ((EEDB::SPStreams::FeatureLengthFilter*)node)->_next_in_stream();
+MQDB::DBObject* _spstream_edgelengthfilter_next_in_stream_func(EEDB::SPStream* node) {
+  return ((EEDB::SPStreams::EdgeLengthFilter*)node)->_next_in_stream();
 }
-void _spstream_featurelengthfilter_xml_func(MQDB::DBObject *obj, string &xml_buffer) { 
-  ((EEDB::SPStreams::FeatureLengthFilter*)obj)->_xml(xml_buffer);
+void _spstream_edgelengthfilter_xml_func(MQDB::DBObject *obj, string &xml_buffer) { 
+  ((EEDB::SPStreams::EdgeLengthFilter*)obj)->_xml(xml_buffer);
 }
 
 
-EEDB::SPStreams::FeatureLengthFilter::FeatureLengthFilter() {
+EEDB::SPStreams::EdgeLengthFilter::EdgeLengthFilter() {
   init();
 }
 
-EEDB::SPStreams::FeatureLengthFilter::~FeatureLengthFilter() {
+EEDB::SPStreams::EdgeLengthFilter::~EdgeLengthFilter() {
 }
 
-void EEDB::SPStreams::FeatureLengthFilter::init() {
+void EEDB::SPStreams::EdgeLengthFilter::init() {
   EEDB::SPStream::init();
-  _classname                 = EEDB::SPStreams::FeatureLengthFilter::class_name;  
-  _module_name               = "FeatureLengthFilter";
-  _funcptr_delete            = _spstream_featurelengthfilter_delete_func;
-  _funcptr_xml               = _spstream_featurelengthfilter_xml_func;
-  _funcptr_simple_xml        = _spstream_featurelengthfilter_xml_func;
+  _classname                 = EEDB::SPStreams::EdgeLengthFilter::class_name;  
+  _module_name               = "EdgeLengthFilter";
+  _funcptr_delete            = _spstream_edgelengthfilter_delete_func;
+  _funcptr_xml               = _spstream_edgelengthfilter_xml_func;
+  _funcptr_simple_xml        = _spstream_edgelengthfilter_xml_func;
 
   //function pointer code
-  _funcptr_next_in_stream         = _spstream_featurelengthfilter_next_in_stream_func;
+  _funcptr_next_in_stream         = _spstream_edgelengthfilter_next_in_stream_func;
 
   //attribute variables
-  _min_feature_length = -1;
-  _max_feature_length = -1;
+  _min_length = -1;
+  _max_length = -1;
 }
 
 
@@ -109,24 +109,24 @@ void EEDB::SPStreams::FeatureLengthFilter::init() {
 //
 ////////////////////////////////////////////////////////////////////////////
 
-void EEDB::SPStreams::FeatureLengthFilter::_xml(string &xml_buffer) {
+void EEDB::SPStreams::EdgeLengthFilter::_xml(string &xml_buffer) {
   _xml_start(xml_buffer);  //from superclass
   
   char buffer[256];
   //older style of <ignore_strand value="1" />
-  if(_min_feature_length >=0) { 
-    snprintf(buffer, 256, "<min_length>%ld</min_length>", _min_feature_length);
+  if(_min_length >=0) { 
+    snprintf(buffer, 256, "<min_length>%ld</min_length>", _min_length);
     xml_buffer.append(buffer);    
   }
-  if(_max_feature_length >=0) { 
-    snprintf(buffer, 256, "<max_length>%ld</max_length>", _max_feature_length);
+  if(_max_length >=0) { 
+    snprintf(buffer, 256, "<max_length>%ld</max_length>", _max_length);
     xml_buffer.append(buffer);    
   }
   _xml_end(xml_buffer);  //from superclass
 }
 
 
-EEDB::SPStreams::FeatureLengthFilter::FeatureLengthFilter(void *xml_node) {
+EEDB::SPStreams::EdgeLengthFilter::EdgeLengthFilter(void *xml_node) {
   //constructor using a rapidxml <spstream> description
   init();
   if(xml_node==NULL) { return; }
@@ -137,48 +137,48 @@ EEDB::SPStreams::FeatureLengthFilter::FeatureLengthFilter(void *xml_node) {
   if(string(root_node->name()) != "spstream") { return; }
   
   if((node = root_node->first_node("min_length")) != NULL) {
-    _min_feature_length = strtol(node->value(), NULL, 10);
+    _min_length = strtol(node->value(), NULL, 10);
   }
   if((node = root_node->first_node("max_length")) != NULL) {
-    _max_feature_length = strtol(node->value(), NULL, 10);
+    _max_length = strtol(node->value(), NULL, 10);
   }
 }
 
 /*****************************************************************************************/
 
-void  EEDB::SPStreams::FeatureLengthFilter::min_length(long value) {
+void  EEDB::SPStreams::EdgeLengthFilter::min_length(long value) {
   if(value < 0) { value = abs(value); }
-  _min_feature_length = value;
+  _min_length = value;
 }
 
-void  EEDB::SPStreams::FeatureLengthFilter::max_length(long value) {
+void  EEDB::SPStreams::EdgeLengthFilter::max_length(long value) {
   if(value < 0) { value = abs(value); }
-  _max_feature_length = value;
+  _max_length = value;
 }
+
 
 /*****************************************************************************************/
 
-
-MQDB::DBObject* EEDB::SPStreams::FeatureLengthFilter::_next_in_stream() {
+MQDB::DBObject* EEDB::SPStreams::EdgeLengthFilter::_next_in_stream() {
   MQDB::DBObject *obj;
   
   if(_source_stream!=NULL) {
     while((obj = _source_stream->next_in_stream()) != NULL) {
       
-      //non-feature\expression objects on the primary source stream
+      //non-edge objects on the primary source stream
       //are just passed through this module      
-      if(obj->classname() != EEDB::Feature::class_name) {
+      if(obj->classname() != EEDB::Edge::class_name) {
         return obj;
       }
       
-      //if feature passes legnth filter, return it
-      EEDB::Feature *feature = (EEDB::Feature*)obj;
-      long int length = feature->chrom_end() - feature->chrom_start() + 1;
-      if(length < _min_feature_length) { 
+      //if edge passes legnth filter, return it
+      EEDB::Edge *edge = (EEDB::Edge*)obj;
+      long int length = edge->chrom_end() - edge->chrom_start() + 1;
+      if(length < _min_length) { 
         obj->release();
         continue;
       }
-      if((_max_feature_length>0) && (length > _max_feature_length)) {
+      if((_max_length>0) && (length > _max_length)) {
         obj->release();
         continue;
       }      

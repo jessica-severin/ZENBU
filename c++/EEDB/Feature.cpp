@@ -1,4 +1,4 @@
-/* $Id: Feature.cpp,v 1.317 2019/03/20 07:13:11 severin Exp $ */
+/* $Id: Feature.cpp,v 1.321 2021/06/29 01:53:15 severin Exp $ */
 
 /***
 
@@ -192,9 +192,11 @@ void EEDB::Feature::init() {
   _last_update     = 0;
   _strand          = ' ';
   _significance    = 0.0;
+  _mate_start      = -1;
   
-  _primary_name.clear();
+  _primary_name.clear(); //must clear for realloc
   _chrom_name.clear();
+  _mate_chrom_name.clear();
 }
 
 
@@ -490,11 +492,11 @@ void EEDB::Feature::_xml_start(string &xml_buffer) {
   xml_buffer.append(" >");
   
   //change XML from version 1.xxx this is better and faster
-  if(chrom())          { _chrom->simple_xml(xml_buffer); }
+  if(chrom())          { xml_buffer+="\n"; _chrom->simple_xml(xml_buffer); }
 
   //for now I need to leave this in. the jscript is still not
   //smart enough to efficiently connect external featuresources 2012-05-29
-  if(feature_source()) { _feature_source->simple_xml(xml_buffer); }
+  if(feature_source()) { xml_buffer+="\n"; _feature_source->simple_xml(xml_buffer); }
 }
 
 
@@ -631,7 +633,7 @@ void EEDB::Feature::_xml_subfeatures(string &xml_buffer) {
   subfeatures(); //makes sure it is loaded and sorted
   if(_subfeature_array.empty()) { return; }
   
-  snprintf(buffer, 2040, "<subfeatures count=\"%d\">", (int)_subfeature_array.size());
+  snprintf(buffer, 2040, "<subfeatures count=\"%d\">\n", (int)_subfeature_array.size());
   xml_buffer.append(buffer);
 
   for(unsigned int i=0; i<_subfeature_array.size(); i++) { 
@@ -1055,6 +1057,8 @@ long int    EEDB::Feature::chrom_end()    { return _chrom_end; }
 char        EEDB::Feature::strand()       { return _strand; }
 double      EEDB::Feature::significance() { return _significance; }
 time_t      EEDB::Feature::last_update()  { return _last_update; }
+string      EEDB::Feature::mate_chrom_name() { return _mate_chrom_name; }
+long int    EEDB::Feature::mate_start()      { return _mate_start; }
 
 long int  EEDB::Feature::min_start() { 
   //for resized features, checks subfeatures
@@ -1100,7 +1104,13 @@ void  EEDB::Feature::strand(char value) {
   } else {
     _strand = ' ';
   }
+}
 
+void  EEDB::Feature::mate_chrom_name(string value) { 
+  _mate_chrom_name = value;
+}
+void  EEDB::Feature::mate_start(long int value) { 
+  _mate_start = value; 
 }
 
 // lazy load object methods
@@ -1814,13 +1824,13 @@ vector<DBObject*>  EEDB::Feature::fetch_all_by_source_metadata(EEDB::FeatureSour
 
   //value += "%"; //to force it into a prefix like search
 
-  string sql = "SELECT * FROM feature JOIN ((SELECT distinct feature_id FROM feature_2_symbol JOIN symbol using(symbol_id) WHERE sym_value like ?";
+  string sql = "SELECT * FROM feature JOIN (";
+  sql += "SELECT distinct feature_id FROM feature_2_symbol JOIN symbol using(symbol_id) WHERE sym_value like ? ";
   if(!type.empty()) { sql += " AND sym_type='"+type+"'"; }
-  sql += ") UNION ";
-  sql += "(SELECT distinct feature_id FROM feature_2_metadata JOIN metadata using(metadata_id) where data like ?";
+  sql += " UNION ";
+  sql += "SELECT distinct feature_id FROM feature_2_metadata JOIN metadata using(metadata_id) WHERE data like ? ";
   if(!type.empty()) { sql += " AND data_type='"+type+"'"; }
-  sql += "))t1 using(feature_id) where feature_source_id = ?";
-
+  sql += ")t1 using(feature_id) where feature_source_id = ?";
   //fprintf(stderr, "%s\n", sql.c_str());
   return MQDB::fetch_multiple(EEDB::Feature::create, db, sql.c_str(), "ssd", value.c_str(), value.c_str(), source->primary_id());
 }

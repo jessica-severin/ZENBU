@@ -1,4 +1,4 @@
-/* $Id: Signal.h,v 1.24 2013/08/22 05:18:52 severin Exp $ */
+/* $Id: Signal.h,v 1.25 2021/07/02 05:22:27 severin Exp $ */
 
 /***
 
@@ -57,8 +57,8 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <vector>
 #include <boost/algorithm/string.hpp>
 #include <MQDB/Database.h>
-#include <MQDB/MappedQuery.h>
-#include <EEDB/Chrom.h>
+#include <MQDB/DBObject.h>
+#include <EEDB/DataSource.h>
 #include <EEDB/Datatype.h>
 
 using namespace std;
@@ -70,7 +70,7 @@ class Feature;
 class Datatype;
 class Chrom;
 
-class Signal : public MQDB::MappedQuery {
+class Signal : public MQDB::DBObject {
   public:  //global class level
     static const char*  class_name;
 
@@ -82,16 +82,10 @@ class Signal : public MQDB::MappedQuery {
     static EEDB::Signal*  realloc();
   
   protected:
-    double              _value;
-    double              _sig_error;   
-    long int            _count;
-    double              _duplication;
-    long int            _feature_id;
-    long int            _experiment_id;
-    string              _experiment_dbid;
-    EEDB::Experiment*   _experiment;
-    EEDB::Feature*      _feature;
+    EEDB::DataSource*   _datasource;
     EEDB::Datatype*     _datatype;
+    double              _value;
+    string              _datasource_dbid;
 
   public:
     Signal();               // constructor
@@ -105,66 +99,21 @@ class Signal : public MQDB::MappedQuery {
     bool operator>(const EEDB::Signal& b);
 
     //get atribute
-    EEDB::Experiment*    experiment();
-    EEDB::Feature*       feature();
-    EEDB::Datatype*      datatype() { return _datatype; }
     double               value() { return _value; }
-    double               sig_error() { return _sig_error; }
-    long int             count() { return _count; }
-    double               duplication() { return _duplication; }
-    string               experiment_dbid();
-    long int             feature_id() { return _feature_id; }
+    EEDB::Datatype*      datatype();
+    EEDB::DataSource*    datasource();
+    string               datasource_dbid();
 
     //set attribute
-    void   experiment(EEDB::Experiment *source);
+    void   value(double weight);
     void   datatype(EEDB::Datatype *type);
     void   datatype(string dtype);
-    void   value(double value);
-    void   count(long int value);
-    void   sig_error(double value);
-    void   duplication(double value) { _duplication = value; }
-    void   duplication_adjust(double value) { _duplication = _duplication * value; }
-    void   feature(EEDB::Feature *feature);
-
-    //forwarding methods to internal _feature
-    string               primary_name();
-    string               chrom_name();
-    long int             chrom_start();
-    long int             chrom_end();
-    char                 strand();    
-    string               chrom_location();
-    long int             chrom_id();
-    EEDB::Chrom*         chrom();
-
+    void   datasource(EEDB::DataSource *source);
+    void   datasource_dbid(string value);
 
     //display and export
-    void   display_info();
     string display_desc();
-    string display_contents();
-    string bed_description(string format);
 
-
-    bool store(MQDB::Database *db);
-
-    //
-    // static member function each subclass must implement this code
-    // replace the "<class*> obj = new <class>" line with subclass specific class type
-    // must return as DBObject* cast
-    //
-    static DBObject* create(map<string, dynadata> &row_map, Database* db) {
-      EEDB::Signal *obj = EEDB::Signal::realloc();
-      obj->database(db);
-      obj->init_from_row_map(row_map);
-      return obj;
-    }
-    void init_from_row_map(map<string, dynadata> &row_map);
-
-
-    //
-    // static member functions for object retrieval from database
-    //
-    static EEDB::Signal*  fetch_by_id(MQDB::Database *db, long int id);
-    static vector<DBObject*>  fetch_all_by_feature_id(MQDB::Database *db, long int id);
 
   private:
     static vector<EEDB::Signal*>    _realloc_signal_array;

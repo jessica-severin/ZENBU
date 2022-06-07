@@ -1,4 +1,4 @@
-/* $Id: MetaSearch.cpp,v 1.96 2020/01/07 06:51:00 severin Exp $ */
+/* $Id: MetaSearch.cpp,v 1.100 2020/10/02 10:41:22 severin Exp $ */
 
 /***
 
@@ -1651,6 +1651,9 @@ void EEDB::WebServices::MetaSearch::show_edges() {
 
   map<string, EEDB::Feature*>::iterator   it1;
   
+  //gettimeofday(&endtime, NULL); timersub(&endtime, &_starttime, &time_diff);
+  //printf("===== before source_stream() %1.6f msec \n", (double)time_diff.tv_sec*1000.0 + ((double)time_diff.tv_usec)/1000.0);
+
   EEDB::SPStreams::FederatedSourceStream  *stream = source_stream();
 
   gettimeofday(&endtime, NULL);
@@ -1658,23 +1661,34 @@ void EEDB::WebServices::MetaSearch::show_edges() {
   double   total_time  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
   //fprintf(stderr, "\nMetaSearch::show_edges get stream (%ld starting features) %1.6f sec\n", _feature_id_hash.size(), total_time);
   
-  
+  bool src_ids_changed = false;
   if(!_filter_source_ids.empty()) {
     //fprintf(stderr, "starting with %ld sources\n", _filter_source_ids.size());
+    //map<string, bool>::iterator  it2;
+    //for(it2 = _filter_source_ids.begin(); it2 != _filter_source_ids.end(); it2++) { fprintf(stderr, "%s\n", (*it2).first.c_str()); }
     stream->stream_data_sources("EdgeSource");
     while(EEDB::EdgeSource *source = (EEDB::EdgeSource*)stream->next_in_stream()) {
       if(source->classname() != EEDB::EdgeSource::class_name) { continue; }
       //if(!source->peer_uuid()) { continue; }  //something wrong or a 'proxy' source
-      //if(source->classname() != EEDB::EdgeSource::class_name) { continue; }
       //fprintf(stderr, "%s\n", source->simple_xml().c_str());
-      //printf("%s", source->xml().c_str());
-      _filter_source_ids[source->feature_source1_dbid()] = true;;
-      _filter_source_ids[source->feature_source2_dbid()] = true;;
+      if(_filter_source_ids.find(source->feature_source1_dbid())==_filter_source_ids.end()) {
+        _filter_source_ids[source->feature_source1_dbid()] = true;
+        src_ids_changed = true;
+        fprintf(stderr, "add edge fsrcs %s\n", source->feature_source1_dbid().c_str());
+      }
+      if(_filter_source_ids.find(source->feature_source2_dbid())==_filter_source_ids.end()) {
+        _filter_source_ids[source->feature_source2_dbid()] = true;;
+        src_ids_changed = true;
+        fprintf(stderr, "add edge fsrcs %s\n", source->feature_source2_dbid().c_str());
+      }
     }
   }
 
-  //rebuild stream in case there are new peers added
-  stream = source_stream(); 
+  if(src_ids_changed) { //rebuild stream in case there are new peers added
+    stream = source_stream(); 
+    gettimeofday(&endtime, NULL); timersub(&endtime, &_starttime, &time_diff);
+    //printf("===== after rebuild source_stream() %1.6f msec \n", (double)time_diff.tv_sec*1000.0 + ((double)time_diff.tv_usec)/1000.0);
+  }
 
   if(!_filter_source_ids.empty()) {
     stream->stream_data_sources();
@@ -1693,43 +1707,38 @@ void EEDB::WebServices::MetaSearch::show_edges() {
     deep_loop = strtol(_parameters["edge_search_depth"].c_str(), NULL, 10);
     if(deep_loop<1) { deep_loop = 1; }
   }
+  if(input_feature_count==0) { deep_loop=1; }
+  fprintf(stderr, "starting deep_loop = %ld\n", deep_loop);
   
   string xml_buffer;
   while(deep_loop>0) {
-  //while(!_feature_id_hash.empty() && (deep_loop>0)) {
     //printf("<note>deep loop %ld</note>\n", deep_loop);
-    //fprintf(stderr,"show_edges loop %ld: input %ld feature_ids\n", deep_loop, _feature_id_hash.size());
-    
-    //pre-fetch features we know
-    if(!stream->fetch_features(_feature_id_hash)) {
-      fprintf(stderr, "show_edges: failed to pre-fetch features\n");
-    }
-    
     gettimeofday(&endtime, NULL);
     timersub(&endtime, &_starttime, &time_diff);
-    total_time  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+    double   total_time  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+    fprintf(stderr,"\nshow_edges loop %ld: input %ld feature_ids  %1.3fsecs\n", deep_loop, _feature_id_hash.size(), total_time);
+    
+    //pre-fetch features we know
+    //if(!stream->fetch_features(_feature_id_hash)) {
+    //  fprintf(stderr, "show_edges: failed to pre-fetch features\n");
+    //}
+    
+    //gettimeofday(&endtime, NULL);
+    //timersub(&endtime, &_starttime, &time_diff);
+    //total_time  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
     //fprintf(stderr, "\nMetaSearch::show_edges before stream edges %1.6f sec\n\n", total_time);
 
     bool features_changed = false;
-    stream->stream_edges(_feature_id_hash);
+    stream->stream_edges(_feature_id_hash, _parameters["filter"]);
 
-    gettimeofday(&endtime, NULL);
-    timersub(&endtime, &_starttime, &time_diff);
-    total_time  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+    //gettimeofday(&endtime, NULL);
+    //timersub(&endtime, &_starttime, &time_diff);
+    //total_time  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
     //fprintf(stderr, "\nMetaSearch::show_edges after stream_edges() setup %1.6f sec\n\n", total_time);
 
     while(EEDB::Edge *edge = (EEDB::Edge*)stream->next_in_stream()) {
       if(!edge) { continue; }
       
-      //perform edge metadata filter
-      if(_parameters.find("filter") != _parameters.end()) {
-        EEDB::MetadataSet  *mdset = edge->metadataset();
-        if((mdset != NULL) and (!(mdset->check_by_filter_logic(_parameters["filter"])))) {
-          edge->release();
-          continue;
-        }
-      }
-
       if(deep_loop ==1) { 
         //printf("%s", edge->simple_xml().c_str());
         if(_parameters["format"] == "xml") {
@@ -1774,9 +1783,13 @@ void EEDB::WebServices::MetaSearch::show_edges() {
     if(!xml_buffer.empty()) { printf("%s\n", xml_buffer.c_str()); xml_buffer.clear(); }
 
     //rebuild stream in case there are new peers added
+    _filter_peer_ids.clear(); //clear the peer_ids and only rely on the source_ids
     stream = source_stream(); 
     deep_loop--;
-    if(!features_changed && deep_loop>1) { deep_loop = 1; }
+    if(!features_changed && deep_loop>1) { 
+      deep_loop = 1; 
+      fprintf(stderr, "features didn't change, so loop 1 more time to output edges\n");
+    }
   }
 
   gettimeofday(&endtime, NULL);
@@ -1811,11 +1824,11 @@ void EEDB::WebServices::MetaSearch::show_edges() {
       }
     } else {
       feature_fail_count++;
-      //printf("<note>%s :: not fetched</note>\n", (*it1).first.c_str());
+      printf("<note>%s :: feature failed to fetch</note>\n", (*it1).first.c_str());
     }
   }
   if(!xml_buffer.empty()) { printf("%s\n", xml_buffer.c_str()); xml_buffer.clear(); }
-  if(feature_fail_count>0) { fprintf(stderr, "MetaSearch::show_edges failed to fetch %ld features\n", feature_fail_count); }
+  if(feature_fail_count>0) { fprintf(stderr, "MetaSearch::show_edges failed to fetch %d features\n", feature_fail_count); }
   
   printf("<result_count input_features=\"%ld\" connected_features=\"%ld\" edges=\"%ld\" />\n", input_feature_count, _feature_id_hash.size(), edge_count);
   gettimeofday(&endtime, NULL);
@@ -1890,7 +1903,7 @@ void EEDB::WebServices::MetaSearch::show_features() {
         //printf("<note>%s :: not fetched</note>\n", (*it1).first.c_str());
       }
     }
-    if(feature_fail_count>0) { fprintf(stderr, "failed to fetch %ld features\n", feature_fail_count); }
+    if(feature_fail_count>0) { fprintf(stderr, "failed to fetch %d features\n", feature_fail_count); }
   }
   else if(!_filter_source_ids.empty()) {
     //stream all features for specified sources

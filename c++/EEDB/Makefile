@@ -1,13 +1,13 @@
 CC=gcc
 CPP=g++
-CFLAGS   = -Wall -O3 -I./ -I../ -I/usr/include/mysql -I/usr/local/mysql/include -I/usr/local/include -I/usr/local/boost/ \
+CFLAGS   = -Wall -O3 -I./ -I../ -I/usr/include/mariadb/ -I/usr/include/mysql -I/usr/local/mysql/include -I/usr/local/include -I/usr/local/boost/ \
            -I../rapidxml-1.13/ -I../samtools-1.5/ -I../samtools-1.5/htslib-1.5/
-CPPFLAGS = -Wall -O3 -I./ -I../ -I/usr/include/mysql -I/usr/local/mysql/include -I/usr/local/include -I/usr/local/boost/ \
+CPPFLAGS = -Wall -O3 -I./ -I../ -I/usr/include/mariadb/ -I/usr/include/mysql -I/usr/local/mysql/include -I/usr/local/include -I/usr/local/boost/ \
            -I../rapidxml-1.13/ -I../samtools-1.5/ -I../samtools-1.5/htslib-1.5/
 
 LIBS = -lm -lsqlite3 -lz
 SRCS_C = Assembly.cpp Chrom.cpp ChromChunk.cpp \
-         Metadata.cpp Symbol.cpp EdgeSet.cpp MetadataSet.cpp \
+         Metadata.cpp Symbol.cpp EdgeSet.cpp MetadataSet.cpp InteractionMatrix.cpp \
          DataSource.cpp FeatureSource.cpp Experiment.cpp EdgeSource.cpp \
          Peer.cpp SPStream.cpp User.cpp Collaboration.cpp Configuration.cpp \
          Datatype.cpp Feature.cpp Expression.cpp Edge.cpp EdgeWeight.cpp TrackCache.cpp TrackRequest.cpp \
@@ -29,7 +29,8 @@ SRCS_C = Assembly.cpp Chrom.cpp ChromChunk.cpp \
          SPStreams/CachePoint.cpp SPStreams/RemoteServerStream.cpp SPStreams/StrandFilter.cpp SPStreams/FlipStrand.cpp \
          SPStreams/MannWhitneyRanksum.cpp SPStreams/OverlapMerge.cpp SPStreams/SiteFinder.cpp \
          SPStreams/FoldChange.cpp SPStreams/DemultiplexSource.cpp SPStreams/CAGECorrection.cpp SPStreams/AppendExpression.cpp \
-         SPStreams/AddLinkedMetadata.cpp \
+         SPStreams/AddLinkedMetadata.cpp SPStreams/PairReads.cpp SPStreams/EdgeLengthFilter.cpp \
+         SPStreams/DumbBellToEdge.cpp SPStreams/MergeEdges.cpp \
          ZDX/ZDXsegment.cpp ZDX/ZDXstream.cpp \
          WebServices/WebBase.cpp WebServices/MetaSearch.cpp WebServices/ConfigServer.cpp WebServices/RegionServer.cpp \
          WebServices/UploadServer.cpp WebServices/DownloadServer.cpp WebServices/UserSystem.cpp WebServices/zenbu_common.cpp 

@@ -1,4 +1,4 @@
-/* $Id: Feature.h,v 1.80 2019/02/07 07:03:17 severin Exp $ */
+/* $Id: Feature.h,v 1.81 2020/04/15 04:04:46 severin Exp $ */
 
 /***
 
@@ -107,7 +107,8 @@ class Feature : public MQDB::MappedQuery {
     char                 strand();
     long int             min_start(); //for resized features, checks subfeatures
     long int             max_end();
-    
+    string               mate_chrom_name();
+    long int             mate_start();
     
     string               chrom_location();
     double               significance();
@@ -145,6 +146,8 @@ class Feature : public MQDB::MappedQuery {
     void                 strand(char value);
     void                 significance(double value) { _significance = value; }
     void                 last_update(time_t value) { _last_update = value; }
+    void                 mate_chrom_name(string value);
+    void                 mate_start(long int value);
 
 
     //display / output
@@ -214,9 +217,11 @@ class Feature : public MQDB::MappedQuery {
 
     string                     _primary_name;
     string                     _chrom_name;
+    string                     _mate_chrom_name;
     time_t                     _last_update;  //timestamp (unix time)
     long int                   _chrom_start;
     long int                   _chrom_end;
+    long int                   _mate_start;
     double                     _significance;
     char                       _strand;
     long int                   _feature_source_id;

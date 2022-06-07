@@ -331,16 +331,16 @@ class MysqlStmt {
             result_bind[i].buffer        = (void*)calloc(1024,1);
             result_bind[i].length        = (long unsigned int*)(calloc(sizeof(long unsigned int), 1));
             break;
-          case MYSQL_TYPE_VAR_STRING:
+          case MYSQL_TYPE_VAR_STRING: //longtext is 4GB, mediumtext is 16MB. use 64MB as compromise
             result_bind[i].buffer_type   = fields[i].type;
-            result_bind[i].buffer_length = 64*1024; //max 64kb
-            result_bind[i].buffer        = (void*)calloc(64*1024 +2, 1);
+            result_bind[i].buffer_length = 64*1024*1024; //max 64MB
+            result_bind[i].buffer        = (void*)calloc(64*1024*1024 +2, 1);
             result_bind[i].length        = (long unsigned int*)(calloc(sizeof(long unsigned int), 1));
            break;
           case MYSQL_TYPE_BLOB:  //medium blob is 16MB max, LONGBLOB is 4GB
             result_bind[i].buffer_type   = fields[i].type;
-            result_bind[i].buffer_length = 16*1024*1024;
-            result_bind[i].buffer        = (void*)calloc(16*1024*1024 +2, 1);
+            result_bind[i].buffer_length = 64*1024*1024;
+            result_bind[i].buffer        = (void*)calloc(64*1024*1024 +2, 1);
             result_bind[i].length        = (long unsigned int*)(calloc(sizeof(long unsigned int), 1));
             break;
           case MYSQL_TYPE_SET:
@@ -1372,7 +1372,6 @@ void* MQDB::Database::mysql_prepare_fetch_sql(const char* sql, const char* fmt, 
 
     va_copy(ap2, ap);
     while(param_idx < bind_cnt) {
-      switch(fmt[param_idx]) {
         char         t_char;
         char*        s;
         long int     d;
@@ -1383,6 +1382,7 @@ void* MQDB::Database::mysql_prepare_fetch_sql(const char* sql, const char* fmt, 
         
         mysql_bind[param_idx].buffer = NULL;
       
+      switch(fmt[param_idx]) {
         case 's':                       //string
           s = va_arg(ap2, char *);
           mysql_buffer[param_idx].i_string = s;

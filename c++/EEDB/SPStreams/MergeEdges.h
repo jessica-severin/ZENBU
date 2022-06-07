@@ -1,20 +1,15 @@
-/* $Id: TemplateCluster.h,v 1.22 2020/04/28 01:28:55 severin Exp $ */
+/* $Id: MergeEdges.h,v 1.2 2021/07/14 03:34:11 severin Exp $ */
 
 /***
 
-NAME - EEDB::SPStreams::TemplateCluster
+NAME - EEDB::SPStreams::MergeEdges
 
 SYNOPSIS
 
 DESCRIPTION
 
-a signal-processing-stream filter
-As a stream filter the idea is a restricted use-case which is very common.
-This filter is configured with a side_stream of "template" features.
-These sources form a collation of "templates" which are used for "clustering".
-If the input features/expressions overlaps with any of these sources the tempate
-is copied and the expression from the primary stream 
-is "collected" under it as a "pseudo-cluster".
+ a simple module to combine exact edges merging weights and metadata. uses the IDs or locations
+ of feature1/feature2 to identify equal connections
 
 CONTACT
 
@@ -54,8 +49,8 @@ The rest of the documentation details each of the object methods. Internal metho
 
 ***/
 
-#ifndef _EEDB_SPSTREAMS_TEMPLATECLUSTER_H
-#define _EEDB_SPSTREAMS_TEMPLATECLUSTER_H
+#ifndef _EEDB_SPSTREAMS_MergeEdges_H
+#define _EEDB_SPSTREAMS_MergeEdges_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -65,7 +60,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <deque>
 #include <EEDB/Feature.h>
 #include <EEDB/Edge.h>
-#include <EEDB/SPStreams/MergeStreams.h>
+#include <EEDB/InteractionMatrix.h>
 
 using namespace std;
 using namespace MQDB;
@@ -74,52 +69,37 @@ namespace EEDB {
 
 namespace SPStreams {
 
-class TemplateCluster : public EEDB::SPStreams::MergeStreams {
+class MergeEdges : public EEDB::SPStream {
   public:  //global class level
     static const char*  class_name;
 
   public:
-    TemplateCluster();                // constructor
-    TemplateCluster(void *xml_node);  // constructor using a rapidxml <spstream> description
-   ~TemplateCluster();                // destructor
+    MergeEdges();                // constructor
+    MergeEdges(void *xml_node);  // constructor using a rapidxml <spstream> description
+   ~MergeEdges();                // destructor
     void init();                      // initialization method
 
     void display_info();
     string display_desc();
     string display_contents();
 
-    void  overlap_mode(string value);  //area, height, 5end, 3end
-    void  ignore_strand(bool value)                     { _ignore_strand = value; }
-    void  skip_empty_templates(bool value)              { _skip_empty_templates = value; }
-    void  expression_mode(t_collate_express_mode value) { _expression_mode = value; }
-    void  overlap_check_subfeatures(bool value);
-    void  overlap_distance(long value) { _overlap_distance = value; }
-    void  scan_extend_distance(long value) { _scan_extend_distance = value; }
-    
+    void  ignore_direction(bool value);
+    void  expression_mode(t_collate_express_mode value);
 
   protected:
-    string                       _overlap_mode;
     t_collate_express_mode       _expression_mode;
-    bool                         _ignore_strand;
-    bool                         _skip_empty_templates;
-    bool                         _template_stream_empty;
-    bool                         _overlap_check_subfeatures;
-    long int                     _overlap_distance;
-    long int                     _scan_extend_distance;
-    map<string,bool>             _subfeat_filter_categories;
-    deque<EEDB::Feature*>        _template_buffer;
-    deque<EEDB::Feature*>        _completed_templates;
-    bool                         _stream_features_mode;
-    bool                         _edges_mode;
-    deque<EEDB::Edge*>           _edge_buffer;
+    bool                         _stream_from_matrix;
+    bool                         _streaming_region;
+    bool                         _ignore_direction;
+  
+    EEDB::InteractionMatrix*     _interact_matrix;
 
-    EEDB::Feature*               _process_feature(MQDB::DBObject* obj);
-    EEDB::Edge*                  _process_edge(MQDB::DBObject* obj);
-    void                         _modify_ends(EEDB::Feature *feature);
-    EEDB::Feature*               _extend_template_buffer();
-    void                         _calc_template_significance(EEDB::Feature* feature);
-    void                         _cluster_add_expression(EEDB::Feature *cluster, EEDB::Expression *express, long dup_count);
-    void                         _edge_merge_weight(EEDB::Edge *edge, EEDB::EdgeWeight *weight);
+    EEDB::Edge*                  _process_object(MQDB::DBObject* obj);
+    bool                         _check_edges_equal(EEDB::Edge* edge1, EEDB::Edge* edge2);
+    bool                         _merge_edges(EEDB::Edge* edge1, EEDB::Edge* edge2); //tests and merges
+    void                         _cluster_add_weight(EEDB::Edge *cluster, EEDB::EdgeWeight *weight);
+    void                         _transfer_metadata(EEDB::Edge *edge, EEDB::Edge *edge2);
+    void                         _transfer_metadata(EEDB::Edge *edge, EEDB::MetadataSet *mdset);
 
   //used for callback functions, should not be considered open API
   public:

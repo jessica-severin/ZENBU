@@ -1,4 +1,4 @@
-/* $Id: SPStream.cpp,v 1.103 2018/12/05 00:46:56 severin Exp $ */
+/* $Id: SPStream.cpp,v 1.108 2021/07/08 04:43:20 severin Exp $ */
 
 /***
 
@@ -105,6 +105,10 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <EEDB/SPStreams/DemultiplexSource.h>
 #include <EEDB/SPStreams/CAGECorrection.h>
 #include <EEDB/SPStreams/AppendExpression.h>
+#include <EEDB/SPStreams/PairReads.h>
+#include <EEDB/SPStreams/EdgeLengthFilter.h>
+#include <EEDB/SPStreams/DumbBellToEdge.h>
+#include <EEDB/SPStreams/MergeEdges.h>
 
 
 using namespace std;
@@ -157,8 +161,8 @@ void _spstream_default_stream_all_features_func(EEDB::SPStream* node) {
 bool _spstream_default_fetch_features_func(EEDB::SPStream* node, map<string, EEDB::Feature*> &fid_hash) {
   return ((EEDB::SPStream*)node)->_fetch_features(fid_hash);
 }
-void _spstream_default_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash) {
-  ((EEDB::SPStream*)node)->_stream_edges(fid_hash);
+void _spstream_default_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash, string search_logic) {
+  ((EEDB::SPStream*)node)->_stream_edges(fid_hash, search_logic);
 }
 void _spstream_default_reset_stream_node_func(EEDB::SPStream* node) {
   //this is not passed down the stream, but can be replaced by subclasses
@@ -458,9 +462,9 @@ void EEDB::SPStream::stream_chromosomes(string assembly_name, string chrom_name)
  Description: stream edges based on filters ,peers, sources and a list of features
  *****/
 
-void EEDB::SPStream::stream_edges(map<string, EEDB::Feature*> fid_hash) {
+void EEDB::SPStream::stream_edges(map<string, EEDB::Feature*> fid_hash, string search_logic) {
   reset_stream_node();
-  _funcptr_stream_edges(this, fid_hash);
+  _funcptr_stream_edges(this, fid_hash, search_logic);
 }
 
 /***** stream_all_features
@@ -612,8 +616,11 @@ EEDB::SPStream* EEDB::SPStream::_xmlnode_create_spstream(void *xml_node) {
   if(modname == "Proxy")             { spstream = new EEDB::SPStreams::Proxy(xml_node); }
   if(modname == "SiteFinder")        { spstream = new EEDB::SPStreams::SiteFinder(xml_node); }
   if(modname == "DemultiplexSource") { spstream = new EEDB::SPStreams::DemultiplexSource(xml_node); }
+  if(modname == "PairReads")         { spstream = new EEDB::SPStreams::PairReads(xml_node); }
   if(modname == "CAGECorrection")    { spstream = new EEDB::SPStreams::CAGECorrection(xml_node); }
   if(modname == "AppendExpression")  { spstream = new EEDB::SPStreams::AppendExpression(xml_node); }
+  if(modname == "DumbBellToEdge")    { spstream = new EEDB::SPStreams::DumbBellToEdge(xml_node); }
+  if(modname == "MergeEdges")        { spstream = new EEDB::SPStreams::MergeEdges(xml_node); }
 
   if(modname == "FederatedSourceStream")     { spstream = new  EEDB::SPStreams::FederatedSourceStream(xml_node); }
   if(modname == "CachePoint")                { spstream = new  EEDB::SPStreams::CachePoint(xml_node); }
@@ -629,6 +636,7 @@ EEDB::SPStream* EEDB::SPStream::_xmlnode_create_spstream(void *xml_node) {
   if(modname == "ResizeFeatures")            { spstream = new  EEDB::SPStreams::ResizeFeatures(xml_node); }
   if(modname == "ExpressionDatatypeFilter")  { spstream = new  EEDB::SPStreams::ExpressionDatatypeFilter(xml_node); }
   if(modname == "FeatureLengthFilter")       { spstream = new  EEDB::SPStreams::FeatureLengthFilter(xml_node); }
+  if(modname == "EdgeLengthFilter")          { spstream = new  EEDB::SPStreams::EdgeLengthFilter(xml_node); }
   if(modname == "MakeStrandless")            { spstream = new  EEDB::SPStreams::MakeStrandless(xml_node); }
   if(modname == "TopHits")                   { spstream = new  EEDB::SPStreams::TopHits(xml_node); }
   if(modname == "NormalizeRPKM")             { spstream = new  EEDB::SPStreams::NormalizeRPKM(xml_node); }
@@ -726,8 +734,8 @@ void EEDB::SPStream::_stream_chromosomes(string assembly_name, string chrom_name
   if(source_stream() != NULL) { source_stream()->stream_chromosomes(assembly_name, chrom_name); }
 }
 
-void EEDB::SPStream::_stream_edges(map<string, EEDB::Feature*> fid_hash) {
-  if(source_stream() != NULL) { source_stream()->stream_edges(fid_hash); }
+void EEDB::SPStream::_stream_edges(map<string, EEDB::Feature*> fid_hash, string search_logic) {
+  if(source_stream() != NULL) { source_stream()->stream_edges(fid_hash, search_logic); }
 }
 
 void EEDB::SPStream::_stream_peers() {

@@ -1,4 +1,4 @@
-/* $Id: UserSystem.cpp,v 1.123 2019/02/12 07:56:11 severin Exp $ */
+/* $Id: UserSystem.cpp,v 1.125 2022/04/08 02:03:18 severin Exp $ */
 
 /***
 
@@ -174,6 +174,10 @@ bool EEDB::WebServices::UserSystem::execute_request() {
     collaboration_make_admin_user();
   } else if(_parameters["mode"] == "collaboration_revoke_admin_user") {
     collaboration_revoke_admin_user();
+  } else if(_parameters["mode"] == "collaboration_make_public") {
+    collaboration_make_public(true);
+  } else if(_parameters["mode"] == "collaboration_revoke_public") {
+    collaboration_make_public(false);
   } else if(_parameters["mode"] == "invite_user") {
     invite_user_to_collaboration();
   } else if(_parameters["mode"] == "accept_invitation") {
@@ -234,7 +238,7 @@ void EEDB::WebServices::UserSystem::show_api() {
   */
 
   printf("Content-type: text/html\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("\r\n");
   printf("<!DOCTYPE html  PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n");
 
@@ -484,7 +488,7 @@ void  EEDB::WebServices::UserSystem::parse_metadata_edit_commands(void *xml_node
 
 void EEDB::WebServices::UserSystem::show_user() {  
   printf("Content-type: text/xml\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
 
@@ -515,7 +519,7 @@ void  EEDB::WebServices::UserSystem::reset_session() {
   save_session();
 
   printf("Content-type: text/html\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("Location: %s/user/#section=profile\r\n", _web_url.c_str());
   printf("\r\n");
   
@@ -554,7 +558,7 @@ void EEDB::WebServices::UserSystem::password_login() {
   //save_session();
 
   printf("Content-type: text/xml\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<user>\n");
@@ -591,7 +595,7 @@ void EEDB::WebServices::UserSystem::logout() {
   save_session();
 
   printf("Content-type: text/xml\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<user>\n");
@@ -621,7 +625,7 @@ void  EEDB::WebServices::UserSystem::redirect_to_last_url() {
   printf("Content-type: text/html\r\n");
   string url = _web_url + "/user/#section=profile";  
   if(!_session_data["id"].empty()) { 
-    printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); 
+    printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); 
     string last_url = _session_data["last_url"];
     if(!last_url.empty()) { 
       url = last_url; 
@@ -635,7 +639,7 @@ void  EEDB::WebServices::UserSystem::redirect_to_last_url() {
 
 void  EEDB::WebServices::UserSystem::redirect_to_user_profile() {
   printf("Content-type: text/html\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("Location: %s/user/#section=profile\r\n", _web_url.c_str());
   printf("\r\n");  
 }
@@ -826,7 +830,7 @@ void  EEDB::WebServices::UserSystem::send_validation_email() {
   // display XML return status
   //
   printf("Content-type: text/xml\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<user_validation>\n");
@@ -900,7 +904,7 @@ void  EEDB::WebServices::UserSystem::send_password_reset_email() {
   // display XML return status
   //
   printf("Content-type: text/xml\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<user_validation>\n");
@@ -961,7 +965,7 @@ void  EEDB::WebServices::UserSystem::send_invitation_email(EEDB::User *invited_u
   // display XML return status
   //
   printf("Content-type: text/xml\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<user_validation>\n");
@@ -985,7 +989,7 @@ void EEDB::WebServices::UserSystem::receive_validation() {
   fprintf(stderr, "UserSystem::receive_validation\n");
 
   //printf("Content-type: text/xml\r\n");
-  //if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  //if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   //printf("\r\n");
   //printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   //printf("<user_validation>\n");
@@ -1166,7 +1170,7 @@ void EEDB::WebServices::UserSystem::create_collaboration() {
 
 void EEDB::WebServices::UserSystem::show_collaborations() {  
   printf("Content-type: text/xml; charset=utf-8\r\n");
-  printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
+  printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   
@@ -1276,6 +1280,16 @@ void EEDB::WebServices::UserSystem::ignore_collaboration() {
     collaboration->ignore_collaboration(_user_profile);
   }  
   show_collaborations();
+}
+
+void EEDB::WebServices::UserSystem::collaboration_make_public(bool value) {  
+  //must be owner of collaboration in order to accept a user's collaboration request
+  if(!_user_profile) { return show_user(); }
+  EEDB::Collaboration *collaboration = EEDB::Collaboration::fetch_by_uuid(_user_profile, _parameters["collaboration_uuid"]);
+  if(collaboration) {
+    collaboration->make_public(value);
+  }  
+  show_collaborations();  
 }
 
 
@@ -1488,7 +1502,7 @@ void EEDB::WebServices::UserSystem::share_uploaded_database() {
   //last loop on these peers and process the sharing and collect errors
   
   printf("Content-type: text/xml; charset=utf-8\r\n");
-  printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
+  printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   
@@ -1597,7 +1611,7 @@ void EEDB::WebServices::UserSystem::unshare_uploaded_database() {
   
 
   printf("Content-type: text/xml; charset=utf-8\r\n");
-  printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
+  printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   
@@ -1654,7 +1668,7 @@ void EEDB::WebServices::UserSystem::upgrade_user_uploads() {
   }
   
   printf("Content-type: text/xml; charset=utf-8\r\n");
-  printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
+  printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<upgrade_user_uploads>\n");  
@@ -1734,7 +1748,7 @@ void EEDB::WebServices::UserSystem::edit_objects_metadata() {
   int object_count=0;
   
   printf("Content-type: text/xml; charset=utf-8\r\n");
-  printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
+  printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<edit_metadata>\n");  
@@ -1786,7 +1800,7 @@ void EEDB::WebServices::UserSystem::source_search_edit_metadata() {
   fprintf(stderr, "UserSystem::source_search_edit_metadata start at %1.3f msec\n", runtime);
 
   printf("Content-type: text/xml; charset=utf-8\r\n");
-  printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
+  printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<edit_metadata>\n");  
@@ -2105,7 +2119,7 @@ void EEDB::WebServices::UserSystem::save_mdata_edits(MQDB::DBObject *obj) {
 
 void EEDB::WebServices::UserSystem::show_downloads() {  
   printf("Content-type: text/xml; charset=utf-8\r\n");
-  printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
+  printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   

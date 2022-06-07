@@ -1,4 +1,4 @@
-/* $Id: MultiMergeStream.cpp,v 1.34 2017/07/24 04:21:33 severin Exp $ */
+/* $Id: MultiMergeStream.cpp,v 1.35 2020/03/02 08:26:32 severin Exp $ */
 
 /***
 
@@ -134,8 +134,8 @@ bool _spstream_multimergestream_fetch_features_func(EEDB::SPStream* node, map<st
   return ((EEDB::SPStreams::MultiMergeStream*)node)->_fetch_features(fid_hash);
 }
 
-void _spstream_multimergestream_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash) {
-  ((EEDB::SPStreams::MultiMergeStream*)node)->_stream_edges(fid_hash);
+void _spstream_multimergestream_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash, string filter_logic) {
+  ((EEDB::SPStreams::MultiMergeStream*)node)->_stream_edges(fid_hash, filter_logic);
 }
 
 void _spstream_multimergestream_stream_all_features_func(EEDB::SPStream* node) {
@@ -663,11 +663,11 @@ bool  EEDB::SPStreams::MultiMergeStream::_fetch_features(map<string, EEDB::Featu
 }
 
 
-void  EEDB::SPStreams::MultiMergeStream::_stream_edges(map<string, EEDB::Feature*> fid_hash) {
+void  EEDB::SPStreams::MultiMergeStream::_stream_edges(map<string, EEDB::Feature*> fid_hash, string filter_logic) {
   vector<EEDB::SPStreams::MultistreamElement*>::iterator   it;
   for(it = _sourcestreams.begin(); it != _sourcestreams.end(); it++) {
     if((*it)->stream == NULL) { continue; }
-    (*it)->stream->stream_edges(fid_hash);
+    (*it)->stream->stream_edges(fid_hash, filter_logic);
   }
   _init_active_streams();  //prepares for next_in_stream() calls
 }

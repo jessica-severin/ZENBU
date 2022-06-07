@@ -1,4 +1,4 @@
-/* $Id: OSCFileParser.cpp,v 1.226 2019/11/15 04:41:17 severin Exp $ */
+/* $Id: OSCFileParser.cpp,v 1.227 2022/02/02 10:40:59 severin Exp $ */
 
 /***
 
@@ -2247,16 +2247,20 @@ bool  EEDB::Tools::OSCFileParser::_convert_bed_block_extensions(EEDB::Feature *f
   long int thickEnd   = feature->chrom_end();
   long int blockCount = strtol(_columns[_idx_bed_block_count].data, NULL, 10);
   
+  //fixing the thick logic. using as BED defines as the start and end of exons
   if(_idx_bed_thickstart != -1) { 
-    //thinkStart is really the end of the 5'UTR region in 0base
-    //so converting to 1base means not doing anything
-    thickStart = strtol(_columns[_idx_bed_thickstart].data, NULL, 10); 
+    if(strlen(_columns[_idx_bed_thickstart].data) > 0) {
+      thickStart = strtol(_columns[_idx_bed_thickstart].data, NULL, 10); 
+      if(_coordinate_system == BASE0) { thickStart++; }
+      if(thickStart < feature->chrom_start()) { thickStart = feature->chrom_start(); }
+    }
   }
   if(_idx_bed_thickend   != -1) { 
-    //thinkEnd is really the start of the 3'UTR region in 0base
-    //so need to +1 to convert to 1base coordinate system
-    thickEnd = strtol(_columns[_idx_bed_thickend].data, NULL, 10); 
-    if(_coordinate_system == BASE0) { thickEnd++; }
+    if(strlen(_columns[_idx_bed_thickend].data) > 0) {
+      thickEnd = strtol(_columns[_idx_bed_thickend].data, NULL, 10); 
+      if(thickEnd < feature->chrom_start()) { thickEnd = feature->chrom_end(); }
+      if(thickEnd > feature->chrom_end())   { thickEnd = feature->chrom_end(); }
+    }
   }
 
   char *size1  = _columns[_idx_bed_block_sizes].data;
@@ -2322,9 +2326,10 @@ bool  EEDB::Tools::OSCFileParser::_convert_bed_block_extensions(EEDB::Feature *f
     feature->add_subfeature(subfeat);
     subfeat->release(); //retained by feature
     
+    //defining the head UTRs before thickStart
     if(thickStart > subfeat->chrom_start()) {
       long int uend = subfeat->chrom_end();
-      if(thickStart < uend) { uend = thickStart; }
+      if(thickStart-1 <= uend) { uend = thickStart-1; }
 
       EEDB::Feature *utr = EEDB::Feature::realloc();
       utr->chrom(feature->chrom());
@@ -2345,9 +2350,10 @@ bool  EEDB::Tools::OSCFileParser::_convert_bed_block_extensions(EEDB::Feature *f
       utr->release(); //retained by feature
     }
 
+    //defining the tail UTRs after thickEnd
     if(thickEnd < subfeat->chrom_end()) {
       long int ustart = subfeat->chrom_start();
-      if(thickEnd > ustart) { ustart = thickEnd; }
+      if(thickEnd+1 >= ustart) { ustart = thickEnd+1; }
 
       EEDB::Feature *utr = EEDB::Feature::realloc();
       utr->chrom(feature->chrom());

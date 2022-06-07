@@ -1,4 +1,4 @@
-/*  $Id: EdgeSource.cpp,v 1.75 2017/10/12 07:58:15 severin Exp $ */
+/*  $Id: EdgeSource.cpp,v 1.76 2021/05/22 01:41:25 severin Exp $ */
 
 /***
 NAME - EEDB::EdgeSource
@@ -271,6 +271,7 @@ void EEDB::EdgeSource::parse_metadata_into_attributes() {
   if(!_owner_identity.empty()) { 
     _metadataset.add_metadata("eedb:owner_email", _owner_identity);
   }
+  _metadataset.add_metadata("eedb:dbid", db_id());
 }
 
 

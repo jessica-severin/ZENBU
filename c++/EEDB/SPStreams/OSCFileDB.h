@@ -1,5 +1,5 @@
 
-/* $Id: OSCFileDB.h,v 1.55 2019/02/27 09:04:53 severin Exp $ */
+/* $Id: OSCFileDB.h,v 1.56 2020/03/02 08:49:26 severin Exp $ */
 
 /***
 
@@ -192,7 +192,7 @@ class OSCFileDB : public EEDB::SPStreams::SourceStream {
     bool               _stream_by_named_region(string assembly_name, string chrom_name, long int start, long int end);
     void               _stream_all_features();
     bool               _fetch_features(map<string, EEDB::Feature*> &fid_hash);
-    void               _stream_edges(map<string, EEDB::Feature*> fid_hash);
+    void               _stream_edges(map<string, EEDB::Feature*> fid_hash, string filter_logic);
 
 };
 

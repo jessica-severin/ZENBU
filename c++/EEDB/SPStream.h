@@ -1,4 +1,4 @@
-/* $Id: SPStream.h,v 1.33 2019/02/15 04:37:30 severin Exp $ */
+/* $Id: SPStream.h,v 1.34 2020/03/02 08:26:32 severin Exp $ */
 
 /***
 
@@ -99,7 +99,7 @@ class SPStream : public MQDB::DBObject {
     void             stream_data_sources(string classname);
     void             stream_data_sources(string classname, string search_logic);
     void             stream_chromosomes(string assembly_name, string chrom_name);
-    void             stream_edges(map<string, EEDB::Feature*> fid_hash);
+    void             stream_edges(map<string, EEDB::Feature*> fid_hash, string search_logic);
 
     void             stream_peers();
     void             reload_stream_data_sources();
@@ -135,7 +135,7 @@ class SPStream : public MQDB::DBObject {
     void            (*_funcptr_stream_all_features)(EEDB::SPStream* node);
     void            (*_funcptr_stream_data_sources)(EEDB::SPStream* node, string classname, string search_logic);
     void            (*_funcptr_stream_chromosomes)(EEDB::SPStream* node, string assembly_name, string chrom_name);
-    void            (*_funcptr_stream_edges)(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash);
+    void            (*_funcptr_stream_edges)(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash, string search_logic);
     void            (*_funcptr_stream_peers)(EEDB::SPStream* node);
     void            (*_funcptr_reload_stream_data_sources)(EEDB::SPStream* node);
     void            (*_funcptr_reset_stream_node)(EEDB::SPStream* node);
@@ -163,7 +163,7 @@ class SPStream : public MQDB::DBObject {
     void              _stream_data_sources(string classname, string filter_logic);
     void              _stream_dependent_data_sources();
     void              _stream_chromosomes(string assembly_name, string chrom_name);
-    void              _stream_edges(map<string, EEDB::Feature*> fid_hash);
+    void              _stream_edges(map<string, EEDB::Feature*> fid_hash, string search_logic);
     void              _stream_peers();
     void              _reload_stream_data_sources();
     void              _disconnect();
@@ -189,7 +189,7 @@ void _spstream_default_get_proxies_by_name(EEDB::SPStream* node, string proxy_na
 void _spstream_default_get_dependent_datasource_ids(EEDB::SPStream* node, map<string, bool> &source_ids);
 void _spstream_default_stream_all_features_func(EEDB::SPStream* node);
 bool _spstream_default_fetch_features_func(EEDB::SPStream* node, map<string, EEDB::Feature*> &fid_hash);
-void _spstream_default_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash);
+void _spstream_default_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash, string search_logic);
 void _spstream_default_reset_stream_node_func(EEDB::SPStream* node);
 void _eedb_spstream_delete_func(MQDB::DBObject *obj);
 void _eedb_spstream_xml_func(MQDB::DBObject *obj, string &xml_buffer);

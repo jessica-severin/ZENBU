@@ -1,4 +1,4 @@
-/* $Id: OSCFileDB.cpp,v 1.277 2019/07/31 06:59:15 severin Exp $ */
+/* $Id: OSCFileDB.cpp,v 1.282 2022/02/02 10:59:14 severin Exp $ */
 
 /***
 
@@ -152,8 +152,8 @@ bool _spstream_oscfiledb_fetch_features_func(EEDB::SPStream* node, map<string, E
   return ((EEDB::SPStreams::OSCFileDB*)node)->_fetch_features(fid_hash);
 }
 
-void _spstream_oscfiledb_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash) {
-  ((EEDB::SPStreams::OSCFileDB*)node)->_stream_edges(fid_hash);
+void _spstream_oscfiledb_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash, string filter_logic) {
+  ((EEDB::SPStreams::OSCFileDB*)node)->_stream_edges(fid_hash, filter_logic);
 }
 
 void _spstream_oscfiledb_stream_all_features_func(EEDB::SPStream* node) {
@@ -652,6 +652,14 @@ MQDB::DBObject* EEDB::SPStreams::OSCFileDB::_next_in_stream() {
   
   _prepare_next_line();
   _stream_next_feature = oscfileparser()->convert_dataline_to_feature(_data_line_ptr, _outmode, _expression_datatypes, _filter_exp_ids);
+
+  while((_stream_next_feature != NULL) and !_stream_chrom.empty() and (_stream_next_feature->chrom_name() == _stream_chrom) and (_stream_next_feature->chrom_end() < _stream_start)) {
+    //printf("skip feature %s  end < start %ld\n", _stream_next_feature->chrom_location().c_str(), _stream_start);
+    _stream_next_feature->release();
+    _prepare_next_line();
+    _stream_next_feature = oscfileparser()->convert_dataline_to_feature(_data_line_ptr, _outmode, _expression_datatypes, _filter_exp_ids);
+  }
+
   if(_stream_next_feature != NULL) {
     _stream_next_feature->peer_uuid(peer_uuid());
     if((!_stream_chrom.empty() && (_stream_next_feature->chrom_name() != _stream_chrom)) or
@@ -1298,7 +1306,7 @@ EEDB::Edge*  EEDB::SPStreams::OSCFileDB::_fetch_edge_by_id(long int edge_id) {
   return edge;
 }
 
-void EEDB::SPStreams::OSCFileDB::_stream_edges(map<string, EEDB::Feature*> fid_hash) {
+void EEDB::SPStreams::OSCFileDB::_stream_edges(map<string, EEDB::Feature*> fid_hash, string filter_logic) {
   //TODO: may rethink the edge sort/index/query logic. Might be best to differentiate between forward search and backward search
   // maybe sort on f1,f2 to favor forward searches. Then if there are any queries involving f2 it will have to forgo the index/stop
   // and perform a full scan. But if only f1 queries then it can use the index/stop since it will sort on f1 first and then f2
@@ -1308,7 +1316,7 @@ void EEDB::SPStreams::OSCFileDB::_stream_edges(map<string, EEDB::Feature*> fid_h
   if(!_source_is_active) { return; }
   if(!_connect_to_files()) { return; }
   
-  fprintf(stderr, "OSCFileDB::stream_edges from peer[%s]\n", peer_uuid());
+  //fprintf(stderr, "OSCFileDB::stream_edges from peer[%s]\n", peer_uuid());
   oscfileparser();  //initialize if not already
   if(oscfileparser()->coordinate_system() != Tools::EDGES) { return; }
   
@@ -1318,7 +1326,7 @@ void EEDB::SPStreams::OSCFileDB::_stream_edges(map<string, EEDB::Feature*> fid_h
     _error_msg += " " + oscfileparser()->get_parameter("_parsing_error") + " -";
     return;
   }
-  fprintf(stderr, "%s\n", edgesource->xml().c_str());
+  //fprintf(stderr, "%s\n", edgesource->xml().c_str());
   
   string uuid, objClass;
   long int objID;
@@ -1327,8 +1335,8 @@ void EEDB::SPStreams::OSCFileDB::_stream_edges(map<string, EEDB::Feature*> fid_h
   string fsrc1_uuid = uuid;
   unparse_eedb_id(edgesource->feature_source2_dbid(), uuid, objID, objClass);
   string fsrc2_uuid = uuid;
-  fprintf(stderr, "fsrc1_uuid[%s] fsrc2_uuid[%s]\n", fsrc1_uuid.c_str(), fsrc2_uuid.c_str());
-  fprintf(stderr, "fsrc1_uuid[%s] fsrc2_uuid[%s]\n", edgesource->feature_source1_uuid().c_str(), edgesource->feature_source2_uuid().c_str());
+  //fprintf(stderr, "fsrc1_uuid[%s] fsrc2_uuid[%s]\n", fsrc1_uuid.c_str(), fsrc2_uuid.c_str());
+  //fprintf(stderr, "fsrc1_uuid[%s] fsrc2_uuid[%s]\n", edgesource->feature_source1_uuid().c_str(), edgesource->feature_source2_uuid().c_str());
   
   //get feature_ids matching my EdgeSource fsrc1/fsrc2
   map<long int, bool> f1ids, f2ids;
@@ -1340,51 +1348,52 @@ void EEDB::SPStreams::OSCFileDB::_stream_edges(map<string, EEDB::Feature*> fid_h
     unparse_eedb_id(fid, uuid, objID, objClass);
     if(objClass != "Feature") { continue; }
     if(uuid.empty()) { continue; }
-    fprintf(stderr, "%s uuid[%s]\n", fid.c_str(), uuid.c_str());
+    //fprintf(stderr, "%s uuid[%s]\n", fid.c_str(), uuid.c_str());
     
     //need to find those matching my EdgeSource fsrc1/fsrc2 peer_uuid
     if(uuid == fsrc1_uuid) {
       f1ids[objID] = true;
-      fprintf(stderr, "  fsrc1\n");
+      //fprintf(stderr, "  fsrc1\n");
       if(min_f1id<0 || objID<min_f1id) { min_f1id = objID; }
       if(max_f1id<0 || objID>max_f1id) { max_f1id = objID; }
     }
     if(uuid == fsrc2_uuid) {
       f2ids[objID] = true;
-      fprintf(stderr, "  fsrc2\n");
+      //fprintf(stderr, "  fsrc2\n");
       if(min_f2id<0 || objID<min_f2id) { min_f2id = objID; }
       if(max_f2id<0 || objID>max_f2id) { max_f2id = objID; }
     }
     if((uuid != fsrc1_uuid) && (uuid != fsrc2_uuid)) { continue; }
   }
-  fprintf(stderr, "need to fetch edges connected to fsrc1:%ld fsrc2:%ld features from peer[%s]\n", f1ids.size(), f2ids.size(), peer_uuid());
-  fprintf(stderr, "min_f1id=%ld  max_f1id=%ld\n", min_f1id, max_f1id);
-  fprintf(stderr, "min_f2id=%ld  max_f2id=%ld\n", min_f2id, max_f2id);
+  //fprintf(stderr, "need to fetch edges connected to fsrc1:%ld fsrc2:%ld features from peer[%s]\n", f1ids.size(), f2ids.size(), peer_uuid());
+  //fprintf(stderr, "min_f1id=%ld  max_f1id=%ld\n", min_f1id, max_f1id);
+  //fprintf(stderr, "min_f2id=%ld  max_f2id=%ld\n", min_f2id, max_f2id);
+  //fprintf(stderr, "filter_logic [%s]\n", filter_logic.c_str());
   
-  //if(fids.empty()) { return; }
   if(!fid_hash.empty() && (min_f1id<0) && (min_f2id<0)) {
     fprintf(stderr, "no features matching fsrc1 or fsrc2\n");
     return;
   }
-  //long int min_fid = min_f1id;
-  //if(min_f2id>=0 && min_f2id<min_fid) { min_fid = min_f2id; }
-  //fprintf(stderr, "min_fid=%ld\n", min_fid);
   
   EEDB::SPStreams::StreamBuffer *streambuffer = new EEDB::SPStreams::StreamBuffer();
   _source_stream = streambuffer;
 
+  //the fancy code was unreliable so now a simple index on f1id and only use index for f1id
   //use min_f-id to use efidx to skip ahead for speed up
   if(!_seek_to_edge_min_feature_id(min_f1id, min_f2id)) {
     fprintf(stderr, "seek_to_edge_min_feature_id failed so seek to begining\n");
     if(!_seek_to_datarow(1)) { return; }
   }
+
+  //the seek_to_edge_min_feature_id is not reliable, so disabling for now and always scan entire file
+  //if(!_seek_to_datarow(1)) { return; }
   
   //stream the edges and find those matching the fids query and put into streambuffer
   if(_data_line_ptr==NULL) { return; } //problem;
 
-  gettimeofday(&endtime, NULL);
-  timersub(&endtime, &starttime, &difftime);
-  fprintf(stderr, "OSCFileDB::_stream_edges setup and seek %1.6f msec\n\n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+  //gettimeofday(&endtime, NULL);
+  //timersub(&endtime, &starttime, &difftime);
+  //fprintf(stderr, "OSCFileDB::_stream_edges setup and seek %1.6f msec\n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
 
   vector<EEDB::Tools::OSC_column>  *cols = oscfileparser()->columns();
   EEDB::Tools::OSC_column* idcol = NULL;
@@ -1399,9 +1408,9 @@ void EEDB::SPStreams::OSCFileDB::_stream_edges(map<string, EEDB::Feature*> fid_h
     fprintf(stderr, "error finding the edgef1_id and edgef2_id columns");
     return;
   }
-  fprintf(stderr, "%s\n", idcol->display_desc().c_str());
-  fprintf(stderr, "%s\n", f1col->display_desc().c_str());
-  fprintf(stderr, "%s\n", f2col->display_desc().c_str());
+  //fprintf(stderr, "%s\n", idcol->display_desc().c_str());
+  //fprintf(stderr, "%s\n", f1col->display_desc().c_str());
+  //fprintf(stderr, "%s\n", f2col->display_desc().c_str());
   //sleep(3);
   
   long int count=0;
@@ -1409,15 +1418,17 @@ void EEDB::SPStreams::OSCFileDB::_stream_edges(map<string, EEDB::Feature*> fid_h
     
     oscfileparser()->segment_line(_data_line_ptr);
 
-    long int edge_id = strtol(idcol->data, NULL, 10);
+    //long int edge_id = strtol(idcol->data, NULL, 10);
     long int f1id = strtol(f1col->data, NULL, 10);
     long int f2id = strtol(f2col->data, NULL, 10);
     //printf("id=%ld   f1=%ld   f2=%ld\n", edge_id, f1id, f2id);
     
+    //the fancy code was unreliable so now a simple index on f1id and only use index for f1id
+    // none of these speed ups work, need to scan whole file always
     if((min_f1id>=0) && (f1id<min_f1id) && (min_f2id<0)) {
       //if(((min_f1id>=0) && (f1id<min_f1id)) || ((min_f2id>=0) && (f2id<min_f2id))) {
       //if((f1id<min_fid) && (f2id<min_fid)) {
-      fprintf(stderr, "skip [%ld] %ld %ld before mins\n", edge_id, f1id, f2id);
+      //fprintf(stderr, "skip [%ld] %ld %ld before mins\n", edge_id, f1id, f2id);
       _prepare_next_line();
       continue;
     }
@@ -1425,15 +1436,26 @@ void EEDB::SPStreams::OSCFileDB::_stream_edges(map<string, EEDB::Feature*> fid_h
     //new stop logic
     if((max_f1id>=0) && (f1id>max_f1id) && (max_f2id<0)) {
       //if(((max_f1id<0) || (f1id>max_f1id)) && ((max_f2id<0) || (f2id>max_f2id))) {
-      fprintf(stderr, "[%ld]  %ld %ld stop!\n", edge_id, f1id, f2id);
+      //fprintf(stderr, "[%ld]  %ld %ld stop!\n", edge_id, f1id, f2id);
       break; //finished
     }
     
     if(fid_hash.empty() || (f1ids.find(f1id) != f1ids.end()) || (f2ids.find(f2id) != f2ids.end())) {
-      count++;
       EEDB::Edge *edge = oscfileparser()->convert_segmented_columns_to_edge();
       if(edge) {
         edge->peer_uuid(peer_uuid());
+
+        //perform edge metadata filter
+        if(!filter_logic.empty()) {
+          EEDB::MetadataSet  *mdset = edge->metadataset();
+          if((mdset != NULL) and (!(mdset->check_by_filter_logic(filter_logic)))) {
+            edge->release();
+            _prepare_next_line();
+            continue;
+          }
+        }
+
+        count++;
         streambuffer->add_object(edge);
         //fprintf(stderr, "%s\n", edge->xml().c_str());
         //fprintf(stderr, "match [%ld] %ld %ld\n", edge_id, f1id, f2id);
@@ -1450,7 +1472,7 @@ void EEDB::SPStreams::OSCFileDB::_stream_edges(map<string, EEDB::Feature*> fid_h
   
   gettimeofday(&endtime, NULL);
   timersub(&endtime, &starttime, &difftime);
-  fprintf(stderr, "found matching %10ld edges %1.6f msec \n", count, (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+  fprintf(stderr, "OSCFileDB::stream_edges finished: %ld edges %1.6f msec \n", count, (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
   return;
 }
 
@@ -1489,7 +1511,7 @@ bool  EEDB::SPStreams::OSCFileDB::_seek_to_edge_min_feature_id(long int min_f1id
   do {
     int read_bytes = read(_efidx_fd, &efidx_entry, 24);
     if(read_bytes != 24) { fprintf(stderr, "not read 24\n"); break; }
-    fprintf(stderr,"egidx [%ld, %ld] (%ld, %ld) -- %ld \n", min_f1id, min_f2id, efidx_entry.feature1_id, efidx_entry.feature2_id, efidx_entry.offset);
+    //fprintf(stderr,"egidx [%ld, %ld] (%ld, %ld) -- %ld \n", min_f1id, min_f2id, efidx_entry.feature1_id, efidx_entry.feature2_id, efidx_entry.offset);
     if((min_f1id>=0) && (efidx_entry.feature1_id >= min_f1id)) { break; }
     //if(((min_f1id>=0) && (efidx_entry.feature1_id >= min_f1id)) ||
     //   ((min_f2id>=0) && (efidx_entry.feature2_id >= min_f2id))) { break; }
@@ -1973,6 +1995,7 @@ bool  EEDB::SPStreams::OSCFileDB::upgrade_db() {
     source->metadataset()->remove_metadata_like("eedb:owner_nickname","");
     source->metadataset()->remove_metadata_like("eedb:owner_email","");
     source->metadataset()->remove_metadata_like("eedb:owner_uuid","");
+    source->metadataset()->remove_metadata_like("eedb:dbid","");
   }
 
   //last step write out the XML database
@@ -2002,6 +2025,7 @@ bool  EEDB::SPStreams::OSCFileDB::save_xmldb() {
     source->metadataset()->remove_metadata_like("eedb:owner_nickname","");
     source->metadataset()->remove_metadata_like("eedb:owner_email","");
     source->metadataset()->remove_metadata_like("eedb:owner_uuid","");
+    source->metadataset()->remove_metadata_like("eedb:dbid","");
     if(!owner_ident.empty()) { source->owner_identity(owner_ident); }
   }
 
@@ -3257,11 +3281,13 @@ bool  EEDB::SPStreams::OSCFileDB::_create_edge_osc_filedb() {
 
 
   //
-  // sort the edge file based in the maximum f1id/f2id which is stored in column 1
+  // sort the edge file 
+  //   old: based in the maximum f1id/f2id which is stored in column 1
+  //   now: f1id (k2) then f2id (k3)
   //
   string sorted_path = _oscdb_dir + "/edges.sorted";
   //string cmd = "sort -n -k1 -k2 -k3 ";
-  string cmd = "sort -n -k2 -k3 ";  //TODO: possible new logic to favor forward searches
+  string cmd = "sort -n -k2 -k3 ";  //new logic to favor forward searches (f1id)
   cmd += edges_file +" > " + sorted_path;
   fprintf(stderr, "%s\n", cmd.c_str());
   system(cmd.c_str());

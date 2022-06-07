@@ -1,4 +1,4 @@
-/* $Id: DemultiplexSource.cpp,v 1.3 2020/01/27 10:11:05 severin Exp $ */
+/* $Id: DemultiplexSource.cpp,v 1.4 2022/02/02 11:01:31 severin Exp $ */
 
 /***
 
@@ -180,6 +180,10 @@ void EEDB::SPStreams::DemultiplexSource::_xml(string &xml_buffer) {
     _demux_mdata[i]->xml(xml_buffer);
   }
   xml_buffer.append("</demux_mdata>");
+  
+  if(!_demux_source_mdkey.empty()) { 
+    xml_buffer += "<demux_source_mdkey>"+_demux_source_mdkey+"</demux_source_mdkey>";
+  }
 
   _xml_end(xml_buffer);  //from superclass
 }
@@ -208,6 +212,10 @@ EEDB::SPStreams::DemultiplexSource::DemultiplexSource(void *xml_node) {
   
   if((node = root_node->first_node("side_linking_mdkey")) != NULL) { 
     _side_linking_mdkey=node->value();
+  }
+
+  if((node = root_node->first_node("demux_source_mdkey")) != NULL) { 
+    _demux_source_mdkey=node->value();
   }
 
   if((node = root_node->first_node("full_demux")) != NULL) {
@@ -368,6 +376,22 @@ bool  EEDB::SPStreams::DemultiplexSource::_demux_source_for_feature(EEDB::Featur
   if(_demux_source_mode == FEATURESOURCE) {
     EEDB::FeatureSource *fsrc = feature->feature_source();
     if(!fsrc) { return false; }
+
+    //if we have a source_demux_mdkey we can append additional source mdata
+    EEDB::MetadataSet*  mdset2 = fsrc->metadataset();
+    if(!_demux_source_mdkey.empty()) {
+      EEDB::Metadata *md2 = mdset2->find_metadata(_demux_source_mdkey, "");  
+      if(md2) {
+        //fprintf(stderr, "found demux key[%s]  value[%s]\n", md2->type().c_str(), md2->data().c_str());
+        if(!demux_key.empty()) { demux_key += "_"; }
+        demux_key += md2->data();
+      } else if(!fsrc->display_name().empty() && (_demux_source_mdkey == "name")) {
+        //fprintf(stderr, "found demux key[%s]  value[%s]\n", md1->type().c_str(), feature->primary_name().c_str());
+        if(!demux_key.empty()) { demux_key += "_"; }
+        demux_key += fsrc->display_name();
+      }
+    }
+    
     EEDB::FeatureSource *demux_fsrc = (EEDB::FeatureSource*)fsrc->subsource_for_key(demux_key);
     if(!demux_fsrc) {         
       fprintf(stderr, "demux failed to return a FeatureSource");
@@ -392,6 +416,22 @@ bool  EEDB::SPStreams::DemultiplexSource::_demux_source_for_feature(EEDB::Featur
     for(unsigned int i=0; i<expression.size(); i++) {
       EEDB::Experiment *exp = expression[i]->experiment();
       if(!exp) { continue; }
+      
+      //if we have a source_demux_mdkey we can append additional source mdata
+      EEDB::MetadataSet*  mdset2 = exp->metadataset();
+      if(!_demux_source_mdkey.empty()) {
+        EEDB::Metadata *md2 = mdset2->find_metadata(_demux_source_mdkey, "");  
+        if(md2) {
+          //fprintf(stderr, "found demux key[%s]  value[%s]\n", md2->type().c_str(), md2->data().c_str());
+          if(!demux_key.empty()) { demux_key += "_"; }
+          demux_key += md2->data();
+        } else if(!exp->display_name().empty() && (_demux_source_mdkey == "name")) {
+          //fprintf(stderr, "found demux key[%s]  value[%s]\n", md1->type().c_str(), feature->primary_name().c_str());
+          if(!demux_key.empty()) { demux_key += "_"; }
+          demux_key += exp->display_name();
+        }
+      }
+            
       EEDB::Experiment *demux_exp = (EEDB::Experiment*)exp->subsource_for_key(demux_key);
       if(!demux_exp) {         
         fprintf(stderr, "demux failed to return a DataSource\n");

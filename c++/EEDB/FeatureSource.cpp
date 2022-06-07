@@ -1,4 +1,4 @@
-/*  $Id: FeatureSource.cpp,v 1.131 2018/12/05 00:34:23 severin Exp $ */
+/*  $Id: FeatureSource.cpp,v 1.133 2021/06/25 04:24:51 severin Exp $ */
 
 /***
 NAME - EEDB::FeatureSource
@@ -124,12 +124,14 @@ EEDB::DataSource* EEDB::FeatureSource::_copy(EEDB::DataSource* copy) {
   if(!copy) { copy = new EEDB::FeatureSource; }
 
   EEDB::DataSource::_copy(copy);
-
-  EEDB::FeatureSource *fsrc = (EEDB::FeatureSource*)copy;
-  fsrc->_category         = _category;
-  fsrc->_import_source    = _import_source;
-  fsrc->_comments         = _comments;
-  fsrc->_feature_count    = _feature_count;
+  
+  if(copy->classname() == EEDB::FeatureSource::class_name) {
+    EEDB::FeatureSource *fsrc = (EEDB::FeatureSource*)copy;
+    fsrc->_category         = _category;
+    fsrc->_import_source    = _import_source;
+    fsrc->_comments         = _comments;
+    fsrc->_feature_count    = _feature_count;
+  }
   
   //fprintf(stderr, "FeatureSource::_copy finished\n");
   return copy;
@@ -355,6 +357,7 @@ void EEDB::FeatureSource::parse_metadata_into_attributes() {
   if(!_owner_identity.empty()) { 
     _metadataset.add_metadata("eedb:owner_email", _owner_identity);
   }
+  _metadataset.add_metadata("eedb:dbid", db_id());
 }
 
 

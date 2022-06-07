@@ -1,15 +1,17 @@
-/* $Id: SiteFinder.h,v 1.3 2021/11/21 01:38:57 severin Exp $ */
+/* $Id: DumbBellToEdge.h,v 1.5 2021/06/29 02:06:46 severin Exp $ */
 
 /***
 
-NAME - EEDB::SPStreams::SiteFinder
+NAME - EEDB::SPStreams::DumbBellToEdge
 
 SYNOPSIS
 
 DESCRIPTION
 
-Abstract superclass for all stream signal-processing modules. 
-SPStream is short hand for Signal-Process-Stream
+Converts Dumb-bell style features (with subfeatures) to a Edge object. To ease loading and processing
+for intra-chromosomal data. Pair data can be converted into a BED12 "dumb bell" where pair-feature1 is the 
+first block and pair-feature2 is the last block and the distance of the pair is the edge connecting
+the pairs.
 
 CONTACT
 
@@ -49,8 +51,8 @@ The rest of the documentation details each of the object methods. Internal metho
 
 ***/
 
-#ifndef _EEDB_SPSTREAMS_SITEFINDER_H
-#define _EEDB_SPSTREAMS_SITEFINDER_H
+#ifndef _EEDB_SPSTREAMS_DUMBBELLTOEDGE_H
+#define _EEDB_SPSTREAMS_DUMBBELLTOEDGE_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -60,6 +62,8 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <deque>
 #include <EEDB/SPStream.h>
 #include <EEDB/Feature.h>
+#include <EEDB/Edge.h>
+#include <EEDB/EdgeSource.h>
 
 using namespace std;
 using namespace MQDB;
@@ -67,54 +71,35 @@ using namespace MQDB;
 namespace EEDB {
 
 namespace SPStreams {
-
-  struct pwm_e {
-    double m[5];
-    double p[5];
-    double w[5];
-  };
   
-class SiteFinder : public EEDB::SPStream {
+class DumbBellToEdge : public EEDB::SPStream {
   public:  //global class level
     static const char*  class_name;
   
   public:
-    SiteFinder();                // constructor
-    SiteFinder(void *xml_node);  // constructor using a rapidxml <spstream> description
-   ~SiteFinder();                // destructor
-    void init();                 // initialization method
+    DumbBellToEdge();                // constructor
+    DumbBellToEdge(void *xml_node);  // constructor using a rapidxml <spstream> description
+   ~DumbBellToEdge();                // destructor
+    void init();                     // initialization method
 
     string display_contents();
 
-    void   site_name(string value);
-    void   output_strand(string value);
-    void   iupac_sequence(string value);
-    void   parse_jaspar_to_pwm(string jaspar_matrix);
-    void   parse_raw_pwm(string pwm_matrix);
-  
-    void   clear_pw_matrix();
-    void   add_iupac_to_pwm(char value);
-  
-  protected:
-    string                   _iupac_seq;
-    string                   _site_name;
-    vector< struct pwm_e >   _pw_matrix;
-    double                   _score_cutoff;
-    long                     _mismatches;
-    char                     _search_strand;
-  
-    long int              _sequence_start;
-    string                _sequence;
-    long int              _current_start;
-    long int              _current_count;
-    char                  _current_strand;
-    EEDB::Chrom*          _region_chrom;
-    EEDB::FeatureSource*  _feature_source;
-  
-    bool                  _check_sequence(string seq);
-    double                _pw_score_sequence(string seq);
-    bool                  _load_next_sequence();
-  
+    void   add_subfeature_category_filter(string value) { _subfeat_filter_categories[value] = true; }    
+    void   transfer_expression(bool value) { _transfer_expression = value; }
+
+  protected: 
+    map<string,bool>             _subfeat_filter_categories;
+    bool                         _transfer_expression;
+
+    map<string, EEDB::EdgeSource*>     _edge_source_hash;  //from fsrcID -> dynamic edge_source
+    map<string, EEDB::DataSource*>     _sources_cache;
+    EEDB::SPStreams::StreamBuffer*     _source_streambuffer;
+
+    EEDB::Edge*                      _process_feature(EEDB::Feature* feature);
+    EEDB::EdgeSource*                _dynamic_edge_source(EEDB::Feature* feature);
+    EEDB::EdgeSource*                _dynamic_edge_source(EEDB::DataSource* source);
+    void                             _cache_datasource(EEDB::DataSource* source);
+
   //used for callback functions, should not be considered open API
   public:
     void               _xml(string &xml_buffer);
@@ -123,7 +108,8 @@ class SiteFinder : public EEDB::SPStream {
     void               _stream_clear();
     void               _reset_stream_node();
     bool               _stream_by_named_region(string assembly_name, string chrom_name, long int start, long int end);
-
+    void               _reload_stream_data_sources();
+    void               _stream_data_sources(string classname, string filter_logic);
 
 };
 

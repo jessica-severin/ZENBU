@@ -1,4 +1,4 @@
-/* $Id: SourceStream.cpp,v 1.157 2018/04/16 08:26:01 severin Exp $ */
+/* $Id: SourceStream.cpp,v 1.158 2020/03/02 08:27:06 severin Exp $ */
 
 /***
 
@@ -113,8 +113,8 @@ bool _spstream_sourcestream_stream_by_named_region_func(EEDB::SPStream* node, st
 bool _spstream_sourcestream_fetch_features_func(EEDB::SPStream* node, map<string, EEDB::Feature*> &fid_hash) {
   return ((EEDB::SPStreams::SourceStream*)node)->_fetch_features(fid_hash);
 }
-void _spstream_sourcestream_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash) {
-  ((EEDB::SPStreams::SourceStream*)node)->_stream_edges(fid_hash);
+void _spstream_sourcestream_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash, string filter_logic) {
+  ((EEDB::SPStreams::SourceStream*)node)->_stream_edges(fid_hash, filter_logic);
 }
 void _spstream_sourcestream_stream_all_features_func(EEDB::SPStream* node) {
   ((EEDB::SPStreams::SourceStream*)node)->_stream_all_features();
@@ -558,7 +558,7 @@ bool  EEDB::SPStreams::SourceStream::_fetch_features(map<string, EEDB::Feature*>
 }
 
 
-void  EEDB::SPStreams::SourceStream::_stream_edges(map<string, EEDB::Feature*> fid_hash) {
+void  EEDB::SPStreams::SourceStream::_stream_edges(map<string, EEDB::Feature*> fid_hash, string filter_logic) {
   if(_database ==NULL) { return; }
   if(!_source_is_active) { return; }
   if(_peer_uuid==NULL) { return; }

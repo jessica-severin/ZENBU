@@ -1,4 +1,4 @@
-/*  $Id: Configuration.cpp,v 1.57 2018/03/20 02:38:22 severin Exp $ */
+/*  $Id: Configuration.cpp,v 1.58 2021/10/07 04:08:29 severin Exp $ */
 
 /***
 NAME - EEDB::Configuration
@@ -167,6 +167,7 @@ void EEDB::Configuration::_xml(string &xml_buffer) {
   EEDB::MetadataSet *mdset = metadataset();
   if(mdset!=NULL) { mdset->xml_nokeywords(xml_buffer); }
 
+  /*
   if(_load_fixed_id_history()) {
     xml_buffer += "<fixed_id_history>";
     for(unsigned j=0; j<_fixed_id_history.size(); j++) {
@@ -177,6 +178,7 @@ void EEDB::Configuration::_xml(string &xml_buffer) {
     }
     xml_buffer += "</fixed_id_history>";
   }
+  */
 
   _xml_end(xml_buffer);
 }

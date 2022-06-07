@@ -1,4 +1,4 @@
-/* $Id: Edge.cpp,v 1.93 2020/01/08 05:53:07 severin Exp $ */
+/* $Id: Edge.cpp,v 1.100 2021/06/29 02:00:00 severin Exp $ */
 
 /***
 
@@ -53,6 +53,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <string>
 #include <sqlite3.h>
 #include <stdarg.h>
+#include <rapidxml.hpp>  //rapidxml must be include before boost
 
 #include <MQDB/MappedQuery.h>
 #include <EEDB/Edge.h>
@@ -289,16 +290,21 @@ void EEDB::Edge::_xml_start(string &xml_buffer) {
     xml_buffer.append(buffer);
   }
   */
+  
+  bool show_feat1 = false;
+  bool show_feat2 = false;
+  
   if(!feature1_dbid().empty()) {
     xml_buffer.append(" f1id=\"");
     xml_buffer.append(feature1_dbid());
     xml_buffer.append("\"");
-  }
+  } else { show_feat1 = true; }
+  
   if(!feature2_dbid().empty()) {
     xml_buffer.append(" f2id=\"");
     xml_buffer.append(feature2_dbid());
     xml_buffer.append("\"");
-  }
+  } else { show_feat2 = true; }
 
   if(edge_source()) { 
     xml_buffer.append(" esrc_id=\"");
@@ -315,6 +321,18 @@ void EEDB::Edge::_xml_start(string &xml_buffer) {
     xml_buffer += "\n";
   }
   
+  if(show_feat1 && feature1()) { 
+    xml_buffer.append("<feature1>");
+    feature1()->xml_interchange(xml_buffer,0);
+    xml_buffer.append("</feature1>\n");
+  }
+
+  if(show_feat2 && feature2()) { 
+    xml_buffer.append("<feature2>");
+    feature2()->xml_interchange(xml_buffer,0);
+    xml_buffer.append("</feature2>\n");
+  }
+
   //for now I need to leave this in. the jscript is still not
   //smart enough to efficiently connect external edgesources 2012-05-29
   //if(edge_source()) { edge_source()->simple_xml(xml_buffer); }
@@ -335,22 +353,85 @@ void EEDB::Edge::_xml(string &xml_buffer) {
   EEDB::MetadataSet *mdset = metadataset();
   if(mdset!=NULL) { mdset->xml(xml_buffer); }
 
-/*
-  if(feature1()) { 
-    xml_buffer.append("<feature1>");
-    feature1()->xml(xml_buffer);
-    xml_buffer.append("</feature1>\n");
-  }
-
-  if(feature2()) { 
-    xml_buffer.append("<feature2>");
-    feature2()->xml(xml_buffer);
-    xml_buffer.append("</feature2>\n");
-  }
-*/
   _xml_end(xml_buffer);
 }
 
+
+bool EEDB::Edge::init_from_xml(void *xml_node) {
+  // using a rapidxml node
+  init();
+  if(xml_node==NULL) { return false; }
+  
+  rapidxml::xml_node<>      *root_node = (rapidxml::xml_node<>*)xml_node;
+  rapidxml::xml_attribute<> *attr;
+  rapidxml::xml_node<>      *node;
+  
+  if(strcmp(root_node->name(), "edge")!=0) { return false; }
+  
+  if((attr = root_node->first_attribute("esrc_id"))) { 
+    _edge_source = (EEDB::EdgeSource*)EEDB::DataSource::sources_cache_get(attr->value());
+    if(_edge_source) { _edge_source->retain(); }
+  } else if((node = root_node->first_node("edgesource")) != NULL) {
+    if((attr = node->first_attribute("id"))) {
+      _edge_source = (EEDB::EdgeSource*)EEDB::DataSource::sources_cache_get(attr->value());
+      if(_edge_source) { 
+        _edge_source->retain();
+      } else {
+        _edge_source = new EEDB::EdgeSource(node);
+        EEDB::DataSource::add_to_sources_cache(_edge_source);
+      }
+    }
+  }
+
+  if((attr = root_node->first_attribute("id")))       { db_id(attr->value()); }
+  if((attr = root_node->first_attribute("dir")))      { direction(attr->value()[0]); }
+  
+  if((attr = root_node->first_attribute("fid1"))) { 
+    _feature1_dbid = attr->value();
+    //TODO: need to parse to get feature1_id
+  }
+  if((attr = root_node->first_attribute("fid2"))) { 
+    _feature2_dbid = attr->value();
+    //TODO: need to parse to get feature1_id
+  }
+  
+  //_last_update TODO
+  
+  //chrom(): for now features will always be pulled from systems where the chrom is set externally
+      
+  // metadata
+  if((node = root_node->first_node("mdata")) != NULL) {
+    while(node) {
+      EEDB::Metadata *mdata = new EEDB::Metadata(node);
+      _metadataset.add_metadata(mdata);
+      node = node->next_sibling("mdata");
+    }    
+  }
+  if((node = root_node->first_node("symbol")) != NULL) {
+    while(node) {
+      EEDB::Symbol *mdata = new EEDB::Symbol(node);
+      _metadataset.add_metadata(mdata);
+      node = node->next_sibling("symbol");
+    }    
+  }
+  _metadata_loaded = true;
+  
+  // edgeweight
+  if((node = root_node->first_node("edgeweight")) != NULL) {
+    while(node) {
+      EEDB::EdgeWeight *edgeweight = EEDB::EdgeWeight::realloc();
+      if(edgeweight->init_from_xml(node)) {
+        _edgeweight_array.push_back(edgeweight);
+      } else {
+        fprintf(stderr, "failed to init xml edgeweight\n");
+        edgeweight->release();
+      }
+      node = node->next_sibling("edgeweight");
+    }    
+  }
+//  _expression_loaded = true;
+  return true;
+}
 
 
 ////////////////////////////////////////////////////
@@ -405,6 +486,40 @@ void  EEDB::Edge::feature2_id(long int id) {
   _feature2_dbid = "";
 }
 
+char  EEDB::Edge::direction() { 
+  return _direction;
+}
+
+void  EEDB::Edge::direction(char value) { 
+  _direction = value; 
+}
+
+
+void EEDB::Edge::calc_direction() {
+  _direction = '=';  // spc, =, +, -, C, D
+  if(!feature1() || !feature2()) { return; }
+
+  if(_feature1->strand() == _feature2->strand()) { 
+    //fprintf(stderr, "f1 f2 same strand\n"); 
+    if(_feature1->strand() == '+') { _direction = '+'; }
+    if(_feature1->strand() == '-') { _direction = '-'; }
+  }
+  else {
+    if(_feature1->strand() == '-' && _feature2->strand()=='+') { 
+      //fprintf(stderr, "f1 f2 divergent <->\n");
+      _direction = 'D';
+    }
+    else if(_feature1->strand() == '+' && _feature2->strand()=='-') { 
+      //fprintf(stderr, "f1 f2 convergent >-<\n");
+      _direction = 'C';
+    }
+    else { 
+      //fprintf(stderr, "f1 f2 different strands\n");
+    }
+  }
+}
+
+        
 // lazy load object methods
 EEDB::MetadataSet*   EEDB::Edge::metadataset() {
   if(!_metadata_loaded) {
@@ -433,12 +548,12 @@ EEDB::EdgeSource*  EEDB::Edge::edge_source() {
 }
 
 void  EEDB::Edge::edge_source(EEDB::EdgeSource* obj) {
+  if(obj != NULL) { obj->retain(); }
   if(_edge_source != NULL) { _edge_source->release(); }
   _edge_source = obj;
   _edge_source_id = -1;
   _feature1_dbid = "";
   _feature2_dbid = "";
-  if(_edge_source != NULL) { _edge_source->retain(); }
 }
 
 
@@ -472,6 +587,25 @@ void  EEDB::Edge::feature2(EEDB::Feature* obj) {
   _feature2_id = -1;
   if(_feature2 != NULL) { _feature2->retain(); }
 }
+
+long int  EEDB::Edge::chrom_start() {
+  long f1start=-1,  f2start=-1;
+  if(feature1()) { f1start = feature1()->chrom_start(); }
+  if(feature2()) { f2start = feature2()->chrom_start(); }
+  if(f1start>0 && f1start<=f2start) { return f1start; }
+  if(f2start>0 && f2start<=f1start) { return f2start; }
+  return f1start;
+}
+
+long int  EEDB::Edge::chrom_end() {
+  long f1end=-1,  f2end=-1;
+  if(feature1()) { f1end = feature1()->chrom_end(); }
+  if(feature2()) { f2end = feature2()->chrom_end(); }
+  if(f1end>0 && f1end>=f2end) { return f1end; }
+  if(f2end>0 && f2end>=f1end) { return f2end; }
+  return f1end;
+}
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -772,7 +906,7 @@ void  EEDB::Edge::merge_edges(vector<EEDB::Edge*> &edges) {
 
 
 /*
-# $Id: Edge.cpp,v 1.93 2020/01/08 05:53:07 severin Exp $
+# $Id: Edge.cpp,v 1.100 2021/06/29 02:00:00 severin Exp $
 =head1 NAME - EEDB::Edge
 
 =head1 SYNOPSIS

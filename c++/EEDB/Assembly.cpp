@@ -1,4 +1,4 @@
-/*  $Id: Assembly.cpp,v 1.65 2019/03/26 07:06:56 severin Exp $ */
+/*  $Id: Assembly.cpp,v 1.66 2020/02/05 02:30:49 severin Exp $ */
 
 /*******
 
@@ -395,6 +395,11 @@ void  EEDB::Assembly::release_date(time_t value) {
 
 void  EEDB::Assembly::sequence_loaded(bool value) {
   _sequence_loaded = value;
+  if(_database && _primary_db_id>0) {
+    const char* val = "";
+    if(_sequence_loaded) { val = "y"; }
+    _database->do_sql("UPDATE assembly set sequence_loaded=? where assembly_id=?", "sd", val, _primary_db_id);
+  }
   _xml_cache.clear();
 }
 
@@ -787,7 +792,7 @@ vector<EEDB::Assembly*>  EEDB::Assembly::fetch_from_NCBI_by_search(string search
   ////if(!curl) { return assembly_array; }
   
   struct RSS_curl_buffer  chunk;
-  struct curl_slist *slist = NULL;
+  //struct curl_slist *slist = NULL;
   chunk.memory = NULL;  // will be grown as needed
   chunk.size = 0;    // no data at this point
   chunk.alloc_size = 0;    // no data at this point

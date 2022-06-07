@@ -1,4 +1,4 @@
-/* $Id: ConfigServer.cpp,v 1.130 2019/07/31 06:59:15 severin Exp $ */
+/* $Id: ConfigServer.cpp,v 1.131 2020/10/02 11:27:20 severin Exp $ */
 
 /***
 
@@ -1175,6 +1175,17 @@ void  EEDB::WebServices::ConfigServer::_register_view_config() {
     config->link_to_collaboration(collaboration); 
   }
   
+  if(_parameters.find("fixed_id")!=_parameters.end()) { 
+    string fixed_id = _parameters["fixed_id"];
+    //perform the fixed_id relink (unlink previous, set current)
+    string check_msg, check_status;
+    if(config->check_fixed_id_editor(fixed_id, _user_profile, check_status, check_msg)) {
+      if(config->assign_to_fixed_id(fixed_id, _user_profile)) { 
+        fprintf(stderr, "assigned view %s to fixed_id [%s]\n", config->uuid().c_str(), config->fixed_id().c_str()); 
+      }
+    }
+  }
+
   //now increment usage and update user last_config
   config->update_usage();
   _session_data["last_view_config"] = config->uuid();

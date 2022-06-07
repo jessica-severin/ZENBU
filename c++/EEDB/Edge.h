@@ -1,4 +1,4 @@
-/* $Id: Edge.h,v 1.11 2020/01/08 05:53:07 severin Exp $ */
+/* $Id: Edge.h,v 1.15 2021/06/29 02:00:00 severin Exp $ */
 
 /***
 
@@ -81,6 +81,8 @@ class Edge : public MQDB::MappedQuery {
    ~Edge();                 // destructor
     void init();            // initialization method
 
+    bool init_from_xml(void *xml_node);  // using a rapidxml node
+
     EEDB::Edge*           copy();
     EEDB::Edge*           copy(EEDB::Edge* copy);
 
@@ -91,9 +93,12 @@ class Edge : public MQDB::MappedQuery {
     EEDB::Feature*        feature1();
     EEDB::Feature*        feature2();
 
+    long int              chrom_start();
+    long int              chrom_end();
+
     //string                sub_type() { return _sub_type; }
     //double                weight() { return _weight; }
-    char                  direction() { return _direction; }
+    char                  direction();
     long int              feature1_id();
     string                feature1_dbid();
     long int              feature2_id();
@@ -114,12 +119,13 @@ class Edge : public MQDB::MappedQuery {
     void                  feature2_id(long int id);
     //void                  sub_type(string value) { _sub_type = value; }
     //void                  weight(double value)   { _weight = value; }
-    void                  direction(char value)   { _direction = value; }
+    void                  direction(char value);
+    void                  calc_direction(); //based on f1/f2 strands
 
     //display and export
-    void display_info();
-    string display_desc();
-    string display_contents();
+    void     display_info();
+    string   display_desc();
+    string   display_contents();
 
     //bool check_exists_db(Database *db);
     bool store(MQDB::Database *db);

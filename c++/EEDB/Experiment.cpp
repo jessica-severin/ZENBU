@@ -1,4 +1,4 @@
-/*  $Id: Experiment.cpp,v 1.118 2018/12/05 00:35:20 severin Exp $ */
+/*  $Id: Experiment.cpp,v 1.120 2021/06/25 04:24:51 severin Exp $ */
 
 /***
 NAME - EEDB::Experiment
@@ -116,11 +116,13 @@ EEDB::DataSource* EEDB::Experiment::_copy(EEDB::DataSource* copy) {
   if(!copy) { copy = new EEDB::Experiment; }
 
   EEDB::DataSource::_copy(copy);
-
-  EEDB::Experiment *exp = (EEDB::Experiment*)copy;
-  exp->_platform          = _platform;
-  exp->_series_name       = _series_name;
-  exp->_series_point      = _series_point;
+  
+  if(copy->classname() == EEDB::Experiment::class_name) {
+    EEDB::Experiment *exp = (EEDB::Experiment*)copy;
+    exp->_platform          = _platform;
+    exp->_series_name       = _series_name;
+    exp->_series_point      = _series_point;
+  }
   
   return copy;
 }
@@ -469,6 +471,8 @@ void EEDB::Experiment::parse_metadata_into_attributes() {
   if(!_owner_identity.empty()) { 
     _metadataset.add_metadata("eedb:owner_email", _owner_identity);
   }
+  _metadataset.add_metadata("eedb:dbid", db_id());
+  
 }
 
 

@@ -1,4 +1,4 @@
-/* $Id: Collaboration.cpp,v 1.108 2019/02/07 07:15:16 severin Exp $ */
+/* $Id: Collaboration.cpp,v 1.109 2021/01/22 06:02:24 severin Exp $ */
 
 /***
 
@@ -1138,6 +1138,17 @@ bool  EEDB::Collaboration::revoke_user_administrator(string user_ident) {
   return true;
 }
 
+
+bool  EEDB::Collaboration::make_public(bool value) {
+  if(!_database) { return false; }
+  if(_member_status!="OWNER" && _member_status!="ADMIN") { return false; }
+  
+  const char *sql = "UPDATE collaboration set open_to_public='y' where collaboration_id=?";
+  if(!value) { sql = "UPDATE collaboration set open_to_public='n' where collaboration_id=?"; }
+  _database->do_sql(sql, "d", _primary_db_id);
+  
+  return true;
+}
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////

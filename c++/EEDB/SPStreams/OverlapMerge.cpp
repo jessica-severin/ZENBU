@@ -1,4 +1,4 @@
-/* $Id: OverlapMerge.cpp,v 1.4 2017/02/22 07:34:23 severin Exp $ */
+/* $Id: OverlapMerge.cpp,v 1.5 2022/02/02 11:04:21 severin Exp $ */
 
 /***
 
@@ -8,9 +8,7 @@ SYNOPSIS
 
 DESCRIPTION
 
-processing module which collates expression from the primary stream
- onto features on the side stream (templates) based on genomic
- overlap logic
+simple clustering algorithm which processes features on the main stream for overalaps and merges
 
 CONTACT
 

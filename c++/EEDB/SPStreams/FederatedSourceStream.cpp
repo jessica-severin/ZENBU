@@ -1,4 +1,4 @@
-/* $Id: FederatedSourceStream.cpp,v 1.91 2017/07/24 04:21:33 severin Exp $ */
+/* $Id: FederatedSourceStream.cpp,v 1.92 2020/03/02 08:26:32 severin Exp $ */
 
 /***
 
@@ -132,9 +132,9 @@ bool _spstream_federatedsourcestream_fetch_features_func(EEDB::SPStream* node, m
   if(stream != NULL) { return stream->fetch_features(fid_hash); }
   return false;
 }
-void _spstream_federatedsourcestream_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash) {
+void _spstream_federatedsourcestream_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash, string filter_logic) {
   EEDB::SPStream* stream = ((EEDB::SPStreams::FederatedSourceStream*)node)->_build_source_stream();
-  if(stream != NULL) { return stream->stream_edges(fid_hash); }
+  if(stream != NULL) { return stream->stream_edges(fid_hash, filter_logic); }
 }
 void _spstream_federatedsourcestream_disconnect_func(EEDB::SPStream* node) {
   ((EEDB::SPStreams::FederatedSourceStream*)node)->_disconnect_stream();

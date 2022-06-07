@@ -1,4 +1,4 @@
-/* $Id: RegionServer.cpp,v 1.265 2019/07/31 06:59:15 severin Exp $ */
+/* $Id: RegionServer.cpp,v 1.267 2021/06/29 02:00:00 severin Exp $ */
 
 /***
 
@@ -1493,8 +1493,24 @@ void  EEDB::WebServices::RegionServer::_direct_show_region() {
   stream->stream_by_named_region(assembly, chrom_name, _region_start, _region_end);
   bool show_chrom=true;
   while(MQDB::DBObject *obj = stream->next_in_stream()) {
-    if(obj->classname() != EEDB::Feature::class_name) { obj->release(); continue; }
-    EEDB::Feature *feature= (EEDB::Feature*)obj; 
+    EEDB::Feature *feature = NULL;
+    EEDB::Edge    *edge = NULL;
+    if(obj->classname() == EEDB::Feature::class_name) { feature = (EEDB::Feature*)obj; }
+    if(obj->classname() == EEDB::Edge::class_name)    { edge = (EEDB::Edge*)obj; }
+
+    if(!edge && !feature) { obj->release(); continue; }
+
+    if(edge) {
+      if(format == "xml")  { 
+        edge->xml(_output_buffer); 
+      }
+      _total_count++;
+      if(_total_count<10) { check_over_memory(); }
+      if(_total_count % 100 == 0) { check_over_memory(); }
+      obj->release();
+      _output_buffer_send(true);
+      continue;
+    }
 
     if(trim_starts && (feature->chrom_start() < _region_start)) {
       //fprintf(stderr, "feature_restream from %ld, feature %ld trimmed\n", _region_start, feature->chrom_start());
@@ -1548,6 +1564,7 @@ void  EEDB::WebServices::RegionServer::_direct_show_region() {
       _output_buffer += _osctable_generator->osctable_feature_output(feature) + "\n";
     }
     if(format == "das")  { _output_buffer += feature->dasgff_xml() + "\n"; }
+
     if(format == "xml")  { 
       if(show_chrom && (feature->chrom())) { 
         show_chrom=false;

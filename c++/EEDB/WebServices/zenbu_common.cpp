@@ -1,4 +1,4 @@
-/* $Id: zenbu_common.cpp,v 1.2 2019/08/01 02:56:00 severin Exp $ */
+/* $Id: zenbu_common.cpp,v 1.3 2022/04/08 08:55:42 severin Exp $ */
 
 /***
 
@@ -92,7 +92,9 @@ void  send_email_smtp(string email, string subject, string message) {
    * of using CURLUSESSL_TRY here, because if TLS upgrade fails, the transfer
    * will continue anyway - see the security discussion in the libcurl
    * tutorial for more details. */ 
-  curl_easy_setopt(curl, CURLOPT_USE_SSL, (long)CURLUSESSL_TRY);
+  if(_smtp_server_url.find("smtps:") !=std::string::npos) {
+    curl_easy_setopt(curl, CURLOPT_USE_SSL, (long)CURLUSESSL_TRY);
+  }
   
   /* If your server doesn't have a valid certificate, then you can disable
    * part of the Transport Layer Security protection by setting the

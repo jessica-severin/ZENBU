@@ -1,8 +1,8 @@
-/* $Id: SiteFinder.h,v 1.3 2021/11/21 01:38:57 severin Exp $ */
+/* $Id: EdgeLengthFilter.h,v 1.2 2020/04/01 01:50:41 severin Exp $ */
 
 /***
 
-NAME - EEDB::SPStreams::SiteFinder
+NAME - EEDB::SPStreams::EdgeLengthFilter
 
 SYNOPSIS
 
@@ -49,17 +49,15 @@ The rest of the documentation details each of the object methods. Internal metho
 
 ***/
 
-#ifndef _EEDB_SPSTREAMS_SITEFINDER_H
-#define _EEDB_SPSTREAMS_SITEFINDER_H
+#ifndef _EEDB_SPSTREAMS_EDGELENGTHFILTER_H
+#define _EEDB_SPSTREAMS_EDGELENGTHFILTER_H
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
 #include <string>
 #include <vector>
-#include <deque>
 #include <EEDB/SPStream.h>
-#include <EEDB/Feature.h>
 
 using namespace std;
 using namespace MQDB;
@@ -68,63 +66,29 @@ namespace EEDB {
 
 namespace SPStreams {
 
-  struct pwm_e {
-    double m[5];
-    double p[5];
-    double w[5];
-  };
-  
-class SiteFinder : public EEDB::SPStream {
+class EdgeLengthFilter : public EEDB::SPStream {
   public:  //global class level
     static const char*  class_name;
-  
+
   public:
-    SiteFinder();                // constructor
-    SiteFinder(void *xml_node);  // constructor using a rapidxml <spstream> description
-   ~SiteFinder();                // destructor
-    void init();                 // initialization method
+    EdgeLengthFilter();                // constructor
+    EdgeLengthFilter(void *xml_node);  // constructor using a rapidxml <spstream> description
+   ~EdgeLengthFilter();                // destructor
+    void init();                  // initialization method
+    
+    void  min_length(long value);
+    void  max_length(long value);
 
-    string display_contents();
+  private:
+    long int   _min_length;
+    long int   _max_length;
 
-    void   site_name(string value);
-    void   output_strand(string value);
-    void   iupac_sequence(string value);
-    void   parse_jaspar_to_pwm(string jaspar_matrix);
-    void   parse_raw_pwm(string pwm_matrix);
-  
-    void   clear_pw_matrix();
-    void   add_iupac_to_pwm(char value);
-  
-  protected:
-    string                   _iupac_seq;
-    string                   _site_name;
-    vector< struct pwm_e >   _pw_matrix;
-    double                   _score_cutoff;
-    long                     _mismatches;
-    char                     _search_strand;
-  
-    long int              _sequence_start;
-    string                _sequence;
-    long int              _current_start;
-    long int              _current_count;
-    char                  _current_strand;
-    EEDB::Chrom*          _region_chrom;
-    EEDB::FeatureSource*  _feature_source;
-  
-    bool                  _check_sequence(string seq);
-    double                _pw_score_sequence(string seq);
-    bool                  _load_next_sequence();
-  
   //used for callback functions, should not be considered open API
   public:
-    void               _xml(string &xml_buffer);
-    string             _display_desc();
     MQDB::DBObject*    _next_in_stream();
-    void               _stream_clear();
     void               _reset_stream_node();
-    bool               _stream_by_named_region(string assembly_name, string chrom_name, long int start, long int end);
-
-
+    void               _xml(string &xml_buffer);
+    
 };
 
 };   //namespace SPStreams

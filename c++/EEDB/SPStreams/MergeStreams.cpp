@@ -1,4 +1,4 @@
-/* $Id: MergeStreams.cpp,v 1.53 2019/02/15 04:36:20 severin Exp $ */
+/* $Id: MergeStreams.cpp,v 1.54 2020/03/02 08:26:32 severin Exp $ */
 
 /***
 
@@ -120,10 +120,10 @@ bool _spstream_mergestreams_stream_by_named_region_func(EEDB::SPStream* node, st
   return ((EEDB::SPStreams::MergeStreams*)node)->_stream_by_named_region(assembly_name, chrom_name, start, end);  
 }
 
-void _spstream_mergestreams_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash) {
+void _spstream_mergestreams_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash, string filter_logic) {
   EEDB::SPStream* t_side_stream = node->side_stream();
-  if(node->source_stream() != NULL) { node->source_stream()->stream_edges(fid_hash); }
-  if(t_side_stream != NULL)         { t_side_stream->stream_edges(fid_hash); }
+  if(node->source_stream() != NULL) { node->source_stream()->stream_edges(fid_hash, filter_logic); }
+  if(t_side_stream != NULL)         { t_side_stream->stream_edges(fid_hash, filter_logic); }
 }
 
 void _spstream_mergestreams_stream_data_sources_func(EEDB::SPStream* node, string classname, string filter_logic) {

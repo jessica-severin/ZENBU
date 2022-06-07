@@ -1,4 +1,4 @@
-/* $Id: zenbu_upload.cpp,v 1.23 2019/07/31 07:03:48 severin Exp $ */
+/* $Id: zenbu_upload.cpp,v 1.25 2020/10/03 01:13:51 severin Exp $ */
 
 /****
  
@@ -176,6 +176,8 @@ int main(int argc, char *argv[]) {
     if(arg == "-collabs")       { _parameters["mode"] = "list_collaborations"; continue; }
     if(arg == "-collaborations") { _parameters["mode"] = "list_collaborations"; continue; }
 
+    if(arg == "-edges") { _parameters["assembly"] = "non-genomic"; _parameters["submode"] = "edges"; _parameters["strict_edge_linking"] = "on"; continue; }
+
     if(arg == "-singletag_exp") { 
       if(argvals.empty()) {
         _parameters["singletagmap_expression"] = "tagcount";
@@ -209,6 +211,11 @@ int main(int argc, char *argv[]) {
     if(arg == "-description")   { _parameters["description"] = argvals[0]; }
     if(arg == "-desc")          { _parameters["description"] = argvals[0]; }
     if(arg == "-gff_mdata")     { _parameters["gff_mdata"] = argvals[0]; }
+
+    if(arg == "-edgef1")      { _parameters["featuresource1"] = argvals[0]; }
+    if(arg == "-fsrc1")       { _parameters["featuresource1"] = argvals[0]; }
+    if(arg == "-edgef2")      { _parameters["featuresource2"] = argvals[0]; }
+    if(arg == "-fsrc2")       { _parameters["featuresource2"] = argvals[0]; }
 
     if(arg == "-filter")        { _parameters["filter"] = argvals[0]; }
 
@@ -354,6 +361,9 @@ void usage() {
   printf("    -score_exp <datatype>       : use bed score column as expression value with <datatype>\n");
   printf("    -singletag_exp <datatype>   : each line of file gets expression value of 1 with <datatype>: default 'tagcount'\n");
   //printf("    -collab_uuid <uuid>         : share this uploaded data to specified collaboration\n");
+  printf("    -edges                      : indicate that this is an edge file\n");
+  printf("    -edgef1 <source_uuid>       : for edge file, link edgef1 to this data source (uuid)\n");
+  printf("    -edgef2 <source_uuid>       : for edge file, link edgef2 to this data source (uuid)\n");
   printf("    -allow_duplicates           : do not perform the duplicate-uploads checks\n");
   printf("  -filelist <control_file>      : bulk upload files. control_file is a 4 tab-column format. Takes same additional params as -file\n");
   printf("                                    col 1- full path to file to upload\n");
@@ -620,8 +630,18 @@ bool  upload_file_prep() {
   }  
 
   if(_parameters["check_duplicates"] != "false") {
-    paramXML += "<check_duplicates>true</check_duplicates>";
+    paramXML += "<check_duplicates>true</check_duplicates>\n";
   }
+
+  if(_parameters["submode"] == "edges") {
+    paramXML += "<strict_edge_linking>"+_parameters["strict_edge_linking"]+"</strict_edge_linking>\n";
+    paramXML += "<featuresource1>"+_parameters["featuresource1"]+"</featuresource1>\n";
+    paramXML += "<featuresource2>"+_parameters["featuresource2"]+"</featuresource2>\n";
+    //<featuresource1>3741F65E-B551-48BF-90D0-48E5F3ED85EF::1:::FeatureSource</featuresource1>
+    //<featuresource2>3741F65E-B551-48BF-90D0-48E5F3ED85EF::1:::FeatureSource</featuresource2>
+    //<strict_edge_linking>on</strict_edge_linking>
+  }
+
   
   //if(_parameters.find("_collab_uuid") != _parameters.end()) { 
   //  paramXML += "<collaboration_uuid>"+_parameters["_collab_uuid"]+"</collaboration_uuid>";  
@@ -648,7 +668,7 @@ bool  upload_file_prep() {
   }
   
   paramXML += "</zenbu_query>";  
-  fprintf(stderr, "POSTi---\n%s\n", paramXML.c_str());
+  fprintf(stderr, "POST---\n%s\n", paramXML.c_str());
   
   string url = _parameters["_url"] + "/cgi/eedb_upload.cgi";  
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
@@ -1023,7 +1043,7 @@ bool  upload_file_send(string input_file) {
   gettimeofday(&endtime, NULL);
   timersub(&endtime, &starttime, &difftime);
   double duration = (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0;
-  fprintf(stderr, "  sent in %1.6f sec : %1.3f kb/sec\n", duration, file_len/1024.0/duration);
+  fprintf(stderr, "  sent in %1.6f sec : %1.3f mb/sec\n", duration, file_len/1048576.0/duration);
 
   return true;
 }    
@@ -1045,6 +1065,7 @@ bool list_uploads() {
   //map<string, long>                  peer_source_count;
   long exp_count=0;
   long fsrc_count=0;
+  long esrc_count=0;
   
   EEDB::SPStreams::FederatedSourceStream *stream = new EEDB::SPStreams::FederatedSourceStream;
   EEDB::Peer *seed = EEDB::Peer::new_from_url(_parameters["_url"]);
@@ -1097,6 +1118,7 @@ bool list_uploads() {
     EEDB::DataSource* source = (EEDB::DataSource*)obj;
     if(obj->classname() == EEDB::Experiment::class_name) { exp_count++; }
     if(obj->classname() == EEDB::FeatureSource::class_name) { fsrc_count++; }
+    if(obj->classname() == EEDB::EdgeSource::class_name) { esrc_count++; }
 
     //if(obj->primary_id() == 1) {
     my_uploads[uuid].push_back(source);
@@ -1151,7 +1173,7 @@ bool list_uploads() {
 
   }
   printf("-------------\n");
-  printf("%ld uploads --- %ld featuresources --- %ld experiments --- [%ld total sources]\n", upload_count, fsrc_count, exp_count, fsrc_count+exp_count);
+  printf("%ld uploads --- %ld featuresources --- %ld experiments --- %ld edge_sources--- [%ld total sources]\n", upload_count, fsrc_count, exp_count, esrc_count, fsrc_count+exp_count+esrc_count);
 
   //bulk share
   if(_parameters.find("_collab_uuid") != _parameters.end()) {

@@ -1,4 +1,4 @@
-/* $Id: BAMDB.cpp,v 1.67 2019/07/31 06:59:15 severin Exp $ */
+/* $Id: BAMDB.cpp,v 1.70 2022/01/10 08:37:34 severin Exp $ */
 
 /***
 
@@ -868,6 +868,7 @@ bool  EEDB::SPStreams::BAMDB::_stream_by_named_region(string asm_name, string ch
   if((_sourcestream_output == "feature") ||
      (_sourcestream_output == "express") ||
      (_sourcestream_output == "simple_express") ||
+     (_sourcestream_output == "skip_subfeatures") ||
      (_sourcestream_output == "skip_metadata")) { 
     _add_expression = true; 
   }
@@ -881,7 +882,8 @@ bool  EEDB::SPStreams::BAMDB::_stream_by_named_region(string asm_name, string ch
   }
   _add_metadata = false;
   if((_sourcestream_output == "feature") ||
-     (_sourcestream_output == "skip_expression")) {
+     (_sourcestream_output == "skip_expression") ||
+     (_sourcestream_output == "skip_subfeatures")) {
     _add_metadata = true;
   }
   
@@ -1001,7 +1003,8 @@ EEDB::Feature* EEDB::SPStreams::BAMDB::_convert_to_feature(bam1_t *al) {
   feature->feature_source(_primary_source);
   feature->significance(al->core.qual);
   feature->chrom_start(al->core.pos+1);  // position (0-based) where alignment starts
-  
+  feature->chrom_end(bam_endpos(al));  // position (0-based) where alignment starts
+
   //chrom
   if(al->core.tid >= 0) { // chr
     char* chr_name = _samlib_fp->header->target_name[al->core.tid];
@@ -1009,24 +1012,57 @@ EEDB::Feature* EEDB::SPStreams::BAMDB::_convert_to_feature(bam1_t *al) {
     feature->chrom(chrom);
     //TODO: manage multiple assemblies
   }
-  
+
   //strand
   long int flags = al->core.flag;
+  char buf[255];
+  sprintf(buf, "%ld", flags);
+  if(_add_metadata) { feature->metadataset()->add_tag_data("sam:flags", buf); }
+
   if(flags & 0x0010) { feature->strand('-'); } else { feature->strand('+'); }
   if(flags & 0x0004) { /*fprintf(stderr, "0x04 unmapped\n");*/ feature->chrom(NULL); }
   if(flags & 0x0001) {  //paired reads
     //fprintf(stderr, "paired read\n");
     //if(!(flags & 0x0002)) { /*fprintf(stderr, "0x08 pair is unaligned\n");*/ feature->chrom(NULL); }
     //if(flags & 0x0008) { /*fprintf(stderr, "0x08 pair is unaligned\n");*/ feature->chrom(NULL); }
+    if(_add_metadata) { 
+      //mate chrom, mate_start
+      if(al->core.mtid >= 0) { // chr
+        char* chr_name = _samlib_fp->header->target_name[al->core.mtid];
+        //EEDB::Chrom *mate_chrom = assembly()->get_chrom(chr_name);
+        //if(mate_chrom) { feature->metadataset()->add_tag_data("sam:mate_chrom", mate_chrom->chrom_name()); }
+        if(chr_name) { feature->mate_chrom_name(chr_name); }
+
+        long mate_start = al->core.mpos+1;
+        sprintf(buf, "%ld", mate_start);
+        //feature->metadataset()->add_tag_data("sam:mate_start", buf);
+        feature->mate_start(mate_start);
+      }
+      //feature->metadataset()->add_tag_data("sam:flag", "0x01_paired");
+      //feature->metadataset()->add_tag_data("sam:paired", "paired");
+      //if(flags & 0x0002) { feature->metadataset()->add_tag_data("sam:flag", "0x02_proper_pair"); }
+      //if(flags & 0x0008) { feature->metadataset()->add_tag_data("sam:flag", "0x08_mate_unmapped"); }
+      //if(flags & 0x0010) { feature->metadataset()->add_tag_data("sam:flag", "0x10_read_rev_strand"); }
+      //if(flags & 0x0020) { feature->metadataset()->add_tag_data("sam:flag", "0x20_mate_rev_strand"); }
+      //if(flags & 0x0040) { feature->metadataset()->add_tag_data("sam:flag", "0x40_first_in_pair"); }
+      //if(flags & 0x0080) { feature->metadataset()->add_tag_data("sam:flag", "0x80_second_in_pair"); }
+      //if(flags & 0x0040) { feature->metadataset()->add_tag_data("sam:pair", "first"); }
+      //if(flags & 0x0080) { feature->metadataset()->add_tag_data("sam:pair", "second"); }
+    }
+
     //if(flags & 0x0040) { } //fprintf(stderr, "0x40 mate1\n");
     //if(flags & 0x0080) { } //fprintf(stderr, "0x80 mate2\n");
-    if(flags & 0x0080) { //fprintf(stderr, "0x80 mate2\n");         
+    if(flags & 0x0080) { 
+      //DON'T remove! this is critical for some paired BAM files
+      //fprintf(stderr, "0x80 mate2\n");         
       if(flags & 0x0020) { feature->strand('-'); } else { feature->strand('+'); }
     }
     //if(flags & 0x0040) { feature->chrom(NULL); }  //debuging remove the first mate (only shows mate2)
     //if(flags & 0x0080) { feature->chrom(NULL); }  //debuging remove the second mated (only shows mate1)
 
-    if(_parameters["flip_mated_pair_orientation"] == "yes") {
+    //if(_parameters["flip_mated_pair_orientation"] == "yes") {
+    if((_parameters["flip_mated_pair_orientation"] == "yes") && (flags & 0x0080)) {
+      //second mate of pair gets flipped because protocol is >---< but should be >--->
       char strand = feature->strand();
       if(strand == '+') { feature->strand('-'); }
       if(strand == '-') { feature->strand('+'); }
@@ -1153,6 +1189,95 @@ EEDB::Feature* EEDB::SPStreams::BAMDB::_convert_to_feature(bam1_t *al) {
 
   // Calculates alignment end position, based on starting position and CIGAR data. (default usePadded=false, zeroBased=true)
   feature->chrom_end(feature->chrom_start() + curr_pos -1);
+
+  //if(_add_metadata) { feature->metadataset()->remove_duplicates(); }
+
+  //aux tags
+  if(_add_metadata && bam_get_l_aux(al)>0) {
+    long            aux_len = bam_get_l_aux(al);
+    unsigned char*  aux = bam_get_aux(al);
+    //printf("aux_data %ld [%s]\n", aux_len, aux);
+    
+    //binary parsing of the aux_data into ZENBU metadata
+    //TAG:TYPE:VALUE
+    //https://samtools.github.io/hts-specs/SAMtags.pdf
+    
+    //type size from bam_aux.c in htslib
+    //if (x == 'C' || x == 'c' || x == 'A') return 1;
+    //else if (x == 'S' || x == 's') return 2;
+    //else if (x == 'I' || x == 'i' || x == 'f' || x == 'F') return 4;
+    //else return 0;
+    
+    unsigned int i = 0;
+    int8_t   val1;
+    int16_t  val2;
+    int32_t  val3;
+    float    val4;
+    string   val_str;
+
+    while (i < aux_len) {
+      char tag[4];
+      memset(tag, 0, 4);
+      memcpy(tag, aux+i, 2);
+      unsigned char type = *(aux+i+2);
+      //printf("%.2s:%c:",tag, type);
+      i += 3;
+
+      switch (type) {
+        //I think it is a 1byte integer, it's not listed in the SAM documents
+        case 'c': 
+        case 'C': 
+          val1 = (int8_t)(*(aux+i));
+          //printf("%d", val1);
+          i++;
+          break;
+
+        case 's': //int16_t, 2byte int
+        case 'S':
+          val2 = (int16_t)(*(aux+i));
+          //printf("%d", val2);
+          i+=2;
+          break;
+
+        case 'i': //int32, 4 byte int
+        case 'I': 
+          val3 = (int32_t)(*(aux+i));
+          //printf("%ld", val3);
+          i+=4;
+          break;
+
+        case 'f': //4byte float
+        case 'F': 
+          val4 = (float)(*(aux+i));
+          //printf("%f", val4);
+          i+=4;
+          break;
+
+        case 'A': //char
+          val_str = (char)(*(aux+1));
+          //printf("%s", val_str.c_str());
+          //putc(*(aux+i), stdout); 
+          feature->metadataset()->add_tag_data((char*)tag, val_str);
+          i++;
+          break;
+
+        case 'Z': //string
+          val_str = (char*)(aux+i); //should be null terminated
+          while (*(aux+i) != '\0') { ++i; }
+          //while (*(aux+i) != '\0') { putc(*(aux+i), stdout); ++i; }
+          i++; //to move past \0
+          //printf("%s", val_str.c_str());
+          feature->metadataset()->add_tag_data((char*)tag, val_str);
+          break;
+       
+        default:
+          i++;
+          break;
+      }
+      //putc('\n',stdout);
+    }
+
+  }
 
   return feature;
 }

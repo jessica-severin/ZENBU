@@ -1,4 +1,4 @@
-/* $Id: DemultiplexSource.h,v 1.3 2020/01/27 10:11:05 severin Exp $ */
+/* $Id: DemultiplexSource.h,v 1.4 2022/02/02 11:01:31 severin Exp $ */
 
 /***
 
@@ -84,6 +84,7 @@ class DemultiplexSource : public EEDB::SPStreams::MergeStreams {
     enum { FEATURESOURCE, EXPERIMENT }  _demux_source_mode;
     vector<EEDB::Metadata*>             _demux_mdata;
     string                              _side_linking_mdkey;
+    string                              _demux_source_mdkey;
     bool                                _enable_full_demux;
     
     map<string, EEDB::DataSource*>      _subsource_hash;     //to track newly generated subsources  

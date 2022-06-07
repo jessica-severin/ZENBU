@@ -1,4 +1,4 @@
-/* $Id: Collaboration.h,v 1.38 2016/10/05 08:52:58 severin Exp $ */
+/* $Id: Collaboration.h,v 1.39 2021/01/22 06:02:24 severin Exp $ */
 
 /***
 
@@ -153,6 +153,7 @@ class Collaboration : public MQDB::MappedQuery {
     bool     make_user_administrator(string user_ident);
     bool     revoke_user_administrator(string user_ident);
   
+    bool     make_public(bool value); //publish collaboration
     //
     // static member function each subclass must implement this code
     // replace the "<class*> obj = new <class>" line with subclass specific class type

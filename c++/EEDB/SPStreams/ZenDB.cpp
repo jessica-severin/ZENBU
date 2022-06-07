@@ -1,4 +1,4 @@
-/* $Id: ZenDB.cpp,v 1.30 2019/07/31 06:59:15 severin Exp $ */
+/* $Id: ZenDB.cpp,v 1.31 2021/05/22 01:43:18 severin Exp $ */
 
 /***
 
@@ -782,6 +782,7 @@ bool  EEDB::SPStreams::ZenDB::save_xmldb() {
     source->metadataset()->remove_metadata_like("eedb:owner_OpenID","");
     source->metadataset()->remove_metadata_like("eedb:owner_email","");
     source->metadataset()->remove_metadata_like("eedb:owner_uuid","");
+    source->metadataset()->remove_metadata_like("eedb:dbid","");
   }
 
   //version the old XML database
