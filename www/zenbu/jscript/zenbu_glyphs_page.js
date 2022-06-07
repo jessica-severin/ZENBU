@@ -180,7 +180,7 @@ function gLyphsInit() {
 function gLyphsChangeDhtmlHistoryLocation() {
   if(zenbu_embedded_view) { return; }
   var urlID = current_region.configUUID;
-  if((current_region.view_config.type != "AUTOSAVE") && current_region.config_fixed_id) { 
+  if(current_region.view_config && (current_region.view_config.type != "AUTOSAVE") && current_region.config_fixed_id) { 
     urlID = current_region.config_fixed_id;
   }
 
@@ -1065,7 +1065,6 @@ function gLyphsUploadViewConfigXMLResponse() {
 
 function gLyphsShowConfigInfo() {
   var titlediv = document.getElementById("gLyphs_title");
-  var genomeDiv = document.getElementById("glyphs_genome_desc");
   if(!titlediv) { return; }
 
   //titlediv.setAttribute("style", "font-size:10px; font-family:arial,helvetica,sans-serif;");
@@ -1124,13 +1123,11 @@ function gLyphsShowConfigInfo() {
     span1.innerHTML += "NA";
   }
 
-
-  if(!genomeDiv) {
-    genomeDiv = document.createElement("div");
-    genomeDiv.id = "glyphs_genome_desc";
-    genomeDiv.setAttribute("style", "font-size:14px;");
+  if(!current_region.genomeDescDiv) { 
+    current_region.genomeDescDiv = document.createElement("div");
+    current_region.genomeDescDiv.setAttribute("style", "font-size:14px;");
   }
-  descdiv.appendChild(genomeDiv);
+  descdiv.appendChild(current_region.genomeDescDiv);
 }
 
 

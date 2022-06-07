@@ -718,6 +718,7 @@ function eedbDisplayTooltipObj(obj) {
   toolTipWidth=350;
   moveToMouseLoc(e);
   if(obj.classname == "Feature") { eedbFeatureTooltip(obj); }
+  if(obj.classname == "Edge")    { eedbEdgeTooltip(obj); }
   if(obj.classname == "Experiment") { eedbSourceTooltip(obj); }
   if(obj.classname == "FeatureSource") { eedbSourceTooltip(obj); }
   if(obj.classname == "Configuration") { eedbSourceTooltip(obj); }
@@ -760,6 +761,32 @@ function eedbFeatureTooltip(feature) {
   object_html += " <span style=\"font-size:12px; font-weight: bold;\">" + encodehtml(feature.name)+"</span>";
   object_html += " <span style=\"font-size:9px;\">" + encodehtml(feature.category) +" : " + encodehtml(feature.source_name) + "</span>";
   object_html += "</div>";
+  object_html += eedbFeatureInfoHTML(feature);
+  object_html += "</div>"; 
+
+  if(ns4) {
+    toolTipSTYLE.document.write(object_html);
+    toolTipSTYLE.document.close();
+    toolTipSTYLE.visibility = "visible";
+  }
+  if(ns6) {
+    //document.getElementById("toolTipLayer").innerHTML;
+    document.getElementById("toolTipLayer").innerHTML = object_html;
+    toolTipSTYLE.display='block'
+  }
+  if(ie4) {
+    document.all("toolTipLayer").innerHTML=object_html;
+    toolTipSTYLE.display='block'
+  }
+}
+
+
+function eedbFeatureInfoHTML(feature) {
+  if(!feature) return "";
+  var genloc = feature.genloc;
+  if(!genloc) { genloc =""; } else { genloc += " ::  "; }
+
+  var object_html = "";
   if(feature.description) { object_html += "<div>" + encodehtml(feature.description)+ "</div>"; }
   if(feature.gene_names) { object_html += "<div>alias: " + feature.gene_names +"</div>"; }
   if(feature.entrez_id) { object_html += "<div>EntrezID: " + feature.entrez_id +"</div>"; }
@@ -779,22 +806,8 @@ function eedbFeatureTooltip(feature) {
     object_html += "</div>"; 
   }
   if(feature.cytostain) { object_html += "<div>cytostain: " + feature.cytostain + "</div>"; }
-  object_html += "</div>";
 
-  if(ns4) {
-    toolTipSTYLE.document.write(object_html);
-    toolTipSTYLE.document.close();
-    toolTipSTYLE.visibility = "visible";
-  }
-  if(ns6) {
-    //document.getElementById("toolTipLayer").innerHTML;
-    document.getElementById("toolTipLayer").innerHTML = object_html;
-    toolTipSTYLE.display='block'
-  }
-  if(ie4) {
-    document.all("toolTipLayer").innerHTML=object_html;
-    toolTipSTYLE.display='block'
-  }
+  return object_html;
 }
 
 
@@ -879,6 +892,182 @@ function eedbSourceTooltip(source) {
     }
   }
   */
+
+  //update the tooltip
+  var tooltip = document.getElementById("toolTipLayer");
+  tooltip.innerHTML = "";
+  tooltip.appendChild(main_div);
+  toolTipSTYLE.display='block';
+}
+
+
+function eedbEdgeTooltip(edge) {
+  if(!edge) return;
+
+  toolTipWidth=350;
+  var tdiv, tspan, tinput, ta;
+  var main_div = document.createElement('div');
+  //info_div.setAttribute('style', "position:absolute; left:"+ xpos +"px; top:"+ ypos +"px;");
+  main_div.setAttribute('style', "text-align:left; font-size:10px; font-family:arial,helvetica,sans-serif; "+
+                                 "min-width:250px; z-index:60; padding: 3px 5px 3px 3px; "+
+                                 "box-sizing: border-box; border: 1px solid #808080; border-radius: 4px; "+
+                                 "background-color:#404040; color:#FDFDFD; "+
+                                 "opacity:0.85;");
+
+  if(edge.name) {
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "font-size:12px; font-weight: bold;");
+    tspan.innerHTML = edge.name;
+  }
+
+  tdiv = main_div.appendChild(document.createElement('div'));
+  if(edge.platform) {
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "font-size:9px; padding: 0px 3px 0px 0px;");
+    tspan.innerHTML = edge.platform;
+  }
+  if(edge.source) {
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "font-size:9px; padding: 0px 3px 0px 0px;");
+    tspan.innerHTML = edge.source.name;
+
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "font-size:9px; padding: 0px 3px 0px 0px;");
+    tspan.innerHTML = edge.source.category;
+  }
+  if(edge.owner_identity) {
+    //tdiv = main_div.appendChild(document.createElement('div'));
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "font-weight: bold; padding: 0px 3px 0px 2px;");
+    tspan.innerHTML = "created by: ";
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "color:green;");
+    tspan.innerHTML = edge.owner_identity;
+  }
+  if(edge.description.length > 0) {
+    //main_div.appendChild(document.createElement('hr'));
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tdiv.innerHTML = edge.description;
+  }
+  
+  if(edge.feature1) {
+    var feature = edge.feature1;
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "font-weight: bold; padding: 0px 3px 0px 2px;");
+    tspan.innerHTML = "feature1: ";
+    if(feature.chromloc) { 
+      tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.innerHTML = feature.chromloc; 
+      var len = feature.end - feature.start+1;
+      if(len > 1000000) { len = Math.round(len/100000)/10.0 + "mb"; }
+      else if(len > 1000) { len = Math.round(len/100)/10.0 + "kb"; }
+      else { len += "bp"; }
+      tspan.innerHTML += " ("+len+")"; 
+    }
+    //tspan = tdiv.appendChild(document.createElement('span'));
+    //tspan.innerHTML = feature.name;
+    //tdiv = main_div.appendChild(document.createElement('div'));
+    //tdiv.style.marginLeft = "5px";
+    //tdiv.innerHTML = eedbFeatureInfoHTML(feature);
+  }
+  if(edge.feature2) {
+    var feature = edge.feature2;
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "font-weight: bold; padding: 0px 3px 0px 2px;");
+    tspan.innerHTML = "feature2: ";
+    if(feature.chromloc) { 
+      tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.innerHTML = feature.chromloc; 
+      var len = feature.end - feature.start+1;
+      if(len > 1000000) { len = Math.round(len/100000)/10.0 + "mb"; }
+      else if(len > 1000) { len = Math.round(len/100)/10.0 + "kb"; }
+      else { len += "bp"; }
+      tspan.innerHTML += " ("+len+")"; 
+    }
+    //tspan = tdiv.appendChild(document.createElement('span'));
+    //tspan.innerHTML = feature.name;
+    //tdiv = main_div.appendChild(document.createElement('div'));
+    //tdiv.style.marginLeft = "5px";
+    //tdiv.innerHTML = eedbFeatureInfoHTML(feature);
+  }
+  
+  //length
+  tdiv = main_div.appendChild(document.createElement('div'));
+  tdiv.setAttribute('style', "padding: 0px 3px 0px 2px;");
+  var len = edge.end - edge.start+1;
+  if(len > 1000000) { len = Math.round(len/100000)/10.0 + "mb"; }
+  else if(len > 1000) { len = Math.round(len/100)/10.0 + "kb"; }
+  else { len += "bp"; }
+  tdiv.innerHTML = "edge length: "+len;
+
+  if(edge.maxexpress) { 
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tdiv.innerHTML = "maxexpress: " + edge.maxexpress;
+  }
+  if(edge.score || edge.exp_total) {
+    tdiv = main_div.appendChild(document.createElement('div'));
+    if(edge.score) {
+      tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.setAttribute('style', "padding: 0px 5px 0px 2px;");
+      tspan.innerHTML = "score: " + edge.score;
+    }
+    if(edge.exp_total) { 
+      tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.setAttribute('style', "padding: 0px 5px 0px 2px;");
+      tspan.innerHTML = "weight_total: " + edge.exp_total.toFixed(2);
+    }
+  }
+
+  //weights
+  for(var dtype in edge.weights) {
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tdiv.setAttribute('style', "font-weight: bold; padding: 0px 3px 0px 2px;");
+    tdiv.innerHTML = dtype+": ";
+    var weights = edge.weights[dtype];
+    for(var j=0; j<weights.length; j++) {
+      var weight = weights[j];
+      if(weight.source) { 
+        tdiv = main_div.appendChild(document.createElement('div'));
+        tdiv.style.marginLeft = "7px";
+        if(weight.source.display_name) { tdiv.innerHTML += weight.source.display_name+": "; }
+        else {  tdiv.innerHTML += weight.source.name+": "; }
+      }
+      else if(j>0) { tdiv.innerHTML += ", "; }
+      tdiv.innerHTML += weight.weight;
+    }
+  }
+
+  //main_div.appendChild(document.createElement('hr'));
+  for(var tag in edge.mdata) { //new common mdata[].array system
+    if(tag=="description") { continue; }
+    if(tag=="eedb:description") { continue; }
+    if(tag=="eedb:category") { continue; }
+    if(tag=="display_name") { continue; }
+    if(tag=="eedb:display_name") { continue; }
+    if(tag=="eedb:owner_nickname") { continue; }
+    if(tag=="eedb:owner_OpenID") { continue; }
+
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "font-weight: bold;");
+    tspan.innerHTML = tag + ": ";
+    var value_array = edge.mdata[tag];
+    for(var idx1=0; idx1<value_array.length; idx1++) {
+      var value = value_array[idx1];
+
+      if(idx1!=0) { 
+        tspan = tdiv.appendChild(document.createElement('span'));
+        tspan.innerHTML = ", " 
+      }
+
+      tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.setAttribute('style', "color: rgb(105,105,105);");
+      tspan.innerHTML = value;
+    }
+  }
 
   //update the tooltip
   var tooltip = document.getElementById("toolTipLayer");
@@ -1294,6 +1483,8 @@ function eedbParseFeatureData(xmlFeature, feature) {
   if(feature.mdata["EntrezID"])  { feature.entrez_id = feature.mdata["EntrezID"][0]; }
   if(feature.mdata["entrez_ID"]) { feature.entrez_id = feature.mdata["entrez_ID"][0]; }
   if(feature.mdata["refseq_ID"]) { feature.refseq_id = feature.mdata["refseq_ID"][0]; }
+  if(!feature.name && feature.mdata["geneName"]) { feature.name = feature.mdata["geneName"][0]; }
+  if(!feature.name && feature.mdata["geneID"]) { feature.name = feature.mdata["geneID"][0]; }
 
   return feature;
 }
@@ -1465,10 +1656,23 @@ function eedbParseEdgeXML(edgeXML, edge) {
     weight = new Object();
     weight.source     = null //object;
     weight.source_id  = weightXML.getAttribute("datasource_id");
+    weight.expid  = weightXML.getAttribute("datasource_id");
     weight.datatype   = weightXML.getAttribute("datatype");
     weight.weight     = 0;
+    //mirror the expression to easily integrate into existing code
+    weight.count      = 1;
+    weight.dup        = 1;
+    weight.sense      = 0;
+    weight.antisense  = 0;
+    weight.total      = 0;
     if(weightXML.getAttribute("weight")) {
       weight.weight = parseFloat(weightXML.getAttribute("weight"));
+      weight.total = weight.weight;
+      weight.sense = weight.weight;
+    }
+    if(weight.dir == "-") {
+      weight.antisense = weight.weight;
+      weight.sense = 0;
     }
 
     if(!(edge.weights[weight.datatype])) { edge.weights[weight.datatype] = new Array; }
@@ -1479,13 +1683,19 @@ function eedbParseEdgeXML(edgeXML, edge) {
   if(f1 && f1.length>0) { 
     var featureXML = f1[0].firstChild;
     var feature = eedbParseFeatureFullXML(featureXML);
-    if(feature) { edge.feature1 = feature; }
+    if(feature) { 
+      edge.feature1 = feature; 
+      edge.feature1_id = null;
+    }
   }
   var f2 = edgeXML.getElementsByTagName("feature2");
   if(f2 && f2.length>0) { 
     var featureXML = f2[0].firstChild;
     var feature = eedbParseFeatureFullXML(featureXML);
-    if(feature) { edge.feature2 = feature; }
+    if(feature) { 
+      edge.feature2 = feature; 
+      edge.feature2_id = null;
+    }
   }
   
   return edge;
@@ -1821,7 +2031,7 @@ function eedbParseMetadata(eedbXML, eedbObject) {
 
   if(!eedbObject.description && eedbObject.comments) { eedbObject.description = eedbObject.comments; }
   if(!eedbObject.description && eedbObject.sam_desc) { eedbObject.description = eedbObject.sam_desc; }
-  if(!eedbObject.name) { eedbObject.name = eedbObject.id; }
+  //if(!eedbObject.name) { eedbObject.name = eedbObject.id; }
   if(!eedbObject.treatment && eedbObject.series_name) { eedbObject.treatment = eedbObject.series_name; }
 
   //if(eedbObject.species_name) { eedbObject.biosample += eedbObject.species_name + " "; }
@@ -1876,6 +2086,260 @@ function eedbParseSimpleMetadata(eedbXML, eedbObject) {
     eedbObject.mdata[tag].push(value);
   }
 }
+
+//=== check_by_filter_logic : ported from c++
+function check_by_filter_logic(eedbObject, filter) {
+  if(!eedbObject) { return false; }
+  if(!eedbObject.mdata) { return false; }
+
+  filter = trim_string(filter); //trims white space from front and rear
+  if(!filter) { //empty string matches everything
+    //console.log("check_by_filter_logic["+filter+"]");
+    return true;
+  }  
+  //console.log("check_by_filter_logic["+filter+"]");  
+
+  //"not" phrase
+  p1 = filter.indexOf("not ");
+  if(p1==0) { 
+    //invert phrase logic response
+    //console.log("  not phrase[%s]\n", filter);
+    filter = filter.substring(p1+4);
+    if(check_by_filter_logic(eedbObject, filter)) { return false; } else { return true; }
+  }
+
+  //"!(" not phrase
+  p1 = filter.indexOf("!(");
+  if(p1==0) { 
+    //invert block logic response
+    //console.log("  not phrase[%s]\n", filter);
+    filter = filter.substring(1);
+    if(check_by_filter_logic(eedbObject, filter)) { return false; } else { return true; }
+  }
+  
+  // '(' blocking
+  if(filter.charAt(0) == '(') {
+    var cnt=1;
+    p1=1;
+    while(p1<filter.length && cnt>0) {
+      if(filter.charAt(p1) == '(') { cnt++; }
+      if(filter.charAt(p1) == ')') { cnt--; }
+      if(cnt>0) { p1++; }
+    }
+    phrase1.clear();
+    phrase2.clear();
+    if(cnt==0) { phrase1 = filter.substring(1, p1-1); }
+    else { phrase1 = filter.substring(1); }
+    
+    if(p1<filter.length) { p1++; } //move past the ')'
+    //eat whitespace on phrase2
+    while(p1<filter.length && ((filter.charAt(p1)==' ') || (filter.charAt(p1)=='\t'))) { p1++; }
+    
+    if(p1>=filter.length) { 
+      //no phrase2 so just do phrase1
+      return check_by_filter_logic(eedbObject, phrase1); 
+    }
+    
+    phrase2 = filter.substring(p1);
+    //console.log("  phrase2[%s]\n", phrase2);
+    p2 = phrase2.indexOf("or ");
+    p3 = phrase2.indexOf("and ");
+    if(p2==0) {
+      phrase2 = phrase2.substring(3);
+      if(check_by_filter_logic(eedbObject, phrase1) || check_by_filter_logic(eedbObject, phrase2)) { return true; }
+      else { return false; }
+    } 
+    else if(p3==0) {
+      phrase2 = phrase2.substring(4);
+      if(check_by_filter_logic(eedbObject, phrase1) && check_by_filter_logic(eedbObject, phrase2)) { return true; }
+      else { return false; }
+    } else {
+      if(check_by_filter_logic(eedbObject, phrase1) && check_by_filter_logic(eedbObject, phrase2)) { return true; }
+      else { return false; }
+    }
+  }
+
+  //and phrases
+  p1 = filter.indexOf(" and ");
+  if(p1 != -1) { 
+    //process "and" phrases, any false in the "and" will cause a fail
+    phrase1 = filter.substring(0, p1);
+    phrase2 = filter.substring(p1+5);
+    if(check_by_filter_logic(eedbObject, phrase1) && check_by_filter_logic(eedbObject, phrase2)) { return true; }
+    else { return false; }
+  }  
+  
+  //or phrases
+  p1 = filter.indexOf(" or ");
+  if(p1 != -1) { 
+    //process "or" phrases, any true makes it true
+    phrase1 = filter.substring(0, p1);
+    phrase2 = filter.substring(p1+4);
+    if(check_by_filter_logic(eedbObject, phrase1) || check_by_filter_logic(eedbObject, phrase2)) { return true; }
+    else { return false; }
+  }  
+
+  //2017-2-6 changed logic, now := and ~= requires () to isolate, but now allows spaces in key and value
+  //ex: (oligo_info.target_gene_name:=negative control: scrambled antisense)
+  //now everything before := ~= is key and everything after is value 
+  //so only way to isolate is with ( ), not with " "
+
+  //check for "key:=value" logic
+  var key;
+  p1 = filter.indexOf(":=");
+  if(p1 != -1) { 
+    key = filter.substring(0, p1);
+    if(p1+2 < filter.size()) {
+      var val1 = filter.substring(p1+2);
+      filter = val1;
+    } else { filter = ""; }
+    //console.log("found key:=value logic [%s] := [%s]\n", key, filter);
+    if(find_metadata(key, filter)) { return true; }
+    else { return false; }
+  }  
+  //check for "key~=value" logic
+  p1 = filter.indexOf("~=");
+  if(p1 != -1) { 
+    key = filter.substring(0, p1);
+    if(p1+2 < filter.size()) {
+      var val1 = filter.substring(p1+2);
+      filter = val1;
+    } else { filter = ""; }
+    //console.log("found key~=value logic [%s] :~ [%s]\n", key, filter);
+    if(has_metadata_like(eedbObject, key, filter)) { return true; }
+    else { return false; }
+  }  
+
+  //phrases like A,B,C translates as implied "or"
+  p1 = filter.indexOf(",");
+  if(p1 != -1) { 
+    //process "," phrases, any true makes it true
+    phrase1 = filter.substring(0, p1);
+    phrase2 = filter.substring(p1+1);
+    if(check_by_filter_logic(eedbObject, phrase1) || check_by_filter_logic(eedbObject, phrase2)) { return true; }
+    else { return false; }
+  }  
+
+  //multi word phrases like "brain cortex", translates as an implied "and"
+  filter = trim_string(filter); //trims white space from front and rear again to be safe
+  p1 = filter.indexOf(" ");
+  if(p1 != -1) { 
+    //process " " phrases, any false makes it false
+    phrase1 = trim_string(filter.substring(0, p1));
+    phrase2 = trim_string(filter.substring(p1+1));
+    if(phrase1 && phrase2 && 
+       check_by_filter_logic(eedbObject, phrase1) && 
+       check_by_filter_logic(eedbObject, phrase2)) { return true; }
+    else { return false; }
+  }
+
+  //OK this is a bare keyword now
+  //check for !<key>
+  var invert_keyword = false;
+  if(filter.charAt(0) == '!') { 
+    filter = filter.substring(1);
+    invert_keyword = true;
+  }
+  if(!filter) { return true; }  //empty string matches everything
+  var rtn = has_metadata_like(eedbObject, key, filter);
+  if(invert_keyword) { rtn = !rtn; }
+  //console.log("  keyword check [%s] %d\n", filter, rtn);
+  return rtn;
+}
+
+
+function find_metadata(eedbObject, tag, value) {
+  //returns first occurance matching search pattern. 
+  //if value is set, this is an exact match search
+  //if value is empty, this returns the first occurance with matching tag.
+  if(!eedbObject) { return null; }
+  if(!eedbObject.mdata) { return null; }
+  if((!tag || tag=="") && (!value || value=="")) { return null; }
+  value = value.toLowerCase();
+
+  for(var tg1 in eedbObject.mdata) {
+    var rtn = true;
+    if(tag && (tg1 != tag)) { rtn = false; }
+
+    var value_array = eedbObject.mdata[tg1];
+    for(var idx1=0; idx1<value_array.length; idx1++) {
+      var tval = value_array[idx1];
+      if(value && (tval.toLowerCase() != value)) { rtn = false; }
+      if(rtn) { return tval; }
+    } 
+    //for(var i=0; i<eedbObject.mdata.size(); i++) {
+    //  var mdata = eedbObject.mdata[i];
+    //  bool rtn = true;
+    //  if(!tag.empty() && (mdata->type() != tag)) { rtn = false; }
+    //  if(!value.empty()) {
+    //    //string tval = mdata->data().substr(0,value.size());
+    //    var tval = mdata->data().toLowerCase();
+    //    if(tval != value) { rtn = false; }
+    //  }
+    //  if(rtn) { return mdata; }
+  } 
+  return null;
+}
+
+
+function has_metadata_like(eedbObject, tag, value) {
+  //tag (if specified) must match exactly (case-sensitive)
+  //value (if specified) is allowed to be a case-insensitive 'prefix'
+  
+  if(!eedbObject) { return false; }
+  if(!tag && !value) { return false; }
+  if(value) { value = value.toLowerCase(); }
+
+  //could consider to expand beyond mdata to 
+  // if(eedbObject.name && (eedbObject.name.toLowerCase().indexOf(value) != -1)) { return true; }
+  // if(eedbObject.source) {
+  //   if(eedbObject.source.category && (eedbObject.source.category.toLowerCase().indexOf(value) != -1)) { return true; }
+  //   if(eedbObject.source.name && (eedbObject.source.name.toLowerCase().indexOf(value) != -1)) { return true; }
+  // }
+  // if(eedbObject.chromloc && (eedbObject.chromloc.toLowerCase().indexOf(value) != -1)) { return true; }
+  
+  for(var tg1 in eedbObject.mdata) {
+    var rtn = true;
+    if(tag && (tg1 != tag)) { rtn = false; }
+
+    if(value) {
+      var value_array = eedbObject.mdata[tg1];
+      for(var idx1=0; idx1<value_array.length; idx1++) {
+        var tval = value_array[idx1];
+        if(tval) { tval = tval.toLowerCase(); }
+        //--anywhere search
+        if(tval.indexOf(value) == -1) { rtn = false; }
+      }
+    }
+    if(rtn) { return true; }
+  }
+
+  /*
+  for(var i=0; i<_metadata.size(); i++) {
+    Metadata *mdata = _metadata[i];
+    bool rtn = true;
+    if(!tag.empty() && (mdata->type() != tag)) { rtn = false; }
+    if(!value.empty()) {
+      //prior to 2.8.3 this only searched Symbols, now everything
+      
+      //--prefix search
+      //string tval = mdata->data().substr(0,value.size());
+      //boost::algorithm::to_lower(tval);
+      //if(tval != value) { rtn = false; }
+
+      //--anywhere search
+      var tval = mdata->data();
+      tval = tval.toLowerCase();
+      if(tval.indexOf(value) == -1) { rtn = false; }
+    }
+    if(rtn) { return true; }
+  } 
+  */
+  return false;
+}
+
+
+//-------------------------------------------------------------------
 
 
 function eedbParseCollaborationData(xmlCollaboration, collaboration) {
@@ -2336,6 +2800,14 @@ function eedbDisplaySourceInfo(source, user_match) {
   if(source.classname== "Configuration") {
     tspan.innerHTML = source.type + " config: ";
     tspan2.innerHTML = source.uuid;
+  }
+  if(source.fixed_id) {
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "font-weight: bold; ");
+    tspan.innerHTML = "fixedID: ";
+    tspan2 = tdiv.appendChild(document.createElement('span'));
+    tspan2.innerHTML = source.fixed_id;
   }
 
   if(source.subsource_count) {
@@ -3469,6 +3941,44 @@ function zenbuGenomeSelectChanged(uniqID, name) {
 
   if(current_genome.callOutFunction) { current_genome.callOutFunction(); }
   if(genomeWidget.callOutFunction)   { genomeWidget.callOutFunction(genomeWidget); }
+}
+
+
+function zenbuParseJobXML(xmlJob, job) {
+  if(!xmlJob) { return; }
+  if(!job) { job = new Object; } 
+  
+  job.classname    = "Job";
+  job.upload_error = "";
+  job.id           = xmlJob.getAttribute("id");
+  job.name         = xmlJob.getAttribute("name");
+  job.status       = xmlJob.getAttribute("status");
+  if(job.status == "READY") { job.status = "QUEUED"; }
+  if(xmlJob.getAttribute("create_date")) {
+    job.import_date  = xmlJob.getAttribute("create_date");
+  }
+  if(xmlJob.getAttribute("create_timestamp")) {
+    job.import_timestamp  = xmlJob.getAttribute("create_timestamp");
+  }
+  if(xmlJob.getAttribute("owner_openid")) {
+    job.owner_openID  = xmlJob.getAttribute("owner_openid");
+  }
+  job.platform     = '';     
+  job.assembly     = '';     
+  job.description  = "";
+
+  eedbParseMetadata(xmlJob, job);
+  
+  if(job.mdata["upload_error"]) {
+    var value_array = job.mdata["upload_error"];
+    for(var idx1=0; idx1<value_array.length; idx1++) {
+      var value = value_array[idx1];
+      if(job.upload_error) { job.upload_error +=". "; }
+      job.upload_error += value;
+    }
+  }
+
+  return job;
 }
 
 

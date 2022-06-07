@@ -134,6 +134,7 @@ function zenbuHtmlElement_reconfigureParam(param, value, altvalue) {
 
   if(param == "edit_html_content") {
     this.newconfig.edit_html_content = !this.newconfig.edit_html_content;
+    reportElementToggleSubpanel(this.elementID, 'none'); //hide panel
     reportsDrawElement(this.elementID);
   }
 
@@ -196,7 +197,8 @@ function zenbuHtmlElement_draw() {
   var selected_edge = datasourceElement.selected_edge;
   var selected_source = datasourceElement.selected_source;
   var focus_feature = datasourceElement.focus_feature;
-  
+  var load_filter = datasourceElement.load_filter;
+
   if(datasourceElement.selected_id) {
     console.log("reportsDrawHtmlElement selected_id ["+datasourceElement.selected_id+"]");
   }
@@ -312,8 +314,6 @@ function zenbuHtmlElement_configSubpanel() {
   var configdiv = this.config_options_div;
   
   var datasourceElement = this.datasource();
-  
-  configdiv.appendChild(document.createElement('hr'));
   
   var edit_html_content = false;
   if(this.newconfig && this.newconfig.edit_html_content != undefined) { edit_html_content = this.newconfig.edit_html_content; }

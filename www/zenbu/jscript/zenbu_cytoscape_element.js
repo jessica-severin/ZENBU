@@ -50,10 +50,9 @@ function ZenbuCytoscapeElement(elementID) {
   this.assembly_name= "";
   this.assembly= null;
   this.colorspace = "Set3_bp_12";
-  this.show_only_connected_chroms = false;
-  this.show_mini_chroms = false; //ensures that all chroms get at least 0.5deg of the circle
 
-  this.layout_style = "grid"; //random, grid, cose, breadthfirst, concentric, circle
+  this.layout_style = "concentric"; //random, grid, cose, breadthfirst, concentric, circle
+  this.download_mode = "png";
   
   this.content_width = 500;
   this.content_height = 500;
@@ -65,9 +64,9 @@ function ZenbuCytoscapeElement(elementID) {
 //  this.cyto_elements = [];
   //demo data for testing
   this.cyto_elements = [ 
-      { data: { id: 'a', text_color: "#2X2C2C", node_color: "gray", node_shape: "round-rectangle" } }, 
-      { data: { id: 'b', text_color: "#2X2C2C", node_color: "gray", node_shape: "round-rectangle" } }, 
-      { data: { id: 'ab', source: 'a', target: 'b', edge_color: "#CCC" } } ];
+      { data: { id:'a', text_color:"#2X2C2C", node_color:"gray", node_shape:"round-rectangle", border_color:"darkgray" }}, 
+      { data: { id:'b', text_color:"#2X2C2C", node_color:"gray", node_shape:"round-rectangle", border_color:"darkgray" }}, 
+      { data: { id:'ab', source: 'a', target: 'b', edge_color: "#CCC" } } ];
         
       
   this.cyto_node_style = {  //default label inside style
@@ -76,7 +75,7 @@ function ZenbuCytoscapeElement(elementID) {
           'color': 'data(text_color)',  //#2X2C2C default
           'font-weight': 'bold',
           'background-color': 'data(node_color)', //"#AAA", 
-          'border-color': 'data(node_color)',
+          'border-color': 'data(border_color)',
           'border-width':3,
           'border-opacity':1,
           'background-opacity':0.5, 
@@ -258,6 +257,8 @@ function ZenbuCytoscapeElement(elementID) {
       // }
     ];
 
+  this.highlight_filter = "";
+  
   this.label_inside_nodes = true;
   this.default_node_shape = "round-rectangle";
   this.default_node_color = "#F09000";
@@ -278,6 +279,7 @@ function ZenbuCytoscapeElement(elementID) {
   this.edge_color_weight_invert = false;
   this.edge_color_weight_min = "auto";
   this.edge_color_weight_max = "auto";
+  this.hide_self_edges = false;
   
   //methods
   this.initFromConfigDOM  = zenbuCytoscapeElement_initFromConfigDOM;  //pass a ConfigDOM object
@@ -292,6 +294,9 @@ function ZenbuCytoscapeElement(elementID) {
   this.showSelections     = zenbuCytoscapeElement_showSelections
   this.drawElement        = zenbuCytoscapeElement_draw;
   this.configSubpanel     = zenbuCytoscapeElement_configSubpanel;
+  this.downloadSubpanel   = zenbuCytoscapeElement_downloadSubpanel;
+  this.download           = zenbuCytoscapeElement_download;
+
 
   //internal methods
   this.postprocessEdges    = zenbuCytoscapeElement_postprocessEdges;
@@ -299,6 +304,7 @@ function ZenbuCytoscapeElement(elementID) {
   this.fetchAssembly       = zenbuCytoscapeElement_fetch_assembly;
   this.renderEdges         = zenbuCytoscapeElement_renderEdges;
   this.renderFeatures      = zenbuCytoscapeElement_renderFeatures;
+  this.processHighlight    = zenbuCytoscapeElement_processHighlight;
   
   this.nodeStyleInterface     = zenbuCytoscapeElement_nodeStyleInterface;
   this.calcDatatypeCategories = zenbuCytoscapeElement_calcDatatypeCategories;
@@ -332,6 +338,7 @@ function zenbuCytoscapeElement_initFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("edge_color_weight_max")) { this.edge_color_weight_max = elementDOM.getAttribute("edge_color_weight_max"); }
   if(elementDOM.getAttribute("edge_color_weight_logscale") == "true") { this.edge_color_weight_logscale = true; }
   if(elementDOM.getAttribute("edge_color_weight_invert") == "true") { this.edge_color_weight_invert = true; }
+  if(elementDOM.getAttribute("hide_self_edges") == "true") { this.hide_self_edges = true; }
   
   this.label_inside_nodes = false;
   if(elementDOM.getAttribute("label_inside_nodes") == "true") { this.label_inside_nodes = true; }
@@ -391,6 +398,7 @@ function zenbuCytoscapeElement_generateConfigDOM() {
   if(this.edge_color_weight_max) { elementDOM.setAttribute("edge_color_weight_max", this.edge_color_weight_max); }
   if(this.edge_color_weight_logscale) { elementDOM.setAttribute("edge_color_weight_logscale", "true"); }
   if(this.edge_color_weight_invert) { elementDOM.setAttribute("edge_color_weight_invert", "true"); }
+  if(this.hide_self_edges) { elementDOM.setAttribute("hide_self_edges", "true"); }
   
   if(this.label_inside_nodes) { elementDOM.setAttribute("label_inside_nodes", "true"); }
   
@@ -439,7 +447,15 @@ function zenbuCytoscapeElement_generateConfigDOM() {
 //TODO: these are placeholders for now, still need to figure out how to integrate subclass into main code
 
 function zenbuCytoscapeElement_elementEvent(mode, value, value2) {
-  //var datasourceElement = this.datasource();
+  var datasourceElement = this.datasource();
+  
+  if(mode == "highlight") {
+    console.log(this.elementID+" highlight event "+value);
+    this.highlight_filter = value;
+    this.processHighlight();
+    this.postprocessElement();
+    this.drawElement();
+  }
 }
 
 
@@ -447,8 +463,7 @@ function zenbuCytoscapeElement_reconfigureParam(param, value, altvalue) {
   if(!this.newconfig) { return; }
   
   if(param == "assembly_name") { this.newconfig.assembly_name = value; }
-  if(param == "show_only_connected_chroms") { this.newconfig.show_only_connected_chroms = value; }
-  if(param == "show_mini_chroms") { this.newconfig.show_mini_chroms = value; }
+  if(param == "hide_self_edges") { this.newconfig.hide_self_edges = value; }
 
   if(param == "layout_style") { this.newconfig.layout_style = value; }
   if(param == "default_node_shape") { this.newconfig.default_node_shape = value; }
@@ -530,6 +545,7 @@ function zenbuCytoscapeElement_reconfigureParam(param, value, altvalue) {
     if(this.newconfig.edge_color_mode !== undefined) { this.edge_color_mode = this.newconfig.edge_color_mode; }
     if(this.newconfig.default_edge_color !== undefined) { this.default_edge_color = this.newconfig.default_edge_color; }
     if(this.newconfig.edge_color_datatype !== undefined) { this.edge_color_datatype = this.newconfig.edge_color_datatype; }
+    if(this.newconfig.hide_self_edges !== undefined) { this.hide_self_edges = this.newconfig.hide_self_edges; }
     if(this.edgeColorCSI) {
       console.log("transfer params from edgeColorCSI");
       if(this.edgeColorCSI.newconfig.colorspace != undefined) { this.edge_weight_colorspace = this.edgeColorCSI.newconfig.colorspace; }
@@ -690,9 +706,9 @@ function zenbuCytoscapeElement_postprocess() {
   if(this.cyto_elements.length == 0) {
     //demo objects
     this.cyto_elements = [ // list of graph elements to start with
-        { data: { id: 'a', text_color: "#2X2C2C", node_color: "gray", node_shape: "round-rectangle" } },
-        { data: { id: 'b', text_color: "#2X2C2C", node_color: "gray", node_shape: "round-rectangle" } },
-        { data: { id: 'ab', source: 'a', target: 'b', edge_color: "#CCC" } } // edge
+        { data: { id:'a', text_color:"#2X2C2C", node_color:"gray", node_shape:"round-rectangle", border_color:"darkgray" }},
+        { data: { id:'b', text_color:"#2X2C2C", node_color:"gray", node_shape:"round-rectangle", border_color:"darkgray" }},
+        { data: { id:'ab', source: 'a', target: 'b', edge_color: "#CCC" } } // edge
       ];    
   }  
 }
@@ -810,8 +826,25 @@ function zenbuCytoscapeElement_postprocessEdges() {
           }
         }
       }
+      var border_color = node_color;
+      if(this.highlight_filter) {
+        if(feature1.highlight) { node_color = "#FF0000"; }
+        else {
+          var cl1 = new RGBColor(node_color);
+          var alpha = 0.5; //mix with gray 128,128,128
+          cl1.r = (alpha*cl1.r) + (1-alpha)*255;
+          cl1.g = (alpha*cl1.g) + (1-alpha)*255;
+          cl1.b = (alpha*cl1.b) + (1-alpha)*255;
+          var cl2 = new RGBColour(cl1.r, cl1.g, cl1.b);
+          node_color = cl2.getCSSHexadecimalRGB();
+        }
+        border_color = node_color;
+      }
+      if(feature1.highlight) { node_color = border_color = "#FF0000"; }
       var ele1 = { group:"nodes", selectable:true, grabbable:true, 
-                     data: { id:"", dbid: "", text_color: "#2X2C2C", node_color: node_color, node_shape: node_shape } };
+                     data: { id:"", dbid: "", text_color: "#2X2C2C", node_color: node_color, node_shape: node_shape, 
+                       border_color: border_color
+                    } };
                   
       if(this.label_inside_nodes) {
         //label inside options                    
@@ -891,9 +924,25 @@ function zenbuCytoscapeElement_postprocessEdges() {
           }
         }
       }
-
+      var border_color = node_color;
+      if(this.highlight_filter) {
+        if(feature2.highlight) { node_color = "#FF0000"; }
+        else {
+          var cl1 = new RGBColor(node_color);
+          var alpha = 0.5; //mix with gray 128,128,128
+          cl1.r = (alpha*cl1.r) + (1-alpha)*255;
+          cl1.g = (alpha*cl1.g) + (1-alpha)*255;
+          cl1.b = (alpha*cl1.b) + (1-alpha)*255;
+          var cl2 = new RGBColour(cl1.r, cl1.g, cl1.b);
+          node_color = cl2.getCSSHexadecimalRGB();
+        }
+        border_color = node_color;
+      }
+      if(feature2.highlight) { node_color = border_color = "#FF0000"; }
       var ele2 = { group:"nodes", selectable:true, grabbable:true, 
-                   data: { id:"", dbid:"", text_color: "#2X2C2C", node_color: node_color, node_shape: node_shape } };
+                   data: { id:"", dbid:"", text_color: "#2X2C2C", node_color: node_color, node_shape: node_shape, 
+                   border_color: border_color  
+                  } };
       if(this.label_inside_nodes) {
         //label inside options
         var cl1 = new RGBColor(node_color);
@@ -930,9 +979,12 @@ function zenbuCytoscapeElement_postprocessEdges() {
       this.cyto_elements.push(ele2);
       
       //edge
+      if(this.hide_self_edges && (edge.feature1 == edge.feature2)) { continue; }
+      
       var edge_color = this.default_edge_color;
+      var signal = 0.0;        
       if(edge_color_dtype && (this.edge_color_mode == "weight")) { 
-        var signal = 0.0;        
+        signal = 0.0;        
         var weights = edge.weights[edge_color_dtype.datatype];
         if(weights && weights.length>0) { signal = weights[0].weight; }
         //colorscore (cr) is 0..1 scaled signal
@@ -944,11 +996,21 @@ function zenbuCytoscapeElement_postprocessEdges() {
                                          this.edge_color_weight_invert); //leave discrete false          
         edge_color = color.getCSSHexadecimalRGB();
       }
-      
+      if(this.highlight_filter) {
+        var cl1 = new RGBColor(edge_color);
+        var alpha = 0.5; //mix with gray 128,128,128
+        cl1.r = (alpha*cl1.r) + (1-alpha)*255;
+        cl1.g = (alpha*cl1.g) + (1-alpha)*255;
+        cl1.b = (alpha*cl1.b) + (1-alpha)*255;
+        var cl2 = new RGBColour(cl1.r, cl1.g, cl1.b);
+        edge_color = cl2.getCSSHexadecimalRGB();
+      }
+
       var ele = { group:"edges", selectable:true, grabbable:true, data: { id:edge.id, dbid: edge.id, edge_color: edge_color } };
       ele.data.source = edge.feature1.node_name;
       ele.data.target = edge.feature2.node_name;
       //TODO: edge weight 
+      if(signal) { ele.data.weight = signal; }
       this.cyto_elements.push(ele);
     }
   }
@@ -1060,6 +1122,49 @@ function zenbuCytoscapeElement_postprocessFeatures() {
   console.log("zenbuCytoscapeElement_postprocessFeatures " +(runtime)+"msec");
 }
 
+
+function zenbuCytoscapeElement_processHighlight() {
+  var datasourceElement = this.datasource();
+
+  var feature_count = datasourceElement.feature_array.length;
+  var edge_count    = datasourceElement.edge_array.length;
+
+  for(var k=0; k<feature_count; k++) {
+    var feature = datasourceElement.feature_array[k];
+    if(feature) { feature.highlight = false; }
+  }
+  for(var k=0; k<edge_count; k++) {
+    var edge = datasourceElement.edge_array[k];
+    if(edge) { edge.highlight = false; }
+  }
+  if(!this.highlight_filter) { return; }  //also performs the clear
+
+  var filter = String(this.highlight_filter);
+  filter = filter.toLowerCase();
+  console.log("zenbuCytoscapeElement_processHighlight "+this.elementID+" ["+filter+"]");
+  
+  var f_count=0, e_count=0;
+  //features
+  for(var k=0; k<feature_count; k++) {
+    var feature = datasourceElement.feature_array[k];
+    if(!feature) { continue; }
+    feature.highlight = false;
+    if(check_by_filter_logic(feature, filter)) { 
+      feature.highlight = true; 
+      f_count++;
+    }
+  }
+  for(var k=0; k<edge_count; k++) {
+    var edge = datasourceElement.edge_array[k];
+    if(!edge) { continue; }
+    edge.highlight = false;
+    if(check_by_filter_logic(edge, filter)) { 
+      edge.highlight = true; 
+      e_count++;
+    }
+  }
+  console.log("zenbuCytoscapeElement_processHighlight "+this.elementID+" matched f:"+f_count+" e:"+e_count);
+}
 
 
 //=================================================================================
@@ -1175,7 +1280,13 @@ function zenbuCytoscapeElement_draw() {
     randomize: false,
     padding: 20,
     minNodeSpacing: 1,
-    spacingFactor: 0.6, 
+    spacingFactor: 0.5, 
+    //avoidOverlap: true, // prevents node overlap, may overflow boundingBox if not enough space
+    levelWidth: function( nodes ){ 
+      // the letiation of concentric values in each level
+      var opt = 3 + Math.floor(nodes.length * 0.06);
+      return nodes.maxDegree() / opt 
+    } 
     /*
     //concentric
     fit: true, // whether to fit the viewport to the graph
@@ -1247,7 +1358,7 @@ function zenbuCytoscapeElement_draw() {
         'color': 'data(text_color)',  //#2X2C2C default
         'font-weight': 'bold',
         'background-color': 'data(node_color)',
-        'border-color': 'data(node_color)',
+        'border-color': 'data(border_color)',
         'border-width':3,
         'border-opacity':1,
         'background-opacity':0.5, 
@@ -1266,7 +1377,7 @@ function zenbuCytoscapeElement_draw() {
         'color': '#2X2C2C',
         'label': 'data(id)',
         'background-color': 'data(node_color)',
-        'border-color': 'data(node_color)',
+        'border-color': 'data(border_color)',
         'border-width':3,
         'border-opacity':1,
         'background-opacity':0.5, 
@@ -1686,8 +1797,13 @@ function zenbuCytoscapeElement_configSubpanel() {
   //----  
   // configdiv.appendChild(document.createElement('hr'));
 
+  var labelDiv = configdiv.appendChild(document.createElement('div'));
+  labelDiv.setAttribute("style", "font-size:12px; font-family:arial,helvetica,sans-serif;");
+  var span1 = labelDiv.appendChild(document.createElement('span'));
+  span1.setAttribute("style", "font-size:12px; margin-right:7px; font-family:arial,helvetica,sans-serif; font-weight:bold;");
+  span1.innerHTML ="Visualization:";
+
   tdiv2  = configdiv.appendChild(document.createElement('div'));
-  tdiv2.setAttribute('style', "margin-top: 10px;");
   var layout_style = this.layout_style;
   if(this.newconfig && this.newconfig.layout_style != undefined) { layout_style = this.newconfig.layout_style; }
   var span1 = tdiv2.appendChild(document.createElement('span'));
@@ -1721,6 +1837,7 @@ function zenbuCytoscapeElement_configSubpanel() {
 
   var hr1 = configdiv.appendChild(document.createElement('hr'));
   hr1.style.borderTop = "1px dashed #7f7f7f";
+  hr1.style.width = "95%";
 
   var tdiv1 = configdiv.appendChild(document.createElement('div'));
   tdiv1.setAttribute("style", "font-size:12px; font-family:arial,helvetica,sans-serif;");
@@ -1863,6 +1980,7 @@ function zenbuCytoscapeElement_configSubpanel() {
   //
   var hr1 = configdiv.appendChild(document.createElement('hr'));
   hr1.style.borderTop = "1px dashed #7f7f7f";
+  hr1.style.width = "95%";
 
   var tdiv1 = configdiv.appendChild(document.createElement('div'));
   tdiv1.setAttribute("style", "font-size:12px; font-family:arial,helvetica,sans-serif;");
@@ -1870,6 +1988,18 @@ function zenbuCytoscapeElement_configSubpanel() {
   span1.setAttribute("style", "font-size:12px; margin-right:7px; font-family:arial,helvetica,sans-serif; font-weight:bold;");
   span1.innerHTML ="edge styling :";
   
+  //hide_self_edges
+  tdiv2  = configdiv.appendChild(document.createElement('div'));
+  tcheck = tdiv2.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 0px 5px 0px 5px;");
+  tcheck.setAttribute('type', "checkbox");
+  var hide_self_edges = this.hide_self_edges;
+  if(this.newconfig && this.newconfig.hide_self_edges != undefined) { hide_self_edges = this.newconfig.hide_self_edges; }
+  if(hide_self_edges) { tcheck.setAttribute('checked', "checked"); }
+  tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'hide_self_edges', this.checked);");
+  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2.innerHTML = "hide self edges";
+
   //default_edge_color
   tdiv2  = configdiv.appendChild(document.createElement('div'));
   var tspan = tdiv2.appendChild(document.createElement('span'));
@@ -2268,6 +2398,74 @@ function zenbuCytoscapeElement_nodeStyleInterface() {
   }
     
   return nodeStyleDiv;
+}
+
+//=================================================================================
+
+
+function zenbuCytoscapeElement_downloadSubpanel() {
+  if(!this.download_options_div) { return; }
+
+  //var datasourceElement = this.datasource();
+  var downloadDiv = this.download_options_div;
+  
+  tdiv = downloadDiv.appendChild(document.createElement('div'));
+  tspan = tdiv.appendChild(document.createElement('span'));
+  tspan.innerHTML = "export format:";
+
+  radio1 = tdiv.appendChild(document.createElement('input'));
+  radio1.setAttribute("type", "radio");
+  radio1.setAttribute("name", this.elementID + "_download_mode");
+  radio1.setAttribute("value", "png");
+  if(this.download_mode == "png") { radio1.setAttribute('checked', "checked"); }
+  radio1.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'download_mode', this.value);");
+  tspan = tdiv.appendChild(document.createElement('span'));
+  tspan.innerHTML = "png";
+
+  radio2 = tdiv.appendChild(document.createElement('input'));
+  radio2.setAttribute("type", "radio");
+  radio2.setAttribute("name", this.elementID + "_download_mode");
+  radio2.setAttribute("value", "jpg");
+  if(this.download_mode == "jpg") { radio2.setAttribute('checked', "checked"); }
+  radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'download_mode', this.value);");
+  tspan = tdiv.appendChild(document.createElement('span'));
+  tspan.innerHTML = "jpg";
+}
+
+
+function zenbuCytoscapeElement_download() {
+  if(!this.cy) { return; }
+  if(this.loading) { return; }
+
+  // If we are replacing a previously generated file we need to
+  // manually revoke the object URL to avoid memory leaks.
+  if(this.downloadURL !== null) {
+    window.URL.revokeObjectURL(this.downloadURL);
+    this.downloadURL = null;
+  }
+
+  //this.downloadURL = window.URL.createObjectURL(data);
+  if(this.download_mode == "png") {
+    this.downloadURL = this.cy.png();
+  }
+  else if(this.download_mode == "jpg") {
+    this.downloadURL = this.cy.jpg();
+  }
+  if(!this.downloadURL) { return; }
+  
+  var filename = this.title;
+  filename = filename.replace(/^\s+/, '').replace(/\s+$/, ''); //remove leading and trailing spaces
+  filename = filename.replace(/[;:]/g, ''); 
+  filename = filename.replace(/\s+/g, '_'); 
+  filename += "." + this.download_mode;
+  
+  var downloadLink = document.createElement("a");
+  downloadLink.href = this.downloadURL;
+  downloadLink.download = filename;
+  document.body.appendChild(downloadLink);
+  downloadLink.click();
+  document.body.removeChild(downloadLink);
+  return true;
 }
 
 //=================================================================================

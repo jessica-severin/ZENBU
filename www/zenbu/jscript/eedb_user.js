@@ -897,9 +897,12 @@ function eedbUserNewUploadPanel() {
   tdiv2.setAttribute("style", "margin-left:20px;");
   tdiv2.innerHTML = "Count each line of file as expression of 1 tagcount (no correction for 'multi-mapping' locations).";
 
+  //--------  name index options : still buggy for bed files 
+  name_index_options = form.appendChild(document.createElement('div'));
+  name_index_options.setAttribute("style", "margin:3px 0px 0px 15px; display:none;");
+  name_index_options.id = "eedb_user_upload_name_index_options";
   /* still buggy for bed files */
-  /*
-  tdiv = express_options.appendChild(document.createElement('div'));
+  tdiv = name_index_options.appendChild(document.createElement('div'));
   tcheck = tdiv.appendChild(document.createElement('input'));
   tcheck.setAttribute('style', "margin: 0px 1px 0px 0px;");
   tcheck.setAttribute('name', "build_feature_name_index");
@@ -907,8 +910,7 @@ function eedbUserNewUploadPanel() {
   tcheck.setAttribute("onclick", "eedbUserReconfigParam('build_feature_name_index', this.checked);");
   if(userview.upload.build_feature_name_index) {tcheck.setAttribute("checked", "checked"); }
   tspan2 = tdiv.appendChild(document.createElement('span'));
-  tspan2.innerHTML = "Build name indexing for annotation features (eg genes, transcripts)";
-  */
+  tspan2.innerHTML = " build name search indexing (<span style=\"color:#FF4500; \">WARN</span> only for annotation features with unique names)";
 
 
   //-------- data file uploads name/description --------
@@ -1071,12 +1073,14 @@ function eedbUserNewUploadPanelRefresh() {
   var edge_options     = document.getElementById("eedb_user_upload_node_edge_options");
   var datatype_div     = document.getElementById("eedb_user_upload_datatype_div");
   var datatype_input   = document.getElementById("eedb_user_upload_datatype");
+  var name_index_options   = document.getElementById("eedb_user_upload_name_index_options");
 
   express_options.setAttribute("style", "display:none;");
   namedesc_options.setAttribute("style", "display:none;");
   bedscore_options.setAttribute("style", "display:none;");
   genome_options.setAttribute("style", "display:none;");
   edge_options.setAttribute("style", "display:none;");
+  name_index_options.setAttribute("style", "display:none;");
 
   if(userview.upload.file_format) { 
     if(userview.upload.file_format == "GENOME") {
@@ -1098,6 +1102,9 @@ function eedbUserNewUploadPanelRefresh() {
           if(userview.upload.bedscore_express) { datatype_div.setAttribute("style", "margin-left:15px; display:block;"); } 
           else { datatype_div.setAttribute("style", "display:none;"); }
           datatype_input.setAttribute("value", userview.upload.datatype);
+        }
+        if((userview.upload.file_format == "BED") || (userview.upload.file_format == "GFF")) {
+          name_index_options.setAttribute("style", "margin:3px 0px 0px 15px; display:block;");
         }
       }
     }
@@ -2013,6 +2020,23 @@ function zenbuCollaborationInviteUser(uuid) {
 }
 
 
+function zenbuCollaborationOpenToPublic(uuid, mode) {
+  var paramXML = "<zenbu_query>\n";
+  paramXML += "<collaboration_uuid>"+uuid+"</collaboration_uuid>";
+  if(mode) { paramXML += "<mode>collaboration_make_public</mode>\n"; }
+  else { paramXML += "<mode>collaboration_revoke_public</mode>\n"; }
+  paramXML += "</zenbu_query>\n";
+
+  var xhr=GetXmlHttpObject();
+  xhr.open("POST", eedbUserCGI, false);
+  xhr.setRequestHeader("Content-Type", "application/xml; charset=UTF-8;");
+  //xhr.setRequestHeader("Content-length", paramXML.length);
+  //xhr.setRequestHeader("Connection", "close");
+  xhr.send(paramXML);
+
+  zenbuCollaborationUserManagementPanel(uuid, true);
+}
+
 
 //---------------------------------------------------------------------------
 
@@ -2102,14 +2126,21 @@ function zenbuCollaborationUserManagementPanel(uuid, reload) {
     var div2 = div1.appendChild(new Element('div'));
     div2.setAttribute('style', "margin: 0px 10px 0px 10px; color:#B22222; font-size:10px;");
     div2.innerHTML = "published collaboration: open to public";
+
+    var button = div2.appendChild(new Element('input'));
+    button.type = "button";
+    button.className = "slimbutton";
+    button.style.marginLeft = "10px";
+    button.setAttribute("onclick", "zenbuCollaborationOpenToPublic(\""+ collaboration.uuid +"\", false);");
+    button.value ="unpublish";
   } else {
-    //var div2 = div1.appendChild(new Element('div'));
-    //div2.setAttribute('style', "margin: 0px 10px 0px 10px; color:#B22222; font-size:10px;");
-    //var button = div2.appendChild(new Element('input'));
-    //button.type = "button";
-    //button.className = "slimbutton";
-    //button.setAttribute("onclick", "zenbuCollaborationInviteUser(\""+ collaboration.uuid +"\");");
-    //button.value ="publish collaboration : open all data and views to public";
+    var div2 = div1.appendChild(new Element('div'));
+    div2.setAttribute('style', "margin: 0px 10px 0px 10px; color:#B22222; font-size:10px;");
+    var button = div2.appendChild(new Element('input'));
+    button.type = "button";
+    button.className = "slimbutton";
+    button.setAttribute("onclick", "zenbuCollaborationOpenToPublic(\""+ collaboration.uuid +"\", true);");
+    button.value ="publish collaboration : open all data and views to public";
   }
 
   // --------
@@ -2457,7 +2488,14 @@ function eedbUserClearFailedJobs() {
   var clearFailsXMLHttp=GetXmlHttpObject();
   clearFailsXMLHttp.open("GET", url, false);
   clearFailsXMLHttp.send(null);
+  eedbUserReloadQueueStatus();
+}
 
+function eedbUserClearBlockedJobs() {
+  var url = eedbUploadCGI + "?mode=clear_blocked_jobs";
+  var clearFailsXMLHttp=GetXmlHttpObject();
+  clearFailsXMLHttp.open("GET", url, false);
+  clearFailsXMLHttp.send(null);
   eedbUserReloadQueueStatus();
 }
 
@@ -2910,6 +2948,14 @@ function eedbUserShowMydataQueue() {
   clearFailedButton.setAttribute("onclick", "eedbUserClearFailedJobs();");
   clearFailedButton.innerHTML ="clear failed jobs";
 
+  var clearBlockedButton = queue_div.appendChild(new Element('button'));
+  clearBlockedButton.style.marginLeft = "10px";
+  clearBlockedButton.style.display = "none";
+  clearBlockedButton.setAttribute("type", "button");
+  clearBlockedButton.setAttribute("onclick", "eedbUserClearBlockedJobs();");
+  clearBlockedButton.innerHTML ="clear blocked jobs";
+
+
   var div1 = queue_div.appendChild(new Element('div'));
   div1.setAttribute('style', "width:100%;");
   var my_table = new Element('table');
@@ -2950,6 +2996,7 @@ function eedbUserShowMydataQueue() {
     (tr.appendChild(new Element('td'))).innerHTML = encodehtml(job.import_date);
     (tr.appendChild(new Element('td'))).innerHTML = job.status;
     if(job.status == "FAILED") { clearFailedButton.style.display = "initial"; }
+    if(job.status == "BLOCKED") { clearBlockedButton.style.display = "initial"; }
   }
   queue_div.appendChild(new Element('hr'));
 }
@@ -3165,7 +3212,7 @@ function eedbUserSelectedPeersPanel(mode) {
       button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
       //button.setAttribute("onclick", "eedbUserShareDatabaseWithCollaboration(\""+ source_id +"\", \""+collaboration.uuid+"\");");
       button.setAttribute("onclick", "eedbUserShareMultipleDatabases(\""+collaboration.uuid+"\");");
-      button.setAttribute("onmouseover", "eedbMessageTooltip(\"share data source to this collaboration\",100);");
+      button.setAttribute("onmouseover", "eedbMessageTooltip(\"share data sources to : <br>"+collaboration.name+"\",150);");
       button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
       button.innerHTML = "share";
     }
@@ -3386,7 +3433,7 @@ function eedbUserShareDatabasePanel(source_id) {
       var button = div2.appendChild(document.createElement("button"));
       button.setAttribute("style", "font-size:8px; padding: 1px 4px; margin-left:auto;margin-right:auto; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
       button.setAttribute("onclick", "eedbUserUnshareDatabaseWithCollaboration(\""+ source_id +"\", \""+collaboration.uuid+"\");");
-      button.setAttribute("onmouseover", "eedbMessageTooltip(\"share data source to this collaboration\",100);");
+      button.setAttribute("onmouseover", "eedbMessageTooltip(\"<span style='color:#FF9757; font-weight:bold;'>unshare</span> data with : <br>"+collaboration.name+"\",150);");
       button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
       button.innerHTML = "unshare";
     } else {
@@ -3397,7 +3444,7 @@ function eedbUserShareDatabasePanel(source_id) {
       var button = td.appendChild(document.createElement("button"));
       button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
       button.setAttribute("onclick", "eedbUserShareDatabaseWithCollaboration(\""+ source_id +"\", \""+collaboration.uuid+"\");");
-      button.setAttribute("onmouseover", "eedbMessageTooltip(\"share data source to this collaboration\",100);");
+      button.setAttribute("onmouseover", "eedbMessageTooltip(\"share data to : <br>"+collaboration.name+"\",150);");
       button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
       button.innerHTML = "share";
     }

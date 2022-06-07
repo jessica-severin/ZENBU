@@ -547,29 +547,29 @@ function glyphsGetChromInfo(glyphsGB, asm, chrom) {
     glyphsGB.ncbi_asm_accn = xml_asm[0].getAttribute('ncbi_acc');
     glyphsGB.release_date = xml_asm[0].getAttribute('release_date');
   }
-  //update the genome desc
-  var genomeDiv = document.getElementById("glyphs_genome_desc");
-  if(genomeDiv) {
-    genomeDiv.setAttribute("style", "font-family:arial,helvetica,sans-serif; font-size:12px; color:black;");
-    genomeDiv.innerHTML="";
-    var span1 = genomeDiv.appendChild(document.createElement("span"));
-    span1.setAttribute("style", "margin-left:3px; color:black;");
-    span1.innerHTML = glyphsGB.common_name +" "+ glyphsGB.asm; 
-    //if(glyphsGB.ucsc_asm) { span1.innerHTML += " "+glyphsGB.ucsc_asm; }
-    if(glyphsGB.ncbi_asm && glyphsGB.ncbi_asm!=glyphsGB.asm) { span1.innerHTML += " "+glyphsGB.ncbi_asm; }
-    if(glyphsGB.ucsc_asm && glyphsGB.ucsc_asm!=glyphsGB.asm) { span1.innerHTML += " "+glyphsGB.ucsc_asm; }
-    //if(glyphsGB.ncbi_asm_accn) { span1.innerHTML += " "+glyphsGB.ncbi_asm_accn; }
 
-    if(glyphsGB.release_date) {
-      span1 = genomeDiv.appendChild(document.createElement("span"));
-      span1.setAttribute("style", "margin-left:3px; color:black; ");
-      span1.innerHTML = glyphsGB.release_date;
-    }
-    if(glyphsGB.genus) {
-      span1 = genomeDiv.appendChild(document.createElement("span"));
-      span1.setAttribute("style", "margin-left:3px; color:black;");
-      span1.innerHTML = "( "+glyphsGB.genus + " " + glyphsGB.species+" )";
-    }
+  //update the genome desc
+  if(!glyphsGB.genomeDescDiv) { glyphsGB.genomeDescDiv = document.createElement("div"); }
+  var genomeDiv = glyphsGB.genomeDescDiv;
+  genomeDiv.setAttribute("style", "font-family:arial,helvetica,sans-serif; font-size:12px; color:black;");
+  genomeDiv.innerHTML="";
+  var span1 = genomeDiv.appendChild(document.createElement("span"));
+  span1.setAttribute("style", "margin-left:3px; color:black;");
+  span1.innerHTML = glyphsGB.common_name +" "+ glyphsGB.asm; 
+  //if(glyphsGB.ucsc_asm) { span1.innerHTML += " "+glyphsGB.ucsc_asm; }
+  if(glyphsGB.ncbi_asm && glyphsGB.ncbi_asm!=glyphsGB.asm) { span1.innerHTML += " "+glyphsGB.ncbi_asm; }
+  if(glyphsGB.ucsc_asm && glyphsGB.ucsc_asm!=glyphsGB.asm) { span1.innerHTML += " "+glyphsGB.ucsc_asm; }
+  //if(glyphsGB.ncbi_asm_accn) { span1.innerHTML += " "+glyphsGB.ncbi_asm_accn; }
+
+  if(glyphsGB.release_date) {
+    span1 = genomeDiv.appendChild(document.createElement("span"));
+    span1.setAttribute("style", "margin-left:3px; color:black; ");
+    span1.innerHTML = glyphsGB.release_date;
+  }
+  if(glyphsGB.genus) {
+    span1 = genomeDiv.appendChild(document.createElement("span"));
+    span1.setAttribute("style", "margin-left:3px; color:black;");
+    span1.innerHTML = "( "+glyphsGB.genus + " " + glyphsGB.species+" )";
   }
 }
 
@@ -1233,6 +1233,11 @@ function gLyphsInitViewConfigUUID(glyphsGB, configUUID) {
   if(glyphsGB.configUUID == configUUID) { return true; }
   glyphsGB.configUUID = configUUID; //make sure to set to we can reload if it fails
 
+  if(configUUID == "empty") {
+    gLyphsInitEmptyViewConfig(glyphsGB);
+    return true;
+  }
+
   var id = configUUID + ":::Config";
   var config = eedbFetchObject(id);
   if(!gLyphsInitFromViewConfig(glyphsGB, config)) { return false; }
@@ -1260,6 +1265,51 @@ function gLyphsInitConfigBasename(glyphsGB, basename) {
 
   if(!gLyphsInitFromViewConfig(glyphsGB, config)) { return false; }
 
+  return true;
+}
+
+function gLyphsInitEmptyViewConfig(glyphsGB) {
+  document.onmouseup = endDrag;
+
+  if(!glyphsGB) { return false; }
+  console.log("gLyphsInitEmptyViewConfig");
+
+  //reset some variables to be safe
+  glyphsGB.highlight_search = "";
+  glyphsGB.init_search_term = "";
+  glyphsGB.active_track_exp_filter = "";
+  glyphsGB.configname = "welcome to ZENBU genome browser";
+  glyphsGB.desc = "";
+  glyphsGB.view_config = null;
+  glyphsGB.config_createdate = "";
+  glyphsGB.config_creator = "";
+  glyphsGB.config_fixed_id = "";
+  glyphsGB.view_config_loaded = true;
+  glyphsGB.active_trackID = undefined;
+  glyphsGB.selected_feature = undefined;
+  glyphsGB.tracks_hash = new Object();
+  glyphsGB.tracks_array = new Array();
+
+  glyphsGB.configUUID = "empty";
+  
+  current_dragTrack = undefined;
+  currentSelectTrackID =undefined;
+    
+  gLyphsSearchInterface(glyphsGB);
+  gLyphsEmptySearchResults(glyphsGB);
+ 
+  //create empty cytoband track
+  var glyphTrack = new ZenbuGlyphsTrack(glyphsGB);
+  glyphTrack.glyphStyle = "cytoband";
+  glyphsGB.gLyphTrackSet.appendChild(glyphTrack.trackDiv);
+  createAddTrackTool(glyphsGB); //so it moves to end
+
+  gLyphsRenderTrack(glyphTrack);
+  gLyphsDrawTrack(glyphTrack.trackID);
+  gLyphsChangeActiveTrack(glyphTrack);
+  
+  gLyphsSetLocation(glyphsGB, "hg38", "chr19", 49657992, 49666908);
+  gLyphsReloadRegion(glyphsGB); 
   return true;
 }
 
@@ -2242,7 +2292,7 @@ function gLyphsAddCustomTrack(glyphsGB) {
 
   var glyphTrack = new ZenbuGlyphsTrack(glyphsGB);
   glyphsGB.tracks_hash[glyphTrack.trackID] = glyphTrack;
-  glyphTrack.title = "new track "+glyphTrack.trackID;
+  //glyphTrack.title = "new track "+glyphTrack.trackID;
 
   //glyphTrack.trackDiv.innerHTML = "<h3>this is a new track, is it working?</h3>";
   

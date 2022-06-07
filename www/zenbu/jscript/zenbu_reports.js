@@ -825,8 +825,10 @@ function reportsCreateLayoutElementFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("main_div_id")) {  layoutElement.main_div_id = elementDOM.getAttribute("main_div_id"); }
   if(elementDOM.getAttribute("title")) {  layoutElement.title = elementDOM.getAttribute("title"); }
   if(elementDOM.getAttribute("layout_mode")) {  layoutElement.layout_mode = elementDOM.getAttribute("layout_mode"); }
+  if(elementDOM.getAttribute("layout_centered") == "true") { layoutElement.layout_centered = true; }
 
   if(elementDOM.getAttribute("layout_parentID")) {  layoutElement.layout_parentID = elementDOM.getAttribute("layout_parentID"); }
+  if(elementDOM.getAttribute("layout_alignment")) {  layoutElement.layout_alignment = elementDOM.getAttribute("layout_alignment"); }
   if(elementDOM.getAttribute("layout_col")) {  layoutElement.layout_col = parseInt(elementDOM.getAttribute("layout_col")); }
   if(elementDOM.getAttribute("layout_row")) {  layoutElement.layout_row = parseInt(elementDOM.getAttribute("layout_row")); }
   if(elementDOM.getAttribute("layout_xpos")) {  layoutElement.layout_xpos = parseInt(elementDOM.getAttribute("layout_xpos")); }
@@ -869,6 +871,7 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
   reportElement.show_titlebar = true;
   reportElement.widget_search = false;
   reportElement.widget_filter = false;
+  reportElement.widget_download = false;
   reportElement.widget_columns = false;
   reportElement.move_selection_to_top=false;
   reportElement.sort_reverse = false;
@@ -876,12 +879,16 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
   reportElement.hide_zero = false;
   reportElement.auto_content_height = false;
   reportElement.title = "";
-  reportElement.title_prefix = "";
+  reportElement.title_prefix = "";  
+  reportElement.title_load_filter = false;
+  reportElement.title_focus_feature = false;
   //reportElement.resetable = false;
   
   if(elementDOM.getAttribute("main_div_id")) {  reportElement.main_div_id = elementDOM.getAttribute("main_div_id"); }
   if(elementDOM.getAttribute("title")) {  reportElement.title = elementDOM.getAttribute("title"); }
   if(elementDOM.getAttribute("title_prefix")) {  reportElement.title_prefix = elementDOM.getAttribute("title_prefix"); }
+  if(elementDOM.getAttribute("title_focus_feature") == "true") { reportElement.title_focus_feature = true; }
+  if(elementDOM.getAttribute("title_load_filter") == "true") { reportElement.title_load_filter = true; }
 
   if(elementDOM.getAttribute("datasource_mode")) {  reportElement.datasource_mode = elementDOM.getAttribute("datasource_mode"); }
   if(elementDOM.getAttribute("datasource_submode")) {  reportElement.datasource_submode = elementDOM.getAttribute("datasource_submode"); }
@@ -904,11 +911,12 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("init_selection")) {  reportElement.init_selection = elementDOM.getAttribute("init_selection"); }
   //if(elementDOM.getAttribute("selected_id")) {  reportElement.selected_id = elementDOM.getAttribute("selected_id"); }
   //if(elementDOM.getAttribute("search_data_filter")) {  reportElement.search_data_filter = elementDOM.getAttribute("search_data_filter"); }
-  //if(elementDOM.getAttribute("show_only_search_matches") == "true") { reportElement.show_only_search_matches = true; }
+  if(elementDOM.getAttribute("show_only_search_matches") == "true") { reportElement.show_only_search_matches = true; }
 
   if(elementDOM.getAttribute("show_titlebar") == "false") { reportElement.show_titlebar = false; }
   if(elementDOM.getAttribute("widget_search") == "true") { reportElement.widget_search = true; }
   if(elementDOM.getAttribute("widget_filter") == "true") { reportElement.widget_filter = true; }
+  if(elementDOM.getAttribute("widget_download") == "true") { reportElement.widget_download = true; }
   if(elementDOM.getAttribute("widget_columns") == "true") { reportElement.widget_columns = true; }
   if(elementDOM.getAttribute("border")) {  reportElement.border = elementDOM.getAttribute("border"); }
 
@@ -916,6 +924,7 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
 
   if(elementDOM.getAttribute("layout_mode")) {  reportElement.layout_mode = elementDOM.getAttribute("layout_mode"); }
   if(elementDOM.getAttribute("layout_parentID")) {  reportElement.layout_parentID = elementDOM.getAttribute("layout_parentID"); }
+  if(elementDOM.getAttribute("layout_alignment")) {  reportElement.layout_alignment = elementDOM.getAttribute("layout_alignment"); }
   if(elementDOM.getAttribute("layout_col")) {  reportElement.layout_col = parseInt(elementDOM.getAttribute("layout_col")); }
   if(elementDOM.getAttribute("layout_row")) {  reportElement.layout_row = parseInt(elementDOM.getAttribute("layout_row")); }
   if(elementDOM.getAttribute("layout_xpos")) {  reportElement.layout_xpos = parseInt(elementDOM.getAttribute("layout_xpos")); }
@@ -925,6 +934,14 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("auto_content_height") == "true") { reportElement.auto_content_height = true; }
 
   if(elementDOM.getAttribute("assembly_name")) { reportElement.assembly_name = elementDOM.getAttribute("assembly_name"); }
+
+  if(elementDOM.getAttribute("fixed_color")) {  reportElement.fixed_color = elementDOM.getAttribute("fixed_color"); }
+  if(elementDOM.getAttribute("signal_datatype")) { reportElement.signal_datatype = elementDOM.getAttribute("signal_datatype"); }
+  if(elementDOM.getAttribute("signal_colorspace")) { reportElement.signal_colorspace = elementDOM.getAttribute("signal_colorspace"); }
+  if(elementDOM.getAttribute("signal_logscale")) { reportElement.signal_logscale = elementDOM.getAttribute("signal_logscale"); }
+  if(elementDOM.getAttribute("signal_invert")) { reportElement.signal_invert = elementDOM.getAttribute("signal_invert"); }
+  if(elementDOM.getAttribute("signal_min")) { reportElement.signal_min = elementDOM.getAttribute("signal_min"); }
+  if(elementDOM.getAttribute("signal_max")) { reportElement.signal_max = elementDOM.getAttribute("signal_max"); }
 
   //general subclass method
   if(reportElement.initFromConfigDOM) {
@@ -1195,6 +1212,8 @@ function reportsGenerateElementDOM(reportElement) {
 
   if(reportElement.title) { elementDOM.setAttribute("title", reportElement.title); }
   if(reportElement.title_prefix) { elementDOM.setAttribute("title_prefix", reportElement.title_prefix); }
+  if(reportElement.title_focus_feature) { elementDOM.setAttribute("title_focus_feature", "true"); }
+  if(reportElement.title_load_filter) { elementDOM.setAttribute("title_load_filter", "true"); }
   
   if(reportElement.datasource_mode) { elementDOM.setAttribute("datasource_mode", reportElement.datasource_mode); } //feature, edge, shared_element
   if(reportElement.datasource_submode) { elementDOM.setAttribute("datasource_submode", reportElement.datasource_submode); } //feature, edge, shared_element
@@ -1218,19 +1237,22 @@ function reportsGenerateElementDOM(reportElement) {
     if(reportElement.selected_id) { elementDOM.setAttribute("init_selection", reportElement.selected_id); }
   }
   //if(reportElement.search_data_filter) { elementDOM.setAttribute("search_data_filter", reportElement.search_data_filter); }
-  //if(reportElement.show_only_search_matches) { elementDOM.setAttribute("show_only_search_matches", "true"); }
-
+  if(reportElement.show_only_search_matches) { elementDOM.setAttribute("show_only_search_matches", "true"); }
+  
   if(reportElement.hide_zero) { elementDOM.setAttribute("hide_zero", "true"); }
 
   if(reportElement.show_titlebar) { elementDOM.setAttribute("show_titlebar", "true"); } else { elementDOM.setAttribute("show_titlebar", "false"); }
   if(reportElement.widget_search) { elementDOM.setAttribute("widget_search", "true"); }
   if(reportElement.widget_filter) { elementDOM.setAttribute("widget_filter", "true"); }
+  if(reportElement.widget_download) { elementDOM.setAttribute("widget_download", "true"); }
   if(reportElement.widget_columns) { elementDOM.setAttribute("widget_columns", "true"); }
   if(reportElement.border) { elementDOM.setAttribute("border", reportElement.border); }
 
-  if(reportElement.layout_mode) { elementDOM.setAttribute("layout_mode", reportElement.layout_mode); }  //absolute, child
+  if(reportElement.layout_mode) { elementDOM.setAttribute("layout_mode", reportElement.layout_mode); }  //absolute, child, root
+  if(reportElement.layout_centered) { elementDOM.setAttribute("layout_centered", "true"); } 
   if(reportElement.layout_parentID) { elementDOM.setAttribute("layout_parentID", reportElement.layout_parentID); } //linked to Row, Column, or Grid layoutElement
   else { elementDOM.setAttribute("layout_parentID", ""); } //root
+  if(reportElement.layout_alignment) { elementDOM.setAttribute("layout_alignment", reportElement.layout_alignment); }
   if(reportElement.layout_row) { elementDOM.setAttribute("layout_row", reportElement.layout_row); }
   if(reportElement.layout_col) { elementDOM.setAttribute("layout_col", reportElement.layout_col); }
   if(reportElement.layout_xpos) { elementDOM.setAttribute("layout_xpos", parseInt(reportElement.layout_xpos)); }
@@ -1240,6 +1262,14 @@ function reportsGenerateElementDOM(reportElement) {
   if(reportElement.content_height) { elementDOM.setAttribute("content_height", reportElement.content_height); }
   if(reportElement.auto_content_height) { elementDOM.setAttribute("auto_content_height", "true"); }
   
+  if(reportElement.fixed_color) { elementDOM.setAttribute("fixed_color", reportElement.fixed_color); }
+  if(reportElement.signal_datatype) { elementDOM.setAttribute("signal_datatype", reportElement.signal_datatype); }
+  if(reportElement.signal_colorspace) { elementDOM.setAttribute("signal_colorspace", reportElement.signal_colorspace); }
+  if(reportElement.signal_logscale) { elementDOM.setAttribute("signal_logscale", reportElement.signal_logscale); }
+  if(reportElement.signal_invert) { elementDOM.setAttribute("signal_invert", reportElement.signal_invert); }
+  if(reportElement.signal_min) { elementDOM.setAttribute("signal_min", reportElement.signal_min); }
+  if(reportElement.signal_max) { elementDOM.setAttribute("signal_max", reportElement.signal_max); }
+
   //dtype_columns
   if(reportElement.datatypes) {
     for(var dtype in reportElement.datatypes) {
@@ -2527,6 +2557,7 @@ function reportsDisplayEditTools() {
     toolPanelElement.layout_ypos = masterRect.top + 20;
     toolPanelElement.widget_search = false;
     toolPanelElement.widget_filter = false;
+    toolPanelElement.widget_download = false;
     toolPanelElement.widget_columns = false;
     toolPanelElement.loading = false;
     reportsDrawElement(toolPanelElement.elementID);
@@ -2662,7 +2693,7 @@ function reportsDrawToolsPanel(toolPanelElement) {
   button.setAttribute("onmouseover", "eedbMessageTooltip(\"create element\",100);");
   button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
   button.setAttribute("onmousedown", "reportsToolsPanelCreateElement('treelist');");
-  button.innerHTML = "TreeList";
+  button.innerHTML = "Tree List";
 
   tdiv = main_div.appendChild(document.createElement('div'));
   tdiv.setAttribute("style", "width:80%; margin:auto; ");
@@ -2672,6 +2703,24 @@ function reportsDrawToolsPanel(toolPanelElement) {
   button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
   button.setAttribute("onmousedown", "reportsToolsPanelCreateElement('chart');");
   button.innerHTML = "Chart";
+
+  tdiv = main_div.appendChild(document.createElement('div'));
+  tdiv.setAttribute("style", "width:80%; margin:auto; ");
+  button = tdiv.appendChild(document.createElement("button"));
+  button.setAttribute("style", "font-size:12px; padding: 1px 4px; margin-top:10px; width:100%; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.setAttribute("onmouseover", "eedbMessageTooltip(\"create element\",100);");
+  button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  button.setAttribute("onmousedown", "reportsToolsPanelCreateElement('heatmap');");
+  button.innerHTML = "Heatmap";
+
+  tdiv = main_div.appendChild(document.createElement('div'));
+  tdiv.setAttribute("style", "width:80%; margin:auto; ");
+  button = tdiv.appendChild(document.createElement("button"));
+  button.setAttribute("style", "font-size:12px; padding: 1px 4px; margin-top:10px; width:100%; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.setAttribute("onmouseover", "eedbMessageTooltip(\"create element\",100);");
+  button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  button.setAttribute("onmousedown", "reportsToolsPanelCreateElement('colorscale');");
+  button.innerHTML = "Color Scale";
 
   tdiv = main_div.appendChild(document.createElement('div'));
   tdiv.setAttribute("style", "width:80%; margin:auto; ");
@@ -2708,6 +2757,24 @@ function reportsDrawToolsPanel(toolPanelElement) {
   button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
   button.setAttribute("onmousedown", "reportsToolsPanelCreateElement('category');");
   button.innerHTML = "Category";
+
+  tdiv = main_div.appendChild(document.createElement('div'));
+  tdiv.setAttribute("style", "width:80%; margin:auto; ");
+  button = tdiv.appendChild(document.createElement("button"));
+  button.setAttribute("style", "font-size:12px; padding: 1px 4px; margin-top:10px; width:100%; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.setAttribute("onmouseover", "eedbMessageTooltip(\"create element\",100);");
+  button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  button.setAttribute("onmousedown", "reportsToolsPanelCreateElement('filter');");
+  button.innerHTML = "Filter";
+
+  tdiv = main_div.appendChild(document.createElement('div'));
+  tdiv.setAttribute("style", "width:80%; margin:auto; ");
+  button = tdiv.appendChild(document.createElement("button"));
+  button.setAttribute("style", "font-size:12px; padding: 1px 4px; margin-top:10px; width:100%; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.setAttribute("onmouseover", "eedbMessageTooltip(\"create element\",100);");
+  button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  button.setAttribute("onmousedown", "reportsToolsPanelCreateElement('search');");
+  button.innerHTML = "Search";
 
   tdiv = main_div.appendChild(document.createElement('div'));
   tdiv.setAttribute("style", "width:80%; margin:auto; ");
@@ -2967,6 +3034,7 @@ function reportsXHResponse(elementID) {
   reportElement.load_retry = 0;
   reportElement.loaded_timestamp = Date.now();
 
+  current_report.active_cascades = {};  //start cascade
   reportsPostprocessElement(elementID);
   reportsDrawElement(elementID);
 
@@ -3004,14 +3072,21 @@ function reportsParseElementData(reportElement, xhrObj) {
     return;
   }
 
-  //flag the dtypes to remove those not valid with this load
+  //flag the dtypes to remove those not valid with this load and reset min/max_val to fully recalc
   if(reportElement.datatypes) {
     for(var dtype in reportElement.datatypes) {
       var dtype_col = reportElement.datatypes[dtype];
       if(!dtype_col) { continue; }
+      dtype_col.row_count=0;
+      dtype_col.dtype_valid = true;
+      dtype_col.min_val = 0;
+      dtype_col.max_val = 0;
       if(dtype_col.col_type == "hyperlink") { continue; }
       if(dtype_col.col_type == "row") { continue; }
-      if(dtype_col.filtered) { continue; }
+      if(dtype_col.filtered) { 
+        console.log("reportsParseElementData ["+reportElement.elementID+"] dtype_col ["+dtype_col.col_type+"] "+dtype_col.datatype+" is filtered");
+        continue;
+      }
       if(dtype_col.visible) { continue; }
       dtype_col.dtype_valid = false;
     }
@@ -3056,17 +3131,17 @@ function reportsParseElementData(reportElement, xhrObj) {
   //sources mode
   if(reportElement.datasource_mode == "source") {
     //console.log("add default source columns");
-    reportElementAddDatatypeColumn(reportElement, "name", "name", true);
-    reportElementAddDatatypeColumn(reportElement, "category", "category", true);
-    reportElementAddDatatypeColumn(reportElement, "eedb:assembly_name", "assembly", true);
-    reportElementAddDatatypeColumn(reportElement, "description", "description", true);
-    reportElementAddDatatypeColumn(reportElement, "import_date", "import_date", true);
-    reportElementAddDatatypeColumn(reportElement, "owner_identity", "owner_identity", true);
-    reportElementAddDatatypeColumn(reportElement, "owner_import_date", "owner_import_date", true);
-    reportElementAddDatatypeColumn(reportElement, "platform", "platform", true);
-    reportElementAddDatatypeColumn(reportElement, "source_class", "source_class", true);
-    //reportElementAddDatatypeColumn(reportElement, "feature_count", "feature_count", true);
-    //reportElementAddDatatypeColumn(reportElement, "series_point", "series_point", true);
+    reportElementAddDatatypeColumn(reportElement, "name", "name");
+    reportElementAddDatatypeColumn(reportElement, "category", "category");
+    reportElementAddDatatypeColumn(reportElement, "eedb:assembly_name", "assembly");
+    reportElementAddDatatypeColumn(reportElement, "description", "description");
+    reportElementAddDatatypeColumn(reportElement, "import_date", "import_date");
+    reportElementAddDatatypeColumn(reportElement, "owner_identity", "owner_identity");
+    reportElementAddDatatypeColumn(reportElement, "owner_import_date", "owner_import_date");
+    reportElementAddDatatypeColumn(reportElement, "platform", "platform");
+    reportElementAddDatatypeColumn(reportElement, "source_class", "source_class");
+    //reportElementAddDatatypeColumn(reportElement, "feature_count", "feature_count");
+    //reportElementAddDatatypeColumn(reportElement, "series_point", "series_point");
 
     for(var i=0; i<reportElement.sources_array.length; i++) {
       var source  = reportElement.sources_array[i];
@@ -3074,7 +3149,7 @@ function reportsParseElementData(reportElement, xhrObj) {
       source.filter_valid = true;
       //if(source.className == "experiment") { }
       for(var tag in source.mdata) { //new common mdata[].array system
-        var t_col = reportElementAddDatatypeColumn(reportElement, tag, tag, false);
+        var t_col = reportElementAddDatatypeColumn(reportElement, tag, tag);
         //t_col.visible = false;
       }
     }
@@ -3091,17 +3166,17 @@ function reportsParseElementData(reportElement, xhrObj) {
   
   if(features.length>0) {
     if(reportElement.datasource_mode == "edge") {
-      reportElementAddDatatypeColumn(reportElement, "f1.name", "name", true);
-      reportElementAddDatatypeColumn(reportElement, "f1.category", "category", false);
-      reportElementAddDatatypeColumn(reportElement, "f1.source_name", "source_name", false);
-      reportElementAddDatatypeColumn(reportElement, "f1.location_link", "location", false);
-      reportElementAddDatatypeColumn(reportElement, "f1.location_string", "location", false);
+      reportElementAddDatatypeColumn(reportElement, "f1.name", "name");
+      reportElementAddDatatypeColumn(reportElement, "f1.category", "category");
+      reportElementAddDatatypeColumn(reportElement, "f1.source_name", "source_name");
+      reportElementAddDatatypeColumn(reportElement, "f1.location_link", "location");
+      reportElementAddDatatypeColumn(reportElement, "f1.location_string", "location");
       
-      reportElementAddDatatypeColumn(reportElement, "f2.name", "name", true);
-      reportElementAddDatatypeColumn(reportElement, "f2.category", "category", false);
-      reportElementAddDatatypeColumn(reportElement, "f2.source_name", "source_name", false);
-      reportElementAddDatatypeColumn(reportElement, "f2.location_link", "location", false);
-      reportElementAddDatatypeColumn(reportElement, "f2.location_string", "location", false);
+      reportElementAddDatatypeColumn(reportElement, "f2.name", "name");
+      reportElementAddDatatypeColumn(reportElement, "f2.category", "category");
+      reportElementAddDatatypeColumn(reportElement, "f2.source_name", "source_name");
+      reportElementAddDatatypeColumn(reportElement, "f2.location_link", "location");
+      reportElementAddDatatypeColumn(reportElement, "f2.location_string", "location");
     }
   }
 
@@ -3141,27 +3216,27 @@ function reportsParseElementData(reportElement, xhrObj) {
     //mdata to column datatype
     if(reportElement.datasource_mode == "feature") {
       if(!dtype_name && feature.name && (feature.source.name!=feature.name)) { 
-        dtype_name = reportElementAddDatatypeColumn(reportElement, "name", "name", true);
+        dtype_name = reportElementAddDatatypeColumn(reportElement, "name", "name");
       }
       if(!dtype_category && feature.source && feature.source.category) {
-        dtype_category = reportElementAddDatatypeColumn(reportElement, "category", "category", true); 
+        dtype_category = reportElementAddDatatypeColumn(reportElement, "category", "category"); 
       }
       if(!dtype_source_name && feature.source && feature.source.name) {
-        dtype_source_name = reportElementAddDatatypeColumn(reportElement, "source_name", "source_name", true); 
+        dtype_source_name = reportElementAddDatatypeColumn(reportElement, "source_name", "source_name"); 
       }
       if(!dtype_location_string && feature.chromloc) {
-        dtype_location_link = reportElementAddDatatypeColumn(reportElement, "location_link", "location", false);
-        dtype_location_string = reportElementAddDatatypeColumn(reportElement, "location_string", "location", false); 
+        dtype_location_link = reportElementAddDatatypeColumn(reportElement, "location_link", "location");
+        dtype_location_string = reportElementAddDatatypeColumn(reportElement, "location_string", "location"); 
       }
       for(var tag in feature.mdata) { //new common mdata[].array system
         if(tag=="keyword") { continue; }
         if(tag=="eedb:display_name") { continue; }
-        var t_col = reportElementAddDatatypeColumn(reportElement, tag, tag, false);
+        var t_col = reportElementAddDatatypeColumn(reportElement, tag, tag);
       }
       //feature score
       if(feature.score && feature.score!=0) {
         if(!dtype_score) {
-          dtype_score = reportElementAddDatatypeColumn(reportElement, "bedscore", "bedscore", false);
+          dtype_score = reportElementAddDatatypeColumn(reportElement, "bedscore", "bedscore");
           dtype_score.col_type = "signal";
         }
         if((dtype_score.min_val == 0) && (dtype_score.max_val == 0)) {
@@ -3178,7 +3253,7 @@ function reportsParseElementData(reportElement, xhrObj) {
           if(!expr) { continue; }
           var dtype = expr.datatype;
           if(!dtype) { continue; }
-          var dtype_col = reportElementAddDatatypeColumn(reportElement, dtype, dtype, false);
+          var dtype_col = reportElementAddDatatypeColumn(reportElement, dtype, dtype);
           dtype_col.col_type = "signal";
           //console.log("feature_expression "+dtype+" total="+expr.total);
           if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
@@ -3237,7 +3312,7 @@ function reportsParseElementData(reportElement, xhrObj) {
           if(!expr) { continue; }
           if(!expr.datatype) { continue; }
           var dtype = "f1."+expr.datatype;
-          var dtype_col = reportElementAddDatatypeColumn(reportElement, dtype, expr.datatype, false);
+          var dtype_col = reportElementAddDatatypeColumn(reportElement, dtype, expr.datatype);
           dtype_col.col_type = "signal";
           if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
             dtype_col.min_val = expr.total;
@@ -3265,7 +3340,7 @@ function reportsParseElementData(reportElement, xhrObj) {
           if(!expr) { continue; }
           if(!expr.datatype) { continue; }
           var dtype = "f2."+expr.datatype;
-          var dtype_col = reportElementAddDatatypeColumn(reportElement, dtype, expr.datatype, false);
+          var dtype_col = reportElementAddDatatypeColumn(reportElement, dtype, expr.datatype);
           dtype_col.col_type = "signal";
           if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
             dtype_col.min_val = expr.total;
@@ -3280,7 +3355,7 @@ function reportsParseElementData(reportElement, xhrObj) {
     for(var dtype in edge.weights) {
       var weights = edge.weights[dtype];
       if(!weights) { continue; }
-      var dtype_col = reportElementAddDatatypeColumn(reportElement, dtype, dtype, true);
+      var dtype_col = reportElementAddDatatypeColumn(reportElement, dtype, dtype);
       dtype_col.col_type = "weight";
       if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
         dtype_col.min_val = weights[0].weight;
@@ -3297,14 +3372,14 @@ function reportsParseElementData(reportElement, xhrObj) {
     for(var tag in edge.mdata) { //new common mdata[].array system
       if(tag=="keyword") { continue; }
       if(tag=="eedb:display_name") { continue; }
-      var t_col = reportElementAddDatatypeColumn(reportElement, tag, tag, false);
+      var t_col = reportElementAddDatatypeColumn(reportElement, tag, tag);
     }
 
     //edge metadata
     for(var tag in edge.mdata) { //new common mdata[].array system
       if(tag=="keyword") { continue; }
       if(tag=="eedb:display_name") { continue; }
-      var t_col = reportElementAddDatatypeColumn(reportElement, tag, tag, false);
+      var t_col = reportElementAddDatatypeColumn(reportElement, tag, tag);
     }
 
     reportElement.edge_array.push(edge);
@@ -3312,11 +3387,13 @@ function reportsParseElementData(reportElement, xhrObj) {
   console.log("reportsParseElementData ["+reportElement.elementID+"] read "+reportElement.feature_array.length+" features; "+ reportElement.edge_array.length +" edges");
 
   var dtype_msg = "";
+  console.log("reportsParseElementData ["+reportElement.elementID+"] rebuild dtype_columns");
   reportElement.dtype_columns = new Array();
   for(var dtype in reportElement.datatypes) {
     var dtype_col = reportElement.datatypes[dtype];
     if(!dtype_col) { continue; }
-    if(!dtype_col.dtype_valid) { //remove it
+    if(!dtype_col.dtype_valid || (!dtype_col.visible && dtype_col.filtered && dtype_col.row_count==0)) { //remove it
+      console.log("reportsParseElementData ["+reportElement.elementID+"] remove dtype_col "+dtype_col.col_type+" "+dtype_col.datatype);
       reportElement.datatypes[dtype] = null;
       //delete reportElement.datatypes[dtype];
       continue; 
@@ -3375,6 +3452,7 @@ function reportElementAddDatatypeColumn(reportElement, dtype, title, visible) {
     //console.log("reportElementAddDatatypeColumn "+reportElement.elementID+" new "+dtype_col.datatype);
   }
   dtype_col.dtype_valid = true;
+  dtype_col.row_count++;
   return dtype_col;
 }
 
@@ -3557,6 +3635,7 @@ function reportsObjectCheckCategoryFilters(object, dtype_col) {
   if(!dtype_col.filtered) { return true; }
   if(dtype_col.col_type != "mdata") { return true; }
   if(!dtype_col.categories) { return true; }
+  //console.log("reportsObjectCheckCategoryFilters "+dtype_col.datatype+" has categories");
 
   //perform class specific tests if datatype is not generic mdata
   //if(dtype_col.datatype == "name") {
@@ -3588,7 +3667,7 @@ function reportsObjectCheckCategoryFilters(object, dtype_col) {
   //this is one of the filtered dtypes, must pass this category test in order to continue checking next dtype
   if(!object.mdata || !object.mdata[datatype]) {
     //object doesn't have this datatype so immeadiately fails tests
-    //console.log("reportsObjectCheckCategoryFilters "+datatype+"  obj["+object.name+"] no mdata");
+    console.log("reportsObjectCheckCategoryFilters "+datatype+"  obj["+object.name+"] failed no mdata");
     return false;
   }
   
@@ -3600,7 +3679,7 @@ function reportsObjectCheckCategoryFilters(object, dtype_col) {
     var ctg_obj = dtype_col.categories[val];
     if(!ctg_obj) { continue; }
     if(ctg_obj.filtered) {
-      //console.log("found match ctg["+ctg_obj.ctg+"]");
+      //console.log("not failed found dtype:"+datatype+" match ctg["+ctg_obj.ctg+"]");
       valid= true;
       break;
     }
@@ -3628,6 +3707,12 @@ function reportElementSearchTestObject(feature, filter) {
     feature.search_match = true;
     return;
   }
+  if(feature.search_match) { return; }
+  if(check_by_filter_logic(feature, filter)) {
+    feature.search_match = true;
+    return;
+  }
+  /*
   for(var tag in feature.mdata) { //new common mdata[].array system
     if(feature.search_match) { return; }
     var value_array = feature.mdata[tag];
@@ -3640,6 +3725,7 @@ function reportElementSearchTestObject(feature, filter) {
       }
     }
   }
+  */
 }
 
 
@@ -3682,8 +3768,9 @@ function reportElementSearchData(elementID) {
   console.log("reportElementSearchData "+elementID+" 1st clear " +(runtime)+"msec");
 
   if(!datasourceElement.search_data_filter) { return; }  //also performs the clear
+  console.log("reportElementSearchData "+elementID+"/"+datasourceElement.elementID+" ["+datasourceElement.search_data_filter+"]");
 
-  var filter = datasourceElement.search_data_filter;
+  var filter = String(datasourceElement.search_data_filter);
   filter = filter.toLowerCase();
   console.log("reportElementSearchData ["+filter+"]");
   
@@ -3744,6 +3831,266 @@ function reportElementSearchData(elementID) {
 }
 
 //-----------------------------------
+//-----------------------------------
+
+function reportElement_process_dtype_category(datasourceElement, selected_dtype, category_method, ctg_value_datatype) {
+  if(!datasourceElement) { return; }
+  if(!selected_dtype) { return; }
+  //console.log("selected_dtype type["+selected_dtype.datatype+"]  title["+selected_dtype.title+"]")
+  if(selected_dtype.col_type != "mdata") { return; } //might loosen this in the future
+  if(!datasourceElement.dtype_columns) { return; }
+
+  //scan the datasource column for all the different categories, count up and display
+  if(!selected_dtype.categories) {
+    selected_dtype.categories = new Object();
+  }
+  var categories = selected_dtype.categories;
+  //clear the old counts
+  for(var ctg in categories) {
+    var ctg_obj = categories[ctg];
+    ctg_obj.count = 0;
+    ctg_obj.hidden_count = 0;
+    ctg_obj.value = null;
+  }
+
+  //recalc if this is filtered or not
+  var is_filtered = false;
+  for(var ctg in selected_dtype.categories) {
+    if(selected_dtype.categories[ctg].filtered) {
+      is_filtered = true;
+    }
+  }
+  if(selected_dtype.filtered != is_filtered) { console.log("DANGER!! selected_dtype.filtered out of sync with categories"); }
+  selected_dtype.filtered = is_filtered;
+
+  if(datasourceElement.datasource_mode == "edge")    {
+    var datatype = selected_dtype.datatype
+    datatype = datatype.replace(/^f1\./, '');
+    datatype = datatype.replace(/^f2\./, '');
+    //console.log("zenbu_process_dtype_category edges type["+datatype+"]")
+
+    for(j=0; j<datasourceElement.edge_array.length; j++) {
+      var edge = datasourceElement.edge_array[j];
+      if(!edge) { continue; }
+      if(!edge.feature1) { continue; }
+      if(!edge.feature2) { continue; }
+
+      //check for focus_feature sub-selection
+      if(datasourceElement.focus_feature &&
+         (datasourceElement.focus_feature.id != edge.feature1_id) &&
+         (datasourceElement.focus_feature.id != edge.feature2_id)) { continue; }
+      //if(datasourceElement.show_only_search_matches && !edge.search_match) { continue; }
+
+      var t_feature = null;
+      if(edge && (/^f1\./.test(selected_dtype.datatype))) { t_feature = edge.feature1;}
+      if(edge && (/^f2\./.test(selected_dtype.datatype))) { t_feature = edge.feature2;}
+
+      //specific logic rather than using object.filter_valid
+      if(!reportElementEdgeCheckValidFilters(datasourceElement, edge)) { continue; }
+      selected_dtype.filtered=false;
+      if(!reportElementCheckCategoryFilters(datasourceElement, edge)) {
+        //even with this filter turned off it is still filter out so really filtered so skip it
+        if(is_filtered) { selected_dtype.filtered=true; }
+        continue;
+      }
+      if(is_filtered) { selected_dtype.filtered=true; }
+      
+      var signal = 0;
+      if(ctg_value_datatype) {
+        var ctg_value_datatype = ctg_value_datatype;
+        ctg_value_datatype = ctg_value_datatype.replace(/^f1\./, '');
+        ctg_value_datatype = ctg_value_datatype.replace(/^f2\./, '');
+
+        var sig_feature = null;
+        if(edge && (/^f1\./.test(ctg_value_datatype))) { sig_feature = edge.feature1;}
+        if(edge && (/^f2\./.test(ctg_value_datatype))) { sig_feature = edge.feature2;}
+
+        if(sig_feature && sig_feature.expression_hash && 
+           sig_feature.expression_hash[ctg_value_datatype] && 
+           sig_feature.expression_hash[ctg_value_datatype][0]) {
+          signal = sig_feature.expression_hash[ctg_value_datatype][0].total;
+        }
+        if(edge && edge.weights && edge.weights[ctg_value_datatype] && edge.weights[ctg_value_datatype][0]) {
+          signal = edge.weights[ctg_value_datatype][0].weight;
+        }
+      }
+
+      if(t_feature) {
+        var filtered =reportsObjectCheckCategoryFilters(t_feature, selected_dtype);
+        if(t_feature.source && (datatype == "category")) {
+          //console.log("check t_feature "+t_feature.name+" -- category");
+          zenbu_update_dtype_category(selected_dtype, t_feature.source.category, filtered, category_method, signal);
+        } else if(t_feature.source && (datatype == "source_name")) {
+          //console.log("check t_feature "+t_feature.name+" -- source_name");
+          zenbu_update_dtype_category(selected_dtype, t_feature.source.name, filtered, category_method, signal);
+        } else if(datatype == "location_string") {
+          //console.log("check t_feature "+t_feature.name+" -- location_string");
+          zenbu_update_dtype_category(selected_dtype, t_feature.chromloc, filtered, category_method, signal);
+        } else  if(datatype == "name") {
+          zenbu_update_dtype_category(selected_dtype, t_feature.name, filtered, category_method, signal);
+        } else if(t_feature.mdata && t_feature.mdata[datatype]) {
+          //console.log("check t_feature "+t_feature.name+" -- "+selected_dtype.datatype+"  mdata["+datatype+"]");
+          var value_array = t_feature.mdata[datatype];
+          for(var idx1=0; idx1<value_array.length; idx1++) {
+            val = value_array[idx1];
+            zenbu_update_dtype_category(selected_dtype, val, filtered, category_method, signal);
+          }
+        }
+      } else { //selected_dtype is on the edge
+        var filtered =reportsObjectCheckCategoryFilters(edge, selected_dtype);
+        //console.log("check edge name["+edge.name+"]");
+        if(edge.source && (datatype == "category")) {
+          zenbu_update_dtype_category(selected_dtype, edge.source.category, filtered, category_method, signal);
+        } else if(edge.source && (datatype == "source_name")) {
+          zenbu_update_dtype_category(selected_dtype, edge.source.name, filtered, category_method, signal);
+        } else if(datatype == "location_string") {
+          zenbu_update_dtype_category(selected_dtype, edge.chromloc, filtered, category_method, signal);
+        } else if(edge.mdata && edge.mdata[datatype]) {
+          var value_array = edge.mdata[datatype];
+          for(var idx1=0; idx1<value_array.length; idx1++) {
+            val = value_array[idx1];
+            zenbu_update_dtype_category(selected_dtype, val, filtered, category_method, signal);
+          }
+        }
+      }      
+    }  //loop on edges
+  }
+  
+  if(datasourceElement.datasource_mode == "feature") {
+    var datatype = selected_dtype.datatype
+    //console.log("zenbu_process_dtype_category features type["+datatype+"]")
+    for(j=0; j<datasourceElement.feature_array.length; j++) {
+      var feature = datasourceElement.feature_array[j];
+      if(!feature) { continue; }
+      
+      //specific logic rather than using object.filter_valid
+      if(!reportElementCheckValidSignalFilters(datasourceElement, feature)) { continue; }
+      selected_dtype.filtered=false;
+      if(!reportElementCheckCategoryFilters(datasourceElement, feature)) {
+        //even with this filter turned off it is still filter out so really filtered so skip it
+        if(is_filtered) { selected_dtype.filtered=true; }
+        continue;
+      }
+      if(is_filtered) { selected_dtype.filtered=true; }
+
+      var signal = 0;
+      if(feature.expression_hash && feature.expression_hash[ctg_value_datatype] && feature.expression_hash[ctg_value_datatype][0]) {
+        signal = feature.expression_hash[ctg_value_datatype][0].total;
+      }
+      
+      var val = "";
+      if(feature.source && (datatype == "category")) {
+        //console.log("check feature "+feature.name+" -- category");
+        zenbu_update_dtype_category(selected_dtype, feature.source.category, feature.filter_valid, category_method, signal);
+      } else if(feature.source && (datatype == "source_name")) {
+        //console.log("check feature "+feature.name+" -- source_name");
+        zenbu_update_dtype_category(selected_dtype, feature.source.name, feature.filter_valid, category_method, signal);
+      } else if(datatype == "location_string") {
+        //console.log("check feature "+feature.name+" -- location_string");
+        zenbu_update_dtype_category(selected_dtype, feature.chromloc, feature.filter_valid, category_method, signal);
+      } else  if(datatype == "name") {
+        zenbu_update_dtype_category(selected_dtype, feature.name, feature.filter_valid, category_method, signal);
+      } else if(feature.mdata && feature.mdata[datatype]) {
+        //console.log("check feature "+feature.name+" -- "+selected_dtype.datatype+"  mdata["+datatype+"]");
+        var value_array = feature.mdata[datatype];
+        for(var idx1=0; idx1<value_array.length; idx1++) {
+          val = value_array[idx1];
+          zenbu_update_dtype_category(selected_dtype, val, feature.filter_valid, category_method, signal);
+        }
+      }
+    }
+  }
+  
+  if(datasourceElement.datasource_mode == "source") {
+    //filter_count = datasourceElement.feature_array.length;
+    for(j=0; j<datasourceElement.sources_array.length; j++) {
+      var source = datasourceElement.sources_array[j];
+      if(!source) { continue; }
+
+      //specific logic rather than using object.filter_valid
+      selected_dtype.filtered=false;
+      if(!reportElementCheckCategoryFilters(datasourceElement, source)) {
+        //even with this filter turned off it is still filter out so really filtered so skip it
+        if(is_filtered) { selected_dtype.filtered=true; }
+        continue;
+      }
+      if(is_filtered) { selected_dtype.filtered=true; }
+
+      var val = "";
+      if(selected_dtype.datatype == "category") {
+        val = source.category;
+        if(val && !categories[val]) { categories[val] = {ctg:val, count:0, value:0, filtered:false}; }
+        if(source.filter_valid) { categories[val].count++; }
+      } else if(selected_dtype.datatype == "source_name") {
+        val = source.name;
+        if(val && !categories[val]) { categories[val] = {ctg:val, count:0, value:0, filtered:false}; }
+        if(source.filter_valid) { categories[val].count++; }
+      } else if(source.mdata && source.mdata[selected_dtype.datatype]) {
+        var value_array = source.mdata[selected_dtype.datatype];
+        for(var idx1=0; idx1<value_array.length; idx1++) {
+          val = value_array[idx1];
+          if(val && !categories[val]) { categories[val] = {ctg:val, count:0, value:0, filtered:false}; }
+          if(source.filter_valid) { categories[val].count++; }
+        }
+      }
+    }
+  }
+
+  //final loop to fix non-zero, count, mean and debug message
+  var ctg_cnt=0;
+  var ctg_names="";
+  for(var ctg in categories) {
+    var ctg_obj = categories[ctg];
+    if(category_method=="non-zero") { if(ctg_obj.count>0) { ctg_obj.value = 1; } else { ctg_obj.value = 0; } }
+    if(category_method=="count") { ctg_obj.value = ctg_obj.count; }
+    if(category_method=="mean")  { 
+      ctg_obj.mean_sum = ctg_obj.value;
+      ctg_obj.value = ctg_obj.value/ctg_obj.count;
+    }
+    ctg_cnt++;
+    ctg_names += ctg_obj.ctg+" ";
+    //console.log("dtype["+selected_dtype.datatype+"]  category ["+ctg_obj.ctg+"] cnt="+ctg_obj.count+" hidden_count="+ctg_obj.hidden_count);
+  }
+  console.log(datasourceElement.elementID+" dtype["+selected_dtype.datatype+"] has "+ctg_cnt+" categories: "+ctg_names);
+}
+
+
+function zenbu_update_dtype_category(dtype_col, ctgval, filter_valid, category_method, signal) {
+  if(!dtype_col) { return; }
+  if(!dtype_col.categories) { dtype_col.categories = new Object(); }
+  var categories = dtype_col.categories;
+
+  if(!ctgval) { return; }
+  if(!categories[ctgval]) { categories[ctgval] = {ctg:ctgval, count:0, hidden_count:0, value:null, filtered:false}; }
+
+  if(!filter_valid) { categories[ctgval].hidden_count++; return; }
+  categories[ctgval].count++;
+  
+  if(category_method=="count") { return; }
+  if(signal==null) { return; }
+  
+  //console.log("zenbu_update_dtype_category ["+ctgval+"] mode["+category_method+"] sig["+signal+"]");
+  switch(category_method) {
+    case "min": 
+      if(categories[ctgval].value==null) { categories[ctgval].value = signal; }
+      if(signal < categories[ctgval].value) { categories[ctgval].value = signal; }
+      break;
+    case "max": 
+      if(categories[ctgval].value==null) { categories[ctgval].value = signal; }
+      if(signal > categories[ctgval].value) { categories[ctgval].value = signal; }
+      break;
+    case "sum": 
+    case "mean": 
+      if(categories[ctgval].value==null) { categories[ctgval].value = signal; }
+      else { categories[ctgval].value += signal; }
+      break;
+    default: 
+      break;
+  }
+}
+
+
+//-----------------------------------
 // features
 //-----------------------------------
 
@@ -3773,7 +4120,16 @@ function reportElementLoadSourceFeatures(reportElement) {
 
   var paramXML = "<zenbu_query><format>fullxml</format><mode>features</mode>";
   paramXML += "<source_ids>"+reportElement.source_ids+"</source_ids>";
-  if(reportElement.query_filter) { paramXML += "<filter>"+reportElement.query_filter+"</filter>"; }
+  var filter="";
+  if(reportElement.query_filter) { filter += reportElement.query_filter; }
+  if(reportElement.load_filter)  { 
+    if(filter) { filter += " "; }
+    filter += reportElement.load_filter; 
+  }
+  if(filter) {
+    paramXML += "<filter>"+filter+"</filter>";
+    console.log("load "+reportElement.elementID+" features with load_filter ["+filter+"]");
+  }
   paramXML += "</zenbu_query>\n";
   
   if(reports_pending_XHRs[reportElement.elementID] != null) {
@@ -3896,7 +4252,10 @@ function reportElementLoadSourceEdges(reportElement) {
 
   //TODO: need to figure out this logic, might need flag if ok to pull full edge-network
   //actually I think using load_on_page_init is enough. if this is set then there is no input trigger so should be ok to pull all edges
-  if(!reportElement.load_on_page_init && !reportElement.focus_feature && !reportElement.filter_feature_ids) { return; }
+  if(!reportElement.load_on_page_init && 
+     !reportElement.focus_feature && 
+     !reportElement.filter_feature_ids && 
+     !reportElement.load_filter) { return; }
 
   var paramXML = "<zenbu_query><format>"+reportElement.query_format+"</format><mode>edges</mode>";
   paramXML += "<source_ids>"+reportElement.source_ids+"</source_ids>";
@@ -3911,8 +4270,15 @@ function reportElementLoadSourceEdges(reportElement) {
     if(feature_ids!="") { feature_ids += ","; }
     feature_ids += reportElement.filter_feature_ids;
   }
-  paramXML += "<feature_ids>"+feature_ids+"</feature_ids>";
-  console.log("load "+reportElement.elementID+" edges with filter_features: "+feature_ids);
+  if(feature_ids) { 
+    paramXML += "<feature_ids>"+feature_ids+"</feature_ids>";
+    console.log("load "+reportElement.elementID+" edges with filter_features: "+feature_ids);
+  }
+  if(reportElement.load_filter) {
+    paramXML += "<filter>"+reportElement.load_filter+"</filter>";
+    console.log("load "+reportElement.elementID+" edges with load_filter ["+reportElement.load_filter+"]");
+  }
+  
   if(reportElement.format == "descxml") {
     paramXML += "<mdkey_list>";
     //<mdkey_list>HGNC_symbol, HGNC_name, ";
@@ -3970,15 +4336,16 @@ function reportElementPostprocessEdgesQuery(reportElement) {
 
   var feature_count = reportElement.feature_array.length;
   var edge_count    = reportElement.edge_array.length;
-  console.log("reportElementPostprocessEdgesQuery: " + feature_count+ " features, " + edge_count+" edges");
+  console.log("reportElementPostprocessEdgesQuery: "+elementID +" input " + feature_count+ " features, " + edge_count+" edges");
   
   if(reportElement.focus_feature) {
     //if(!reportElement.selected_feature) { reportElement.selected_feature = reportElement.focus_feature; }  //DONT do this anymore
-    console.log("reportElementPostprocessEdgesQuery start focus["+reportElement.focus_feature.name+"]");
+    console.log("reportElementPostprocessEdgesQuery "+elementID+" focus_feature["+reportElement.focus_feature.name+"]");
   }
   
   var filter_feature_ids_hash = {};
   if(reportElement.filter_feature_ids) {
+    console.log("reportElementPostprocessEdgesQuery "+elementID+" filter_feature_ids["+reportElement.filter_feature_ids+"]");
     var ids = reportElement.filter_feature_ids.split(/[\s\,]/);
     for(var i=0; i<ids.length; i++) {
       var objID = ids[i];
@@ -4029,7 +4396,7 @@ function reportElementPostprocessEdgesQuery(reportElement) {
 
     reportElement.filter_count++;
   }
-  console.log("reportElementPostprocessEdgesQuery filter_count= "+reportElement.filter_count);
+  console.log("reportElementPostprocessEdgesQuery "+elementID+" filter_count= "+reportElement.filter_count);
 
   var num_pages = Math.ceil(reportElement.filter_count / Math.floor(reportElement.table_page_size));
   reportElement.table_num_pages = num_pages;
@@ -4174,6 +4541,7 @@ function reportsDrawElements() {
       if(!parent) {
         console.log("element["+reportElement.elementID+"] has parentID but parent doesn't exist - cleanup");
         reportElement.layout_parentID = null;
+        reportElement.layout_alignment = "";
       }
       if(parent) { 
         //console.log("element["+reportElement.elementID+"] child of layout so skip");
@@ -4307,7 +4675,7 @@ function reportsPostprocessElement(elementID) {
       for(var dtype in datasourceElement.datatypes) {
         var dtype_col = datasourceElement.datatypes[dtype];
         if(!dtype_col) { continue; }
-        var t_col = reportElementAddDatatypeColumn(reportElement, dtype_col.datatype, dtype_col.title, false);
+        var t_col = reportElementAddDatatypeColumn(reportElement, dtype_col.datatype, dtype_col.title);
         t_col.col_type = dtype_col.col_type;
       }
       //might be best to always copy the feature/edge/source array into the local to allow local sorting
@@ -4451,6 +4819,7 @@ function reportsDrawElement(elementID) {
     reportElement.main_div = main_div;
   }
   if(!main_div) { return; }
+  var is_hidden = main_div.style.display;
   main_div.innerHTML = "";
   main_div.setAttribute('style', "font-size:12px;");
   console.log("reportsDrawElement ["+elementID+"]");
@@ -4481,8 +4850,9 @@ function reportsDrawElement(elementID) {
   }
   if(reportElement.content_width) { style += "width:"+(reportElement.content_width)+"px; "; }
   if(reportElement.content_height && !reportElement.auto_content_height) { style += "height: "+(reportElement.content_height)+"px; "; }
+  if(is_hidden == "none") { style += "display:none; "; }  //debug for tab-layout children
   main_div.setAttribute('style', style);
-  
+
   if(current_report.edit_page_configuration) {
     main_div.setAttribute("onmousedown", "reportElementEvent(\""+reportElement.elementID+"\", 'main_div_resize_mousedown');");
     main_div.setAttribute("onmouseup",   "reportElementEvent(\""+reportElement.elementID+"\", 'main_div_resize_mouseup');");
@@ -4693,50 +5063,86 @@ function reportElementTriggerCascade(reportElement, on_trigger) {
 
       //var hyperlink_url = eedbWebRoot + "/reports/#"+trigger.targetElementID+";"+datatype+"="+send_data;
       var hyperlink_url = eedbWebRoot + "/reports/#"+trigger.targetElementID+send_data;
-      //console.log("hyperlink trigger url ["+hyperlink_url+"]");
-      window.location = hyperlink_url;
-
+      var mymatch = /^http(.+)/.exec(trigger.targetElementID);
+      if(mymatch && (mymatch.length == 2)) {
+        hyperlink_url = trigger.targetElementID+send_data;
+      }
+      console.log("hyperlink trigger url ["+hyperlink_url+"]");
+      //window.location = hyperlink_url;
+      window.open(hyperlink_url, "_blank");
+      
       continue;
     }    
     
     if(!trigger.targetElement) { trigger.targetElement = current_report.elements[trigger.targetElementID]; }
     if(!trigger.targetElement) { continue; }
     
-    //console.log("TRIGGER-CASCADE from["+reportElement.elementID+"] on["+on_trigger+"] => to["+trigger.targetElement.elementID+"] action["+trigger.action_mode+" - "+trigger.options+"]");
+    console.log("TRIGGER-CASCADE from["+reportElement.elementID+"] on["+on_trigger+"] => to["+trigger.targetElement.elementID+"] action["+trigger.action_mode+" - "+trigger.options+"]");
 
-    if(trigger.action_mode == "select") {
-      if(trigger.options == "selection_id") {
-        if(datasource.selected_feature) { reportElementCascadeEvent(trigger.targetElement, 'select', datasource.selected_feature.id); }
-        if(datasource.selected_edge)    { reportElementCascadeEvent(trigger.targetElement, 'select', datasource.selected_edge.id); }
-        if(datasource.selected_source)  { reportElementCascadeEvent(trigger.targetElement, 'select', datasource.selected_source.id); }
+    if(reportElement.element_type=="category" && (trigger.action_mode == "set_load_filter" || trigger.action_mode == "search_filter")) {
+      if(trigger.options == "category_filter" && reportElement.selected_dtype) {
+        var ctg_filter = "";
+        var multi_cnt = 0;
+        for(var ctg in reportElement.selected_dtype.categories) {
+          if(reportElement.selected_dtype.categories[ctg].filtered) {
+            multi_cnt++;
+            if(multi_cnt>1) { ctg_filter += " or "; }
+            ctg_filter += ctg;
+          }
+        }
+        if(multi_cnt=1) { ctg_filter = reportElement.selected_dtype.datatype+":=" + ctg_filter; }
+        console.log(reportElement.elementID+" category_filter : "+actmode+ " ["+ctg_filter+"]");
+        reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, ctg_filter);
       }
-      
+      //reportsPostprocessElement(trigger.targetElement.elementID);
+      //reportsDrawElement(trigger.targetElement.elementID);
+    }
+
+    if(trigger.action_mode == "select" || trigger.action_mode == "set_load_filter" || trigger.action_mode == "set_view_config" || trigger.action_mode == "highlight" ||
+       (trigger.action_mode == "search_filter" && reportElement.element_type!="category")) {
+      var actmode = trigger.action_mode;
+      if(trigger.options == "selection_id") {
+        if(datasource.selected_feature) { reportElementCascadeEvent(trigger.targetElement, actmode, datasource.selected_feature.id); }
+        if(datasource.selected_edge)    { reportElementCascadeEvent(trigger.targetElement, actmode, datasource.selected_edge.id); }
+        if(datasource.selected_source)  { reportElementCascadeEvent(trigger.targetElement, actmode, datasource.selected_source.id); }
+      }
+            
       var datatype = trigger.options;
       datatype = datatype.replace(/^f1\./, '');
       datatype = datatype.replace(/^f2\./, '');
 
-      var t_feature = datasource.selected_feature;
-      if(datasource.selected_edge && (/^f1\./.test(trigger.options))) { t_feature = datasource.selected_edge.feature1;}
-      if(datasource.selected_edge && (/^f2\./.test(trigger.options))) { t_feature = datasource.selected_edge.feature2;}
+      var t_object = datasource.selected_feature;
+      if(datasource.selected_edge && (/^f1\./.test(trigger.options))) { t_object = datasource.selected_edge.feature1;}
+      if(datasource.selected_edge && (/^f2\./.test(trigger.options))) { t_object = datasource.selected_edge.feature2;}
+      if(!t_object && datasource.selected_edge) {
+        console.log("using selected_edge for mdata");
+        t_object = datasource.selected_edge;
+      }
 
-      if(t_feature) {
+      if(t_object) {
         if(datatype == "id") {
-          reportElementCascadeEvent(trigger.targetElement, 'select', t_feature.id);
+          reportElementCascadeEvent(trigger.targetElement, actmode, t_object.id);
         }
         else if(datatype == "name") {
-          reportElementCascadeEvent(trigger.targetElement, 'select', t_feature.name);
+          reportElementCascadeEvent(trigger.targetElement, actmode, t_object.name);
         }
-        else if(t_feature.mdata[datatype]) {
-          //console.log("send mdata ["+t_feature.mdata[datatype]+"]");
-          reportElementCascadeEvent(trigger.targetElement, 'select', t_feature.mdata[datatype]);
+        else if(t_object.mdata[datatype]) {
+          //console.log("send mdata ["+t_object.mdata[datatype]+"]");
+          var mdfilter = t_object.mdata[datatype];
+          if(trigger.action_mode == "set_load_filter") { mdfilter = datatype+":=" + mdfilter; }
+          reportElementCascadeEvent(trigger.targetElement, actmode, mdfilter);
         }
-      }
-      if(trigger.options == "clear") {
-        console.log("trigger send clear selection");
-        reportElementCascadeEvent(trigger.targetElement, 'select', "");
+        if(trigger.options == "clear") {
+          console.log("trigger send clear selection");
+          reportElementCascadeEvent(trigger.targetElement, actmode, "");
+        }
+      } 
+      else { //no selected row, so then send clear
+        console.log("deselect so trigger send clear");
+        reportElementCascadeEvent(trigger.targetElement, actmode, "");
       }
     }
-    
+          
     if((trigger.action_mode == "set_focus") || (trigger.action_mode == "focus_load")) {
       //get the selection from this element/datasource, set it as focus_feature on target
       if(trigger.options == "selection") {
@@ -4858,7 +5264,11 @@ function reportsNewReportElement(element_type, elementID) {
     case "table":      reportElement = new ZenbuTableElement(elementID); break;
     case "treelist":   reportElement = new ZenbuTreeListElement(elementID); break;
     case "category":   reportElement = new ZenbuCategoryElement(elementID); break;
+    case "filter":     reportElement = new ZenbuFilterElement(elementID); break;
+    case "search":     reportElement = new ZenbuSearchElement(elementID); break;
     case "chart":      reportElement = new ZenbuChartElement(elementID); break;
+    case "heatmap":    reportElement = new ZenbuHeatmapElement(elementID); break;
+    case "colorscale": reportElement = new ZenbuColorscaleElement(elementID); break;
     case "html":       reportElement = new ZenbuHtmlElement(elementID); break;
     case "zenbugb":    reportElement = new ZenbuGBElement(elementID); break;
     case "circos":     reportElement = new ZenbuCircosElement(elementID); break;
@@ -4912,6 +5322,7 @@ function reportElementInit(reportElement) {
   reportElement.load_on_page_init = false;
   reportElement.focus_feature = null;
   reportElement.filter_feature_ids = "";
+  reportElement.load_filter = "";
   reportElement.hide_zero = false;
 
   reportElement.table_page_size = 20;
@@ -4927,17 +5338,21 @@ function reportElementInit(reportElement) {
   reportElement.search_data_filter = "";
   reportElement.show_only_search_matches = false;
   
+  reportElement.download_mode = "visible";
+
   reportElement.resetable = true;
   reportElement.loading = false;  //not loaded
 
   reportElement.show_titlebar = true;
   reportElement.widget_search = true;
   reportElement.widget_filter = true;
+  reportElement.widget_download = true;
   reportElement.widget_columns = true;
-  reportElement.border = "inset";
+  reportElement.border = "round";
 
   reportElement.layout_mode = "absolute";  //absolute, child
   reportElement.layout_parentID = null;    //linked to Row, Column, or Grid layoutElement
+  reportElement.layout_alignment = "";
   reportElement.layout_row = 0;
   reportElement.layout_col = 0;
   reportElement.layout_xpos = current_report.new_element_abs_pos;
@@ -4959,21 +5374,11 @@ function reportElementInit(reportElement) {
     reportElement.sort_col = "name";
     reportElement.sort_reverse = false;
     reportElement.move_selection_to_top=true;
-    //reportElementAddDatatypeColumn(reportElement, "name", "name", true);
-    //reportElementAddDatatypeColumn(reportElement, "category", "category", true);
-    //reportElementAddDatatypeColumn(reportElement, "source_name", "source_name", true);
-    //reportElementAddDatatypeColumn(reportElement, "location_link", "location", false);
-    //reportElementAddDatatypeColumn(reportElement, "location_string", "location", false);
   }
   if(reportElement.element_type == "table") {
     reportElement.title = "new Table";
     reportElement.sort_col = "name";
     reportElement.sort_reverse = false;
-    //reportElementAddDatatypeColumn(reportElement, "name", "name", true);
-    //reportElementAddDatatypeColumn(reportElement, "category", "category", true);
-    //reportElementAddDatatypeColumn(reportElement, "source_name", "source_name", true);
-    //reportElementAddDatatypeColumn(reportElement, "location_link", "location", false);
-    //reportElementAddDatatypeColumn(reportElement, "location_string", "location", false);
   }
   if(reportElement.element_type == "chart") {
     reportElement.title = "new Chart Graph";
@@ -4989,8 +5394,9 @@ function reportElementInit(reportElement) {
     reportElement.datasource_mode = "";
     reportElement.widget_search = false;
     reportElement.widget_filter = false;
+    reportElement.widget_download = false;
     reportElement.widget_columns = false;
-    reportElement.zenbu_url = "http://fantom.gsc.riken.jp/zenbu";
+    reportElement.zenbu_url = "https://fantom.gsc.riken.jp/zenbu";
     reportElement.view_config = "";
     reportElement.chrom_location = "";
   }
@@ -5000,6 +5406,7 @@ function reportElementInit(reportElement) {
     reportElement.show_titlebar = false;
     reportElement.widget_search = false;
     reportElement.widget_filter = false;
+    reportElement.widget_download = false;
     reportElement.widget_columns = false;
     reportElement.html_content = "";
   }
@@ -5010,6 +5417,7 @@ function reportElementInit(reportElement) {
     reportElement.show_titlebar = true;
     reportElement.widget_search = false;
     reportElement.widget_filter = false;
+    reportElement.widget_download = false;
     reportElement.widget_columns = false;
     reportElement.category_datatype = "";
     reportElement.hide_zero = true;
@@ -5021,6 +5429,7 @@ function reportElementInit(reportElement) {
     reportElement.datasource_mode = "";
     reportElement.widget_search = false;
     reportElement.widget_filter = false;
+    reportElement.widget_download = false;
     reportElement.widget_columns = false;
     reportElement.resetable = false;
     reportElement.loading = false;
@@ -5033,14 +5442,51 @@ function reportElementInit(reportElement) {
 }
 
 
+function reportElementCopy(in_element) {
+  if(!in_element) { return null; }
+   
+  var reportElement = zenbu_object_clone(in_element);
+
+  var elementID = reportElement.element_type + (newElementID++);
+  reportElement.elementID = elementID;
+  reportElement.main_div_id = reportElement.elementID + "_div";
+  reportElement.main_div    = null;
+  reportElement.auxdiv      = null;
+  reportElement.header_div  = null;
+  reportElement.config_subpanel = null;
+  reportElement.config_options_div
+
+  //var t_col = reportElementAddDatatypeColumn(reportElement, "row", "row", true);
+  //t_col.col_type = "row";
+
+  //store into the hash of global elements on the page
+  current_report.elements[reportElement.elementID] = reportElement;
+
+  reportsResetElement(elementID);  //reset to clear previous data/selections
+  if(reportElement.load_on_page_init) { reportsLoadElement(elementID); }
+
+  var tRect = in_element.main_div.getBoundingClientRect();
+  reportElement.layout_mode = "absolute";
+  reportElement.layout_xpos = tRect.left + 10;
+  reportElement.layout_ypos = tRect.top + 10;
+  if(reportElement.layout_xpos < 10) { reportElement.layout_xpos = 10; }
+  if(reportElement.layout_ypos < 10) { reportElement.layout_ypos = 10; }
+  
+  reportsPostprocessElement(reportElement.elementID);
+  reportsDrawElement(reportElement.elementID);
+  
+  return reportElement;
+}
+
+
 function reportElement_datasourceElement() {
   var datasourceElement = this;
-  // var datasourceElementID = this.datasourceElementID;
-  // if(this.newconfig && this.newconfig.datasourceElementID != undefined) { datasourceElementID = this.newconfig.datasourceElementID; }
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
+  var datasourceElementID = this.datasourceElementID;
+  if(this.newconfig && this.newconfig.datasourceElementID != undefined) { datasourceElementID = this.newconfig.datasourceElementID; }
+  if(datasourceElementID) {
+    var ds = current_report.elements[datasourceElementID];
     if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
+    else { console.log("failed to find datasource ["+datasourceElementID+"]"); }
   }
   while(datasourceElement.datasource_element) {
     datasourceElement = datasourceElement.datasource_element;
@@ -5077,6 +5523,7 @@ function reportsNewLayoutElement(layout_type, elementID, layout_parentID) {
   layoutElement.show_titlebar = false;
   layoutElement.widget_search = false;
   layoutElement.widget_filter = false;
+  layoutElement.widget_download = false;
   layoutElement.widget_columns = false;
   layoutElement.border = "dashed";
 
@@ -5097,10 +5544,12 @@ function reportsNewLayoutElement(layout_type, elementID, layout_parentID) {
   }
   
   layoutElement.layout_mode = "root";  //absolute, child, root
+  layoutElement.layout_centered = false;
   layoutElement.layout_parentID = null;  //root
   if(layout_parentID) {
     layoutElement.layout_parentID = layout_parentID;
     layoutElement.layout_mode = "child";
+    layoutElement.layout_alignment = "";
   }
   
   //store into the hash of global elements on the page
@@ -5155,18 +5604,18 @@ function reportsUpdateLayoutElements() {
   layout_array.sort(function(a, b){ return a.layout_depth - b.layout_depth;});
   for(var i=0; i<layout_array.length; i++) {
     var layoutElement = layout_array[i];
-    reportsDrawLayoutElement(layoutElement);
+    reportsDrawLayoutElement(layoutElement, false);
   }
 }
 
 function reportsUpdateLayoutHierarchy(reportElement) {
   //process the layout hierarchy from the node and up to the parents
   if(!reportElement) { return; }
-  reportsDrawLayoutElement(reportElement);
+  reportsDrawLayoutElement(reportElement, false);
   
   var parent = current_report.elements[reportElement.layout_parentID];
   while(parent) {
-    reportsDrawLayoutElement(parent);
+    reportsDrawLayoutElement(parent, false);
     parent = current_report.elements[parent.layout_parentID];
   }
 }
@@ -5231,12 +5680,20 @@ function reportsDrawLayoutElement(layoutElement, traverse_down) {
   }
   
   var active_tab_obj = null;
-  if(layoutElement.layout_type == "tab") { 
-    active_tab_obj = layoutElement.tabs_array[layoutElement.active_tab];
-    if(active_tab_obj && active_tab_obj.child_elementID) {
-      var childElement = current_report.elements[active_tab_obj.child_elementID];
-      if(childElement) { active_tab_obj.child_element = childElement; }
+  if(layoutElement.layout_type == "tab") {
+    for(var tidx=0; tidx<layoutElement.tabs_array.length; tidx++) {
+      var tab_obj = layoutElement.tabs_array[tidx];
+      if(!tab_obj) { continue; }
+      tab_obj.child_element = null;
+      if(!tab_obj.child_elementID) { continue; }
+      var childElement = current_report.elements[tab_obj.child_elementID];
+      if(childElement) { 
+        tab_obj.child_element = childElement;
+        if(childElement.main_div) { childElement.main_div.style.display = "none"; }
+      }
+      else { tab_obj.child_elementID = null; }
     }
+    active_tab_obj = layoutElement.tabs_array[layoutElement.active_tab];
   }
   
   var children = new Array();
@@ -5274,6 +5731,7 @@ function reportsDrawLayoutElement(layoutElement, traverse_down) {
       if(!childElement) { continue; }
       childElement.layout_parentID = null;
       childElement.layout_mode = "absolute";
+      childElement.layout_alignment = "";
       childElement.main_div.style.display = "block";
       master_div.appendChild(childElement.main_div); //move it to the master_div
       //reportsDrawElement(childElement.elementID);
@@ -5343,6 +5801,7 @@ function reportsDrawLayoutElement(layoutElement, traverse_down) {
   var max_height = 0;
   var tcontainer = layoutElement.main_div;
   var children_count = 0;
+  var previous_container = null;
   for(var k=0; k<children.length; k++) {
     var childElement = children[k];
     if(!childElement) { continue; }
@@ -5362,40 +5821,50 @@ function reportsDrawLayoutElement(layoutElement, traverse_down) {
     }
     
     if(layoutElement.layout_type == "row")  {
-      childElement.layout_col = k + 1;
-      childElement.layout_row = 0;
+      if(current_report.edit_page_configuration) {
+        //if(childElement.layout_col != k + 1) { 
+        //  console.log(layoutElement.elementID+" child["+childElement.elementID+"] col changed "+childElement.layout_col+" -> "+(k+1)); }
+        childElement.layout_col = k + 1;
+        childElement.layout_row = 0;
+      }
+      var talign = "top";
+      if(childElement.layout_alignment == "bottom") { talign = "bottom"; }
       var td1 = tr1.appendChild(document.createElement('td'));
-      td1.setAttribute('style', "padding:0; margin:0; border-spacing:0; border-collapse:collapse; vertical-align:top;");
+      td1.setAttribute('style', "padding:0; margin:0; border-spacing:0; border-collapse:collapse; vertical-align:"+talign+";");
       tcontainer = td1.appendChild(document.createElement('div'));
-      //var style = "margin-left: 5px; margin-top: 3px; vertical-align:top; ";
-      var style = "margin:0px; padding-right:3px; vertical-align:top; ";
-      //tcontainer = layoutElement.main_div.appendChild(document.createElement('div'));
-      //var style = "margin-left: 5px; margin-top: 3px; display:inline-block; vertical-align:top; ";
+      var style = "margin:0px; vertical-align:"+talign+"; "; //padding-right:3px;
       if(childElement.layout_mode == "dragging") {
         style += "border:dashed; border-width:2px; border-color:"+layout_color+"; ";
         if(childElement.content_width)  { style += "width:"+(childElement.content_width+10)+"px; "; }
         if(childElement.content_height) { style += "height:"+(childElement.content_height+10)+"px; "; }
       }
       tcontainer.setAttribute('style', style);
+      if(previous_container) { previous_container.style.marginRight = "3px"; }
+      previous_container = tcontainer;
       max_width += childElement.content_width+19;
       if(max_height < childElement.content_height+12) { max_height = childElement.content_height+12; }
     }
     if(layoutElement.layout_type == "col")  {
-      childElement.layout_row = k + 1;
-      childElement.layout_col = 0;
+      if(current_report.edit_page_configuration) {
+        //if(childElement.layout_row != k + 1) { 
+        //  console.log(layoutElement.elementID+" child["+childElement.elementID+"] row changed "+childElement.layout_row+" -> "+(k+1)); }
+        childElement.layout_row = k + 1;
+        childElement.layout_col = 0;
+      }
       var td1 = tr1.appendChild(document.createElement('td'));
       td1.setAttribute('style', "padding:0; margin:0; border-spacing:0; border-collapse:collapse;");
       td1.valign = "top";
       tcontainer = td1.appendChild(document.createElement('div'));
-      //tcontainer = layoutElement.main_div.appendChild(document.createElement('div'));
-      //var style = "margin-left: 5px; margin-top: 3px; vertical-align:top; ";
-      var style = "margin:0px; padding-bottom:3px; vertical-align:top; ";
+      var style = "margin:0px; vertical-align:top; ";  //padding-bottom:3px;
       if(childElement.layout_mode == "dragging") {
         style += "border:dashed; border-width:2px; border-color:"+layout_color+"; ";
         if(childElement.content_width)  { style += "width:"+(childElement.content_width+10)+"px; "; }
         if(childElement.content_height) { style += "height:"+(childElement.content_height+10)+"px; "; }
       }
+      if(childElement.layout_alignment == "right") { style += "float:right; "}
       tcontainer.setAttribute('style', style);
+      if(previous_container) { previous_container.style.marginBottom = "3px"; }
+      previous_container = tcontainer;
       if(max_width < childElement.content_width+19) { max_width = childElement.content_width+19; }
       max_height += childElement.content_height+19;
       //prepare tr1 for next row in this column
@@ -5408,7 +5877,7 @@ function reportsDrawLayoutElement(layoutElement, traverse_down) {
       var td1 = tr1.appendChild(document.createElement('td'));
       td1.setAttribute('style', "padding:0; margin:0; border-spacing:0; border-collapse:collapse; vertical-align:top;");
       tcontainer = td1.appendChild(document.createElement('div'));
-      var style = "margin:0px; padding-bottom:3px; padding-right:0px; vertical-align:top; ";
+      var style = "margin:0px; padding-bottom:0px; padding-right:0px; vertical-align:top; ";
       if(childElement.layout_mode == "dragging") {
         style += "border:dashed; border-width:2px; border-color:"+layout_color+"; ";
         if(childElement.content_width)  { style += "width:"+(childElement.content_width+10)+"px; "; }
@@ -5457,7 +5926,17 @@ function reportsDrawLayoutElement(layoutElement, traverse_down) {
   if(layoutElement.layout_type == "tab")  { style += "width:"+max_width+"px; "; }
   layoutElement.main_div.setAttribute('style', style);
 
-  var closebar=null, reattachBar=null, movebar=null;
+  if((layoutElement.layout_mode == "root") && layoutElement.layout_centered) {
+    var cleft = Math.floor((masterRect.width - max_width)/2);
+    console.log("masterRect.wdith = "+(masterRect.width));
+    console.log(layoutElement.elementID+" center max_width = "+max_width);
+    //console.log("cleft = "+cleft);
+    layoutElement.main_div.style.margin = "auto";
+    layoutElement.main_div.style.width = max_width+"px";
+    //layoutElement.main_div.style.marginLeft = cleft+"px";
+  }
+
+  var closebar=null, reattachBar=null, movebar=null, centerBar=null;
   if(current_report.edit_page_configuration) {
     //draw the style of the layout element, dragbar, and close icon
     // titla area first
@@ -5479,11 +5958,23 @@ function reportsDrawLayoutElement(layoutElement, traverse_down) {
       reattachBar.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
       reattachBar.setAttribute("onmousedown", "reportElementReconfigParam(\""+ layoutElement.elementID +"\", 'reattach-layout');");
       barwidth -= 19;
+    } 
+    if(layoutElement.layout_mode == "root") {
+      centerBar = header_div.appendChild(document.createElement('div'));
+      centerBar.setAttribute('style', "width:15px; margin-right:4px; height:5px; vertical-align:top; background:gold; display:inline-block; float:right; ");
+      centerBar.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\"center\",80);");
+      centerBar.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
+      centerBar.setAttribute("onmousedown", "reportElementReconfigParam(\""+ layoutElement.elementID +"\", 'center-layout');");
+      barwidth -= 19;
+      if(layoutElement.layout_centered) { 
+        centerBar.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\"un-center\",80);");
+        centerBar.style.background = "goldenrod"; 
+      }
     }
     
     movebar = header_div.appendChild(document.createElement('div'));
     movebar.setAttribute('style', "width:"+(barwidth)+"px; height:5px; vertical-align:top; background:"+layout_color+";");
-    movebar.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\"move layout\",80);");
+    movebar.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\"move "+(layoutElement.layout_type)+" layout\",130);");
     movebar.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
     movebar.setAttribute("onmousedown", "reportElementEvent(\""+layoutElement.elementID+"\", 'start_element_drag');");
     movebar.setAttribute("onmouseup",   "reportElementEvent(\""+layoutElement.elementID+"\", 'stop_element_drag');");
@@ -5568,8 +6059,15 @@ function reportsLayoutElementCheckAddChild(layoutElement, reportElement) {
       return false;
   }
   
-  //if near corner of layoutElement can insert at the front
-  if((layoutElement.layout_type != "tab") && (xpos>(layoutRect.left-20) && xpos<(layoutRect.left+20) && ypos>(layoutRect.top-20) && ypos<(layoutRect.top+20))) {
+  if((layoutElement.layout_type == "row") && (xpos<layoutRect.left || xpos>layoutRect.right || ypos<layoutRect.top || ypos>(layoutRect.top+50))) {
+    return false;
+  }
+  if((layoutElement.layout_type == "col") && (xpos<layoutRect.left || xpos>(layoutRect.left+50) || ypos<layoutRect.top || ypos>layoutRect.bottom)) {
+    return false;
+  }
+
+  //if near top-left corner of layoutElement can insert at the front
+  if((layoutElement.layout_type != "tab") && (xpos>=layoutRect.left && xpos<(layoutRect.left+20) && ypos>=layoutRect.top && ypos<(layoutRect.top+20))) {
     //console.log("layout checkAddChild child["+reportElement.elementID+"] set parentID ["+layoutElement.elementID+"]");
     reportElement.layout_parentID = layoutElement.elementID;
     reportElement.layout_container = null;
@@ -5579,14 +6077,8 @@ function reportsLayoutElementCheckAddChild(layoutElement, reportElement) {
     return true;
   }
     
-  if((layoutElement.layout_type == "row") && (xpos<layoutRect.left || xpos>layoutRect.right || ypos<(layoutRect.top-20) || ypos>(layoutRect.top+20))) {
-    return false;
-  }
-  if((layoutElement.layout_type == "col") && (xpos<(layoutRect.left-20) || xpos>(layoutRect.left+20) || ypos<layoutRect.top || ypos>layoutRect.bottom)) {
-    return false;
-  }
 
-  //console.log("found a layout which I might be able to attach to ["+layoutElement.elementID+"]");
+  console.log("found a layout which I might be able to attach to ["+layoutElement.elementID+"]");
   //find correct location within for adding
   reportElement.layout_col = 0;
   reportElement.layout_row = 0;
@@ -5609,8 +6101,9 @@ function reportsLayoutElementCheckAddChild(layoutElement, reportElement) {
     
     var childRect = childElement.main_div.getBoundingClientRect();
 
-    if((xpos>(childRect.left-20) && xpos<(childRect.left+20) && ypos>(childRect.top-20) && ypos<(childRect.top+20))) {
-      //console.log("layout checkAddChild child["+reportElement.elementID+"] set parentID ["+layoutElement.elementID+"]");
+    if(((layoutElement.layout_type == "row") && xpos>(childRect.left-20) && xpos<(childRect.left+20)) ||
+       ((layoutElement.layout_type == "col") && ypos>(childRect.top-20) && ypos<(childRect.top+20))) {
+      console.log("layout checkAddChild child["+reportElement.elementID+"] set parentID ["+layoutElement.elementID+"]");
       reportElement.layout_parentID = layoutElement.elementID;
       reportElement.layout_container = null;
       if(layoutElement.layout_type == "row") {
@@ -5626,10 +6119,10 @@ function reportsLayoutElementCheckAddChild(layoutElement, reportElement) {
       return true;
     }
   }
-
-  if(childElement && (layoutElement.layout_type == "row") &&
-     (xpos>(childRect.right-20) && xpos<(childRect.right+20) && ypos>(childRect.top-20) && ypos<(childRect.top+20))) {
-    //console.log("layout row checkAddChild child["+reportElement.elementID+"] set parentID ["+layoutElement.elementID+"]");
+  
+  //past last child now see if we can add on the end
+  if(childElement && (layoutElement.layout_type == "row") && (xpos>(childRect.right-20) && xpos<(childRect.right+20))) {
+    console.log("layout row checkAddChild child["+reportElement.elementID+"] set parentID ["+layoutElement.elementID+"]");
     reportElement.layout_parentID = layoutElement.elementID;
     reportElement.layout_container = null;
     reportElement.layout_col = childElement.layout_col + 0.5;
@@ -5637,9 +6130,8 @@ function reportsLayoutElementCheckAddChild(layoutElement, reportElement) {
     return true;
   }
 
-  if(childElement && (layoutElement.layout_type == "col") &&
-     (xpos>(childRect.left-20) && xpos<(childRect.left+20) && ypos>(childRect.bottom-20) && ypos<(childRect.bottom+20))) {
-    //console.log("layout col checkAddChild child["+reportElement.elementID+"] set parentID ["+layoutElement.elementID+"]");
+  if(childElement && (layoutElement.layout_type == "col") && (ypos>(childRect.bottom-20) && ypos<(childRect.bottom+20))) {
+    console.log("layout col checkAddChild child["+reportElement.elementID+"] set parentID ["+layoutElement.elementID+"]");
     reportElement.layout_parentID = layoutElement.elementID;
     reportElement.layout_container = null;
     reportElement.layout_row = childElement.layout_row + 0.5;
@@ -5719,7 +6211,8 @@ function reportElementToggleLayoutDrag(reportElement, mode) {
     //console.log("stop dragging element");
     if(!reportElement.is_moving) { return; }
     if(reportElement.layout_parentID) { 
-      reportElement.layout_mode = "child"; 
+      reportElement.layout_mode = "child";
+      reportElement.layout_alignment = "";
       var layoutElement = current_report.elements[reportElement.layout_parentID];
       if(layoutElement && layoutElement.layout_type == "tab") {
         var active_tab_obj = layoutElement.tabs_array[layoutElement.active_tab];
@@ -5782,15 +6275,19 @@ function reportsElementMoveEvent(e) {
   if(master_div && layoutElement && reportElement.layout_container) {
     var layoutRect = reportElement.layout_container.getBoundingClientRect();
     console.log("layoutRect "+reportElement.main_div_id+" left:"+layoutRect.left+" right:"+layoutRect.right+" top:"+layoutRect.top+" bottom:"+layoutRect.bottom);
-    if(xpos<(layoutRect.left+window.scrollX-30) || xpos>(layoutRect.left+window.scrollX+30) ||
-       ypos < (layoutRect.top+window.scrollY-30) || ypos > (layoutRect.top+window.scrollY+30)) {
+    if(xpos<(layoutRect.left+window.scrollX-30) || xpos>(layoutRect.left+window.scrollX+55) ||
+       ypos < (layoutRect.top+window.scrollY-30) || ypos > (layoutRect.top+window.scrollY+55)) {
       console.log("moved outside layout parent so detach");
       reportElement.layout_parentID = null;
       reportElement.layout_container = null;
+      reportElement.layout_alignment = "";
       master_div.appendChild(reportElement.main_div);  //move it to the main so that it is anchored somewhere
       if(layoutElement.layout_type == "tab") { 
         var active_tab_obj = layoutElement.tabs_array[layoutElement.active_tab];
-        if(active_tab_obj) { active_tab_obj.child_elementID = null; }
+        if(active_tab_obj) { 
+          active_tab_obj.child_elementID = null; 
+          active_tab_obj.child_element = null;           
+        }
       }
       reportsUpdateLayoutHierarchy(layoutElement);
     }
@@ -6195,6 +6692,15 @@ function reportElementCascadeEvent(reportElement, mode, value, value2) {
     reportElementTriggerCascade(reportElement, "select");
     return true;
   }
+
+  if(mode == "set_load_filter") { 
+    reportElement.load_filter = value;
+    return true;
+  }
+  
+  //if(mode == "search_filter") {
+  //  //search_data_filter
+  //}
   
   if(mode == "select_location") { 
     reportElement.selected_location = value;
@@ -6243,7 +6749,18 @@ function reportElementCascadeEvent(reportElement, mode, value, value2) {
           }
         }
         if(reportElement.selected_feature) {
-          console.log("selected feature ["+elementID+"] ["+reportElement.selected_feature.name +"  "+reportElement.selected_feature.id +"]");
+          //TODO: use the columns to reset the feature.display_name
+          reportElement.selected_feature.display_name = reportElement.selected_feature.name;
+          for(var i=0; i<datasourceElement.dtype_columns.length; i++) {
+            var dtype_col = datasourceElement.dtype_columns[i];
+            if(!dtype_col) { continue; }
+            if(dtype_col.datatype == "row") { continue; }
+            if(!dtype_col.visible && !dtype_col.signal_active) { continue; }
+            var n1 = zenbu_object_dtypecol_value(reportElement.selected_feature, dtype_col, "unique"); //unique values concatenated 
+            reportElement.selected_feature.display_name = n1;
+            break;
+          }
+          console.log("selected feature ["+elementID+"] ["+reportElement.selected_feature.id +"] "+ reportElement.selected_feature.display_name);
         }
       }
       if(datasourceElement.datasource_mode == "edge" && datasourceElement.edge_array) {
@@ -6303,7 +6820,7 @@ function reportElementCascadeEvent(reportElement, mode, value, value2) {
     //debug
     if(reportElement.selected_id) { console.log("selected_id ["+elementID+"] ["+reportElement.selected_id+"]"); }
     if(reportElement.selected_edge) { console.log("selected edge ["+elementID+"] "+reportElement.selected_edge.id +"]"); }
-    if(reportElement.selected_feature) { console.log("selected feature ["+elementID+"] ["+reportElement.selected_feature.name +" "+reportElement.selected_feature.id +"]"); }
+    if(reportElement.selected_feature) { console.log("selected feature ["+elementID+"] ["+reportElement.selected_feature.id +"] "+ reportElement.selected_feature.display_name); }
     if(reportElement.selected_source) { console.log("selected source ["+elementID+"] ["+reportElement.selected_source.name +" "+reportElement.selected_source.id +"]"); }
   }
 
@@ -6333,6 +6850,20 @@ function reportElementCascadeEvent(reportElement, mode, value, value2) {
     //reportElementTriggerCascade(reportElement, "select");
   }
   
+  if(mode == "search_data_filter" || (mode == "search_filter")) { 
+    var value_changed = false;
+    if(reportElement.search_data_filter != value) { value_changed = true; }
+    console.log("set search_data_filter ["+value+"]");
+    reportElement.search_data_filter = value;
+    reportElementSearchData(reportElement.elementID); //resets the search_match flag and performs refresh on panel
+    reportElementToggleSubpanel(elementID, 'refresh'); //refresh
+    if(value_changed) {
+      reportsPostprocessElement(reportElement.elementID); //to readjust the filter_count and cascade to dependant elements
+      reportsDrawElement(elementID);
+    }
+    return;
+  }
+
   //---------------------------------------------------------------------
   if(mode == "mouseover") {
     reportElement.mouseover_value = value;
@@ -6466,22 +6997,22 @@ function reportElementCascadeEvent(reportElement, mode, value, value2) {
     }
   }
 
-  if(mode == "dtype-category-filter") {  
-    var dtype = reportElement.datatypes[value];
-    if(dtype) { 
-      if(dtype.categories && dtype.categories[value2]) {
-        dtype.categories[value2].filtered = !(dtype.categories[value2].filtered); 
-      }
-      dtype.filtered = false;
-      for(var ctg in dtype.categories) {
-        if(dtype.categories[ctg].filtered) {
-          dtype.filtered = true;
-          break;          
-        }
-      }
-      reportsPostprocessElement(elementID);
-    }
-  }
+  // if(mode == "dtype-category-filter") {  
+  //   var dtype = reportElement.datatypes[value];
+  //   if(dtype) { 
+  //     if(dtype.categories && dtype.categories[value2]) {
+  //       dtype.categories[value2].filtered = !(dtype.categories[value2].filtered); 
+  //     }
+  //     dtype.filtered = false;
+  //     for(var ctg in dtype.categories) {
+  //       if(dtype.categories[ctg].filtered) {
+  //         dtype.filtered = true;
+  //         break;          
+  //       }
+  //     }
+  //     reportsPostprocessElement(elementID);
+  //   }
+  // }
 
   //if(mode == "update-zenbu") {
   //  console.log("update-zenbu");
@@ -6612,6 +7143,7 @@ function reportElementCascadeEvent(reportElement, mode, value, value2) {
           childElement.layout_ypos = childRect.y + window.scrollY + 10;
           childElement.layout_parentID = null;
           childElement.layout_mode = "absolute";
+          childElement.layout_alignment = "";
           childElement.main_div.style.display = "block";
           master_div.appendChild(childElement.main_div); //move it to the master_div
           reportsDrawElement(childElement.elementID);
@@ -6640,6 +7172,33 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
     if(layoutElement) { reportsUpdateLayoutHierarchy(layoutElement); }//rebuilds and does not include
     return;
   }
+  if(param == "copy-element") {
+    var master_div = document.getElementById("zenbuReportsDiv");
+    reportElementToggleSubpanel(elementID, 'none'); //hide panel
+    reportElementCopy(reportElement);
+
+    /* if I want to enable immediate drag right now    
+    var e = window.event;
+    moveToMouseLoc(e);
+    var xpos = toolTipSTYLE.xpos;
+    var ypos = toolTipSTYLE.ypos;
+    //console.log("create new element ["+reportElement.elementID+"] at cursor x="+xpos+" ypos="+ypos);    
+    xpos -= reportElement.content_width * 0.5;
+    ypos -= 15;
+    reportElement.layout_mode = "absolute";
+    reportElement.layout_xpos = xpos;
+    reportElement.layout_ypos = ypos;
+    reportElementToggleLayoutDrag(reportElement, "start");
+    */
+    
+    // if(reportElement.auxdiv) { master_div.removeChild(reportElement.auxdiv); }
+    // delete current_report.elements[elementID];
+    // master_div.appendChild(reportElement.main_div);  //make sure it is moved to the master_div
+    // master_div.removeChild(reportElement.main_div);  //then remove
+    // var layoutElement = current_report.elements[reportElement.layout_parentID];
+    // if(layoutElement) { reportsUpdateLayoutHierarchy(layoutElement); }//rebuilds and does not include
+    return;
+  }
   if(param == "delete-layout") {
     eedbClearSearchTooltip();
     var master_div = document.getElementById("zenbuReportsDiv");
@@ -6660,9 +7219,22 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
     eedbClearSearchTooltip();
     reportElement.layout_mode = "root";
     reportElement.layout_parentID = null;
+    reportElement.layout_centered = false;
+    reportElement.layout_alignment = "";
     reportsDrawLayoutElement(reportElement);
     return;
   }
+  if(param == "center-layout") {
+    console.log("center-layout");
+    eedbClearSearchTooltip();
+    reportElement.layout_mode = "root";
+    reportElement.layout_parentID = null;
+    reportElement.layout_alignment = "";
+    reportElement.layout_centered = !reportElement.layout_centered;
+    reportsDrawLayoutElement(reportElement);
+    return;
+  }
+
 
   if(param == "content_width") {
     reportElement.content_width = parseInt(value);
@@ -6701,6 +7273,9 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
     newconfig.title_prefix = value.replace(/^\s+/, '').replace(/\s+$/, ''); //remove leading and trailing spaces
     return;
   }
+  if(param == "title_focus_feature") { newconfig.title_focus_feature = value; }
+  if(param == "title_load_filter") { newconfig.title_load_filter = value; }
+
   if(param == "description") {  newconfig.description = value; return; }
   if(param == "backColor") {
     if(!value) { value = "#F6F6F6"; }
@@ -6729,6 +7304,13 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
     reportsDrawElement(elementID);
     return;
   }
+  if(param == "widget_download") {
+    if(newconfig.widget_download === undefined) { newconfig.widget_download = reportElement.widget_download; }
+    newconfig.widget_download = !newconfig.widget_download;
+    reportElementToggleSubpanel(elementID, 'refresh'); //refresh
+    reportsDrawElement(elementID);
+    return;
+  }
   if(param == "show_titlebar") {
     if(newconfig.show_titlebar === undefined) { newconfig.show_titlebar = reportElement.show_titlebar; }
     newconfig.show_titlebar = !newconfig.show_titlebar;
@@ -6741,6 +7323,9 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
     reportElementToggleSubpanel(elementID, 'refresh'); //refresh
     reportsDrawElement(elementID);
     return;
+  }
+  if(param == "layout_alignment") {
+    newconfig.layout_alignment = value;
   }
   if(param == "display_type") {
     newconfig.display_type = value;
@@ -6765,32 +7350,38 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
   if(param == "search_data_filter") { newconfig.search_data_filter = value; return; }
   if(param == "search_data_filter_search") {
     reportElement.search_data_filter = "";
+    current_report.active_cascades = {};  //start new user cascade
     if(newconfig.search_data_filter) { reportElement.search_data_filter = newconfig.search_data_filter; }
     reportElementSearchData(reportElement.elementID); //resets the search_match flag and performs refresh on panel
     reportElementToggleSubpanel(elementID, 'refresh'); //refresh
-    //if(reportElement.element_type == "table") { reportsPostprocessTable(reportElement); } //to readjust the filter_count
     reportsPostprocessElement(reportElement.elementID); //to readjust the filter_count and cascade to dependant elements
     reportsDrawElement(elementID);
     return;
   }
   if(param == "search_data_filter_clear") {
     reportElement.search_data_filter = "";
-    reportElement.show_only_search_matches = false;
+    current_report.active_cascades = {};  //start new user cascade
+    //reportElement.show_only_search_matches = false;
     reportElementSearchData(reportElement.elementID); //resets the search_match flag and performs refresh on panel
-    reportElementToggleSubpanel(elementID, 'refresh'); //refresh
-    //if(reportElement.element_type == "table") { reportsPostprocessTable(reportElement); } //to readjust the filter_count
+    reportElementToggleSubpanel(elementID, 'none'); //hide panel
     reportsPostprocessElement(reportElement.elementID); //to readjust the filter_count and cascade to dependant elements
     reportsDrawElement(elementID);
     return;
   }
   if(param == "show_only_search_matches") {
     reportElement.show_only_search_matches = value;
-    //reportElementToggleSubpanel(elementID, 'refresh'); //refresh
-    reportElementToggleSubpanel(elementID, 'none'); //hide panel
-    //if(reportElement.element_type == "table") { reportsPostprocessTable(reportElement); } //to readjust the filter_count
-    reportsPostprocessElement(reportElement.elementID); //to readjust the filter_count and cascade to dependant elements
-    reportsDrawElement(elementID);
-    //reportElementTriggerCascade(reportElement, "postprocess");
+    reportElementToggleSubpanel(elementID, 'refresh'); //refresh
+    if(reportElement.search_data_filter) {
+      reportsPostprocessElement(reportElement.elementID); //to readjust the filter_count and cascade to dependant elements
+      reportsDrawElement(elementID);
+      //reportElementTriggerCascade(reportElement, "postprocess");
+    }
+    return;
+  }
+
+  if(param == "download_mode") { 
+    reportElement.download_mode = value;
+    reportElementToggleSubpanel(elementID, 'refresh'); //refresh
     return;
   }
 
@@ -6957,6 +7548,7 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
       var newconfig = reportElement.newconfig;
       if(newconfig.needReload) { needReload=1; }
       if(newconfig.widget_filter !== undefined) { reportElement.widget_filter = newconfig.widget_filter; }
+      if(newconfig.widget_download !== undefined) { reportElement.widget_download = newconfig.widget_download; }
       if(newconfig.widget_columns !== undefined) { reportElement.widget_columns = newconfig.widget_columns; }
       if(newconfig.widget_search !== undefined) { reportElement.widget_search = newconfig.widget_search; }
       if(newconfig.show_titlebar !== undefined) { reportElement.show_titlebar = newconfig.show_titlebar; }
@@ -6972,7 +7564,10 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
       if(newconfig.source_ids !== undefined) { reportElement.source_ids = newconfig.source_ids; needReload=1; }
       if(newconfig.query_filter !== undefined) { reportElement.query_filter = newconfig.query_filter; needReload=1; }
       if(newconfig.collaboration_filter !== undefined) { reportElement.collaboration_filter = newconfig.collaboration_filter; needReload=1; }
-      if(newconfig.query_edge_search_depth !== undefined) { reportElement.query_edge_search_depth = newconfig.query_edge_search_depth; needReload=1; }
+      if(newconfig.query_edge_search_depth !== undefined) { 
+        reportElement.query_edge_search_depth = newconfig.query_edge_search_depth; needReload=1; 
+        console.log("change query_edge_search_depth = "+reportElement.query_edge_search_depth);        
+      }
       if(newconfig.datasourceElementID !== undefined) { reportElement.datasourceElementID = newconfig.datasourceElementID; needReload=1;}
       if(newconfig.load_on_page_init !== undefined) {
         reportElement.load_on_page_init = newconfig.load_on_page_init;
@@ -6984,12 +7579,14 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
         needReload=1;
       }
       
+      if(newconfig.title_focus_feature !== undefined) { reportElement.title_focus_feature = newconfig.title_focus_feature; }
+      if(newconfig.title_load_filter !== undefined) { reportElement.title_load_filter = newconfig.title_load_filter; }
       if(newconfig.title_prefix !== undefined) {
         reportElement.title        = newconfig.title_prefix;
         reportElement.title_prefix = newconfig.title_prefix;
       }
       reportElement.title=reportElement.title_prefix;
-
+  
       if(newconfig.symetric_axis !== undefined) { reportElement.symetric_axis = newconfig.symetric_axis; }
 
       if(newconfig.xaxis_fixedscale !== undefined) { reportElement.xaxis.fixedscale = newconfig.xaxis_fixedscale; reportElement.chart=null; }
@@ -7011,17 +7608,17 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
       if(newconfig.ctg_value_datatype !== undefined)  { reportElement.ctg_value_datatype = newconfig.ctg_value_datatype; }
       if(newconfig.display_type !== undefined)        { reportElement.display_type = newconfig.display_type; }
       if(newconfig.hide_zero !== undefined)           { reportElement.hide_zero = newconfig.hide_zero; }
-      
-      if(newconfig.display_type !== undefined)        { reportElement.display_type = newconfig.display_type; }
+      if(newconfig.layout_alignment !== undefined)    { reportElement.layout_alignment = newconfig.layout_alignment; }
       if(newconfig.colorspace !== undefined)          { reportElement.colorspace = newconfig.colorspace; }
       //if(newconfig.colorspace_logscale !== undefined) { reportElement.colorspace_logscale = newconfig.colorspace; }
       if(reportElement.colorspaceCSI) {
         var CSI = reportElement.colorspaceCSI;
         if(CSI.newconfig.colorspace != undefined) { reportElement.colorspace = CSI.newconfig.colorspace; }
-        if(CSI.newconfig.colorspace == "single-color") { reportElement.colorspace = CSI.newconfig.single_color; }
         if(CSI.newconfig.min_signal != undefined) { reportElement.colorspace_min = CSI.newconfig.min_signal; }
         if(CSI.newconfig.max_signal != undefined) { reportElement.colorspace_max = CSI.newconfig.max_signal; }
         if(CSI.newconfig.logscale != undefined)   { reportElement.colorspace_logscale = CSI.newconfig.logscale; }
+        if(CSI.newconfig.invert != undefined)     { reportElement.colorspace_invert = CSI.newconfig.invert; }
+        if(CSI.newconfig.zero_center != undefined) { reportElement.colorspace_zero_center = CSI.newconfig.zero_center; }
         reportElement.colorspaceCSI = null; //clear
       }
 
@@ -7053,10 +7650,12 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
     } else {
       console.log("accept-reconfig postprocess");
       //reportsResetElement(elementID);
+      current_report.active_cascades = {};  //start new cascade
       reportsPostprocessElement(elementID);
     }
     reportsDisplayEditTools();
     reportsDrawElement(elementID);
+    reportsUpdateLayoutHierarchy(reportElement);
     reportElementToggleSubpanel(elementID, 'none'); //close
     return;
   }
@@ -7067,6 +7666,8 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
 
 function reportElementDrawTitlebar(reportElement) {
   if(!reportElement) { return; }
+  
+  var datasourceElement = reportElement.datasource();
 
   var show_titlebar = reportElement.show_titlebar;
   if(reportElement.newconfig && reportElement.newconfig.show_titlebar != undefined) { show_titlebar = reportElement.newconfig.show_titlebar; }
@@ -7094,14 +7695,19 @@ function reportElementDrawTitlebar(reportElement) {
   //var width = mainRect.width-5;
 
   //sub panels
-  var auxID = reportElement.main_div_id + "_subpanel_aux";
-  var auxdiv = document.getElementById(auxID);
-  if(!auxdiv) {
-    //auxdiv = main_div.appendChild(document.createElement('div'));
-    auxdiv = master_div.appendChild(document.createElement('div'));
-    auxdiv.id = auxID;
-    reportElement.auxdiv = auxdiv;
+  var auxdiv = reportElement.auxdiv;
+  if(!reportElement.auxdiv) { //used for sub panels
+    var auxID = reportElement.main_div_id + "_subpanel_aux";
+    auxdiv = document.getElementById(auxID);
+    if(!auxdiv) {
+      auxdiv = master_div.appendChild(document.createElement('div'));
+      auxdiv.id = auxID;
+      reportElement.auxdiv = auxdiv;
+      auxdiv.setAttribute('style', "position:absolute; z-index:10; left:0px; top:0px; width:100px;");
+    }
   }
+  master_div.appendChild(auxdiv);
+
   var auxwidth = mainRect.width-5;
   if(auxwidth<425) { auxwidth = 425; }
   auxdiv.setAttribute('style', "position:absolute; z-index:10; left:"+(mainRect.left+window.scrollX)+"px; top:"+(mainRect.top+window.scrollY+10)+"px; width:"+auxwidth+"px;");
@@ -7111,16 +7717,20 @@ function reportElementDrawTitlebar(reportElement) {
   //main_div.setAttribute("onmousedown", "reportElementEvent(\""+reportElement.elementID+"\", 'main_div_resize_mousedown');");
   //main_div.setAttribute("onmouseup",   "reportElementEvent(\""+reportElement.elementID+"\", 'main_div_resize_mouseup');");
 
-  // titla area first
-  var headerID = reportElement.main_div_id + "_header_div";
-  var header_div = document.getElementById(headerID);
-  if(!header_div) {
-    header_div = main_div.appendChild(document.createElement('div'));
+  // titla area and widgets
+  var header_div = reportElement.header_div;
+  if(!reportElement.header_div) { 
+    var headerID = reportElement.main_div_id + "_header_div";
+    header_div = document.getElementById(headerID);
+    if(!header_div) {
+      header_div = main_div.appendChild(document.createElement('div'));
+    }
+    reportElement.header_div = header_div;
   }
   header_div.setAttribute('style', "width:100%;");
   header_div.innerHTML = "";
-  reportElement.header_div = header_div;
-  
+  main_div.insertBefore(header_div, main_div.firstChild);
+
   var svg = header_div.appendChild(document.createElementNS(svgNS,'svg'));
   svg.setAttributeNS(null, 'width', width+'px');
   svg.setAttributeNS(null, 'height', '20px');
@@ -7140,13 +7750,26 @@ function reportElementDrawTitlebar(reportElement) {
     titleBar.setAttribute("onmouseup",   "reportElementEvent(\""+reportElement.elementID+"\", 'stop_element_drag');");
   }
   
+  var title = reportElement.title_prefix;
+  if(reportElement.title_load_filter && datasourceElement.load_filter) {
+    var filter = datasourceElement.load_filter;
+    var p1 = filter.indexOf(":=");
+    if(p1>=0) { filter = filter.substring(p1+2); }
+    title += " : "+ filter;
+  }
+  if(reportElement.title_focus_feature && datasourceElement.focus_feature) {
+    var name = datasourceElement.focus_feature.name;
+    if(datasourceElement.focus_feature.display_name) { name = datasourceElement.focus_feature.display_name; }
+    title += " : " + name;
+  }
+  reportElement.title = title;
   var heading = header_g.appendChild(document.createElementNS(svgNS,'text'));
   heading.setAttributeNS(null, 'x', "10px");
   heading.setAttributeNS(null, 'y', '15px');
   heading.setAttributeNS(null, "font-weight","bold");
   heading.setAttributeNS(null, "font-size","14px");
   heading.setAttributeNS(null, "font-family", 'arial,helvetica,sans-serif');
-  var text1 = document.createTextNode(reportElement.title);
+  var text1 = document.createTextNode(title);
   reportElement.chartTitleArea = text1;
   heading.appendChild(text1);
   if(current_report.edit_page_configuration) {
@@ -7169,7 +7792,8 @@ function reportElementDrawTitlebar(reportElement) {
     widget_columns = reportElement.newconfig.widget_columns; 
   }
   if(current_report.edit_page_configuration && (reportElement.element_type != "tools_panel") && (reportElement.element_type != "html")  &&
-     (reportElement.element_type != "category") && (reportElement.element_type != "zenbugb") && (reportElement.element_type != "layout")) {
+     (reportElement.element_type != "category") && (reportElement.element_type != "filter") &&
+     (reportElement.element_type != "zenbugb") && (reportElement.element_type != "layout")) {
     widget_columns=true; 
   }
   if(widget_columns) {
@@ -7179,6 +7803,15 @@ function reportElementDrawTitlebar(reportElement) {
     header_g.appendChild(widget);
   }
   
+  var widget_download = reportElement.widget_download;
+  if(reportElement.newconfig && reportElement.newconfig.widget_download != undefined) { widget_download = reportElement.newconfig.widget_download; }
+  if(widget_download) {
+    widget_pos -= 20;
+    var widget = reportElementCreateDownloadWidget(reportElement);
+    widget.setAttributeNS(null, 'transform', "translate("+ widget_pos +",2)");
+    header_g.appendChild(widget);
+  }
+
   var widget_filter = reportElement.widget_filter;
   if(reportElement.newconfig && reportElement.newconfig.widget_filter != undefined) { widget_filter = reportElement.newconfig.widget_filter; }
   if(widget_filter) {
@@ -7244,6 +7877,8 @@ function reportElementToggleSubpanel(elementID, mode, submode) {
   //config is based on each element type
   configDiv = reportElementConfigSubpanel(reportElement);
   
+  var downloadDiv = reportElementDownloadSubpanel(reportElement);
+  
   //var groupingdiv = gLyphsExpressionPanelGroupingSubpanel();
   //if(!groupingdiv) { return; }
 
@@ -7257,12 +7892,14 @@ function reportElementToggleSubpanel(elementID, mode, submode) {
   if(searchDiv) { searchDiv.style.display = "none"; }
   if(configDiv) { configDiv.style.display   = "none"; }
   if(filterDiv) { filterDiv.style.display   = "none"; }
+  if(downloadDiv) { downloadDiv.style.display   = "none"; }
   if(columnsDiv) { columnsDiv.style.display   = "none"; }
 
   //if(mode == "group")   { groupingdiv.style.display = "block"; }
   if(searchDiv && (mode == "search"))  { searchDiv.style.display = "block"; } 
   if(configDiv && (mode == "config"))  { configDiv.style.display = "block"; }
   if(filterDiv && (mode == "filter"))  { filterDiv.style.display = "block"; }
+  if(downloadDiv && (mode == "download"))  { downloadDiv.style.display = "block"; }
   if(columnsDiv) {
     if((mode == "columns") || (mode == "columns_down")) { columnsDiv.style.display = "block"; }
     if(submode == "shift") {
@@ -7334,6 +7971,21 @@ function reportElementCreateFilterWidget(reportElement) {
   //backg.setAttributeNS(null, 'fill', '#E7E7E7');  //titlebar color
   //backg.setAttributeNS(null, 'fill', 'rgb(245,245,250)');
   backg.setAttributeNS(null, 'fill', 'rgb(255,255,255)');
+
+  var datasourceElement = reportElement.datasource();
+  var filtered = false;
+  for(var dtype in datasourceElement.datatypes) {
+    var dtype_col = datasourceElement.datatypes[dtype];
+    if(!dtype_col) { continue; }
+    if((dtype_col.col_type != "weight") && (dtype_col.col_type != "signal")) { continue; }  //maybe "expression" or "signal"
+    if(!dtype_col.filtered) { continue; }
+    if((dtype_col.filter_min=="min") && (dtype_col.filter_max=="max")) { continue; }
+    filtered=true; 
+    break;
+  }
+  if(filtered) {  
+    backg.setAttributeNS(null, 'fill', '#ffc266'); //#ffe0b3 #bdf5bd
+  }
 
   /*
   //funnel
@@ -7464,7 +8116,48 @@ function reportElementCreateConfigWidget(reportElement) {
   circle1.setAttributeNS(null, "stroke-width", '1px');
   circle1.setAttributeNS(null, 'fill', '#E7E7E7');
   //circle1.setAttributeNS(null, 'fill', 'none');
+  return g1;
+}
 
+
+function reportElementCreateDownloadWidget(reportElement) {
+  var g1 = document.createElementNS(svgNS,'g');
+  g1.setAttributeNS(null, "onmousedown", "reportElementToggleSubpanel('"+reportElement.elementID+"', 'download');");
+  g1.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\"download\",80);");
+  g1.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
+
+  var backg = g1.appendChild(document.createElementNS(svgNS,'rect'));
+  backg.setAttributeNS(null, 'x', '0px');
+  backg.setAttributeNS(null, 'y', '0px');
+  backg.setAttributeNS(null, 'width',  "18px");
+  backg.setAttributeNS(null, 'height', "16px");
+  //backg.setAttributeNS(null, 'fill', '#E7E7E7');  //titlebar color
+  //backg.setAttributeNS(null, 'fill', 'rgb(245,245,250)');
+  backg.setAttributeNS(null, 'fill', 'rgb(255,255,255)');
+
+//   var poly = document.createElementNS(svgNS,'polygon');
+//   //poly.setAttributeNS(null, 'points', '4,2  7,2  7,5  9.5,5  5.5,9.5  1.5,5  4,5  4,2');
+//   //poly.setAttributeNS(null, 'points', '8,4  14,4  14,10  19,10  11,19  3,10  8,10  8,4');
+//   //poly.setAttributeNS(null, 'points', '6,1  12,1  12,7  17,7  9,16  1,7  6,7  6,1');
+//   //poly.setAttributeNS(null, 'points', '6,1  10,1  10,7  15,7  8,16  1,7  6,7  6,1');
+//   //poly.setAttributeNS(null, 'points', '6,1  10,1  10,9  15,7  8,16  1,7  6,9  6,1');
+//   //poly.setAttributeNS(null, 'points', '6,0  12,0  12,6  17,6  9,13  1,6  6,6  6,0');
+//   poly.setAttributeNS(null, 'points', '6,0  10,0  10,6  15,6  8,13  1,6  6,6  6,0');
+//   poly.setAttributeNS(null, 'fill', 'gray');
+//   g1.appendChild(poly);
+
+  var path = document.createElementNS(svgNS,'path');
+  path.setAttributeNS(null, 'style', 'stroke-width: 1.5px; stroke: gray');
+  path.setAttributeNS(null, 'fill', 'white');
+  //poly.setAttributeNS(null, 'points', '6,1  10,1  10,9  15,7  8,16  1,7  6,9  6,1');
+  //var points = "M2,0 L18,0 L18,16 L2,16 Z M1,7 L18,7 M1,11.5 L18,11.5 M10,0 L10,16";
+  //var points = "M6,1 L10,1 L10,9 L15,7  L8,16  L1,7  L6,9  L6,1 Z";
+  //var points = "M6,1 L10,1 L10,9 L15,7  L8,16  L1,7  L6,9 Z";
+  //var points = "M6,1 L10,1 L10,7 L15,7  L8,13  L1,7  L6,7 Z M1,15 L15,15";
+  var points = "M3,5 L9,12 L15,5  M9,0 L9,12  M1,15 L17,15";
+  //var points = "M1,15 L17,15";
+  path.setAttributeNS(null, 'd', points);
+  g1.appendChild(path);
 
   return g1;
 }
@@ -7662,25 +8355,6 @@ function reportElementSearchSubpanel(reportElement) {
       tspan.setAttribute("style", "padding-left:5px;");
       tspan.innerHTML += "sources:<i>"+ source_matches+"</i>";
     }
-
-    tdiv = searchdiv.appendChild(document.createElement('div'));
-    radio1 = tdiv.appendChild(document.createElement('input'));
-    radio1.setAttribute("type", "radio");
-    radio1.setAttribute("name", reportElement.elementID + "_searchmatchmode");
-    radio1.setAttribute("value", "show_highlight");
-    if(!(datasourceElement.show_only_search_matches)) { radio1.setAttribute('checked', "checked"); }
-    radio1.setAttribute("onchange", "reportElementReconfigParam(\""+ datasourceElement.elementID +"\", 'show_only_search_matches', false);");
-    tspan = tdiv.appendChild(document.createElement('span'));
-    tspan.innerHTML = "highlight matches";
-    
-    radio2 = tdiv.appendChild(document.createElement('input'));
-    radio2.setAttribute("type", "radio");
-    radio1.setAttribute("name", reportElement.elementID + "_searchmatchmode");
-    radio2.setAttribute("value", "show_only");
-    if(datasourceElement.show_only_search_matches) { radio2.setAttribute('checked', "checked"); }
-    radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ datasourceElement.elementID +"\", 'show_only_search_matches', true);");
-    tspan = tdiv.appendChild(document.createElement('span'));
-    tspan.innerHTML = "show only matches";
   }
   if(filter!="" && feature_matches==0 && edge_matches==0 && source_matches==0) {
     tdiv = searchdiv.appendChild(document.createElement('div'));
@@ -7689,6 +8363,25 @@ function reportElementSearchSubpanel(reportElement) {
     tspan.setAttribute("style", "padding-left:5px;");
     tspan.innerHTML = "no matches found";
   }
+
+  tdiv = searchdiv.appendChild(document.createElement('div'));
+  radio1 = tdiv.appendChild(document.createElement('input'));
+  radio1.setAttribute("type", "radio");
+  radio1.setAttribute("name", reportElement.elementID + "_searchmatchmode");
+  radio1.setAttribute("value", "show_highlight");
+  if(!(reportElement.show_only_search_matches)) { radio1.setAttribute('checked', "checked"); }
+  radio1.setAttribute("onchange", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'show_only_search_matches', false);");
+  tspan = tdiv.appendChild(document.createElement('span'));
+  tspan.innerHTML = "highlight matches";
+  
+  radio2 = tdiv.appendChild(document.createElement('input'));
+  radio2.setAttribute("type", "radio");
+  radio2.setAttribute("name", reportElement.elementID + "_searchmatchmode");
+  radio2.setAttribute("value", "show_only");
+  if(reportElement.show_only_search_matches) { radio2.setAttribute('checked', "checked"); }
+  radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'show_only_search_matches', true);");
+  tspan = tdiv.appendChild(document.createElement('span'));
+  tspan.innerHTML = "show only matches";
   
   return searchdiv;
 }
@@ -7762,6 +8455,7 @@ function reportElementConfigSubpanel(reportElement) {
   img1.setAttribute("height", "12");
   img1.setAttribute("alt","close");
   
+  //-------  title, widgets and frame section -------------
   //subpanel title
   tdiv = configdiv.appendChild(document.createElement('div'));
   tspan = tdiv.appendChild(document.createElement('span'));
@@ -7779,12 +8473,12 @@ function reportElementConfigSubpanel(reportElement) {
   tspan.setAttribute('style', "font-size:10px; color:blue; padding-left:5px;");
   tspan.innerHTML = reportElement.elementID;
   
-  if(reportElement.element_type != "category" && reportElement.element_type != "layout") {
+  if(reportElement.element_type != "category" && reportElement.element_type != "layout" && reportElement.element_type != "filter") {
     var title_prefix = reportElement.title_prefix;
     if(reportElement.newconfig && reportElement.newconfig.title_prefix != undefined) { title_prefix = reportElement.newconfig.title_prefix; }
     var div1 = configdiv.appendChild(document.createElement('div'));
     var span0 = div1.appendChild(document.createElement('span'));
-    span0.setAttribute('style', "font-size:12px; font-family:arial,helvetica,sans-serif;");
+    span0.setAttribute('style', "font-size:12px; font-family:arial,helvetica,sans-serif; margin-left:5px;");
     span0.innerHTML = "title:";
     var titleInput = div1.appendChild(document.createElement('input'));
     titleInput.id =  reportElement.elementID + "_config_title";
@@ -7796,18 +8490,32 @@ function reportElementConfigSubpanel(reportElement) {
     titleInput.setAttribute("onkeyup", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'title', this.value);");
     titleInput.setAttribute("onchange", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'title', this.value);");
     titleInput.setAttribute("onblur", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'refresh', this.value);");
-  }
+    
+    var tdiv2 = configdiv.appendChild(document.createElement('div'));
+    tspan2 = tdiv2.appendChild(document.createElement('span'));
+    tspan2.setAttribute('style', "margin: 3px 1px 0px 15px;");
+    tspan2.innerHTML = "append:";
+    tcheck = tdiv2.appendChild(document.createElement('input'));
+    tcheck.setAttribute('style', "margin: 3px 1px 0px 5px;");
+    tcheck.setAttribute('type', "checkbox");
+    var val1 = reportElement.title_focus_feature;
+    if(reportElement.newconfig && reportElement.newconfig.title_focus_feature != undefined) { 
+      val1 = reportElement.newconfig.title_focus_feature; }
+    if(val1) { tcheck.setAttribute('checked', "checked"); }
+    tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'title_focus_feature', this.checked);");
+    tspan2 = tdiv2.appendChild(document.createElement('span'));
+    tspan2.innerHTML = "focus feature";
 
-  var sourcesDiv = reportElementBuildSourcesInterface(reportElement);
-  
-  var cascadesDiv = reportElementCascadeTriggersInterface(reportElement);
-
-  configdiv.appendChild(document.createElement('hr'));
-  
-  //-------  type specific section -------------
-  reportElement.config_options_div = configdiv.appendChild(document.createElement('div'));
-  if(reportElement.configSubpanel) {
-    reportElement.configSubpanel();
+    tcheck = tdiv2.appendChild(document.createElement('input'));
+    tcheck.setAttribute('style', "margin: 3px 1px 0px 5px;");
+    tcheck.setAttribute('type', "checkbox");
+    var val1 = reportElement.title_load_filter;
+    if(reportElement.newconfig && reportElement.newconfig.title_load_filter != undefined) { 
+      val1 = reportElement.newconfig.title_load_filter; }
+    if(val1) { tcheck.setAttribute('checked', "checked"); }
+    tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'title_load_filter', this.checked);");
+    tspan2 = tdiv2.appendChild(document.createElement('span'));
+    tspan2.innerHTML = "load_filter";
   }
 
   //---------- widget controls ------------------
@@ -7816,16 +8524,21 @@ function reportElementConfigSubpanel(reportElement) {
   if(reportElement.element_type != "layout") { configdiv.appendChild(general_ctrl_div); }
 
   tdiv2  = general_ctrl_div.appendChild(document.createElement('div'));
+  tdiv2.setAttribute('style', "margin-top: 3px;");
   tcheck = tdiv2.appendChild(document.createElement('input'));
   tcheck.setAttribute('style', "margin: 3px 1px 0px 5px;");
   tcheck.setAttribute('type', "checkbox");
-  var val1 = reportElement.show_titlebar;
-  if(reportElement.newconfig && reportElement.newconfig.show_titlebar != undefined) { val1 = reportElement.newconfig.show_titlebar; }
-  if(val1) { tcheck.setAttribute('checked', "checked"); }
+  var show_titlebar = reportElement.show_titlebar;
+  if(reportElement.newconfig && reportElement.newconfig.show_titlebar != undefined) { show_titlebar = reportElement.newconfig.show_titlebar; }
+  if(show_titlebar) { tcheck.setAttribute('checked', "checked"); }
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'show_titlebar', this.checked);");
   tspan2 = tdiv2.appendChild(document.createElement('span'));
   tspan2.innerHTML = "title bar";
   if(reportElement.element_type=="category") { tcheck.setAttribute('checked', "checked"); tcheck.setAttribute('disabled', "disabled"); }
+
+  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2.style.marginLeft = "25px";
+  tspan2.innerHTML = "widgets:";
 
   tcheck = tdiv2.appendChild(document.createElement('input'));
   tcheck.setAttribute('style', "margin: 3px 1px 0px 5px;");
@@ -7833,29 +8546,44 @@ function reportElementConfigSubpanel(reportElement) {
   var val1 = reportElement.widget_search;
   if(reportElement.newconfig && reportElement.newconfig.widget_search != undefined) { val1 = reportElement.newconfig.widget_search; }
   if(val1) { tcheck.setAttribute('checked', "checked"); }
+  if(!show_titlebar) { tcheck.setAttribute('disabled', "disabled"); }
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'widget_search', this.checked);");
   tspan2 = tdiv2.appendChild(document.createElement('span'));
-  tspan2.innerHTML = "search widget";
+  tspan2.innerHTML = "search";
 
   tcheck = tdiv2.appendChild(document.createElement('input'));
-  tcheck.setAttribute('style', "margin: 2px 1px 0px 15px;");
+  tcheck.setAttribute('style', "margin: 2px 1px 0px 10px;");
   tcheck.setAttribute('type', "checkbox");
   var val1 = reportElement.widget_filter;
   if(reportElement.newconfig && reportElement.newconfig.widget_filter != undefined) { val1 = reportElement.newconfig.widget_filter; }
   if(val1) { tcheck.setAttribute('checked', "checked"); }
+  if(!show_titlebar) { tcheck.setAttribute('disabled', "disabled"); }
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'widget_filter', this.checked);");
   tspan2 = tdiv2.appendChild(document.createElement('span'));
-  tspan2.innerHTML = "filter widget";
+  tspan2.innerHTML = "filter";
 
   tcheck = tdiv2.appendChild(document.createElement('input'));
-  tcheck.setAttribute('style', "margin: 2px 1px 0px 15px;");
+  tcheck.setAttribute('style', "margin: 2px 1px 0px 10px;");
   tcheck.setAttribute('type', "checkbox");
   var val1 = reportElement.widget_columns;
   if(reportElement.newconfig && reportElement.newconfig.widget_columns != undefined) { val1 = reportElement.newconfig.widget_columns; }
   if(val1) { tcheck.setAttribute('checked', "checked"); }
+  if(!show_titlebar) { tcheck.setAttribute('disabled', "disabled"); }
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'widget_columns', this.checked);");
   tspan2 = tdiv2.appendChild(document.createElement('span'));
-  tspan2.innerHTML = "columns widget";
+  tspan2.innerHTML = "columns";
+  
+  tcheck = tdiv2.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 2px 1px 0px 10px;");
+  tcheck.setAttribute('type', "checkbox");
+  var val1 = reportElement.widget_download;
+  if(reportElement.newconfig && reportElement.newconfig.widget_download != undefined) { val1 = reportElement.newconfig.widget_download; }
+  if(val1) { tcheck.setAttribute('checked', "checked"); }
+  if(!show_titlebar) { tcheck.setAttribute('disabled', "disabled"); }
+  tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'widget_download', this.checked);");
+  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2.innerHTML = "download";
+
   
   //---------- layout controls ------------------
   //configdiv.appendChild(document.createElement('hr'));
@@ -7867,7 +8595,7 @@ function reportElementConfigSubpanel(reportElement) {
   span0.innerHTML = "width:";
   var input = tdiv2.appendChild(document.createElement('input'));
   input.className = "sliminput";
-  input.style.width = "50px";
+  input.style.width = "35px";
   input.setAttribute('type', "text");
   input.setAttribute('value', content_width);
   input.setAttribute("onkeydown", "if(event.keyCode==13) { reportElementReconfigParam(\""+reportElement.elementID+"\", 'content_width', this.value); }");
@@ -7876,11 +8604,11 @@ function reportElementConfigSubpanel(reportElement) {
   var content_height = reportElement.content_height;
   if(reportElement.auto_content_height) { content_height = "auto"; }
   var span0 = tdiv2.appendChild(document.createElement('span'));
-  span0.setAttribute('style', "margin-left:10px; font-size:12px; font-family:arial,helvetica,sans-serif;");
+  span0.setAttribute('style', "margin-left:7px; font-size:12px; font-family:arial,helvetica,sans-serif;");
   span0.innerHTML = "height:";
   var input = tdiv2.appendChild(document.createElement('input'));
   input.className = "sliminput";
-  input.style.width = "50px";
+  input.style.width = "35px";
   input.setAttribute('type', "text");
   input.setAttribute('value', content_height);
   input.setAttribute("onkeydown", "if(event.keyCode==13) { reportElementReconfigParam(\""+reportElement.elementID+"\", 'content_height', this.value); }");
@@ -7888,8 +8616,8 @@ function reportElementConfigSubpanel(reportElement) {
 
   //border options
   var span1 = tdiv2.appendChild(document.createElement('span'));
-  span1.setAttribute('style', "margin: 2px 1px 0px 15px;");
-  span1.innerHTML = "border: ";
+  span1.setAttribute('style', "margin: 2px 1px 0px 7px;");
+  span1.innerHTML = "border:";
   var select = tdiv2.appendChild(document.createElement('select'));
   select.setAttribute("onchange", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'border_type', this.value);");
   select.className = "dropdown";
@@ -7904,7 +8632,48 @@ function reportElementConfigSubpanel(reportElement) {
     option.innerHTML = opts1[idx1];
   }
   
-  general_ctrl_div.appendChild(document.createElement('hr'));
+  //layout alignment for children
+  if(reportElement.layout_mode == "child" && reportElement.layout_parentID) {
+    var layout_parent = current_report.elements[reportElement.layout_parentID];
+    if(layout_parent) {
+      var span1 = tdiv2.appendChild(document.createElement('span'));
+      span1.setAttribute('style', "margin: 2px 1px 0px 7px;");
+      span1.innerHTML = "align:";
+      var select = tdiv2.appendChild(document.createElement('select'));
+      select.setAttribute("onchange", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'layout_alignment', this.value);");
+      select.className = "dropdown";
+      
+      var opts1 = ["left", "right", "top", "bottom" ];
+      if(layout_parent.layout_type=="col") { opts1 = ["left", "right"]; }
+      if(layout_parent.layout_type=="row") { opts1 = ["top", "bottom"]; }
+
+      var layout_alignment = reportElement.layout_alignment;
+      if(reportElement.newconfig && reportElement.newconfig.layout_alignment != undefined) { layout_alignment = reportElement.newconfig.layout_alignment; }
+      for(var idx1=0; idx1<opts1.length; idx1++) {
+        var option = select.appendChild(document.createElement('option'));
+        option.setAttribute("value", opts1[idx1]);
+        if(layout_alignment == opts1[idx1]) { option.setAttribute("selected", "selected"); }
+        option.innerHTML = opts1[idx1];
+      }
+    }
+  }
+
+
+  //-------  sources and triggers section -------------
+  var sourcesDiv = reportElementBuildSourcesInterface(reportElement);
+  
+  var cascadesDiv = reportElementCascadeTriggersInterface(reportElement);
+
+  configdiv.appendChild(document.createElement('hr'));
+  
+
+  //-------  type specific section -------------
+  reportElement.config_options_div = configdiv.appendChild(document.createElement('div'));
+  if(reportElement.configSubpanel) {
+    reportElement.configSubpanel();
+    //configdiv.appendChild(document.createElement('hr'));
+  }
+
 
   //---------- control buttons ------------------
   tdiv2  = configdiv.appendChild(document.createElement('div'));
@@ -7913,8 +8682,18 @@ function reportElementConfigSubpanel(reportElement) {
   button.type = "button";
   button.className = "medbutton";
   button.setAttribute("onclick", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'delete-element');");
-  button.value = "delete element";
-  button.innerHTML = "delete element";
+  button.value = "delete";
+  button.innerHTML = "delete";
+
+  tdiv2  = configdiv.appendChild(document.createElement('div'));
+  tdiv2.setAttribute("style", "margin-top:5px; float:left;");
+  button = tdiv2.appendChild(document.createElement("input"));
+  button.type = "button";
+  button.className = "medbutton";
+  button.setAttribute("onclick", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'copy-element');");
+  button.value = "copy";
+  button.innerHTML = "copy";
+
 
   tdiv2  = configdiv.appendChild(document.createElement('div'));
   tdiv2.setAttribute("style", "margin-top:5px; float:right;");
@@ -8019,7 +8798,7 @@ function reportElement_filterSubpanel() {
     var tspan = tdiv2.appendChild(document.createElement('span'));
     tspan.setAttribute('style', "font-weight:bold;");
     var label =  dtype_col.title;
-    if(dtype_col.title != dtype_col.datatype) { label +=  " ["+ dtype_col.datatype +"]"; }
+    //if(dtype_col.title != dtype_col.datatype) { label +=  " ["+ dtype_col.datatype +"]"; }
     tspan.innerHTML = label;
 
     tcheck = tdiv2.appendChild(document.createElement('input'));
@@ -8192,6 +8971,320 @@ function reportElement_filterSubpanel() {
   }
   
   return paneldiv;
+}
+
+
+function reportElementDownloadSubpanel(reportElement) {
+  if(!reportElement) { return; }
+  if(reportElement.element_type == "layout") { return; }
+
+  var datasourceElement = reportElement.datasource();
+
+  var main_div = reportElement.main_div;
+  if(!main_div) { return; }
+  //console.log("reportElementDownloadSubpanel");
+  
+  var auxID = reportElement.main_div_id + "_subpanel_aux";
+  var auxdiv = document.getElementById(auxID);
+  if(!auxdiv) { return; }
+  //console.log("reportElementDownloadSubpanel aux ok");
+
+  var subID = reportElement.main_div_id + "_download_subpanel";
+  var downloadDiv = document.getElementById(subID);
+  if(!downloadDiv) {
+    downloadDiv = document.createElement('div');
+    //auxdiv.insertBefore(downloadDiv, auxdiv.firstChild);
+    auxdiv.appendChild(downloadDiv);
+    downloadDiv.id = subID;
+    downloadDiv.setAttribute('style', "background-color:rgb(245,245,250); text-align:left; " +
+                             "border:inset; border-width:2px; padding: 3px 3px 3px 3px; " +
+                             //"width:"+(width-30)+"px; display:none; opacity: 0.95; " +
+                             "width:350px; display:none; opacity: 1.0; " +
+                             "position:absolute; top:20px; right:10px;"
+                             );
+  }
+  //clearKids(downloadDiv);
+  downloadDiv.innerHTML = "";
+  var mainRect = main_div.getBoundingClientRect();
+  var auxRect = auxdiv.getBoundingClientRect();
+  if(auxRect.width>mainRect.width) { downloadDiv.style.left = "5px"; downloadDiv.style.right = ""; }
+  else { downloadDiv.style.right = "10px"; downloadDiv.style.left = ""; }
+
+  var tdiv, tdiv2, tspan1, tspan2, tinput, tradio, ttable, ttr, ttd, button, tcheck;
+
+  //close button
+  tdiv = downloadDiv.appendChild(document.createElement('div'));
+  tdiv.setAttribute('style', "float:right; margin: 0px 4px 4px 4px;");
+  var a1 = tdiv.appendChild(document.createElement('a'));
+  a1.setAttribute("target", "top");
+  a1.setAttribute("href", "./");
+  a1.setAttribute("onmousedown", "reportElementToggleSubpanel('"+reportElement.elementID+"', 'none'); return false;");
+
+  var img1 = a1.appendChild(document.createElement('img'));
+  img1.setAttribute("src", eedbWebRoot+"/images/close_icon16px_gray.png");
+  img1.setAttribute("width", "12");
+  img1.setAttribute("height", "12");
+  img1.setAttribute("alt","close");
+
+  //subpanel title
+  tdiv = downloadDiv.appendChild(document.createElement('div'));
+  tdiv.setAttribute('style', "font-size:12px; font-weight:bold;");
+  tdiv.innerHTML = "download";
+
+  downloadDiv.appendChild(document.createElement('hr'));
+  
+    //-------  type specific section -------------
+  reportElement.download_options_div = downloadDiv.appendChild(document.createElement('div'));
+  if(reportElement.downloadSubpanel) { 
+    reportElement.downloadSubpanel();
+  } else {
+    tdiv = downloadDiv.appendChild(document.createElement('div'));
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.innerHTML = "download columns:";
+
+    radio1 = tdiv.appendChild(document.createElement('input'));
+    radio1.setAttribute("type", "radio");
+    radio1.setAttribute("name", reportElement.elementID + "_download_mode");
+    radio1.setAttribute("value", "visible");
+    if(reportElement.download_mode == "visible") { radio1.setAttribute('checked', "checked"); }
+    radio1.setAttribute("onchange", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'download_mode', this.value);");
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.innerHTML = "visible";
+    
+    radio2 = tdiv.appendChild(document.createElement('input'));
+    radio2.setAttribute("type", "radio");
+    radio2.setAttribute("name", reportElement.elementID + "_download_mode");
+    radio2.setAttribute("value", "all");
+    if(reportElement.download_mode == "all") { radio2.setAttribute('checked', "checked"); }
+    radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'download_mode', this.value);");
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.innerHTML = "all";
+  }
+  
+  var div1 = downloadDiv.appendChild(document.createElement('div'));
+  div1.setAttribute('style', "margin: 3px 0px 0px 5px; font-size:12px; font-family:arial,helvetica,sans-serif;");
+
+  var button = div1.appendChild(document.createElement("input"));
+  button.type = "button";
+  button.className = "medbutton";
+  button.style.float = "right";
+  button.value = "download";
+  button.innerHTML = "download";
+  button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  button.setAttribute("onclick", "reportElementDownloadData('"+ reportElement.elementID +"');");
+
+  return downloadDiv;
+}
+
+
+function reportElementDownloadData(elementID) {
+  var reportElement = current_report.elements[elementID];
+  if(!reportElement) { return; }
+  
+  console.log("reportElementDownloadData "+elementID);
+  
+  if(reportElement.download) {
+    reportElement.download();
+    return;
+  }
+  
+  //if(reportElement.loading) { return; }
+  //var output_data = "this is a test download for " + reportElement.elementID;
+  var output_data = "";
+
+  var datasourceElement = reportElement.datasource();
+
+  //get the visible columns in order
+  reportElement.dtype_columns.sort(reports_column_order_sort_func);
+  var columns = reportElement.dtype_columns;
+
+  //output columns line
+  for(var i=0; i<columns.length; i++) {
+    var dtype_col = columns[i];
+    if(!dtype_col) { continue; }
+    if(!dtype_col.visible && reportElement.download_mode=="visible") { continue; }
+    if(/location_link/.test(dtype_col.datatype)) { continue; }
+    if(/hyperlink/.test(dtype_col.datatype)) { continue; }
+
+    if(i>0) { output_data += "\t"; }
+    output_data += dtype_col.title;
+    
+    if(/location_string/.test(dtype_col.datatype)) {
+      output_data += "\tchrom\tstart.1base\tend\tstrand";      
+    }
+
+  }
+  output_data += "\n";
+
+  //generate the display list of objects similar to TableElement
+  var display_list = new Array();
+  if(datasourceElement.datasource_mode == "edge")    {
+    for(j=0; j<datasourceElement.edge_array.length; j++) {
+      var edge = datasourceElement.edge_array[j];
+      if(!edge) { continue; }
+      if(!edge.filter_valid) { continue; }
+      if(!edge.feature1) { continue; }
+      if(!edge.feature2) { continue; }
+      if(reportElement.search_data_filter && reportElement.show_only_search_matches && !edge.search_match) { continue; }
+      if(reportElement.focus_feature &&
+         (reportElement.focus_feature.id != edge.feature1_id) &&
+         (reportElement.focus_feature.id != edge.feature2_id)) { continue; }
+      //TODO: maybe also implement the multi-select filter_feature_ids or some new multi-select-trigger layer
+      display_list.push(edge);
+    }
+  }
+  if(datasourceElement.datasource_mode == "feature") {
+    for(j=0; j<datasourceElement.feature_array.length; j++) {
+      var feature = datasourceElement.feature_array[j];
+      if(!feature) { continue; }
+      if(!feature.filter_valid) { continue; }
+      if(reportElement.search_data_filter && reportElement.show_only_search_matches && !feature.search_match) { continue; }
+      display_list.push(feature);
+    }
+  }
+  if(datasourceElement.datasource_mode == "source") {
+    for(j=0; j<datasourceElement.sources_array.length; j++) {
+      var source = datasourceElement.sources_array[j];
+      if(!source) { continue; }
+      if(!source.filter_valid) { continue; }
+      if(reportElement.search_data_filter && reportElement.show_only_search_matches && !source.search_match) { continue; }
+      display_list.push(source);
+    }
+  }
+  
+  if(reportElement.tableSortFunc) { display_list.sort(reportElement.tableSortFunc()); }
+  
+  //output the display_list
+  for(idx_row=0; idx_row<display_list.length; idx_row++) {
+
+    var edge = null;
+    var feature = null;
+    var source = null;
+
+    if(datasourceElement.datasource_mode == "feature") {
+      feature = display_list[idx_row];
+      if(!feature) { continue; }
+      if(reportElement.search_data_filter && reportElement.show_only_search_matches && !feature.search_match) { continue; }
+    }
+    if(datasourceElement.datasource_mode == "edge") {
+      edge = display_list[idx_row];
+      if(!edge) { continue; }
+      if(reportElement.search_data_filter && reportElement.show_only_search_matches && !edge.search_match) { continue; }
+    }
+    if(datasourceElement.datasource_mode == "source") {
+      source = display_list[idx_row];
+      if(!source) { continue; }
+      if(reportElement.search_data_filter && reportElement.show_only_search_matches && !source.search_match) { continue; }
+    }
+    if(!feature && !edge && !source) { continue; }
+    
+    column_count = 0;    
+    for(var icol=0; icol<columns.length; icol++) {
+      var dtype_col = columns[icol];
+      if(!dtype_col) { continue; }
+      if(!dtype_col.visible && reportElement.download_mode=="visible") { continue; }
+      if(/location_link/.test(dtype_col.datatype)) { continue; }
+      if(/hyperlink/.test(dtype_col.datatype)) { continue; }
+      
+      var t_object;
+      if(edge) { t_object = edge;}
+      if(feature) { t_object = feature;}
+      if(source) { t_object = source;}
+      if(edge && (/^f1\./.test(dtype_col.datatype))) { t_object = edge.feature1;}
+      if(edge && (/^f2\./.test(dtype_col.datatype))) { t_object = edge.feature2;}
+      
+      var datatype = dtype_col.datatype;
+      datatype = datatype.replace(/^f1\./, '');
+      datatype = datatype.replace(/^f2\./, '');
+
+      if(column_count>0) { output_data += "\t"; }
+      column_count++;
+      
+      if(dtype_col.col_type=="row") { output_data += idx_row+1; }
+      
+      if(t_object && (dtype_col.datatype == "name") || (dtype_col.datatype == "f1.name") || (dtype_col.datatype == "f2.name")) {
+        output_data += t_object.name;
+      } else if(edge && (dtype_col.col_type == "weight")) {
+        var weights = edge.weights[dtype_col.datatype];
+        if(weights) { 
+          var val1 = weights[0].weight;
+          if(val1 != Math.floor(val1)) { val1 = val1.toPrecision(4); }
+          output_data += val1;
+        }
+      } else if(t_object && t_object.score && (datatype == "bedscore") && (dtype_col.col_type == "signal")) {
+        output_data +=  parseFloat(t_object.score);
+        //output_data +=  parseFloat(t_object.score).toPrecision(6);
+      } else if(t_object && t_object.expression && (dtype_col.col_type == "signal")) {
+        var exp_val ="";
+        for(var j2=0; j2<t_object.expression.length; j2++) {
+          var expression = t_object.expression[j2];
+          if(expression.datatype != datatype) { continue; }
+          if(exp_val != "") { exp_val += " "; }
+          var val1 = expression.total;
+          if(val1 != Math.floor(val1)) { val1 = val1.toPrecision(4); }
+          exp_val += val1;
+        }
+        output_data +=  exp_val;
+      } else if(t_object && dtype_col.col_type == "mdata") {
+        var val = "";
+        if(t_object.mdata && t_object.mdata[datatype]) {
+          var value_array = t_object.mdata[datatype];
+          for(var idx1=0; idx1<value_array.length; idx1++) {
+            if(val) { val += ", "; }
+            val += value_array[idx1];
+          }
+        } else if(t_object.source && (datatype == "category")) {
+          val = t_object.source.category;
+        } else if(t_object.source && (datatype == "source_name")) {
+          val = t_object.source.name;
+        } else if(datatype == "platform") {
+          val = t_object.platform;
+        } else if(datatype == "import_date") {
+          val = t_object.import_date;
+        } else if(datatype == "owner_identity") {
+          val = t_object.owner_identity;
+        } else if(datatype == "owner_import_date") {
+          val = "<div style='font-size:10px;'>" + t_object.owner_identity +"</div>";
+          val += "<div style='font-size:10px; color:rgb(94,115,153);'>" + t_object.import_date +"</div>";
+        } else if(datatype == "source_class") {
+          val = t_object.classname;
+        } else if(datatype == "location_string") {
+          val = t_object.chromloc;
+          val += "\t" + t_object.chrom + "\t" + t_object.start +"\t" + t_object.end + "\t" + t_object.strand;      
+        }
+        if(val) { output_data += val; }
+        
+        //if(datatype == "location_link") { output_data += dtype_col.title; }
+        //} else if(t_object && (dtype_col.col_type == "hyperlink")) {
+        //  output_data += dtype_col.title;
+      }
+    }
+    output_data += "\n";
+  }
+  
+  var data = new Blob([output_data], {type: 'text/plain'});
+
+  // If we are replacing a previously generated file we need to
+  // manually revoke the object URL to avoid memory leaks.
+  if (reportElement.downloadURL !== null) {
+    window.URL.revokeObjectURL(reportElement.downloadURL);
+    reportElement.downloadURL = null;
+  }
+
+  reportElement.downloadURL = window.URL.createObjectURL(data);
+  
+  var filename = reportElement.title;
+  filename = filename.replace(/^\s+/, '').replace(/\s+$/, ''); //remove leading and trailing spaces
+  filename = filename.replace(/[;:]/g, ''); 
+  filename = filename.replace(/\s+/g, '_'); 
+  filename += ".tsv";
+  
+  var downloadLink = document.createElement("a");
+  downloadLink.href = reportElement.downloadURL;
+  downloadLink.download = filename; //"data.tsv";
+  document.body.appendChild(downloadLink);
+  downloadLink.click();
+  document.body.removeChild(downloadLink);
 }
 
 
@@ -8499,7 +9592,7 @@ function reportElementBuildSourcesInterface(reportElement) {
         dsi1.enableResultFilter = true;
         dsi1.enableScripting = true;
         dsi1.allowMultipleSelect = true;
-
+        dsi1.query_edge_search_depth = reportElement.query_edge_search_depth;
         dsi1.datasource_mode = datasource_mode;
         dsi1.query_filter = query_filter;
         if(reportElement.collaboration_filter) { 
@@ -9183,7 +10276,7 @@ function zenbuReports_hoverInfo(reportElement, object) {
   for(var icol=0; icol<reportElement.dtype_columns.length; icol++) {
     var dtype_col = reportElement.dtype_columns[icol];
     if(!dtype_col) { continue; }
-    if(!dtype_col.visible) { continue; }
+    if(!dtype_col.visible && !dtype_col.user_modifiable) { continue; }
 
     var t_feature = object;
     var edge = null;
@@ -9197,8 +10290,9 @@ function zenbuReports_hoverInfo(reportElement, object) {
     datatype = datatype.replace(/^f1\./, '');
     datatype = datatype.replace(/^f2\./, '');
 
-    tdiv = divFrame.appendChild(document.createElement('div'));
-    tdiv.setAttribute('style', "max-width:330px; word-wrap:break-word; margin:0px 10px 0px 2px; ");
+    //tdiv = divFrame.appendChild(document.createElement('div'));
+    tdiv = document.createElement('div');
+    tdiv.setAttribute('style', "max-width:350px; word-wrap:break-word; margin:0px 10px 0px 2px; ");
 
     if(!firstRow) {
       tspan = tdiv.appendChild(document.createElement('span'));
@@ -9207,7 +10301,7 @@ function zenbuReports_hoverInfo(reportElement, object) {
     }
 
     tspan = tdiv.appendChild(document.createElement('span'));
-    tspan.setAttribute('style', "word-wrap: break-word; ");
+    tspan.setAttribute('style', "word-wrap: break-word; margin-left:5px;");
     if(firstRow) { tspan.style = "word-wrap:break-word; font-weight:bold; font-size:12px; "; }
 
     if(t_feature && (dtype_col.datatype == "name") || (dtype_col.datatype == "f1.name") || (dtype_col.datatype == "f2.name")) {
@@ -9244,6 +10338,8 @@ function zenbuReports_hoverInfo(reportElement, object) {
       }
       if(val) { tspan.innerHTML = val; }      
     }
+    
+    if(tspan.innerHTML) { divFrame.appendChild(tdiv); }
     firstRow = false;
   }
     
@@ -9277,14 +10373,16 @@ function zenbu_object_dtypecol_value(object, dtype_col, mode) {
   else if(edge && edge.weights && (dtype_col.col_type == "weight")) {
     var weights = edge.weights[dtype_col.datatype];
     if(weights) { 
-      value = weights[0].weight.toPrecision(4);
+      //value = weights[0].weight.toPrecision(4);
+      value = parseFloat(weights[0].weight);
     }
   } 
   else if(t_feature && t_feature.expression && (dtype_col.col_type == "signal")) {
     for(var j2=0; j2<t_feature.expression.length; j2++) {
       var expression = t_feature.expression[j2];
       if(expression.datatype != datatype) { continue; }
-      var e1 = expression.total.toPrecision(4);
+      //var e1 = expression.total.toPrecision(4);
+      var e1 = parseFloat(expression.total);
       if(mode!="unqiue" || (mode=="unique" && !values[e1])) {
         if(value != "") { value += " "; }
         value += e1;
@@ -9359,7 +10457,7 @@ function reportElementCascadeTriggersInterface(reportElement) {
   labelDiv.setAttribute("style", "font-size:12px; font-family:arial,helvetica,sans-serif;");
   var span1 = labelDiv.appendChild(document.createElement('span'));
   span1.setAttribute("style", "font-size:12px; margin-right:7px; font-family:arial,helvetica,sans-serif; font-weight:bold;");
-  span1.innerHTML ="Inter-Element cascade-triggers:";
+  span1.innerHTML ="Inter-Element event-triggers:";
   
   tspan = labelDiv.appendChild(document.createElement('span'));
   tspan.setAttribute('style', "padding-left:5px; font-size:10px; font-style:italic;");
@@ -9373,7 +10471,7 @@ function reportElementCascadeTriggersInterface(reportElement) {
     button1.setAttribute("style", "margin-left: 17px; font-size:10px; color:black; padding: 1px 4px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE;  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
     //text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4);
     button1.setAttribute("type", "button");
-    button1.setAttribute("value", "edit cascade triggers");
+    button1.setAttribute("value", "edit event triggers");
     button1.setAttribute("onmousedown", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'edit_cascade_triggers', this.value);");
     
   } else {
@@ -9387,6 +10485,7 @@ function reportElementCascadeTriggersInterface(reportElement) {
 
     var table1 = cascadesDiv.appendChild(document.createElement('table'));
     table1.setAttribute('style', "margin-left:5px; font-size:12px; font-family:arial,helvetica,sans-serif;");
+    //table1.setAttribute('border', "1px solid red;");
 
     //var columns = reportElement.dtype_columns;
     var columns = new Array();
@@ -9405,6 +10504,7 @@ function reportElementCascadeTriggersInterface(reportElement) {
 
       //var rowdiv = cascadesDiv.appendChild(document.createElement('div'));
       var tr1 = table1.appendChild(document.createElement('tr'));
+      tr1.setAttribute("valign", "top");
 
       //on_trigger
       var td1 = tr1.appendChild(document.createElement('td'));
@@ -9414,99 +10514,39 @@ function reportElementCascadeTriggersInterface(reportElement) {
       select.className = "dropdown";
       select.style.fontSize = "10px";
       select.setAttribute("onchange", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'trigger_on_trigger', '"+trig_idx+"', this.value);");
-      var opts1 = ["select", "select_location", "hyperlink", "reset", "preload", "load", "postprocess" ];
+      var opts1 = ["select", "select_location", "hyperlink", "reset", "preload", "load", "postprocess", "filter_change" ];
       for(var idx1=0; idx1<opts1.length; idx1++) {
         var option = select.appendChild(document.createElement('option'));
         option.setAttribute("value", opts1[idx1]);
         if(trigger.on_trigger == opts1[idx1]) { option.setAttribute("selected", "selected"); }
         option.innerHTML = opts1[idx1];
       }
-      
-      //action_mode
-      var td1 = tr1.appendChild(document.createElement('td'));
       if(trigger.on_trigger == "hyperlink") {
-        var span1 = td1.appendChild(document.createElement('span'));
-        span1.innerHTML = "column: ";
-        var span1 = td1.appendChild(document.createElement('span'));
-        span1.setAttribute("style", "font-size:10px; font-weight:bold; padding:1px 1px 1px 1px; margin:0px 3px 0px 1px;");
+        var div1 = td1.appendChild(document.createElement('div'));
+        var span1 = div1.appendChild(document.createElement('span'));
+        span1.setAttribute("style", "margin:0px 0px 0px 13px;");
+        span1.innerHTML = "column:";
+        var span1 = div1.appendChild(document.createElement('span'));
+        span1.setAttribute("style", "font-size:10px; font-weight:bold; padding:1px 1px 1px 1px;"); //margin:0px 3px 0px 1px;");
         span1.innerHTML = trigger.hyperlink_datatype
-        span1 = td1.appendChild(document.createElement('span'));
-        span1.innerHTML = " &rArr; send ";
-      } else {
-        var span1 = td1.appendChild(document.createElement('span'));
-        span1.innerHTML = "&rArr; action: ";
-        var select = td1.appendChild(document.createElement('select'));
-        select.className = "dropdown";
-        select.style.fontSize = "10px";
-        select.setAttribute("onchange", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'trigger_action_mode', '"+trig_idx+"', this.value);");
-        var opts1 = ["select", "select_location", "set_focus", "focus_load", "set_filter_features", "reset", "load", "postprocess"];
-        for(var idx1=0; idx1<opts1.length; idx1++) {
-          var option = select.appendChild(document.createElement('option'));
-          option.setAttribute("value", opts1[idx1]);
-          if(trigger.action_mode == opts1[idx1]) { option.setAttribute("selected", "selected"); }
-          option.innerHTML = opts1[idx1];
-        }
-      }
-
-      //action_mode options
-      var opts1 = [];
-      if(trigger.action_mode == "select") {
-        opts1 = ["clear"];
-        if(trigger.on_trigger == "hyperlink") { opts1 = ["nothing"]; }
-        opts1.push("selection_id");
-        if((reportElement.datasource_mode == "edge") && (reportElement.element_type != "treelist")) {
-          opts1.push("f1.id");
-          opts1.push("f2.id");
-        }
-        for(var i=0; i<columns.length; i++) {
-          var dtype_col = columns[i];
-          if(!dtype_col) { continue; }
-          //dtype_col.colnum = i+1;  //reset column order based on sorting
-          opts1.push(dtype_col.datatype);
-        }
-      }
-      if((trigger.action_mode == "set_focus") || (trigger.action_mode == "focus_load")) {
-        opts1 = ["clear"];
-        if((reportElement.datasource_mode == "edge") && (reportElement.element_type != "treelist")) {
-          opts1.push("selection_f1");
-          opts1.push("selection_f2");
-        } else {
-          opts1.push("selection");
-        }
-      }
-      if(trigger.action_mode == "set_filter_features") {
-        opts1 = ["clear", "selection", "subnetwork", "all_features"];
-      }
-      if(opts1.length>0) {
-        var span1 = td1.appendChild(document.createElement('span'));
-        span1.innerHTML = " : ";
-        var select = td1.appendChild(document.createElement('select'));
-        select.className = "dropdown";
-        select.style.fontSize = "10px";
-        select.setAttribute("onchange", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'trigger_options', '"+trig_idx+"', this.value);");
-        for(var idx1=0; idx1<opts1.length; idx1++) {
-          var option = select.appendChild(document.createElement('option'));
-          option.setAttribute("value", opts1[idx1]);
-          if(trigger.options == opts1[idx1]) { option.setAttribute("selected", "selected"); }
-          option.innerHTML = opts1[idx1];
-        }
       }
 
       //target: even the to-target can be a pull-down based on the known page elements
-      var td1 = tr1.appendChild(document.createElement('td'));
-      var span1 = td1.appendChild(document.createElement('span'));
-      //if(trigger.on_trigger == "hyperlink") {
-      if((trigger.targetElementID != "") && (!trigger.targetElement)) {
-        span1.innerHTML += " to-page : ";
-        var input1 = td1.appendChild(document.createElement('input'));
+      var td2 = tr1.appendChild(document.createElement('td'));
+      td2.valign = "top";
+      var span2b = td2.appendChild(document.createElement('span'));
+      span2b.innerHTML = " &rArr; trigger-target: ";
+
+      if((trigger.targetElementID != "") && (!trigger.targetElement)) { //hyperlink to external page
+        span2b.innerHTML = " &rArr; open-page:";
+        var input1 = td2.appendChild(document.createElement('input'));
         input1.setAttribute("onchange", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'trigger_targetID', '"+trig_idx+"', this.value);");
         input1.className = "sliminput";
-        input1.style.width = "100px";
+        input1.style.width = "150px";
         input1.value = trigger.targetElementID;
       }
       else {
-        span1.innerHTML += " to-target : ";
-        var select = td1.appendChild(document.createElement('select'));
+        var select = td2.appendChild(document.createElement('select'));
         select.className = "dropdown";
         select.style.fontSize = "10px";
         select.setAttribute("onchange", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'trigger_targetID', '"+trig_idx+"', this.value);");
@@ -9530,6 +10570,89 @@ function reportElementCascadeTriggersInterface(reportElement) {
           option.setAttribute("value", t_element.elementID);
           if(trigger.targetElementID == t_element.elementID) { option.setAttribute("selected", "selected"); }
           option.innerHTML = t_element.elementID;
+        }
+      }
+
+      //action_mode
+      var td1 = tr1.appendChild(document.createElement('td'));
+      if(trigger.on_trigger == "hyperlink") {
+        // var span1 = td1.appendChild(document.createElement('span'));
+        // span1.innerHTML = "column: ";
+        // var span1 = td1.appendChild(document.createElement('span'));
+        // span1.setAttribute("style", "font-size:10px; font-weight:bold; padding:1px 1px 1px 1px; margin:0px 3px 0px 1px;");
+        // span1.innerHTML = trigger.hyperlink_datatype
+        span1 = td1.appendChild(document.createElement('span'));
+        span1.innerHTML = " send ";
+      } else {
+        var span1 = td1.appendChild(document.createElement('span'));
+        span1.innerHTML = " action: ";
+        var select = td1.appendChild(document.createElement('select'));
+        select.className = "dropdown";
+        select.style.fontSize = "10px";
+        select.setAttribute("onchange", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'trigger_action_mode', '"+trig_idx+"', this.value);");
+        
+        var opts1 = ["select", "select_location", "search_filter", "set_focus", "focus_load", "set_filter_features", "set_load_filter", "reset", "load", "postprocess"];
+        if(trigger.targetElement) {
+          if(trigger.targetElement.element_type == "zenbugb") { opts1.push("set_view_config"); }
+          if(trigger.targetElement.element_type == "cytoscape") { opts1.push("highlight"); }
+        }
+        for(var idx1=0; idx1<opts1.length; idx1++) {
+          var option = select.appendChild(document.createElement('option'));
+          option.setAttribute("value", opts1[idx1]);
+          if(trigger.action_mode == opts1[idx1]) { option.setAttribute("selected", "selected"); }
+          option.innerHTML = opts1[idx1];
+        }
+      }
+
+      //action_mode options
+      var opts2 = [];
+      if(trigger.action_mode == "select" || trigger.action_mode == "set_load_filter" || 
+         trigger.action_mode == "highlight" ||
+         trigger.action_mode == "search_filter" || trigger.action_mode == "set_view_config") {
+        opts2 = ["clear"];
+        if(trigger.on_trigger == "hyperlink") { opts2 = ["nothing"]; }
+        opts2.push("selection_id");
+        if((reportElement.datasource_mode == "edge") && (reportElement.element_type != "treelist")) {
+          opts2.push("f1.id");
+          opts2.push("f2.id");
+        }
+        for(var i=0; i<columns.length; i++) {
+          var dtype_col = columns[i];
+          if(!dtype_col) { continue; }
+          //dtype_col.colnum = i+1;  //reset column order based on sorting
+          opts2.push(dtype_col.datatype);
+        }
+      }
+      if((trigger.action_mode == "set_focus") || (trigger.action_mode == "focus_load")) {
+        opts2 = ["clear"];
+        if((reportElement.datasource_mode == "edge") && (reportElement.element_type != "treelist")) {
+          opts2.push("selection_f1");
+          opts2.push("selection_f2");
+        } else {
+          opts2.push("selection");
+        }
+      }
+      if(trigger.action_mode == "set_filter_features") {
+        opts2 = ["clear", "selection", "subnetwork", "all_features"];
+      }
+      if(reportElement.element_type=="category" && 
+         (trigger.action_mode == "search_filter" || trigger.action_mode == "set_load_filter")) {
+        opts2 = ["clear", "category_filter"]; 
+      }
+
+      if(opts2.length>0) {
+        var span1 = td1.appendChild(document.createElement('span'));
+        span1.innerHTML = " send: ";
+        var select = td1.appendChild(document.createElement('select'));
+        select.className = "dropdown";
+        select.style.fontSize = "10px";
+        select.setAttribute("onchange", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'trigger_options', '"+trig_idx+"', this.value);");
+        for(var idx1=0; idx1<opts2.length; idx1++) {
+          var option = select.appendChild(document.createElement('option'));
+          option.setAttribute("value", opts2[idx1]);
+          if(!trigger.options) { trigger.options = opts2[idx1]; }
+          if(trigger.options == opts2[idx1]) { option.setAttribute("selected", "selected"); }
+          option.innerHTML = opts2[idx1];
         }
       }
       
@@ -9971,9 +11094,11 @@ function reportElementColorSpaceOptions(reportElement) {
     colorspaceCSI.elementID = reportElement.elementID;
     colorspaceCSI.colorspace = reportElement.colorspace;
     colorspaceCSI.enableScaling = false; //do not show the min_signal/max_signal interfaces
-    //colorspaceCSI.min_signal = reportElement.signal_min;
-    //colorspaceCSI.max_signal = reportElement.signal_max;
+    //colorspaceCSI.min_signal = reportElement.colorspace_min;
+    //colorspaceCSI.max_signal = reportElement.colorspace_max;
     colorspaceCSI.logscale = reportElement.colorspace_logscale;
+    colorspaceCSI.invert = reportElement.colorspace_invert;
+    colorspaceCSI.zero_center = reportElement.colorspace_zero_center;
     colorspaceCSI.callOutFunction = reportElementCSIUpdate;
     reportElement.colorspaceCSI = colorspaceCSI;
     console.log("first create colorspaceCSI reportElement["+reportElement.elementID+"] colorspace:"+reportElement.colorspace);

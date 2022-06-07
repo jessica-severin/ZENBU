@@ -231,6 +231,7 @@ function escapeXml(unsafe) {
 
 // remove multiple, leading or trailing spaces in string
 function trim_string(s) {
+  if(!s) { return ""; }
   s = s.replace(/(^\s*)|(\s*$)/gi,"");
   s = s.replace(/[ ]{2,}/gi," ");
   s = s.replace(/\n /,"\n");

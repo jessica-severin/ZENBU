@@ -65,6 +65,7 @@ function ZenbuGBElement(elementID) {
   this.glyphsGB.hide_compacted_tracks = false;
   this.glyphsGB.view_config_loaded = true; //hack for an empty glyphsGB
   this.glyphsGB.display_width = this.content_width - 30;
+  this.glyphsGB.display_width_auto = false;
   this.glyphsGB.asm = "hg38";
   this.glyphsGB.chrom = "chr19";
   this.glyphsGB.start = 49657992;
@@ -172,6 +173,16 @@ function zenbuGBElement_elementEvent(mode, value, value2) {
     reportsDrawElement(this.elementID);
   }
   
+  if(mode == "set_view_config") {
+    this.configUUID = value;
+    //reload glyphsGB with new config
+    gLyphsInitViewConfigUUID(this.glyphsGB, this.configUUID);
+    //need to get default location from config
+    this.chrom_location = this.glyphsGB.regionLocation();
+    reportsPostprocessElement(this.elementID);
+    reportsDrawElement(this.elementID);
+  }
+  
   if(mode == "select") {
     this.selected_id = value;
     reportsDrawElement(this.elementID);
@@ -240,6 +251,7 @@ function zenbuGBElement_reset() {
   
   if(this.glyphsGB) {
     this.glyphsGB.display_width = this.content_width -30;
+    this.glyphsGB.display_width_auto = false;
     this.postprocessElement();
   }
 }
@@ -359,6 +371,7 @@ function zenbuGBElement_postprocess() {
   }
   gLyphsInitLocation(this.glyphsGB, this.chrom_location);
   this.glyphsGB.display_width = this.content_width - 30;
+  this.glyphsGB.display_width_auto = false;
   this.main_div.appendChild(this.glyphsGB.main_div);
 
   this.glyphsGB.searchbox_enabled = this.searchbox_enabled;
@@ -444,6 +457,7 @@ function zenbuGBElement_draw() {
   
   if(this.glyphsGB) {
     this.glyphsGB.display_width = this.content_width -30;
+    this.glyphsGB.display_width_auto = false;
     main_div.appendChild(this.glyphsGB.main_div);
     //gLyphsInitLocation(this.glyphsGB, this.chrom_location);
     //gLyphsReloadRegion(this.glyphsGB);
@@ -462,8 +476,12 @@ function zenbuGBElement_configSubpanel() {
   
   //var datasourceElement = this.datasource();
   
-  configdiv.appendChild(document.createElement('hr'));
-  
+  var labelDiv = configdiv.appendChild(document.createElement('div'));
+  labelDiv.setAttribute("style", "font-size:12px; font-family:arial,helvetica,sans-serif;");
+  var span1 = labelDiv.appendChild(document.createElement('span'));
+  span1.setAttribute("style", "font-size:12px; margin-right:7px; font-family:arial,helvetica,sans-serif; font-weight:bold;");
+  span1.innerHTML ="Visualization:";
+
   //----------
   var configUUID = this.configUUID;
   if(this.newconfig && this.newconfig.configUUID != undefined) { configUUID = this.newconfig.configUUID; }
@@ -517,6 +535,9 @@ function zenbuGBElement_configSubpanel() {
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'searchbox_enabled', this.checked);");
   tspan2 = tdiv2.appendChild(document.createElement('span'));
   tspan2.innerHTML = "enable search box";
+
+  configdiv.appendChild(document.createElement('hr'));
+  return configdiv;
 }
 
 //=================================================================================

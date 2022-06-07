@@ -3631,7 +3631,7 @@ function gLyphsTrackSourcesMissingMetadataLoad(glyphTrack, mdkeys) {
 
   glyphTrack.checked_missing_mdata = 1; //1 == sending data
   
-  sourcesXMLHttp.open("POST", eedbSearchFCGI, true);  //async
+  sourcesXMLHttp.open("POST", eedbSearchCGI, true);  //async
   sourcesXMLHttp.onreadystatechange= function(id) { return function() { gLyphsTrackSourcesMissingMetadataXMLResponse(id); };}(glyphTrack.trackID);
   sourcesXMLHttp.setRequestHeader("Content-Type", "application/xml; charset=UTF-8;");
   sourcesXMLHttp.send(paramXML);

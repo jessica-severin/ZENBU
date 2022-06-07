@@ -56,11 +56,14 @@ function zenbuColorSpaceInterface(uniqID) {
     zenbuCSI.innerHTML = "";
 
     //init variables here
+    zenbuCSI.label = "color:";
     zenbuCSI.colorspace = "fire1";
     zenbuCSI.single_color = "#0000FF";
     zenbuCSI.enableScaling = true;
     zenbuCSI.min_signal = "auto";
     zenbuCSI.max_signal = "auto";
+    zenbuCSI.signalRangeMin = undefined;
+    zenbuCSI.signalRangeMax = undefined;
     zenbuCSI.logscale = false;
     zenbuCSI.invert = false;
     zenbuCSI.gradientSegLen = 42;
@@ -86,18 +89,27 @@ function zenbuColorSpaceInterfaceUpdate(uniqID) {
   if(!colorSpc && colorspace && (colorspace.charAt(0) == "#")) {
     //special code for single-color init
     var color = colorspace;
-    colorspace = "single-color";
-    zenbuCSI.colorspace = "single-color";
-    zenbuCSI.single_color = color;
-    colorSpc = zenbuColorSpaces["single-color"];
-    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(color);
+    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})(.*)$/i.exec(color);
     if(result) {
       var r = parseInt(result[1], 16);
       var g = parseInt(result[2], 16);
       var b = parseInt(result[3], 16);
-      colorSpc.colors[0] = new RGBColour(r,g,b);
+      if(result[4] == " spectrum") {
+        colorspace = "user-color";
+        zenbuCSI.single_color = "#"+ result[1] + result[2] + result[3] ;
+        colorSpc = zenbuColorSpaces["user-color"];
+        colorSpc.colors = new Array();
+        colorSpc.colors.push(new RGBColour(240, 240, 240)); //gray
+        colorSpc.colors.push(new RGBColour(r,g,b));
+        console.log("zenbuCSI.colorspace["+uniqID+"] init is user-color["+color+"] -> ["+(colorSpc.colors[1].getCSSHexadecimalRGB())+"]");
+      } else {
+        colorspace = "single-color";
+        zenbuCSI.single_color = color;
+        colorSpc = zenbuColorSpaces["single-color"];
+        colorSpc.colors[0] = new RGBColour(r,g,b);
+        console.log("zenbuCSI.colorspace["+uniqID+"] init is single-color["+color+"] -> ["+(colorSpc.colors[0].getCSSHexadecimalRGB())+"]");
+      }
     }    
-    console.log("zenbuCSI.colorspace["+uniqID+"] init is single-color["+color+"] -> ["+(colorSpc.colors[0].getCSSHexadecimalRGB())+"]");
   }
   if(!colorspace || !colorSpc) {
     colorspace = "fire1";
@@ -116,6 +128,8 @@ function zenbuColorSpaceInterfaceUpdate(uniqID) {
   if(zenbuCSI.newconfig && zenbuCSI.newconfig.max_signal != undefined) { max_signal = zenbuCSI.newconfig.max_signal; }
   var invert = zenbuCSI.invert;
   if(zenbuCSI.newconfig && (zenbuCSI.newconfig.invert !== undefined)) { invert = zenbuCSI.newconfig.invert; }
+  var zero_center = zenbuCSI.zero_center;
+  if(zenbuCSI.newconfig && (zenbuCSI.newconfig.zero_center !== undefined)) { zero_center = zenbuCSI.newconfig.zero_center; }
 
   zenbuCSI.style.width = "100%";
   zenbuCSI.innerHTML = "";
@@ -143,7 +157,7 @@ function zenbuColorSpaceInterfaceUpdate(uniqID) {
   var div1 = zenbuCSI.appendChild(document.createElement('div'));
   var span1 = div1.appendChild(document.createElement('span'));
   span1.setAttribute("style", "margin: 0px 0px 0px 0px;");
-  span1.appendChild(document.createTextNode("color:"));
+  span1.appendChild(document.createTextNode(zenbuCSI.label));
 
   var select = div1.appendChild(document.createElement('select'));
   select.className = "dropdown";
@@ -166,7 +180,7 @@ function zenbuColorSpaceInterfaceUpdate(uniqID) {
     colorInput.setAttribute('style', "margin:1px 0px 0px 5px; ");
     colorInput.setAttribute('value', single_color);
     colorInput.setAttribute('size', "5");
-    colorInput.setAttributeNS(null, "onchange", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'colorspace', this.value);");
+    colorInput.setAttributeNS(null, "onchange", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'single_color', this.value);");
     if(zenbuCSI.color_picker) { zenbuCSI.color_picker.hidePicker(); } //hide old picker
     zenbuCSI.color_picker = new jscolor.color(colorInput);
     return;
@@ -215,7 +229,10 @@ function zenbuColorSpaceInterfaceUpdate(uniqID) {
     option.innerHTML = cdepth;
   }
 
-  var span2 = div1.appendChild(document.createElement('span'));
+  var div1b = zenbuCSI.appendChild(document.createElement('div'));
+  div1b.style.marginLeft = "5px";
+
+  var span2 = div1b.appendChild(document.createElement('span'));
   var logCheck = span2.appendChild(document.createElement('input'));
   logCheck.setAttribute('style', "margin: 0px 1px 0px 5px;");
   logCheck.setAttribute('type', "checkbox");
@@ -224,14 +241,23 @@ function zenbuColorSpaceInterfaceUpdate(uniqID) {
   var span1 = span2.appendChild(document.createElement('span'));
   span1.innerHTML = "log scale";
   
-  var span2 = div1.appendChild(document.createElement('span'));
+  var span2 = div1b.appendChild(document.createElement('span'));
   var invertCheck = span2.appendChild(document.createElement('input'));
-  invertCheck.setAttribute('style', "margin: 0px 1px 0px 5px;");
+  invertCheck.setAttribute('style', "margin: 0px 1px 0px 7px;");
   invertCheck.setAttribute('type', "checkbox");
   if(invert) { invertCheck.setAttribute('checked', "checked"); }
   invertCheck.setAttribute("onclick", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'invert', this.checked);");
   var span1 = span2.appendChild(document.createElement('span'));
   span1.innerHTML = "invert";
+
+  var span3 = div1b.appendChild(document.createElement('span'));
+  var invertCheck = span3.appendChild(document.createElement('input'));
+  invertCheck.setAttribute('style', "margin: 0px 1px 0px 7px;");
+  invertCheck.setAttribute('type', "checkbox");
+  if(zero_center) { invertCheck.setAttribute('checked', "checked"); }
+  invertCheck.setAttribute("onclick", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'zero_center', this.checked);");
+  var span1 = span3.appendChild(document.createElement('span'));
+  span1.innerHTML = "zero-center";
 
   var single_color = zenbuCSI.single_color;
   if(zenbuCSI.newconfig && zenbuCSI.newconfig.single_color != undefined) { single_color = zenbuCSI.newconfig.single_color; }
@@ -247,7 +273,7 @@ function zenbuColorSpaceInterfaceUpdate(uniqID) {
     colorInput.setAttribute('style', "margin:1px 0px 0px 5px; font-size:10px; ");
     colorInput.setAttribute('value', single_color);
     colorInput.setAttribute('size', "5");
-    colorInput.setAttributeNS(null, "onchange", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'single_color', this.value);");
+    colorInput.setAttributeNS(null, "onchange", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'user_color', this.value);");
     if(zenbuCSI.color_picker) { zenbuCSI.color_picker.hidePicker(); } //hide old picker
     zenbuCSI.color_picker = new jscolor.color(colorInput);
   }
@@ -258,27 +284,36 @@ function zenbuColorSpaceInterfaceUpdate(uniqID) {
     div2.setAttribute('style', "margin: 2px 0px 1px 7px;");
     var span4 = div2.appendChild(document.createElement('span'));
     span4.innerHTML = "min signal: ";
-    var levelInput = div2.appendChild(document.createElement('input'));
-    levelInput.className = "sliminput";
-    //levelInput.style.fontSize = "10px";
-    levelInput.setAttribute('size', "10");
-    levelInput.setAttribute('type', "text");
-    levelInput.setAttribute('value', min_signal);
-    levelInput.setAttribute("onkeyup", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'min_signal', this.value);");
-    levelInput.setAttribute("onkeydown", "if(event.keyCode==13) { zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'update'); }");
+    var minInput = div2.appendChild(document.createElement('input'));
+    minInput.className = "sliminput";
+    minInput.setAttribute('size', "5");
+    minInput.setAttribute('type', "text");
+    minInput.setAttribute('value', min_signal);
+    minInput.setAttribute("onkeyup", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'min_signal', this.value);");
+    minInput.setAttribute("onkeydown", "if(event.keyCode==13) { zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'update'); }");
+    minInput.setAttribute("onblur", "zenbuColorSpaceInterfaceReconfigParam(\""+zenbuCSI.id+"\", 'update');");
+    if(zenbuCSI.signalRangeMin != undefined) {
+      minInput.setAttribute("onmouseover", "eedbMessageTooltip('min signal: "+(zenbuCSI.signalRangeMin)+"',130);");
+      minInput.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+
+    }
 
     var span4 = div2.appendChild(document.createElement('span'));
     span4.setAttribute('style', "margin-left: 3px;");
     span4.innerHTML = "max signal: ";
-    var levelInput = div2.appendChild(document.createElement('input'));
-    levelInput.className = "sliminput";
-    //levelInput.style.fontSize = "10px";
-    levelInput.setAttribute('size', "10");
-    levelInput.setAttribute('type', "text");
-    levelInput.setAttribute('value', max_signal);
-    levelInput.setAttribute("onkeyup", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'max_signal', this.value);");
-    levelInput.setAttribute("onkeydown", "if(event.keyCode==13) { zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'update'); }");
-
+    var maxInput = div2.appendChild(document.createElement('input'));
+    maxInput.className = "sliminput";
+    maxInput.setAttribute('size', "5");
+    maxInput.setAttribute('type', "text");
+    maxInput.setAttribute('value', max_signal);
+    maxInput.setAttribute("onkeyup", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'max_signal', this.value);");
+    maxInput.setAttribute("onkeydown", "if(event.keyCode==13) { zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'update'); }");
+    maxInput.setAttribute("onblur", "zenbuColorSpaceInterfaceReconfigParam(\""+zenbuCSI.id+"\", 'update');");
+    if(zenbuCSI.signalRangeMax != undefined) {
+      maxInput.setAttribute("onmouseover", "eedbMessageTooltip('max signal: "+(zenbuCSI.signalRangeMax)+"',130);");
+      maxInput.setAttribute("onmouseout", "eedbClearSearchTooltip();");    
+    }
+        
     //var span2 = div2.appendChild(document.createElement('span'));
     //span2.setAttribute('style', "margin: 1px 2px 1px 3px;");
     //span2.innerHTML = "experiment merge:";
@@ -300,11 +335,26 @@ function zenbuColorSpaceInterfaceReconfigParam(uniqID, param, value, altvalue) {
   if(param == "min_signal") {  
     newconfig.min_signal = parseFloat(value); 
     if(isNaN(newconfig.min_signal)) { newconfig.min_signal = "auto"; } 
+    else {
+      if((zenbuCSI.signalRangeMin!=undefined) && (newconfig.min_signal < zenbuCSI.signalRangeMin)) {
+        console.log("zenbuColorSpace trying to set min_signal to "+newconfig.min_signal+" while signalRangeMin="+zenbuCSI.signalRangeMin);
+        //newconfig.min_signal = "auto";
+      }
+    }
+    return true;
   }
-  if(param == "max_signal") {  
+  if(param == "max_signal") {
     newconfig.max_signal = parseFloat(value); 
     if(isNaN(newconfig.max_signal)) { newconfig.max_signal = "auto"; } 
+    else {
+      if((zenbuCSI.signalRangeMax!=undefined) && (newconfig.max_signal > zenbuCSI.signalRangeMax)) {
+        console.log("zenbuColorSpace trying to set max_signal to "+newconfig.max_signal+" while signalRangeMax="+zenbuCSI.signalRangeMax);
+        //newconfig.max_signal = "auto";
+      }
+    }
+    return true;
   }
+  
   if(param == "logscale") { 
     if(value) { newconfig.logscale=1; }
     else { newconfig.logscale = 0; }
@@ -313,6 +363,10 @@ function zenbuColorSpaceInterfaceReconfigParam(uniqID, param, value, altvalue) {
     if(value) { newconfig.invert=1; }
     else { newconfig.invert = 0; }
   }
+  if(param == "zero_center") { 
+    if(value) { newconfig.zero_center=1; }
+    else { newconfig.zero_center = 0; }
+  }
 
   if(param == "colorspace") {  
     newconfig.colorspace = value;
@@ -320,23 +374,31 @@ function zenbuColorSpaceInterfaceReconfigParam(uniqID, param, value, altvalue) {
     if(!colorSpc && value.length==6) {
       var color = value;
       if(color.charAt(0)!="#") { color = "#"+color; }
-      newconfig.colorspace = "single-color";
+      newconfig.colorspace = color;
       newconfig.single_color = color;
-      var colorSpc = zenbuColorSpaces["single-color"];
-      var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(color);
-      if(result) {
-        var r = parseInt(result[1], 16);
-        var g = parseInt(result[2], 16);
-        var b = parseInt(result[3], 16);
-        colorSpc.colors[0] = new RGBColour(r,g,b);
-      }    
-      console.log("colorspace is single-color["+color+"]  -> ["+(colorSpc.colors[0].getCSSHexadecimalRGB())+"]");
+      // var colorSpc = zenbuColorSpaces["single-color"];
+      // var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})(.*)$/i.exec(color);
+      // if(result) {
+      //   var r = parseInt(result[1], 16);
+      //   var g = parseInt(result[2], 16);
+      //   var b = parseInt(result[3], 16);
+      //   colorSpc.colors[0] = new RGBColour(r,g,b);
+      // }
+      // console.log("colorspace is single-color["+color+"]  -> ["+(colorSpc.colors[0].getCSSHexadecimalRGB())+"]");
     }
   }
   if(param == "single_color") {  
     var color = value;
     if(color.charAt(0)!="#") { color = "#"+color; }
+    newconfig.colorspace = color;
     newconfig.single_color = color;
+  }
+  if(param == "user_color") {  
+    var color = value;
+    if(color.charAt(0)!="#") { color = "#"+color; }
+    newconfig.colorspace = color + " spectrum";
+    newconfig.single_color = color;
+    zenbuColorSpaceSetUserColor(color);
   }
   if(param == "colorspace_discrete") {  
     newconfig.colorMode = "signal";
@@ -345,8 +407,10 @@ function zenbuColorSpaceInterfaceReconfigParam(uniqID, param, value, altvalue) {
   if(param == "colorspace_category") {  
     newconfig.colorspace_category = value;
     if(value == "single-color") {
-      newconfig.colorspace = "single-color";
+      //newconfig.colorspace = "single-color";
       if(newconfig.single_color === undefined) { newconfig.single_color = zenbuCSI.single_color; }
+      newconfig.colorspace = newconfig.single_color;
+      console.log("switch colorspace_category[single-color] : "+ newconfig.colorspace);
     }
     if(value == "brewer-sequential") {
       newconfig.colorspace = "BuGn_bp_7";
@@ -361,7 +425,7 @@ function zenbuColorSpaceInterfaceReconfigParam(uniqID, param, value, altvalue) {
       newconfig.colorspace = "fire1";
     }
     var colorspec = zenbuColorSpaces[newconfig.colorspace];
-    newconfig.colorspace_discrete = colorspec.discrete;
+    if(colorspec) { newconfig.colorspace_discrete = colorspec.discrete; }
   }
   if(param == "colorspace_depth") {  
     //modify the color
@@ -662,7 +726,21 @@ function zenbuInitColorSpaces() {
   spec.colors.push(new RGBColour(0, 100, 0));     //dark green
   zenbuColorSpaces[spec.name] = spec;
   
-  
+  // divergent3: smooth variation on brewer-BrBg_9
+  //['rgb(140,81,10)', 'rgb(191,129,45)', 'rgb(223,194,125)', 'rgb(246,232,195)', 'rgb(245,245,245)', 'rgb(199,234,229)', 'rgb(128,205,193)', 'rgb(53,151,143)', 'rgb(1,102,94)'],
+  var spec = new Object();
+  spec.name = "divergent3";
+  spec.discrete = false;
+  spec.colorcat = "zenbu-spectrum";
+  spec.bpdepth = "";
+  spec.colors = new Array();
+  spec.colors.push(new RGBColour(140,81,10));   //brown 
+  spec.colors.push(new RGBColour(223,194,125)); //mid-brown
+  spec.colors.push(new RGBColour(245,245,245)); //gray
+  spec.colors.push(new RGBColour(128,205,193)); //mid-green
+  spec.colors.push(new RGBColour(1,102,94));    //dark green
+  zenbuColorSpaces[spec.name] = spec;
+    
   // gray1
   var gray1 = new Object();
   gray1.name = "gray1";
@@ -733,39 +811,49 @@ function zenbuInitColorSpaces() {
 }
 
 
-function zenbuScoreColorSpace(colorname, score, discrete, logscale, invert) {
+function zenbuScoreColorSpace(colorname, score, discrete, logscale, invert, zero_center) {
   //score is from 0.0 to 1.0
   // function returns an RGBColour object
-  if(score < 0)   { score = 0; }
+  if(zero_center && (score < -1.0)) { score = -1.0; }
+  if((score < 0) && !zero_center) { score = 0; }
   if(score > 1.0) { score = 1.0; }
-  if(invert) { score = 1.0 - score; }
+  if(!zero_center && invert) { score = 1.0 - score; }
+  if(zero_center && invert) { score = 0.0 - score; }
   if(!colorname) { return new RGBColour(0, 0, 0); }
 
   var colorSpc = zenbuColorSpaces[colorname];
   if(!colorSpc && (colorname.charAt(0) == "#")) {
     //special code for single-color colorname
     var color = new RGBColour(0, 0, 0); //black in case there is parsing error
-    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(colorname);
+    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})(.*)$/i.exec(colorname);
     if(result) {
       var r = parseInt(result[1], 16);
       var g = parseInt(result[2], 16);
       var b = parseInt(result[3], 16);
       color = new RGBColour(r,g,b);
+      if(result[4] != " spectrum") { return color; }
+      else {
+        colorSpc = zenbuColorSpaces["user-color"];
+        colorSpc.colors = new Array();
+        colorSpc.colors.push(new RGBColour(240, 240, 240)); //gray
+        colorSpc.colors.push(color);        
+      }
     }    
     //console.log("zenbuScoreColorSpace single-color["+colorname+"] -> ["+(color.getCSSHexadecimalRGB())+"]");
-    return color;
+    //return color;
   }
   if(!colorSpc) { return new RGBColour(0, 0, 0); } //return black if name error
   
   //document.getElementById("message").innerHTML= "colorspace: " + colorSpc.colors.length;
   if(colorSpc.log) { logscale = true; }
   if(logscale) {
-    score = Math.log(score*100 + 1) / Math.log(100+1);
+    score = Math.log(Math.abs(score)*100 + 1) / Math.log(100+1);
   }
   
   if(colorSpc.discrete) { discrete = true; }
   if(discrete) {
     var ci = score * (colorSpc.colors.length);
+    if(zero_center) { ci = ((score +1.0)/2.0) * (colorSpc.colors.length); }
     var idx = Math.floor(ci);
     if(idx == colorSpc.colors.length) { idx = colorSpc.colors.length - 1; }
     var color1 = colorSpc.colors[idx];
@@ -773,16 +861,24 @@ function zenbuScoreColorSpace(colorname, score, discrete, logscale, invert) {
     return color1
   }
   
-  var ci = score * (colorSpc.colors.length - 1);
+  var ci = Math.abs(score) * (colorSpc.colors.length - 1);
+  if(zero_center) { ci = ((score +1.0)/2.0) * (colorSpc.colors.length - 1); }
   var idx = Math.floor(ci);
   var cr = ci - idx;
   //document.getElementById("message").innerHTML += "ci: " + ci;
-  //document.getElementById("message").innerHTML += " ["+score+"] "+idx;
+  //console.log("score:"+score+"  ci:"+ci+" idx:"+idx);
   
   var color1 = colorSpc.colors[idx];
   var color2 = colorSpc.colors[idx+1];
-  if(!color1) { return new RGBColour(0, 0, 0); }
-  if(!color2) { return color1; }
+  if(!color1) { 
+    color1 = new RGBColour(0, 0, 0); 
+    color1.zcr = score;
+    return color1;
+  }
+  if(!color2) { 
+    color1.zcr = score;
+    return color1; 
+  }
   
   if(discrete) { if(cr<=0.5) {return color1;} else {return color2;} }
   
@@ -794,6 +890,7 @@ function zenbuScoreColorSpace(colorname, score, discrete, logscale, invert) {
   var b  = c1.b + cr * (c2.b - c1.b);
   
   var color = new RGBColour(r, g, b);
+  color.zcr = score;
   return color;
 }
 
@@ -804,15 +901,22 @@ function zenbuIndexColorSpace(colorname, index) {
   if(!colorSpc && (colorname.charAt(0) == "#")) {
     //special code for single-color colorname
     var color = new RGBColour(0, 0, 0); //black in case there is parsing error
-    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(colorname);
+    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})(.*)$/i.exec(colorname);
     if(result) {
       var r = parseInt(result[1], 16);
       var g = parseInt(result[2], 16);
       var b = parseInt(result[3], 16);
       color = new RGBColour(r,g,b);
+      if(result[4] != " spectrum") { return color; }
+      else {
+        colorSpc = zenbuColorSpaces["user-color"];
+        colorSpc.colors = new Array();
+        colorSpc.colors.push(new RGBColour(240, 240, 240)); //gray
+        colorSpc.colors.push(color);        
+      }
     }    
     //console.log("zenbuIndexColorSpace single-color["+colorname+"] -> ["+(color.getCSSHexadecimalRGB())+"]");
-    return color;
+    //return color;
   }
   if(!colorSpc) {   //return black if name error
     //console.log("zenbuIndexColorSpace ["+colorname+"] name error");

@@ -1,4 +1,4 @@
-/* $Id: zenbu_genomewide_element.js,v 1.22 2019/11/28 10:03:41 severin Exp $ */
+/* $Id: zenbu_genomewide_element.js,v 1.28 2022/04/21 07:33:36 severin Exp $ */
 
 // ZENBU
 //
@@ -59,6 +59,7 @@ function ZenbuGenomeWideElement(elementID) {
   this.visible_chrom_count=0;
   this.expand_height_tofit = false;
   this.display_type = "chromosome view";
+  this.edge_location_mode = "both features";
   this.feature_color_mode = "match_chrom";
   this.fixed_color = "#0000A0";
   this.signal_colorspace = "fire1";
@@ -99,8 +100,9 @@ function ZenbuGenomeWideElement(elementID) {
   this.drawChromView      = zenbuGenomeWideElement_drawChromosomeView;
   this.drawManhattan      = zenbuGenomeWideElement_drawManhattanPlot;
 
-  this.renderChromViewFeatures     = zenbuGenomeWideElement_renderChromViewFeatures;
+  this.renderChromView             = zenbuGenomeWideElement_renderChromView;
   this.renderManhattanViewFeatures = zenbuGenomeWideElement_renderManhattanViewFeatures;
+  this.renderManhattanViewEdges    = zenbuGenomeWideElement_renderManhattanViewEdges;
   
   return this;
 }
@@ -126,6 +128,7 @@ function zenbuGenomeWideElement_initFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("hide_filtered_slots") == "true") { this.hide_filtered_slots = true; }
   if(elementDOM.getAttribute("signal_datatype")) { this.signal_datatype = elementDOM.getAttribute("signal_datatype"); }
   if(elementDOM.getAttribute("yaxis_logscale") == "true") { this.yaxis_logscale = true; }
+  if(elementDOM.getAttribute("edge_location_mode")) {  this.edge_location_mode = elementDOM.getAttribute("edge_location_mode"); }
 
   return true;
 }
@@ -147,6 +150,7 @@ function zenbuGenomeWideElement_generateConfigDOM() {
   if(this.hide_filtered_slots) { elementDOM.setAttribute("hide_filtered_slots", "true"); }  
   if(this.signal_datatype) { elementDOM.setAttribute("signal_datatype", this.signal_datatype); }
   if(this.yaxis_logscale) { elementDOM.setAttribute("yaxis_logscale", "true"); }
+  if(this.edge_location_mode) { elementDOM.setAttribute("edge_location_mode", this.edge_location_mode); }
 
   return elementDOM;
 }
@@ -214,6 +218,7 @@ function zenbuGenomeWideElement_elementEvent(mode, value, value2) {
   }
   
   if(mode=="select") {
+    //var t1 = performance.now();
     console.log("zenbuGenomeWideElement_elementEvent select");
     if(this.selected_point_feature) {
       //clear previous point selection
@@ -229,11 +234,53 @@ function zenbuGenomeWideElement_elementEvent(mode, value, value2) {
         point.setAttributeNS(null, 'r', "7");
         point.setAttributeNS(null, 'fill', "rgba(255,0,225,0.5)");
         this.selected_point_feature = datasourceElement.selected_feature;
-        if(this.manhattan_feature_render) {
-          this.manhattan_feature_render.appendChild(point); //moves to the end of render list
+        if(this.manhattan_render) {
+          this.manhattan_render.appendChild(point); //moves to the end of render list
         }
       }
     }
+    
+    if(this.selected_point_edge) {
+      //clear previous point selection
+      var point1 = this.selected_point_edge.manhattan_point1;
+      var point2 = this.selected_point_edge.manhattan_point2;
+      if(point1) {
+        point1.setAttributeNS(null, 'r', "2");
+        point1.setAttributeNS(null, 'fill', this.selected_point_edge.manhattan_color1);
+      }
+      if(point2) {
+        point2.setAttributeNS(null, 'r', "2");
+        point2.setAttributeNS(null, 'fill', this.selected_point_edge.manhattan_color2);
+      }
+      this.selected_point_edge = null;
+    }
+
+    if(datasourceElement.selected_edge) {
+      console.log("zenbuGenomeWideElement_elementEvent select_edge : "+datasourceElement.selected_edge.id);
+      for(eidx=0; eidx<this.edge_array.length; eidx++) {
+        var edge = this.edge_array[eidx];
+        if(!edge) { continue; }
+
+        if(datasourceElement.selected_edge.id == edge.id) {
+          //console.log("zenbuGenomeWideElement_elementEvent select_edge FOUND edge points, color PINK");
+          var point1 = edge.manhattan_point1;
+          var point2 = edge.manhattan_point2;
+          if(point1) {
+            point1.setAttributeNS(null, 'r', "7");
+            point1.setAttributeNS(null, 'fill', "rgba(255,0,225,0.7)");
+            this.manhattan_render.appendChild(point1); //moves to the end of render list
+          }
+          if(point2) {
+            point2.setAttributeNS(null, 'r', "7");
+            point2.setAttributeNS(null, 'fill', "rgba(255,0,225,0.7)");
+            this.manhattan_render.appendChild(point2); //moves to the end of render list
+          }
+          this.selected_point_edge = edge;
+        } //if edge.id match
+      } //for edge loop
+    }
+    //var t2 = performance.now();
+    //console.log("zenbuGenomeWideElement_elementEvent select " + (t2 - t1) + " msec");
   }
 }
 
@@ -246,6 +293,7 @@ function zenbuGenomeWideElement_reconfigureParam(param, value, altvalue) {
   if(param == "show_mini_chroms") { this.newconfig.show_mini_chroms = value; }
   if(param == "expand_height_tofit") { this.newconfig.expand_height_tofit = value; }
   if(param == "hide_filtered_slots") { this.newconfig.hide_filtered_slots = value; }
+  if(param == "edge_location_mode") { this.newconfig.edge_location_mode = value; }
   if(param == "feature_color_mode") { this.newconfig.feature_color_mode = value; }
   if(param == "fixed_color") {
     if(!value) { value = "#0000A0"; }
@@ -279,6 +327,7 @@ function zenbuGenomeWideElement_reconfigureParam(param, value, altvalue) {
     if(this.newconfig.show_mini_chroms !== undefined) { this.show_mini_chroms = this.newconfig.show_mini_chroms; }
     if(this.newconfig.expand_height_tofit !== undefined) { this.expand_height_tofit = this.newconfig.expand_height_tofit; }
     if(this.newconfig.hide_filtered_slots !== undefined) { this.hide_filtered_slots = this.newconfig.hide_filtered_slots; }
+    if(this.newconfig.edge_location_mode !== undefined) { this.edge_location_mode = this.newconfig.edge_location_mode; }
     if(this.newconfig.feature_color_mode !== undefined) { this.feature_color_mode = this.newconfig.feature_color_mode; }
     if(this.newconfig.fixed_color !== undefined) { this.fixed_color = this.newconfig.fixed_color; }
     if(this.newconfig.focus_chrom_percent !== undefined) { this.focus_chrom_percent = this.newconfig.focus_chrom_percent; }
@@ -303,8 +352,8 @@ function zenbuGenomeWideElement_reconfigureParam(param, value, altvalue) {
 
 function zenbuGenomeWideElement_reset() {
   console.log("zenbuGenomeWideElement_reset ["+this.elementID+"]");
-  this.chromview_feature_render=null;
-  this.manhattan_feature_render=null;
+  this.chromview_render=null;
+  this.manhattan_render=null;
   this.features_are_sorted = false;
 
   //clear previous loaded data
@@ -361,10 +410,12 @@ function zenbuGenomeWideElement_postprocess() {
   slotcount_dtype.min_val = 0; //reset min/max
   slotcount_dtype.max_val = 0;
 
+  var region_ranges = {}; //track max start-end for each chrom to set a best span for all data
+  
   if(!datasourceElement.dtype_filter_select) { datasourceElement.dtype_filter_select = "slotcount"; }
 
-  //if(datasourceElement.datasource_mode == "feature") {
-  if(datasourceElement.feature_array.length>0) {
+  if(datasourceElement.datasource_mode == "feature") {
+  //if(datasourceElement.feature_array.length>0) {
     this.filter_count=0;
     for(j=0; j<datasourceElement.feature_array.length; j++) {
       var feature = datasourceElement.feature_array[j];
@@ -392,6 +443,15 @@ function zenbuGenomeWideElement_postprocess() {
       var t1 = performance.now();
       console.log("copy feature_array from datasourceElement to this " + (t1 - t0) + " msec.");
     }
+    
+    for(j=0; j<this.feature_array.length; j++) {
+      var feature = datasourceElement.feature_array[j];
+      if(!region_ranges[feature.chrom]) { region_ranges[feature.chrom] = {start: feature.start, end:feature.end}; }
+      else {
+        if(feature.start < region_ranges[feature.chrom].start) { region_ranges[feature.chrom].start = feature.start; }
+        if(feature.end   > region_ranges[feature.chrom].end)   { region_ranges[feature.chrom].end   = feature.end; }
+      }
+    }
   }
 
   if(datasourceElement.datasource_mode == "edge") {
@@ -410,19 +470,68 @@ function zenbuGenomeWideElement_postprocess() {
 
       this.filter_count++;
       
+      //set a chrom,start,end for the edge to make plotting easier. if cross-chrom then feature1 is used
+      edge.chrom = null;
+      edge.start = 0;
+      edge.end = 0;
       if(this.assembly && this.assembly.chroms_hash) {
         var chrom1 = this.assembly.chroms_hash[edge.feature1.chrom];
         var chrom2 = this.assembly.chroms_hash[edge.feature2.chrom];
-        if(chrom1) { 
+        if(chrom1 && (this.edge_location_mode=="both features" || this.edge_location_mode=="left feature")) {
           chrom1.has_features = true; 
           edge.feature1.chrom_name_index = chrom1.name_index;
+          edge.chrom = edge.feature1.chrom;
+          edge.start = edge.feature1.start;
+          edge.end   = edge.feature1.end
         }
-        if(chrom2) { 
+        if(chrom2 && (this.edge_location_mode=="both features" || this.edge_location_mode=="right feature")) {
           chrom2.has_features = true; 
-          edge.feature2.chrom_name_index = chrom2.name_index;          
+          edge.feature2.chrom_name_index = chrom2.name_index;
+          if(!edge.chrom) {
+            edge.chrom = edge.feature2.chrom;
+            edge.start = edge.feature2.start;
+            edge.end   = edge.feature2.end
+          }
+          if(edge.feature1.chrom == edge.feature2.chrom) {
+            if(edge.feature2.start < edge.start) { edge.start = edge.feature2.start; }
+            if(edge.feature2.end > edge.end) { edge.end = edge.feature2.end; }
+          }
+        }
+      }
+      
+      if(this.edge_location_mode=="both features" || this.edge_location_mode=="left feature") {
+        var feat1 = edge.feature1;
+        if(!region_ranges[feat1.chrom]) { region_ranges[feat1.chrom] = {start: feat1.start, end:feat1.end}; }
+        else {
+          if(feat1.start < region_ranges[feat1.chrom].start) { region_ranges[feat1.chrom].start = feat1.start;  }
+          if(feat1.end   > region_ranges[feat1.chrom].end)   { region_ranges[feat1.chrom].end   = feat1.end; }
+        }
+      }
+      if(this.edge_location_mode=="both features" || this.edge_location_mode=="right feature") {
+        var feat2 = edge.feature2;
+        if(!region_ranges[feat2.chrom]) { region_ranges[feat2.chrom] = {start: feat2.start, end:feat2.end}; }
+        else {
+          if(feat2.start < region_ranges[feat2.chrom].start) { region_ranges[feat2.chrom].start = feat2.start;  }
+          if(feat2.end   > region_ranges[feat2.chrom].end)   { region_ranges[feat2.chrom].end   = feat2.end; }
         }
       }
     }
+  }
+
+  //find best range for setting global selected_location
+  var max_length = 0;
+  var max_chrom = "";
+  for(var chrom_name in region_ranges) {
+    var range = region_ranges[chrom_name];
+    //console.log("postprocess["+this.elementID+"] range: "+chrom_name+" "+range.start+".."+range.end);
+    var len = range.end - range.start +1;
+    if(len > max_length) { max_length = len; max_chrom = chrom_name; }
+  }
+  if(max_length>0) {
+    var range = region_ranges[max_chrom];
+    this.selected_location = max_chrom+":"+range.start+".."+range.end;
+    datasourceElement.selected_location = this.selected_location;
+    //console.log("postprocess["+this.elementID+"] MAX range, selected_location set: "+this.selected_location);
   }
 
   //last process the chromosomes to determine which are visible
@@ -436,7 +545,7 @@ function zenbuGenomeWideElement_postprocess() {
       if(!chrom) { continue; }
       chrom.visible = false;
       if(!chrom.chrom_length || chrom.chrom_length<=0) { continue; }
-      if(this.show_only_chroms_with_data && this.filter_count>0 && !chrom.has_features) { continue; }
+      if(this.show_only_chroms_with_data && !chrom.has_features) { continue; }
       this.visible_chrom_length += chrom.chrom_length;
       chrom.visible = true;
       this.visible_chrom_count++;
@@ -460,7 +569,9 @@ function zenbuGenomeWideElement_postprocess() {
     this.visible_chrom_length = new_total_length;
     this.visible_chrom_count = this.chroms_array.length
     console.log("zenbuGenomeWideElement_postprocess chroms["+this.visible_chrom_count+"] total_length:"+this.visible_chrom_length);
-    console.log("zenbuGenomeWideElement_postprocess max chrom["+this.max_chrom.chrom_name+"] length:"+this.max_chrom.chrom_length);
+    if(this.max_chrom) {
+      console.log("zenbuGenomeWideElement_postprocess max chrom["+this.max_chrom.chrom_name+"] length:"+this.max_chrom.chrom_length);
+    }
   }
   this.chroms_array.sort(reports_genomewide_chrom_sort_func);
   
@@ -478,8 +589,8 @@ function zenbuGenomeWideElement_postprocess() {
   this.dtype_columns.sort(reports_column_order_sort_func);
   
   //clear the render caches
-  this.chromview_feature_render = null;
-  this.manhattan_feature_render = null;
+  this.chromview_render = null;
+  this.manhattan_render = null;
 
   var endtime = new Date();
   var runtime = (endtime.getTime() - starttime.getTime());
@@ -590,7 +701,7 @@ function zenbuGenomeWideElement_drawChromosomeView() {
   var datasourceElement = this.datasource();
 
   if(this.resized) { //clear render caches so it rebuilds
-    this.chromview_feature_render = null; 
+    this.chromview_render = null; 
   }
   
   var t0 = performance.now();
@@ -716,20 +827,20 @@ function zenbuGenomeWideElement_drawChromosomeView() {
   t1 = performance.now();
   console.log("after draw chroms " + (t1 - t0) + " msec.");
 
-  //if(!this.chromview_feature_render) { this.renderChromViewFeatures(); }
-  this.renderChromViewFeatures();
-  if(this.chromview_feature_render) { g1.appendChild(this.chromview_feature_render); }
+  //if(!this.chromview_render) { this.renderChromView(); }
+  this.renderChromView();
+  if(this.chromview_render) { g1.appendChild(this.chromview_render); }
 
   //var g4 = g1.appendChild(document.createElementNS(svgNS,'g'));
 
 }
 
 
-function zenbuGenomeWideElement_renderChromViewFeatures() {
-  if(this.chromview_feature_render) { return; }
+function zenbuGenomeWideElement_renderChromView() {
+  if(this.chromview_render) { return; }
   if(this.filter_count==0) { return; }
 
-  console.log("zenbuGenomeWideElement_renderChromViewFeatures start");
+  console.log("zenbuGenomeWideElement_renderChromView start");
   var t0 = performance.now();
   
   var datasourceElement = this.datasource();
@@ -766,20 +877,65 @@ function zenbuGenomeWideElement_renderChromViewFeatures() {
     //var signal_dtype = datasourceElement.datatypes[this.signal_datatype];
     if(signal_dtype) { console.log("created signal_dtype : "+ signal_dtype.datatype); }
   }
+  
+  //preloop to fill array with features or edges by datasource
+  var object_array = [];  
+  if(datasourceElement.datasource_mode == "feature") {
+    for(j=0; j<this.feature_array.length; j++) {
+      var feature = this.feature_array[j];
+      if(!feature) { continue; }
+      if(!feature.filter_valid) { continue; }
+      if(datasourceElement.show_only_search_matches && !feature.search_match) { continue; }
+      object_array.push(feature);
+    }
+  }
+  if(datasourceElement.datasource_mode == "edge") {
+    var t_signal_dtype = datasourceElement.datatypes[this.signal_datatype];
+    for(j=0; j<this.edge_array.length; j++) {
+      var edge = this.edge_array[j];
+      if(!edge) { continue; }
+      if(!edge.filter_valid) { continue; }
+      if(!edge.feature1 || !edge.feature2) { continue; }
+      if(datasourceElement.show_only_search_matches && !edge.search_match) { continue; }
+      if(datasourceElement.focus_feature &&
+         (datasourceElement.focus_feature.id != edge.feature1_id) &&
+         (datasourceElement.focus_feature.id != edge.feature2_id)) { continue; }
+      //object_array.push(edge);
+      edge.feature1.signal = undefined;
+      edge.feature2.signal = undefined;      
+      if(this.signal_datatype!="slotcount") {  
+        var signal = zenbu_object_dtypecol_value(edge, t_signal_dtype, "first"); //return first (single) value
+        edge.feature1.signal = signal;
+        edge.feature2.signal = signal;
+      }
+      var chrom1 = this.assembly.chroms_hash[edge.feature1.chrom];
+      var chrom2 = this.assembly.chroms_hash[edge.feature2.chrom];
+      if(chrom1 && (this.edge_location_mode=="both features" || this.edge_location_mode=="left feature")) {
+        object_array.push(edge.feature1);
+      }
+      if(chrom2 && (this.edge_location_mode=="both features" || this.edge_location_mode=="right feature")) {
+        object_array.push(edge.feature2);
+      }
+    }
+  }
+  object_array.sort(reports_genomewide_featureloc_sort_func);
+  //console.log("zenbuGenomeWideElement_renderChromView preloop "+(object_array.length)+" "+datasourceElement.datasource_mode);
 
   var g4 = document.createElementNS(svgNS,'g');
   var current_chrom = null;
   var current_slot = null;
-  var feature = null;
+  var obj = null;
   var chrom = null;
-  for(fidx=0; fidx<=this.feature_array.length; fidx++) {
+  for(fidx=0; fidx<=object_array.length; fidx++) {
     //trick logic to go one past the end to trigger final slot to render
-    feature=null;
+    obj=null;
     chrom=null;
-    if(fidx<this.feature_array.length) { feature = this.feature_array[fidx]; }
-    if(feature) { chrom = this.assembly.chroms_hash[feature.chrom]; }
+    if(fidx<object_array.length) { obj = object_array[fidx]; }
+    if(obj) { chrom = this.assembly.chroms_hash[obj.chrom]; }
 
-    if(current_slot && (!chrom || !feature || current_chrom!=chrom || feature.start>current_slot.end)) {
+    if(obj && !obj.filter_valid) { continue; }
+
+    if(current_slot && (!chrom || !obj || current_chrom!=chrom || obj.start>current_slot.end)) {
       //render slot into line
       var slot_x = (this.max_name_width+13)+ Math.floor((current_slot.start / current_slot.chrom.chrom_length) * current_slot.chrom.chrom_width);
       var slot_y = Math.floor(current_slot.chrom.draw_idx * this.chrom_track_height)+4;
@@ -812,12 +968,12 @@ function zenbuGenomeWideElement_renderChromViewFeatures() {
       }
       current_slot=null; //finished with current_slot
     }
-    if(!feature) { continue; }
+    if(!obj) { continue; }
     if(!chrom) { continue; }
     if(!chrom.visible) { continue; }
 
     if(!current_chrom || current_chrom!=chrom) {
-      //console.log("feature changed to chrom:"+chrom.chrom_name);
+      //console.log("obj changed to chrom:"+chrom.chrom_name);
       current_chrom = chrom;
       chrom.chrom_width = this.render_width - 15 - this.max_name_width - 10;  //take off extra 10 for border and rounded ends
       if(this.max_chrom) {
@@ -837,7 +993,7 @@ function zenbuGenomeWideElement_renderChromViewFeatures() {
       current_slot.search_match = false;      
       var slot_length = Math.floor(chrom.chrom_length / chrom.chrom_width);
       current_slot.chrom = chrom;
-      current_slot.start = Math.floor(feature.start / slot_length) * slot_length;
+      current_slot.start = Math.floor(obj.start / slot_length) * slot_length;
       current_slot.end = current_slot.start + slot_length -1;
       current_slot.slot_length = slot_length;
       current_slot.features = new Array();
@@ -845,33 +1001,29 @@ function zenbuGenomeWideElement_renderChromViewFeatures() {
       this.chromview_slots.push(current_slot); //track the chromview_slots
       current_slot.slot_idx = this.chromview_slots.length-1;
       
-      //console.log("new slot "+current_slot.start+".."+current_slot.end+"  for feature start:"+feature.start);
+      //console.log("new slot "+current_slot.start+".."+current_slot.end+"  for obj start:"+obj.start);
     }
     
-    if(current_slot && (feature.start>=current_slot.start) && (feature.start<=current_slot.end)) {
-      current_slot.features.push(feature);
+    if(current_slot && (obj.start>=current_slot.start) && (obj.start<=current_slot.end)) {
+      current_slot.features.push(obj);
       var is_valid = true;
-      if(!feature.filter_valid) { is_valid=false; }
+      if(!obj.filter_valid) { is_valid=false; }
       if(is_valid) { 
         current_slot.valid=true; 
         current_slot.count++; 
         if(signal_dtype) {
-          if(this.signal_datatype=="bedscore" && feature.score) {
-            current_slot.signal += parseFloat(feature.score); 
-          } else if(feature.expression) {
-            for(var exp_idx=0; exp_idx<feature.expression.length; exp_idx++) {
-              var expression = feature.expression[exp_idx];
-              if(expression && (expression.datatype == this.signal_datatype)) {
-                current_slot.signal += expression.total;
-              }
-            }
+          if(obj.signal != undefined) {
+            current_slot.signal += obj.signal; 
+          } else {
+            var signal = zenbu_object_dtypecol_value(obj, signal_dtype, "first"); //return first (single) value
+            current_slot.signal += signal;
           }
         }
       }
-      if(!datasourceElement.search_data_filter || feature.search_match) { current_slot.search_match = true; }
+      if(!datasourceElement.search_data_filter || obj.search_match) { current_slot.search_match = true; }
     }
     //else {
-    //  console.log("slot problem "+current_slot.start+".."+current_slot.end+"  for feature:"+feature.chrom+":"+feature.start+".."+feature.end);
+    //  console.log("slot problem "+current_slot.start+".."+current_slot.end+"  for object:"+obj.chrom+":"+obj.start+".."+obj.end);
     //  return;
     //}
   }
@@ -906,7 +1058,7 @@ function zenbuGenomeWideElement_renderChromViewFeatures() {
   }
   */
   var t1 = performance.now();
-  console.log("zenbuGenomeWideElement_renderChromViewFeatures after slot processing " + (t1 - t0) + " msec.");
+  console.log("zenbuGenomeWideElement_renderChromView after slot processing " + (t1 - t0) + " msec.");
 
   //final loop to set color and events for the slots
   for(var sidx=0; sidx<this.chromview_slots.length; sidx++) {
@@ -959,8 +1111,8 @@ function zenbuGenomeWideElement_renderChromViewFeatures() {
   }
 
   t1 = performance.now();
-  console.log("zenbuGenomeWideElement_renderChromViewFeatures total " + (t1 - t0) + " msec.");
-  this.chromview_feature_render = g4;
+  console.log("zenbuGenomeWideElement_renderChromView total " + (t1 - t0) + " msec.");
+  this.chromview_render = g4;
 }
 
 
@@ -1057,7 +1209,7 @@ function zenbuGenomeWideElement_drawManhattanPlot() {
   var datasourceElement = this.datasource();
   
   if(this.resized) { //clear render caches so it rebuilds
-    this.manhattan_feature_render = null; 
+    this.manhattan_render = null; 
   }
 
   var t0 = performance.now();
@@ -1066,7 +1218,7 @@ function zenbuGenomeWideElement_drawManhattanPlot() {
 
   var height = this.content_height - 30;
   var width  = this.content_width;  
-  console.log("zenbuGenomeWideElement_drawManhattanPlot width["+width+"] height["+height+"]");
+  //console.log("zenbuGenomeWideElement_drawManhattanPlot width["+width+"] height["+height+"]");
   
   var svg = div1.appendChild(document.createElementNS(svgNS,'svg'));
   svg.setAttributeNS(null, 'width', width+'px');
@@ -1163,7 +1315,7 @@ function zenbuGenomeWideElement_drawManhattanPlot() {
   line1.setAttributeNS(null, 'fill', "transparent");
 
   //transform g2 up/down based on max_name_width
-  console.log("chrom name max_name_width="+max_name_width);
+  //console.log("chrom name max_name_width="+max_name_width);
   var offset = 25-max_name_width;
   g2.setAttribute('transform', "translate(0,"+offset+")");
   this.manhattan_bottom = height+offset-50;
@@ -1178,7 +1330,7 @@ function zenbuGenomeWideElement_drawManhattanPlot() {
   //draw y-axis label of the datatype with scale ticks
   var signal_dtype = datasourceElement.datatypes[this.signal_datatype];
   if(signal_dtype) {
-    console.log("signal_dtype dtype:"+signal_dtype.datatype+" minval:"+signal_dtype.min_val+" maxval:"+signal_dtype.max_val);
+    console.log("drawManhattanPlot signal_dtype dtype:"+signal_dtype.datatype+" minval:"+signal_dtype.min_val+" maxval:"+signal_dtype.max_val);
     var tg2 = g1.appendChild(document.createElementNS(svgNS,'g'));
     var text = tg2.appendChild(document.createElementNS(svgNS,'text'));
     text.setAttribute('x', '0px');
@@ -1194,7 +1346,7 @@ function zenbuGenomeWideElement_drawManhattanPlot() {
       var major_tick = Math.pow(10,Math.floor(Math.log2(signal_dtype.max_val - signal_dtype.min_val)/Math.log2(10)));
       var minor_tick = major_tick / 10;
       //if((signal_dtype.max_val - signal_dtype.min_val)/major_tick < 5) { major_tick = major_tick/2; }
-      console.log("height scale = "+height_scale+ " major_tick="+major_tick);
+      //console.log("height scale = "+height_scale+ " major_tick="+major_tick);
       var ticks3 = [];
       var min_tick = Math.floor(signal_dtype.min_val / major_tick)*major_tick;
       for(var tk1=min_tick; tk1<=signal_dtype.max_val; tk1+=minor_tick) {
@@ -1232,6 +1384,8 @@ function zenbuGenomeWideElement_drawManhattanPlot() {
       line1.setAttributeNS(null, 'stroke-width', "1px");
       line1.setAttributeNS(null, 'fill', "transparent");
     }
+  } else {
+    console.log("drawManhattanPlot could not find datatype:"+this.signal_datatype);
   }
   
   //draw graph lines adjusted for the chrom max_name_width
@@ -1248,13 +1402,15 @@ function zenbuGenomeWideElement_drawManhattanPlot() {
   //this.max_name_width = max_name_width;
   //this.render_width = width;
   
-  this.renderManhattanViewFeatures();
-  if(this.manhattan_feature_render) { g1.appendChild(this.manhattan_feature_render); }
+  if(datasourceElement.datasource_mode == "feature") { this.renderManhattanViewFeatures(); }
+  if(datasourceElement.datasource_mode == "edge")    { this.renderManhattanViewEdges(); }
+
+  if(this.manhattan_render) { g1.appendChild(this.manhattan_render); }
 }
 
 
 function zenbuGenomeWideElement_renderManhattanViewFeatures() {
-  if(this.manhattan_feature_render) { return; }
+  if(this.manhattan_render) { return; }
   if(this.filter_count==0) { return; }
 
   console.log("zenbuGenomeWideElement_renderManhattanViewFeatures start");
@@ -1271,9 +1427,9 @@ function zenbuGenomeWideElement_renderManhattanViewFeatures() {
   var dt1 = datasourceElement.datatypes[this.signal_datatype];
   if(dt1) {
     signal_dtype = dt1;
-    console.log("signal_dtype dtype:"+signal_dtype.datatype+" minval:"+signal_dtype.min_val+" maxval:"+signal_dtype.max_val);
+    console.log("renderManhattan signal_dtype dtype:"+signal_dtype.datatype+" minval:"+signal_dtype.min_val+" maxval:"+signal_dtype.max_val);
     height_scale = (height/(signal_dtype.max_val - signal_dtype.min_val));
-    console.log("height scale = "+height_scale);
+    console.log("renderManhattan height scale = "+height_scale);
   }
   
   //TODO: might always do a preloop, collate features into slots (like chromview) and then be able to 
@@ -1430,7 +1586,250 @@ function zenbuGenomeWideElement_renderManhattanViewFeatures() {
   
   var t1 = performance.now();
   console.log("zenbuGenomeWideElement_renderManhattanViewFeatures finish " + (t1 - t0) + " msec.");
-  this.manhattan_feature_render = g4;  
+  this.manhattan_render = g4;  
+}
+
+
+function zenbuGenomeWideElement_renderManhattanViewEdges() {
+  if(this.manhattan_render) { return; }
+  if(this.filter_count==0) { return; }
+
+  console.log("zenbuGenomeWideElement_renderManhattanViewEdges start");
+  var t0 = performance.now();
+  
+  var datasourceElement = this.datasource();
+  
+  var height = this.manhattan_bottom - 15;
+  var width  = this.content_width;  
+  //console.log("draw height="+height);
+
+  var signal_dtype = null;
+  var height_scale = 0.0;
+  var dt1 = datasourceElement.datatypes[this.signal_datatype];
+  if(dt1) {
+    signal_dtype = dt1;
+    console.log("renderManhattan signal_dtype dtype:"+signal_dtype.datatype+" minval:"+signal_dtype.min_val+" maxval:"+signal_dtype.max_val);
+    height_scale = (height/(signal_dtype.max_val - signal_dtype.min_val));
+    //console.log("renderManhattan height scale = "+height_scale);
+  }
+  
+  //TODO: might always do a preloop, collate features into slots (like chromview) and then be able to 
+  //sort features within slot where invalid are underneath, valid above, selected on top
+  
+  this.edge_array.sort(reports_genomewide_edge_sort_func);
+
+  //clear and preset
+  for(eidx=0; eidx<this.edge_array.length; eidx++) {
+    var edge = this.edge_array[eidx];
+    if(!edge) { continue; }
+    edge.eidx = eidx;
+    edge.slotcount = 0;
+    if(edge.feature1) {
+      edge.manhattan_point1 = null;
+    }
+    if(edge.feature2) {
+      edge.manhattan_point2 = null;
+    }
+  }
+
+  //if slotcount, need special preloop to recalc the min/max for the slots
+  
+//   var current_chrom = null;
+//   var current_fx = null;
+//   if(signal_dtype && signal_dtype.datatype == "slotcount") {
+//     console.log("preloop features to recalc the slotcount min/max");
+//     var t1 = performance.now();
+//     signal_dtype.min_val = 0; //reset min/max
+//     signal_dtype.max_val = 0;
+//     for(eidx=0; eidx<this.edge_array.length; eidx++) {
+//       var edge = this.edge_array[eidx];
+//       if(!edge) { continue; }
+//       edge.slotcount = 0;
+//       
+//       if(!edge.filter_valid) { continue; }
+//       if(!edge.feature1 || !edge.feature2) { continue; }
+//       if(datasourceElement.show_only_search_matches && !edge.search_match) { continue; }
+//       if(datasourceElement.focus_feature &&
+//          (datasourceElement.focus_feature.id != edge.feature1_id) &&
+//          (datasourceElement.focus_feature.id != edge.feature2_id)) { continue; }
+//       
+//       //set in postprocess now
+//       var t_chrom = edge.feature1.chrom;
+//       var t_start = edge.feature1.start;
+//       var t_end   = edge.feature1.end;
+//       if(edge.feature1.chrom == edge.feature2.chrom) {
+//         if(edge.feature2.start < t_start) { t_start = edge.feature2.start; }
+//         if(edge.feature2.end < t_end) { t_end = edge.feature2.end; }
+//       }
+//       
+//       var chrom = this.assembly.chroms_hash[t_chrom];
+//       if(!chrom) { continue; }
+//       if(!chrom.visible) { continue; }
+//       
+//       if(!current_chrom || current_chrom!=chrom) {
+//         current_chrom = chrom;
+//         current_fx = null;
+//       }
+//       
+//       var fx = Math.round(chrom.manhattan_start + (((t_start + t_end)/2.0) * chrom.manhattan_genome_scale));
+//       
+//       if(current_fx && current_fx.fx != fx) {
+//         //update the slotcount_dtype
+//         if((signal_dtype.min_val == 0) && (signal_dtype.max_val == 0)) {
+//           signal_dtype.min_val = current_fx.count;
+//           signal_dtype.max_val = current_fx.count;
+//         }
+//         if(current_fx.count < signal_dtype.min_val) { signal_dtype.min_val = current_fx.count; }
+//         if(current_fx.count > signal_dtype.max_val) { signal_dtype.max_val = current_fx.count; }        
+//         current_fx = null;
+//       }
+//       
+//       if(!current_fx) {
+//         current_fx = new Object;
+//         current_fx.fx = fx;
+//         current_fx.count = 0;
+//       }
+//       edge.slotcount = current_fx.count;
+//       current_fx.count++;      
+//     }
+//     signal_dtype.min_val = 0; //slotcount always has a 0 min
+//     
+//     console.log("renderManhattan signal_dtype dtype:"+signal_dtype.datatype+" minval:"+signal_dtype.min_val+" maxval:"+signal_dtype.max_val);
+//     height_scale = (height/(signal_dtype.max_val - signal_dtype.min_val));
+//     console.log("renderManhattan height scale = "+height_scale);
+//     
+//     var t2 = performance.now();
+//     console.log("zenbuGenomeWideElement_renderManhattanViewEdges preloop " + (t2 - t1) + " msec");
+//   }
+  
+  var g4 = document.createElementNS(svgNS,'g');
+  var edge = null;
+  for(eidx=0; eidx<=this.edge_array.length; eidx++) {
+    //trick logic to go one past the end to trigger final slot to render
+    edge=null;
+    if(eidx<this.edge_array.length) { edge = this.edge_array[eidx]; }
+    if(!edge) { continue; }
+    if(!edge.feature1) { continue; }
+    if(!edge.feature2) { continue; }
+    
+    var chrom1 = this.assembly.chroms_hash[edge.feature1.chrom];
+    var chrom2 = this.assembly.chroms_hash[edge.feature2.chrom];
+
+    var is_valid = true;
+    if(!edge.filter_valid) { is_valid=false; }
+    if(datasourceElement.search_data_filter && !edge.search_match) { is_valid=false; }
+    if(this.hide_filtered_slots && !is_valid) { continue; }
+
+    var fy = this.manhattan_bottom -2;
+    var signal = 0.0;
+    if(signal_dtype) {
+      if(this.signal_datatype=="slotcount") {
+        if(is_valid) { 
+          signal = 1; //edge.slotcount;
+        }
+      } else {
+        signal = zenbu_object_dtypecol_value(edge, signal_dtype, "first"); //return first (single) value
+        //TODO: might need to add a "sum" more to this function
+      }
+
+      var s1 = (signal- signal_dtype.min_val) / (signal_dtype.max_val - signal_dtype.min_val); //0-1 scale
+      if(this.yaxis_logscale) { 
+        s1 = Math.log(s1*100 + 1) / Math.log(100+1);
+      }
+      fy = this.manhattan_bottom -2 - (height * s1);
+    }
+    
+    var color = "#E8E8E8";
+    if(is_valid) {
+      color = "#000000";
+      // if(this.feature_color_mode == "match_chrom") { color = chrom.color.getCSSHexadecimalRGB(); }
+      if(this.feature_color_mode == "fixed_color") { color = this.fixed_color; }
+      if(signal_dtype && (this.feature_color_mode == "signal")) { 
+        //colorscore (cr) is 0..1 scaled signal
+        var cs = (signal - signal_dtype.min_val) / (signal_dtype.max_val - signal_dtype.min_val);
+        var color = zenbuScoreColorSpace(this.signal_colorspace, cs, false, this.signal_logscale); //leave discrete false
+        color = color.getCSSHexadecimalRGB();
+      }
+    } else {
+      color = "#E8E8E8";
+    }
+    
+    // var fx = Math.round(chrom.manhattan_start + (((edge.start+edge.end)/2.0) * chrom.manhattan_genome_scale));
+    // //var fx = chrom.manhattan_start + (((edge.start+edge.end)/2.0) * this.manhattan_genome_scale);
+
+    if(chrom1 && chrom1.visible && (this.edge_location_mode=="both features" || this.edge_location_mode=="left feature")) {
+      var fx = Math.round(chrom1.manhattan_start + (((edge.feature1.start + edge.feature1.end)/2.0) * chrom1.manhattan_genome_scale));
+
+      if(is_valid && this.feature_color_mode == "match_chrom") { color = chrom1.color.getCSSHexadecimalRGB(); }
+
+      //final draw point, set color and events for the feature
+      //   <circle cx="50" cy="50" r="40" stroke="black" stroke-width="3" fill="red" />
+      var point = document.createElementNS(svgNS,'circle');
+      point.setAttributeNS(null, 'cx', fx+1);
+      point.setAttributeNS(null, 'cy', fy-1);
+      point.setAttributeNS(null, 'r', "2");
+      point.setAttributeNS(null, 'stroke-width', 0);
+      point.setAttributeNS(null, 'fill', color);    
+      point.setAttribute("onmouseover", "zenbuGenomeWideElement_edgeHoverInfo('"+this.elementID+"','"+eidx+"');");
+      point.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+      point.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select', '"+ edge.id+"');");
+      g4.appendChild(point);
+      
+      if(datasourceElement.selected_edge && (datasourceElement.selected_edge.id == edge.id)) {
+        console.log("zenbuGenomeWideElement_renderManhattanViewEdges found selected edge point, color PINK");
+        point.setAttributeNS(null, 'r', "7");
+        point.setAttributeNS(null, 'fill', "rgba(255,0,225,0.7)");
+        //this.selected_point_feature = edge;
+        edge.selected = true;
+        this.selected_point_edge = edge;
+      }
+      edge.manhattan_point1 = point;
+      edge.manhattan_color1 = color;
+    }
+    
+    if(chrom2 && chrom2.visible && (this.edge_location_mode=="both features" || this.edge_location_mode=="right feature")) {
+      var fx = Math.round(chrom2.manhattan_start + (((edge.feature2.start + edge.feature2.end)/2.0) * chrom2.manhattan_genome_scale));
+
+      if(is_valid && this.feature_color_mode == "match_chrom") { color = chrom2.color.getCSSHexadecimalRGB(); }
+
+      //final draw point, set color and events for the feature
+      //   <circle cx="50" cy="50" r="40" stroke="black" stroke-width="3" fill="red" />
+      var point = document.createElementNS(svgNS,'circle');
+      point.setAttributeNS(null, 'cx', fx+1);
+      point.setAttributeNS(null, 'cy', fy-1);
+      point.setAttributeNS(null, 'r', "2");
+      point.setAttributeNS(null, 'stroke-width', 0);
+      point.setAttributeNS(null, 'fill', color);    
+      point.setAttribute("onmouseover", "zenbuGenomeWideElement_edgeHoverInfo('"+this.elementID+"','"+eidx+"');");
+      point.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+      point.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select', '"+ edge.id+"');");
+      g4.appendChild(point);
+      
+      if(datasourceElement.selected_edge && (datasourceElement.selected_edge.id == edge.id)) {
+        console.log("zenbuGenomeWideElement_renderManhattanViewEdges found selected edge point, color PINK");
+        point.setAttributeNS(null, 'r', "7");
+        point.setAttributeNS(null, 'fill', "rgba(255,0,225,0.7)");
+        //this.selected_point_feature = edge;
+        //edge.feature2.selected = true;
+        edge.selected = true;
+        this.selected_point_edge = edge;
+      }
+      edge.manhattan_point2 = point;
+      edge.manhattan_color2 = color;
+    }
+    
+  }
+  
+  if(this.selected_point_edge) {
+    var point1 = this.selected_point_edge.manhattan_point1;
+    if(point1) { g4.appendChild(point); } //moves to the end of render list
+    var point2 = this.selected_point_edge.manhattan_point2;
+    if(point2) { g4.appendChild(point); } //moves to the end of render list
+  }
+  
+  var t1 = performance.now();
+  console.log("zenbuGenomeWideElement_renderManhattanViewEdges finish " + (t1 - t0) + " msec.");
+  this.manhattan_render = g4;  
 }
 
 
@@ -1515,10 +1914,11 @@ function zenbuGenomeWideElement_featureHoverInfo(elementID, fidx) {
   toolTipSTYLE.display='block';
 }
 
+
+/*
 //=================================================================================
 // old code
 //=================================================================================
-
 
 function zenbuGenomeWideElement_renderEdges(svg) {
   if(!this.assembly) { return; }
@@ -1546,7 +1946,10 @@ function zenbuGenomeWideElement_renderEdges(svg) {
     var edge = datasourceElement.edge_array[j];
     if(!edge) { continue; }
     edge.selected = false;
-    if(this.selected_edge && (edge.id == this.selected_edge.id)) { edge.selected=true; }
+    if(this.selected_edge && (edge.id == this.selected_edge.id)) { 
+      console.log("zenbuGenomeWideElement_renderEdges found selected_edge");
+      edge.selected=true;
+    }
   }
   datasourceElement.edge_array.sort(reports_genomewide_edge_sort_func);
 
@@ -1616,6 +2019,7 @@ function zenbuGenomeWideElement_renderEdges(svg) {
     line1.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select', '"+ edge.id+"');");
   }
 }
+*/
 
 
 function zenbuGenomeWideElement_edgeHoverInfo(elementID, edgeIdx) {
@@ -1625,11 +2029,7 @@ function zenbuGenomeWideElement_edgeHoverInfo(elementID, edgeIdx) {
   var reportElement = current_report.elements[elementID];
   if(!reportElement) { return; }
 
-  var datasourceElement = reportElement.datasource();
-  if(!datasourceElement) { return; }
-  if(datasourceElement.datasource_mode != "edge") { return; }
-    
-  var edge = datasourceElement.edge_array[edgeIdx];
+  var edge = reportElement.edge_array[edgeIdx];
   if(!edge) { return; }
 
   var divFrame = document.createElement('div');
@@ -1772,6 +2172,32 @@ function zenbuGenomeWideElement_configSubpanel() {
   tspan2.setAttribute("onmouseover", "eedbMessageTooltip(\"When selected, all chroms will be given a minimum size in order to be visible.<br>If not selected, chroms will be scaled to their true size and small chroms/scaffolds, although present, will be too small to see.\",250);");
   tspan2.setAttribute("onmouseout", "eedbClearSearchTooltip();");
 
+  //show edge position options
+  if(datasourceElement.datasource_mode == "edge") { 
+    var edge_location_mode = this.edge_location_mode;
+    if(this.newconfig && this.newconfig.edge_location_mode != undefined) { edge_location_mode = this.newconfig.edge_location_mode; }
+
+    tdiv2  = configdiv.appendChild(document.createElement('div'));
+    tdiv2.setAttribute('style', "margin:3px 0px 0px 5px;");
+    
+    tspan2 = tdiv2.appendChild(document.createElement('span'));
+    tspan2.innerHTML = "edge location mode: ";
+    tspan2.setAttribute("onmouseover", "eedbMessageTooltip(\"edges have two locations for the left and right feature. choose features are to be displayed.\",250);");
+    tspan2.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+
+    var select = tdiv2.appendChild(document.createElement('select'));
+    select.className = "dropdown";
+    select.style.marginLeft = "3px";
+    select.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'edge_location_mode', this.value);");
+    var types = ["both features", "left feature", "right feature"];
+    for(var i=0; i<types.length; i++) {
+      var val1 = types[i];
+      var option = select.appendChild(document.createElement('option'));
+      option.value = val1;
+      option.innerHTML = val1;
+      if(val1 == edge_location_mode) { option.setAttribute("selected", "selected"); }
+    }
+  }
   
   var hr1 = configdiv.appendChild(document.createElement('hr'));
   hr1.width = "95%";
@@ -2094,10 +2520,14 @@ function reports_genomewide_edge_sort_func(a,b) {
   if(a.selected) { return 1; }
   if(b.selected) { return -1; }
 
+  if(a.filter_valid && !b.filter_valid) { return 1; }
+  if(b.filter_valid && !a.filter_valid) { return -1; }
+
   var af2 = a.feature2;
   var bf2 = b.feature2;
   if(!af2) { return 1; }
   if(!bf2) { return -1; }
+  
   if(af2.id < bf2.id) { return -1; }
   if(af2.id > bf2.id) { return  1; }
 

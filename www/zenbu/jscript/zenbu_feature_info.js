@@ -543,7 +543,9 @@ function zenbuFeatureInfoShowSequence(showseq) {
         case "UTR":
         case "5utr":
         case "3utr":
-          info_div.subfeature_types[subtype].color = "orange";
+        case "five_prime_UTR":
+        case "three_prime_UTR":
+          info_div.subfeature_types[subtype].color = "#FF8C00"; //DarkOrange
           break;
         case "start_codon":
           info_div.subfeature_types[subtype].color = "green";
@@ -694,15 +696,15 @@ function zenbuFeatureInfoShowSequence(showseq) {
   seqlen_span.innerHTML = " [seq "+ sequence.length + "bp]";
   
   //controls for subfeature modifications
-  tdiv = divFrame.appendChild(document.createElement('div'));
-  tdiv.setAttribute('style', "font-size:10px; word-wrap:break-word;");
+  var ttable1 = divFrame.appendChild(document.createElement('table'));
+  var tr1 = ttable1.appendChild(document.createElement('tr'));
+  var tcnt = 0;
   for(var subtype in info_div.subfeature_types) {
+    tcnt++;
     var sft = info_div.subfeature_types[subtype];
     //console.log("subtype ["+subtype+"]  cnt="+sft.count+" active:"+sft.active);
+    var tblock  = tr1.appendChild(document.createElement('td'));
 
-    var tblock  = tdiv.appendChild(document.createElement('label'));
-    tblock.style.display = "inline";
-    tblock.style.whiteSpace = "nowrap";
     var check1 = tblock.appendChild(document.createElement('input'));
     check1.setAttribute('style', "margin: 1px 1px 1px 5px;");
     check1.setAttribute('type', "checkbox");
@@ -716,6 +718,7 @@ function zenbuFeatureInfoShowSequence(showseq) {
       span1.setAttribute('style', "margin: 1px 1px 1px 5px;");
       span1.innerHTML = "|";
     }
+    if(tcnt % 4 == 0) { tr1 = ttable1.appendChild(document.createElement('tr')); }
   }
 
   //sequence box
@@ -729,7 +732,7 @@ function zenbuFeatureInfoShowSequence(showseq) {
     var sft = segment.sft;
     if(!sft || !sft.active) { continue; }
     //console.log("segment "+segment.category+"  s:"+segment.start+"  e:"+segment.end+"  "+segment.seq);
-    console.log("segment "+segment.category+"  s:"+segment.start+"  e:"+segment.end);
+    //console.log("segment "+segment.category+"  s:"+segment.start+"  e:"+segment.end);
     subseq_len += segment.seq.length;
 
     if(segment.category == "intron") { segment.seq = segment.seq.toLowerCase(); }
@@ -737,6 +740,7 @@ function zenbuFeatureInfoShowSequence(showseq) {
 
     var span1 = seqBox.appendChild(document.createElement('span'));
     //span1.setAttribute('style', seqstyle);
+    if(segment.category == "start_codon" || segment.category == "stop_codon") { span1.style.fontWeight = "bold"; }
     span1.style.color = sft.color;
     span1.innerHTML = segment.seq;
   }

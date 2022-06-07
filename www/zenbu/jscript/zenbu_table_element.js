@@ -48,6 +48,7 @@ function ZenbuTableElement(elementID) {
   this.font_size = 10;
   this.overflow_mode = "paging";
   this.show_hover_info = false;
+  this.grid_lines = false;
   
   this.show_titlebar = true;
   this.widget_search = true;
@@ -92,6 +93,7 @@ function zenbuTableElement_initFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("sort_reverse") == "true") { this.sort_reverse = true; }
   if(elementDOM.getAttribute("overflow_mode")) { this.overflow_mode = elementDOM.getAttribute("overflow_mode"); }
   if(elementDOM.getAttribute("show_hover_info") == "true") { this.show_hover_info = true; }
+  if(elementDOM.getAttribute("grid_lines") == "true") { this.grid_lines = true; }
   
   return true;
 }
@@ -107,6 +109,7 @@ function zenbuTableElement_generateConfigDOM() {
   if(this.sort_reverse) { elementDOM.setAttribute("sort_reverse", "true"); }
   if(this.overflow_mode) { elementDOM.setAttribute("overflow_mode", this.overflow_mode); }
   if(this.show_hover_info) { elementDOM.setAttribute("show_hover_info", "true"); }
+  if(this.grid_lines) { elementDOM.setAttribute("grid_lines", "true"); }
 
   return elementDOM;
 }
@@ -162,6 +165,7 @@ function zenbuTableElement_reconfigureParam(param, value, altvalue) {
   
   if(param == "overflow_mode")   { this.newconfig.overflow_mode = value; }
   if(param == "show_hover_info") { this.newconfig.show_hover_info = value; }
+  if(param == "grid_lines")      { this.newconfig.grid_lines = value; }
   
   if(param == "accept-reconfig") {
     if(this.newconfig.overflow_mode !== undefined) { this.overflow_mode = this.newconfig.overflow_mode; }
@@ -169,6 +173,7 @@ function zenbuTableElement_reconfigureParam(param, value, altvalue) {
       this.show_hover_info = this.newconfig.show_hover_info; 
       //this.newconfig.needReload=true; 
     }
+    if(this.newconfig.grid_lines !== undefined) { this.grid_lines = this.newconfig.grid_lines; }
   }
 }
 
@@ -366,6 +371,7 @@ function zenbuTableElement_draw() {
     //need to round this index to the page boundary
     var line_height = 16.4;  //old offset was 72
     if(this.font_size) { line_height = this.font_size + 3; }
+    if(this.grid_lines) { line_height += 2; }
     this.table_page_size = Math.round((this.content_height -67) / line_height);
     if(this.table_page_size < 5) { this.table_page_size = 5; }
     this.table_page = Math.floor(table_page_index / this.table_page_size) + 1;
@@ -419,6 +425,7 @@ function zenbuTableElement_draw() {
     if(!dtype_col.visible) { continue; }
     var th = tr.appendChild(document.createElement('th'));
     if(this.sort_col == dtype_col.datatype) { th.setAttribute('style', "color:green;"); }
+    if(this.grid_lines) { th.style.borderLeft = "1px solid gray"; }
     //th.setAttribute("onmousedown", "reportElementTableEvent(\""+this.elementID+"\", 'sort', '"+dtype_col.datatype+"');");
     //th.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'column_sort', '"+dtype_col.datatype+"');");
     th.setAttribute("onmousedown", "if(event.button==2 || event.altKey) { reportElementColumnsInterface(\""+this.elementID+ "\"); } else { reportElementEvent(\""+ this.elementID +"\", 'column_sort', '"+dtype_col.datatype+"'); }");
@@ -618,6 +625,7 @@ function zenbuTableElement_draw() {
 
       var td = tr.appendChild(document.createElement('td'));
       if(column_count==0) { td.setAttribute("style", "white-space:nowrap;"); }
+      if(this.grid_lines) { td.style.border = "1px solid gray"; }
       td.colnum = column_count++;
 
       if(select_row && dtype_col.highlight_color) { 
@@ -701,19 +709,18 @@ function zenbuTableElement_draw() {
           val += "<div style='font-size:10px; color:rgb(94,115,153);'>" + t_object.import_date +"</div>";
         } else if(datatype == "source_class") {
           val = t_object.classname;
-        } else if(datatype == "location_string") {
-          val = t_object.chromloc;
         }
         if(val) { td.innerHTML = val; }
         
-        if(datatype == "location_link") {
+        if(datatype == "location_link" || datatype == "location_string") {
           var a1 = td.appendChild(document.createElement('a'));
           a1.setAttribute("target", "top");
           a1.setAttribute("href", "#");
           //a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select_location', '"+t_object.id+"');");
           a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select_location', '"+t_object.chromloc+"');");
           a1.setAttribute("onclick", "return false;");
-          a1.innerHTML = dtype_col.title;
+          if(datatype == "location_link") { a1.innerHTML = dtype_col.title; }
+          else { a1.innerHTML = t_object.chromloc; }
         }
       } else if(t_object && (dtype_col.col_type == "hyperlink")) {
         var a1 = td.appendChild(document.createElement('a'));
@@ -736,7 +743,7 @@ function zenbuTableElement_draw() {
     //draw filter count at bottom        
     var tspan = table_div.appendChild(document.createElement('span'));
     tspan.setAttribute('style', "font-size:12px; margin-right: 10px; float:right; display:inline-block; ");
-    tspan.innerHTML = this.filter_count + " "+datasourceElement.datasource_mode+"s";
+    tspan.innerHTML = this.filter_count + " rows";
     
     //transfer the column widths from the tbody.td to the th so they are lined up
     var thElements = thead.getElementsByTagName("th");
@@ -871,7 +878,8 @@ function zenbuTableElement_pagingInterface() {
   span5.setAttribute('style', "margin-right: 10px; float:right; display:inline-block; ");
   var tspan = span5.appendChild(document.createElement('span'));
   //tspan.innerHTML = "filtered " + this.filter_count + " / " + this.raw_count;
-  tspan.innerHTML = this.filter_count + " "+datasourceElement.datasource_mode+"s";
+  //tspan.innerHTML = this.filter_count + " "+datasourceElement.datasource_mode+"s";
+  tspan.innerHTML = this.filter_count + " rows";
   
   var tspan = pagingSpan.appendChild(document.createElement('a'));
   tspan.setAttribute('style', "color:purple; text-decoration:underline;");
@@ -1028,6 +1036,12 @@ function zenbuTableElement_configSubpanel() {
   //tdiv.innerHTML = "TODO: need some interface for column order and selecting active columns from metadata, and datatypes";
 
   
+  var labelDiv = configdiv.appendChild(document.createElement('div'));
+  labelDiv.setAttribute("style", "font-size:12px; font-family:arial,helvetica,sans-serif;");
+  var span1 = labelDiv.appendChild(document.createElement('span'));
+  span1.setAttribute("style", "font-size:12px; margin-right:7px; font-family:arial,helvetica,sans-serif; font-weight:bold;");
+  span1.innerHTML ="Visualization:";
+
   //-----
   div1 = configdiv.appendChild(document.createElement('div'));
   div1.appendChild(document.createTextNode("overflow mode:"));
@@ -1067,6 +1081,20 @@ function zenbuTableElement_configSubpanel() {
   tspan2 = tdiv2.appendChild(document.createElement('span'));
   tspan2.innerHTML = "show hover info panel";
 
+  tcheck = tdiv2.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 0px 1px 0px 10px;");
+  tcheck.setAttribute('type', "checkbox");
+  var val1 = this.grid_lines;
+  if(this.newconfig && this.newconfig.grid_lines != undefined) { val1 = this.newconfig.grid_lines; }
+  if(val1) { tcheck.setAttribute('checked', "checked"); }
+  tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'grid_lines', this.checked);");
+  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2.innerHTML = "grid lines";
+
+  configdiv.appendChild(document.createElement('hr'));
+
+  return configdiv;
+
 }
 
 
@@ -1100,7 +1128,10 @@ function reports_table_column_order_func(a,b) {
 function  zenbuTableElement_tableSortFunc() {
   var sort_rev = false;
   if(this.sort_reverse) { sort_rev = true; }
-  
+  var search_match_to_top = false;
+  if(this.move_selection_to_top) { search_match_to_top = true; }
+  if(this.move_search_match_to_top) { search_match_to_top = true; }
+
   var datasourceElement = this.datasource();
   
   var colname = this.sort_col;
@@ -1116,8 +1147,10 @@ function  zenbuTableElement_tableSortFunc() {
     var res =0;
     if(!a) { return 1; }
     if(!b) { return -1; }
-    //if(a.search_match && !b.search_match) { return -1; }
-    //if(!a.search_match && b.search_match) { return 1; }
+    if(search_match_to_top) {
+      if(a.search_match && !b.search_match) { return -1; }
+      if(!a.search_match && b.search_match) { return 1; }
+    }
     if(a.name && b.name && a.name.toLowerCase() < b.name.toLowerCase()) { res = -1; }
     if(a.name && b.name && a.name.toLowerCase() > b.name.toLowerCase()) { res =  1; }
     if(sort_rev) { res = -1 * res; }
@@ -1128,8 +1161,10 @@ function  zenbuTableElement_tableSortFunc() {
     var res =0;
     if(!a) { return 1; }
     if(!b) { return -1; }
-    //if(a.search_match && !b.search_match) { return -1; }
-    //if(!a.search_match && b.search_match) { return 1; }
+    if(search_match_to_top) {
+      if(a.search_match && !b.search_match) { return -1; }
+      if(!a.search_match && b.search_match) { return 1; }
+    }
     var a_md = a.mdata[datatype];
     var b_md = b.mdata[datatype];
     if(datatype=="import_date") { a_md = parseInt(a.import_timestamp); b_md = parseInt(b.import_timestamp); }
@@ -1158,8 +1193,10 @@ function  zenbuTableElement_tableSortFunc() {
     if(colname.match(/^f2\./)) { af = a.feature2; bf = b.feature2; }
     if(!af) { return 1; }
     if(!bf) { return -1; }
-    //if(af.search_match && !bf.search_match) { return -1; }
-    //if(!af.search_match && bf.search_match) { return 1; }
+    if(search_match_to_top) {
+      if(af.search_match && !bf.search_match) { return -1; }
+      if(!af.search_match && bf.search_match) { return 1; }
+    }
     if(af.name.toLowerCase() < bf.name.toLowerCase()) { res = -1; }
     if(af.name.toLowerCase() > bf.name.toLowerCase()) { res =  1; }
     if(sort_rev) { res = -1 * res; }
@@ -1176,8 +1213,10 @@ function  zenbuTableElement_tableSortFunc() {
     if(colname.match(/^f2\./)) { af = a.feature2; bf = b.feature2; }
     if(!af) { return 1; }
     if(!bf) { return -1; }
-    //if(af.search_match && !bf.search_match) { return -1; }
-    //if(!af.search_match && bf.search_match) { return 1; }
+    if(search_match_to_top) {
+      if(af.search_match && !bf.search_match) { return -1; }
+      if(!af.search_match && bf.search_match) { return 1; }
+    }
     //var a_val = "";
     //var b_val = "";
     var a_md = af.mdata[datatype];
@@ -1198,9 +1237,10 @@ function  zenbuTableElement_tableSortFunc() {
     var res =0;
     if(!a) { return 1; }
     if(!b) { return -1; }
-    //if(a.search_match && !b.search_match) { return -1; }
-    //if(!a.search_match && b.search_match) { return 1; }
-    
+    if(search_match_to_top) {
+      if(a.search_match && !b.search_match) { return -1; }
+      if(!a.search_match && b.search_match) { return 1; }
+    }    
     if(!a.weights[colname]) { return 1; }
     if(!b.weights[colname]) { return -1; }
     var val_a = 0;
@@ -1221,9 +1261,10 @@ function  zenbuTableElement_tableSortFunc() {
     var res =0;
     if(!a) { return 1; }
     if(!b) { return -1; }
-    //if(a.search_match && !b.search_match) { return -1; }
-    //if(!a.search_match && b.search_match) { return 1; }
-
+    if(search_match_to_top) {
+      if(a.search_match && !b.search_match) { return -1; }
+      if(!a.search_match && b.search_match) { return 1; }
+    }
     var val_a = 0;
     var val_b = 0;
 
@@ -1257,9 +1298,10 @@ function  zenbuTableElement_tableSortFunc() {
     if(colname.match(/^f2\./)) { af = a.feature2; bf = b.feature2; }
     if(!af) { return 1; }
     if(!bf) { return -1; }
-    //if(af.search_match && !bf.search_match) { return -1; }
-    //if(!af.search_match && bf.search_match) { return 1; }
-
+    if(search_match_to_top) {
+      if(af.search_match && !bf.search_match) { return -1; }
+      if(!af.search_match && bf.search_match) { return 1; }
+    }
     var val_a = 0;
     var val_b = 0;
 

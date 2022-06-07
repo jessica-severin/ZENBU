@@ -61,7 +61,7 @@ function dexInitContents() {
   contents.filters.search = "";
   contents.filters.hide_mapcount = 1;
   contents.filters.source_ids = "";
-  contents.filters.show_fixedID_reports = true;
+  contents.filters.show_only_fixedIDs = false;
 
   contents.cart = new Object;
   contents.cart.sources = new Object;
@@ -127,6 +127,7 @@ function dexParseURL(urlConfig) {
       if(mode=="Experiments") { mode = "DataSources"; contents.filters.datasource="experiments"; }
       if(mode=="Annotation")  { mode = "DataSources"; contents.filters.datasource="feature_sources"; }
       if(mode=="Edges")       { mode = "DataSources"; contents.filters.datasource="edge_sources"; }
+      if(mode=="Reports")     { contents.filters.show_only_fixedIDs = true; } //default on for Reports
       if((mode=="Views")||(mode=="Tracks")||(mode == "Scripts")||(mode=="DataSources")||(mode=="Reports")) {
         contents.mode = mode;
         rtnval = true;
@@ -335,24 +336,27 @@ function dexShowControls() {
   dexCreateDatasourceSelect();
   dexCreateAssemblySelect();
 
-  var reportsDiv = document.getElementById("dex_contents_controls_reports_div");
-  if(!reportsDiv) {
-    reportsDiv = ctrlOptions.appendChild(document.createElement('div'));
-    reportsDiv.id = "dex_contents_controls_reports_div";
-    reportsDiv.setAttribute("style", "margin-left:10px; vertical-align:bottom; display:inline-block;");
-    var tcheck = reportsDiv.appendChild(document.createElement('input'));
-    tcheck.setAttribute('type', "checkbox");
-    reportsDiv.showCheckbox = tcheck;
-    tspan = reportsDiv.appendChild(document.createElement('span'));
-    tspan.style.verticalAlign="2px";
-    tspan.innerHTML = "show only fixedID pages";
+  var fixedID_div = document.getElementById("dex_contents_controls_fixedID_div");
+  if(!fixedID_div) {
+    fixedID_div = ctrlOptions.appendChild(document.createElement('div'));
+    fixedID_div.id = "dex_contents_controls_fixedID_div";
+    fixedID_div.setAttribute("style", "margin-left:10px; vertical-align:bottom; display:inline-block;");
   }
-  if(contents.mode=="Reports") {
-    reportsDiv.style.display = "inline-block";
-    if(contents.filters.show_fixedID_reports) { reportsDiv.showCheckbox.setAttribute("checked", "checked"); }
-    reportsDiv.showCheckbox.setAttribute("onclick", "dexReconfigContentsParam('show_fixedID_reports', this.checked);");
+  fixedID_div.innerHTML = "";
+  if(contents.mode=="Reports" || contents.mode=="Views") {
+    var tcheck = fixedID_div.appendChild(document.createElement('input'));
+    tcheck.setAttribute('type', "checkbox");
+    //fixedID_div.showCheckbox = tcheck;
+    tspan = fixedID_div.appendChild(document.createElement('span'));
+    tspan.style.verticalAlign="2px";
+    tspan.innerHTML = "show only fixedIDs";
+
+    if(contents.filters.show_only_fixedIDs) { tcheck.setAttribute("checked", "checked"); }
+    tcheck.setAttribute("onclick", "dexReconfigContentsParam('show_only_fixedIDs', this.checked);");
+
+    fixedID_div.style.display = "inline-block";
   } else {
-    reportsDiv.style.display = "none";
+    fixedID_div.style.display = "none";
   }
   
   //----------------
@@ -1960,6 +1964,7 @@ function dexFilteredViewsArray() {
     var config = views_array[i];
     //if((filters.platform!="") && (filters.platform != experiment.platform)) { continue; }
     //if(filters.hide_mapcount && (/mapcount/.test(experiment.name))) { continue; }
+    if(contents.filters.show_only_fixedIDs && !config.fixed_id) { continue; }
     filter_array.push(config);
   }
   return filter_array;
@@ -1996,6 +2001,7 @@ function dexShowViews() {
   trhead.appendChild(new Element('th', { 'class': 'listView' }).update('name'));
   trhead.appendChild(new Element('th', { 'class': 'listView' }).update('genome'));
   trhead.appendChild(new Element('th', { 'class': 'listView' }).update('description'));
+  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('fixedID'));
   trhead.appendChild(new Element('th', { 'class': 'listView' }).update('create date'));
   trhead.appendChild(new Element('th', { 'class': 'listView' }).update('accessed'));
   //trhead.appendChild(new Element('th', { 'class': 'listView' }).update('dex template'));
@@ -2067,6 +2073,8 @@ function dexShowViews() {
     button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
     button.innerHTML ="details";
 
+    td = tr.appendChild(document.createElement('td'));
+    td.innerHTML = encodehtml(config.fixed_id);
 
     //create data/owner edit cell
     td = tr.appendChild(new Element('td'));
@@ -2102,6 +2110,7 @@ function dexShowViews() {
     var tr = tbody.appendChild(new Element('tr'));
     tr.addClassName('odd');
     tr.appendChild(new Element('td').update("no data available"));
+    tr.appendChild(new Element('td'));
     tr.appendChild(new Element('td'));
     tr.appendChild(new Element('td'));
     tr.appendChild(new Element('td'));
@@ -2257,7 +2266,7 @@ function dexFilteredReportsArray() {
     var config = reports_array[i];
     //if((filters.platform!="") && (filters.platform != experiment.platform)) { continue; }
     //if(filters.hide_mapcount && (/mapcount/.test(experiment.name))) { continue; }
-    if(contents.filters.show_fixedID_reports && !config.fixed_id) { continue; }
+    if(contents.filters.show_only_fixedIDs && !config.fixed_id) { continue; }
     
     filter_array.push(config);
   }
@@ -3138,16 +3147,20 @@ function dexReconfigContentsParam(param, value) {
     if(contents.mode != value) { contents.current_index = 0; }
     contents.mode = value;
 
+    contents.filters.show_only_fixedIDs = false;
+    if(value == "Reports") { contents.filters.show_only_fixedIDs = true; }
+
     if(value == "Scripts") { contents.filters.assembly = "";  }
     contents.filters.platform = "";
     contents.filters.search = "";
     contents.filters.source_ids = "";
 
     dexShowSubmenu();
+    //dexShowControls();
     dexSearchReset(true); //reloads
   }
-  if(param == "show_fixedID_reports") {
-    contents.filters.show_fixedID_reports = value;
+  if(param == "show_only_fixedIDs") {
+    contents.filters.show_only_fixedIDs = value;
   }
   dexShowContents();
 }

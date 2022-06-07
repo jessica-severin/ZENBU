@@ -36,7 +36,7 @@ var newTrackID = 100;
 var current_dragTrack;
 var current_resizeTrack;
 var currentSelectTrackID;
-var maxActiveTrackXHRs = 7;
+var maxActiveTrackXHRs = 21;
 var colorSpaces = new Object();
 
 var glyphsTrack_global_track_hash = new Object();
@@ -92,6 +92,7 @@ function ZenbuGlyphsTrack(glyphsGB, trackID) {
   this.track_height  = 100;
   this.scale_max_signal = "auto";
   this.scale_min_signal = "auto";
+  this.scale_max_signal_percent = 0;
   this.exp_mincut = 0.0;
   this.spstream_mode = "none";
   this.exprbin_strandless = false;
@@ -102,6 +103,11 @@ function ZenbuGlyphsTrack(glyphsGB, trackID) {
   this.createMode  = "single";
   this.whole_chrom_scale  = false;
   this.xyplot_fill = false;
+  this.show_hoverinfo = true;
+  this.interaction_style = "diamond";
+  this.max_interaction = 0;
+  this.interaction_grid = false;
+  this.interaction_flip = false;
   
   this.active_on_top = false;
   this.express_sort_mode = "name";
@@ -113,6 +119,17 @@ function ZenbuGlyphsTrack(glyphsGB, trackID) {
   this.ranksum_mdkeys = "";
   this.ranksum_min_zscore = "";
 
+  this.max_express         = 0;
+  this.total_min_express   = 0;
+  this.total_max_express   = 0;
+  this.sense_max_express   = 0;
+  this.anti_max_express    = 0;
+  this.max_express_element = 0;
+  this.max_score           = 0;
+  this.min_score           = 0;
+  this.express_total_sense_sum = 0;
+  this.express_total_antisense_sum = 0;
+
   this.sources     = "";
   this.source_ids  = "";
   this.peerName    = "";
@@ -122,6 +139,7 @@ function ZenbuGlyphsTrack(glyphsGB, trackID) {
   this.has_expression  = false;
   this.has_subfeatures = false;
   this.selected_feature = null;
+  this.selected_edge = null;
   this.search_select_filter = "";
   
   var trackDiv = document.createElement('div');
@@ -400,7 +418,18 @@ function gLyphsTrackFeatureInfo(trackID, feature_idx) {
   if(!trackID) { return; }
   var glyphTrack = glyphsTrack_global_track_hash[trackID];
   if(!glyphTrack) { return; }
+  if(!glyphTrack.show_hoverinfo) { return; }
   var obj = glyphTrack.feature_array[feature_idx];
+  eedbDisplayTooltipObj(obj);
+}
+
+function gLyphsTrackEdgeInfo(trackID, edge_idx) {
+  if(!trackID) { return; }
+  var glyphTrack = glyphsTrack_global_track_hash[trackID];
+  if(!glyphTrack) { return; }
+  if(!glyphTrack.show_hoverinfo) { return; }
+  //console.log("edgeInfo "+trackID+" eidx["+edge_idx+"]");
+  var obj = glyphTrack.edge_array[edge_idx];
   eedbDisplayTooltipObj(obj);
 }
 
@@ -1163,20 +1192,16 @@ function gLyphsTrackSourcesMissingMetadataLoad(glyphTrack, mdkeys) {
         }
         else { console.log("parent "+experiment.parent_source.id+" already full_load so skip"); }
       }
-      else { 
-        if(!(experiment.objID =~ /s/)) {
+      else {
+        if(experiment.objID && (experiment.objID!= -1) && (experiment.objID != parseInt(experiment.objID))) {
+          console.log("experiment "+experiment.id+" is dynamic subsource, can't load metadata");
+        } else { 
           //console.log("experiment "+experiment.id+" will load metadata");
           expID_hash[experiment.id] = true; 
-        } else {
-          //console.log("experiment "+experiment.id+" is dynamic subsource, can't load metadata");
         }
       }
     }
   }
-  if(!expID_hash) { 
-    glyphTrack.checked_missing_mdata = 2;
-    return;
-  } 
 
   var descxml_source_ids ="";
   var id_count=0;
@@ -1540,10 +1565,15 @@ function gLyphsRecalcTrackExpressionScaling(trackID) {
   //this function takes parameters of a track, its experiments
   // and scans the feature_array and recalculates the scaling factors
 
+  //console.log("gLyphsRecalcTrackExpressionScaling "+trackID);
   var glyphTrack = glyphsTrack_global_track_hash[trackID];
   if(glyphTrack == null) { return; }
 
+  var region_start = glyphTrack.glyphsGB.start; 
+  var region_end   = glyphTrack.glyphsGB.end; 
+
   glyphTrack.max_express       = 0;
+  glyphTrack.total_min_express = 0;
   glyphTrack.total_max_express = 0;
   glyphTrack.sense_max_express = 0;
   glyphTrack.anti_max_express  = 0;
@@ -1557,26 +1587,40 @@ function gLyphsRecalcTrackExpressionScaling(trackID) {
   } else if(glyphTrack.glyphStyle == "1D-heatmap") {
     if(glyphTrack.track_height <5) { glyphTrack.track_height = 5; }
     if(glyphTrack.track_height >200) { glyphTrack.track_height = 200; }
+  } else if(glyphTrack.glyphStyle == "interaction-map") {
+    if(glyphTrack.track_height <20) { glyphTrack.track_height = 20; }
+    if(glyphTrack.track_height >2000) { glyphTrack.track_height = 2000; }
   } else {
     if(glyphTrack.track_height <20) { glyphTrack.track_height = 20; }
     if(glyphTrack.track_height >500) { glyphTrack.track_height = 500; }
   }
 
-  if(!glyphTrack.feature_array) { return; }
+  if(!glyphTrack.feature_array && !glyphTrack.edge_array) { return; }
 
   // calculate the max bin size
   var max_express = 0.0;
+  var total_min_express = 0.0;
   var total_max_express = 0.0;
   var sense_max_express = 0.0;
   var anti_max_express = 0.0;
   
+  var obj_array = [];
+  if(glyphTrack.edge_array && glyphTrack.edge_array.length>0) { 
+    obj_array = glyphTrack.edge_array; 
+  }
+  if(obj_array.length==0 && glyphTrack.feature_array && glyphTrack.feature_array.length>0) { 
+    obj_array = glyphTrack.feature_array; 
+  }
+
   //now process the feature/expression values in selection   
-  for(var i=0; i<glyphTrack.feature_array.length; i++) {
-    var feature = glyphTrack.feature_array[i];
+  for(var i=0; i<obj_array.length; i++) {
+    var feature = obj_array[i];
 
     feature.exp_total = 0;
     feature.exp_sense = 0;
-    feature.exp_antisense = 0;    
+    feature.exp_antisense = 0;
+    
+    if(!glyphTrack.whole_chrom_scale && (feature.end < region_start || feature.start > region_end)) { continue; }
 
     if(glyphTrack.max_score==0 && glyphTrack.min_score==0) {
       glyphTrack.min_score = feature.score;
@@ -1585,14 +1629,21 @@ function gLyphsRecalcTrackExpressionScaling(trackID) {
     if(feature.score > glyphTrack.max_score) { glyphTrack.max_score = feature.score; }
     if(feature.score < glyphTrack.min_score) { glyphTrack.min_score = feature.score; }
 
-    if(!feature.expression) { continue; }
+    if(!feature.expression && !feature.weights) { continue; }
     
     var total      = 0;
     var sense      = 0;
     var antisense  = 0;
     
-    for(var j=0; j<feature.expression.length; j++) {
-      var expression = feature.expression[j];
+    var sig_array = [];
+    if(feature.expression) { sig_array = feature.expression; }
+    if(feature.weights) { 
+      var weights = feature.weights[glyphTrack.datatype];
+      if(weights) { sig_array = weights; }
+    }
+    
+    for(var j=0; j<sig_array.length; j++) {
+      var expression = sig_array[j];
       var experiment = glyphTrack.experiments[expression.expID];
       if(experiment && experiment.hide) { continue; }
       if(glyphTrack.datatype && (expression.datatype != glyphTrack.datatype)) { continue; }
@@ -1606,7 +1657,7 @@ function gLyphsRecalcTrackExpressionScaling(trackID) {
 
         if(Math.abs(expression.sense) > Math.abs(feature.exp_sense)) { feature.exp_sense = expression.sense; }
         if(Math.abs(expression.antisense) > Math.abs(feature.exp_antisense)) { feature.exp_antisense = expression.antisense; }
-        if(Math.abs(expression.total) > Math.abs(feature.exp_total)) { feature.exp_total = expression.total; }
+        if(Math.abs(expression.total) > Math.abs(feature.exp_total)) { feature.exp_total = expression.total; }       
       } 
       else if(glyphTrack.experiment_merge == "sum") {
         sense      += expression.sense;
@@ -1641,7 +1692,7 @@ function gLyphsRecalcTrackExpressionScaling(trackID) {
       }
     }
     if((glyphTrack.glyphStyle != "xyplot") && 
-       (glyphTrack.experiment_merge == "mean") && (feature.expression.length > 0)) {
+       (glyphTrack.experiment_merge == "mean") && (glyphTrack.experiment_array.length > 0)) {
       sense      /= glyphTrack.experiment_array.length;
       antisense  /= glyphTrack.experiment_array.length;
       total      /= glyphTrack.experiment_array.length; 
@@ -1649,7 +1700,6 @@ function gLyphsRecalcTrackExpressionScaling(trackID) {
       //antisense  /= feature.expression.length;
       //total      /= feature.expression.length;
     }
-
     
     if(glyphTrack.logscale == 1) { 
       if(sense>0.0) { sense = Math.log(sense+1.0); }
@@ -1663,12 +1713,13 @@ function gLyphsRecalcTrackExpressionScaling(trackID) {
     if(sense > sense_max_express) { sense_max_express = sense; }
     if(antisense > anti_max_express) { anti_max_express = antisense; }
     if(total > total_max_express) { total_max_express = total; }
-    
+
     if(glyphTrack.glyphStyle != "xyplot") {
       feature.exp_total = total;
       feature.exp_sense = sense;
       feature.exp_antisense = antisense;
-    } 
+    }
+    if(feature.exp_total < total_min_express) { total_min_express = feature.exp_total; }
   } //feature loop
   
   // final scaling corrections
@@ -1680,15 +1731,31 @@ function gLyphsRecalcTrackExpressionScaling(trackID) {
     sense_max_express = total_max_express;
     anti_max_express  = total_max_express;
   }
-  if(glyphTrack.scale_max_signal != "auto") {
-    max_express = glyphTrack.scale_max_signal;
-    total_max_express = glyphTrack.scale_max_signal;
-  }
+  
+ 
+  // if(glyphTrack.scale_max_signal != "auto") {
+  //   if(glyphTrack.scale_max_signal_percent) {
+  //     console.log("scale_max_signal_percent TRUE, start with max_express="+max_express+" total_max_express="+total_max_express);
+  //     max_express = max_express * (glyphTrack.scale_max_signal / 100.0);
+  //     total_max_express = total_max_express * (glyphTrack.scale_max_signal / 100.0);
+  //   } else {
+  //     max_express = glyphTrack.scale_max_signal;
+  //     total_max_express = glyphTrack.scale_max_signal;
+  //   }
+  // }
   
   glyphTrack.max_express       = max_express;
+  glyphTrack.total_min_express = total_min_express;
   glyphTrack.total_max_express = total_max_express;
   glyphTrack.sense_max_express = sense_max_express;
   glyphTrack.anti_max_express  = anti_max_express;
+
+  console.log("gLyphsRecalcTrackExpressionScaling "+trackID+
+    " max_express="+max_express+
+    " total_max_express="+total_max_express+
+    " sense_max_express="+ sense_max_express+
+    " anti_max_express="+ anti_max_express
+  );
 }
 
 
@@ -2181,6 +2248,8 @@ function gLyphsRenderTrack(glyphTrack) {
     gLyphsTrack_render_xyplot(glyphTrack);
   } else if(glyphTrack.glyphStyle == "arc") {
     gLyphsTrack_render_arc(glyphTrack);
+  } else if(glyphTrack.glyphStyle == "interaction-map") {
+    gLyphsTrack_render_interaction_map(glyphTrack);
   } else if(glyphTrack.glyphStyle == "split-signal") { 
     gLyphsRenderSplitSignalTrack(glyphTrack);
   } else if((glyphTrack.glyphStyle == "experiment-heatmap") || (glyphTrack.glyphStyle == "1D-heatmap")) { 
@@ -2230,7 +2299,9 @@ function gLyphsDrawTrack(trackID) {
   //console.log(' gLyphsDrawTrack ' + trackID);
 
   var glyphStyle = glyphTrack.glyphStyle;
-  if(glyphStyle == "signal-histogram" || glyphStyle == "xyplot" || glyphStyle == "arc") { 
+  if(glyphStyle == "signal-histogram" || glyphStyle == "xyplot") {
+    gLyphsDrawExpressTrack(glyphTrack);
+  } else if(glyphStyle == "arc" || glyphStyle == "interaction-map") { 
     gLyphsDrawExpressTrack(glyphTrack);
   } else if(glyphStyle == "split-signal") { 
     gLyphsDrawSplitSignalTrack(glyphTrack);
@@ -2380,14 +2451,19 @@ function gLyphsParseFeatureTrackData(glyphTrack, xhrObj) {
   // get the top features from the XML
   // TODO look into alternate method here. this will grab all features
   //  and then I need to figure out if it is top or not. maybe can use children()
-  var xml_features = xmlDoc.getElementsByTagName("feature");
+  //var xml_features = xmlDoc.getElementsByTagName("feature");
+  var children = xmlDoc.childNodes;
   glyphTrack.strandless = true; //new dynamic code to decide if data is strandless or not
   var mode = "full";
   var dtype = "";
   var feat_idx=0;
-  for(var i=0; i<xml_features.length; i++) {
-    var featureXML = xml_features[i];
-    if(featureXML.parentNode.tagName != "region") { continue; }
+  //for(var i=0; i<xml_features.length; i++) {
+  //  var featureXML = xml_features[i];
+  //  if(featureXML.parentNode.tagName != "region") { continue; }
+  for (var i = 0; i < children.length; i++) {
+    var featureXML = children[i];
+    if(featureXML.tagName != "feature") { continue; }
+
     var feature = null;;
     if(mode == "full") {
       feature = convertFullFeatureXML(glyphTrack, featureXML);
@@ -2479,7 +2555,6 @@ function gLyphsParseFeatureTrackData(glyphTrack, xhrObj) {
       first_edge=false;
     }
   
-    glyphTrack.edge_array.push(edge);
     edge.trackID = glyphTrack.trackID;
     edge.filter_valid = true;
     edge.search_match = false;
@@ -2487,9 +2562,11 @@ function gLyphsParseFeatureTrackData(glyphTrack, xhrObj) {
     if(glyphTrack.datasources[edge.source_id]) { 
       edge.source = glyphTrack.datasources[edge.source_id];
     }
-    if(glyphTrack.features[edge.feature1_id]) { 
+
+    if(!edge.feature1 && glyphTrack.features[edge.feature1_id]) { 
       edge.feature1 = glyphTrack.features[edge.feature1_id];
       edge.feature1.f1_edge_count++;
+      //console.log("connect edge.feature1_id ["+edge.feature1_id+"] name["+edge.feature1.name+"]");
       for(var tag in edge.feature1.mdata) { //new common mdata[].array system
         if(tag=="keyword") { continue; }
         if(tag=="eedb:display_name") { continue; }
@@ -2514,10 +2591,11 @@ function gLyphsParseFeatureTrackData(glyphTrack, xhrObj) {
         }
       }
     }
-    if(glyphTrack.features[edge.feature2_id]) { 
+
+    if(!edge.feature2 && glyphTrack.features[edge.feature2_id]) { 
       edge.feature2 = glyphTrack.features[edge.feature2_id];
       edge.feature2.f2_edge_count++;
-      //console.log("connect edge.feature2 ["+edge.feature2_id+"] name["+edge.feature2.name+"]");
+      //console.log("connect edge.feature2_id ["+edge.feature2_id+"] name["+edge.feature2.name+"]");
       for(var tag in edge.feature2.mdata) { //new common mdata[].array system
         if(tag=="keyword") { continue; }
         if(tag=="eedb:display_name") { continue; }
@@ -2546,6 +2624,7 @@ function gLyphsParseFeatureTrackData(glyphTrack, xhrObj) {
     for(var dtype in edge.weights) {
       var weights = edge.weights[dtype];
       if(!weights) { continue; }
+      glyphTrack.has_expression = true;
       var dtype_col = glyphTrackAddDatatypeColumn(glyphTrack, dtype, dtype, true);
       dtype_col.col_type = "weight";
       if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
@@ -2559,10 +2638,22 @@ function gLyphsParseFeatureTrackData(glyphTrack, xhrObj) {
       }
     }
 
+    //console.log("["+glyphTrack.trackID+"] edge f1:"+(edge.feature1.chromloc)+"  f2:"+(edge.feature2.chromloc));
     glyphTrack.edge_array.push(edge);
   }
   
-  if(glyphTrack.edge_array.length >0) { glyphTrack.datasource_mode = "edge"; }
+  if(glyphTrack.edge_array.length >0) { 
+    glyphTrack.datasource_mode = "edge"; 
+    glyphTrack.strandless = true;
+    glyphTrack.selected_edge = null;
+    for(var eidx=0; eidx<glyphTrack.edge_array.length; eidx++) {
+      var edge = glyphTrack.edge_array[eidx];
+      if(!edge) { continue; }
+      edge.eidx = eidx; 
+      if(edge.dir=="-") { glyphTrack.strandless=false; }
+    }
+  }
+    
   console.log("gLyphsParseFeatureTrackData ["+glyphTrack.trackID+"] "+glyphTrack.feature_array.length +" features; "+ glyphTrack.edge_array.length +" edges");
 
   // get the experiments for this track
@@ -2807,7 +2898,7 @@ function convertFullFeatureXML(glyphTrack, featureXML) {
   var feature = convertFeatureXML(glyphTrack, featureXML);
 
   //now the metadata, consolidate on same mdata[key] = array of values system
-  eedbParseSimpleMetadata(featureXML, feature);
+  //eedbParseSimpleMetadata(featureXML, feature);
 
   if(feature.mdata["bed:itemRgb"]) {
     //maybe need to parse value to make sure it is valid
@@ -3095,8 +3186,8 @@ function gLyphsDrawFeatureTrack(glyphTrack) {
       new_title = glyphTrack.title + " [max:"+totalVal;
     }
     if((glyphTrack.scale_max_signal != "auto" || (glyphTrack.scale_min_signal!="auto"))) { 
-      new_title += " scale:" + glyphTrack.scale_min_signal;; 
-      new_title += " to " + glyphTrack.scale_max_signal; 
+      new_title += " scale:" + glyphTrack.scale_min_signal;
+      new_title += " to " + glyphTrack.scale_max_signal;
     }
     if(glyphTrack.logscale==1) { new_title += " log"; }
     new_title += "]";
@@ -3327,6 +3418,7 @@ function gLyphsDrawFeature(glyphTrack, feature, glyphStyle) {
 
 function gLyphsTrackFeatureColour(glyphTrack, feature) {
   var colour = new RGBColour(0,0,0); //black 
+  colour.zcr = 0;
   if(!glyphTrack) { return colour; }
   if(!feature) { return colour; }
   
@@ -3336,14 +3428,24 @@ function gLyphsTrackFeatureColour(glyphTrack, feature) {
       var min = glyphTrack.min_score;
       var max = glyphTrack.max_score;
       if(glyphTrack.scale_min_signal != "auto") { min = glyphTrack.scale_min_signal; }
-      if(glyphTrack.scale_max_signal != "auto") { max = glyphTrack.scale_max_signal; }      
+      if(glyphTrack.scale_max_signal != "auto") { max = glyphTrack.scale_max_signal; }
+      if(glyphTrack.scale_max_signal_percent>0) { max = glyphTrack.max_score * glyphTrack.scale_max_signal_percent; }
       cr = (feature.score - min) / (max - min);
     }
     if(glyphTrack.has_expression && glyphTrack.total_max_express) { 
       var min = 0;
       var max = glyphTrack.total_max_express;
       if(glyphTrack.scale_min_signal != "auto") { min = glyphTrack.scale_min_signal; }
-      if(glyphTrack.scale_max_signal != "auto") { max = glyphTrack.scale_max_signal; }      
+      if(glyphTrack.scale_max_signal != "auto") { max = glyphTrack.scale_max_signal; }
+      if(glyphTrack.scale_max_signal_percent>0) { max = glyphTrack.total_max_express * glyphTrack.scale_max_signal_percent; }
+      cr = (feature.exp_total - min) / (max - min); 
+    }
+    if(feature.weights && glyphTrack.total_max_express) { 
+      var min = 0;
+      var max = glyphTrack.total_max_express;
+      if(glyphTrack.scale_min_signal != "auto") { min = glyphTrack.scale_min_signal; }
+      if(glyphTrack.scale_max_signal != "auto") { max = glyphTrack.scale_max_signal; }
+      if(glyphTrack.scale_max_signal_percent>0) { max = glyphTrack.total_max_express * glyphTrack.scale_max_signal_percent; }
       cr = (feature.exp_total - min) / (max - min); 
     }
     colour = gLyphsScoreColorSpace2(glyphTrack, cr, feature.strand);
@@ -3392,6 +3494,7 @@ function gLyphsTrackFeatureColour(glyphTrack, feature) {
       colour = new RGBColour(rgb.r, rgb.g, rgb.b);
     }
   }
+  if(!colour.zcr) { colour.zcr=0; }
   return colour;
 }
 
@@ -3473,22 +3576,43 @@ function processFeatureRegionExperiments(glyphTrack) {
   glyphTrack.express_total_sense_sum = 0;
   glyphTrack.express_total_antisense_sum = 0;
 
-  if(!glyphTrack.feature_array) { return  undefined; }
+  if(!glyphTrack.feature_array && !glyphTrack.edge_array) { return undefined; }
+  
+  var obj_array = [];
+  if(glyphTrack.edge_array && glyphTrack.edge_array.length>0) { 
+    obj_array = glyphTrack.edge_array; 
+  }
+  if(obj_array.length==0 && glyphTrack.feature_array && glyphTrack.feature_array.length>0) { 
+    obj_array = glyphTrack.feature_array; 
+  }
 
-  //now process the feature/expression values in selection
-  for(var i=0; i<glyphTrack.feature_array.length; i++) {
-    var feature = glyphTrack.feature_array[i];
+  //now process the feature/expression values in selection   
+  for(var i=0; i<obj_array.length; i++) {
+    var feature = obj_array[i];
     if(selection) {
       var ss = selection.chrom_start;
       var se = selection.chrom_end;
       if(ss>se) { var t=ss; ss=se; se=t; }
       if(((feature.end < ss) || (feature.start > se))) { continue; }
     }
-    if(!feature.expression) { continue; }
-    for(var j=0; j<feature.expression.length; j++) {
-      var expression = feature.expression[j];
-      var experiment = glyphTrack.experiments[expression.expID];
+  
+    //if(!feature.expression) { continue; }
+    var sig_array = [];
+    if(feature.expression) { sig_array = feature.expression; }
+    if(feature.weights) { 
+      var weights = feature.weights[glyphTrack.datatype];
+      //console.log(trackID+" using edge.weights : "+glyphTrack.datatype+" len="+ weights.length); 
+      if(weights) { sig_array = weights; }
+    }
+    if(sig_array.length ==0) { continue; }
+
+    for(var j=0; j<sig_array.length; j++) {
+      var expression = sig_array[j];
+      var experiment = null;
+      if(expression.expID)     { experiment = glyphTrack.experiments[expression.expID]; }
+      if(expression.source_id) { experiment = glyphTrack.experiments[expression.source_id]; }
       if(!experiment) { continue; }
+      expression.source = experiment;
       if(glyphTrack.datatype && (expression.datatype != glyphTrack.datatype)) { continue; }
 
       var exp_sense = expression.sense;
@@ -3592,6 +3716,19 @@ function gLyphsRenderExpressionTrack(glyphTrack) {
     if(glyphTrack.glyphsGB.chrom_length>0) { region_end = glyphTrack.glyphsGB.chrom_length; }
   }
 
+  var total_max_express = glyphTrack.total_max_express;
+  var max_express = glyphTrack.max_express;
+  if(glyphTrack.scale_max_signal != "auto") {
+    if(glyphTrack.scale_max_signal_percent>0) {
+      console.log("scale_max_signal_percent TRUE, start with max_express="+max_express+" total_max_express="+total_max_express);
+      max_express = max_express * glyphTrack.scale_max_signal_percent;
+      total_max_express = total_max_express * glyphTrack.scale_max_signal_percent;
+    } else {
+      max_express = glyphTrack.scale_max_signal;
+      total_max_express = glyphTrack.scale_max_signal;
+    }
+  }
+
   var points1 = "";
   var points2 = "";
   for(var i=0; i<features.length; i++) {
@@ -3618,14 +3755,14 @@ function gLyphsRenderExpressionTrack(glyphTrack) {
     if(feature.strand == "+") {xpos = xfs;} else {xpos = xfe;}
     //xpos += 0.5; //a bit off pixel wise since I use a 1.5px width stroke
         
-    var y_total = (height*2* feature.exp_total) / glyphTrack.total_max_express;
+    var y_total = (height*2* feature.exp_total) / total_max_express;
     if(y_total > height*2) { y_total = height*2; }
     
-    var y_sense = (height * feature.exp_sense) / glyphTrack.max_express;
+    var y_sense = (height * feature.exp_sense) / max_express;
     if(y_sense > height)  { y_sense = height; }
     if(y_sense < -height) { y_sense = -height; }
     
-    var y_anti = (height * feature.exp_antisense) / glyphTrack.max_express;
+    var y_anti = (height * feature.exp_antisense) / max_express;
     if(y_anti > height)  { y_anti = height; }
     if(y_anti < -height) { y_anti = -height; }
     
@@ -3738,6 +3875,18 @@ function gLyphsTrack_render_xyplot(glyphTrack) {
     if(glyphTrack.glyphsGB.chrom_length>0) { region_end = glyphTrack.glyphsGB.chrom_length; }
   }
 
+  var total_max_express   = glyphTrack.total_max_express;
+  var max_express = glyphTrack.max_express;
+  if(glyphTrack.scale_max_signal != "auto") { 
+    if(glyphTrack.scale_max_signal_percent>0) {
+      max_express = max_express * glyphTrack.scale_max_signal_percent;
+      total_max_express = total_max_express * glyphTrack.scale_max_signal_percent;
+    } else {
+      max_express = glyphTrack.scale_max_signal;
+      total_max_express = glyphTrack.scale_max_signal;
+    }
+  }
+
   var points1 = "";
   var points2 = "";
   for(var i=0; i<features.length; i++) {
@@ -3763,14 +3912,14 @@ function gLyphsTrack_render_xyplot(glyphTrack) {
     var xpos;
     if(feature.strand == "+") {xpos = xfs;} else {xpos = xfe;}
         
-    var y_total = (height*2* feature.exp_total) / glyphTrack.total_max_express;
-    if(y_total > height*2) { y_total = height*2; }
+    //var y_total = (height*2* feature.exp_total) / total_max_express;
+    //if(y_total > height*2) { y_total = height*2; }
     
-    var y_sense = (height * feature.exp_sense) / glyphTrack.max_express;
+    var y_sense = (height * feature.exp_sense) / max_express;
     if(y_sense > height)  { y_sense = height; }
     if(y_sense < -height) { y_sense = -height; }
     
-    var y_anti = (height * feature.exp_antisense) / glyphTrack.max_express;
+    var y_anti = (height * feature.exp_antisense) / max_express;
     if(y_anti > height)  { y_anti = height; }
     if(y_anti < -height) { y_anti = -height; }
     
@@ -3791,8 +3940,8 @@ function gLyphsTrack_render_xyplot(glyphTrack) {
       }
       t_path.setAttribute('d', points);
       if(glyphTrack.colorMode=="signal") {
-        var min = -(glyphTrack.max_express);
-        var max = glyphTrack.max_express;
+        var min = -(max_express);
+        var max = max_express;
         cr = (feature.exp_sense - min) / (max - min); 
         colour = gLyphsScoreColorSpace2(glyphTrack, cr, feature.strand);
         t_path.style.stroke = colour.getCSSHexadecimalRGB();
@@ -3802,6 +3951,7 @@ function gLyphsTrack_render_xyplot(glyphTrack) {
       
       if(!glyphTrack.glyphsGB.exportSVGconfig) {
         var msg = glyphTrack.glyphsGB.chrom+" "+feature.start+".."+feature.end;
+        msg += "<br>name : "+ feature.name;
         msg += "<br>signal : "+ feature.exp_sense;
         t_path.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\""+msg+"\",190);");
         t_path.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
@@ -3820,8 +3970,8 @@ function gLyphsTrack_render_xyplot(glyphTrack) {
       }
       t_path.setAttributeNS(null, 'd', points);
       if(glyphTrack.colorMode=="signal") {
-        var min = -(glyphTrack.max_express);
-        var max = glyphTrack.max_express;
+        var min = -(max_express);
+        var max = max_express;
         cr = (feature.exp_antisense - min) / (max - min); 
         colour = gLyphsScoreColorSpace2(glyphTrack, cr, feature.strand);
         t_path.style.stroke = colour.getCSSHexadecimalRGB();
@@ -3831,6 +3981,7 @@ function gLyphsTrack_render_xyplot(glyphTrack) {
 
       if(!glyphTrack.glyphsGB.exportSVGconfig) {
         var msg = glyphTrack.glyphsGB.chrom+" "+feature.start+".."+feature.end;
+        msg += "<br>name: "+ feature.name;
         msg += "<br>signal antisense: "+ feature.exp_antisense;
         t_path.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\""+msg+"\",190);");
         t_path.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
@@ -3890,20 +4041,40 @@ function gLyphsTrack_render_arc(glyphTrack) {
   
   var obj_array = []
   obj_array = glyphTrack.feature_array;
-  //if(features.length == 0) { return; }
+
   if(glyphTrack.datasource_mode=="edge") {
+    console.log("gLyphsTrack_render_arc("+glyphTrack.trackID+") edge mode");
     obj_array = glyphTrack.edge_array;
     for(var i=0; i<obj_array.length; i++) {
       var edge = obj_array[i];
       if(!edge) { continue; }
+      edge.start = 0;
+      edge.end = 0;
+      edge.strand = edge.dir;
+      if(!edge.feature1 || !edge.feature2) { continue; }
+
       var f1 = edge.feature1;
       var f2 = edge.feature2;
-      if(f1) { edge.start = (f1.start + f1.end) / 2; }
-      if(f2) { edge.end = (f2.start + f2.end) / 2; }
+      
+      f1.middle = (f1.start + f1.end) /2; 
+      f2.middle = (f2.start + f2.end) /2; 
+
+      edge.start    = Math.min(f1.middle, f2.middle);
+      edge.end      = Math.max(f1.middle, f2.middle);
+            
+      // var f1 = edge.feature1;
+      // var f2 = edge.feature2;
+      // if(f1 && f2) {
+      //   edge.start = Math.min(f1.start, f2.start);
+      //   edge.end = Math.max(f1.end, f2.end);
+      // }
+      // else if(f1) { edge.start = f1.start; edge.end = f1.end; }
+      // else if(f2) { edge.start = f2.start; edge.end = f2.end; }
     }
   }
 
   if(!obj_array) { return; }
+  console.log("gLyphsTrack_render_arc("+glyphTrack.trackID+") "+obj_array.length+" objects");
 
   var region_start = glyphTrack.glyphsGB.start; 
   var region_end   = glyphTrack.glyphsGB.end; 
@@ -3917,6 +4088,11 @@ function gLyphsTrack_render_arc(glyphTrack) {
   for(var i=0; i<obj_array.length; i++) {
     var feature = obj_array[i];
     if(!feature) { continue; }
+    
+    if(glyphTrack.max_interaction>0) {
+      var dist =  feature.end - feature.start+1; 
+      if(dist>glyphTrack.max_interaction) { continue; }
+    }
     
     var xfs = dwidth*(feature.start-region_start)/(region_end-region_start); 
     var xfe = dwidth*(feature.end-region_start)/(region_end-region_start); 
@@ -3937,6 +4113,8 @@ function gLyphsTrack_render_arc(glyphTrack) {
     if(arc_height < 5) { arc_height = 5; }    
     if(arc_height > max_arc_height) { max_arc_height = arc_height; }
     feature.arc_height = arc_height;
+
+    //console.log("gLyphsTrack_render_arc("+glyphTrack.trackID+") arc xfs:"+feature.xfs+"  xfe:"+feature.xfe+"  height:"+feature.arc_height);
   }
     
   for(var i=0; i<obj_array.length; i++) {
@@ -4014,6 +4192,281 @@ function gLyphsTrack_render_arc(glyphTrack) {
       }
     }
   }
+}
+
+
+function gLyphsTrack_render_interaction_map(glyphTrack) {
+  var trackDiv    = glyphTrack.trackDiv;
+  var glyphStyle  = glyphTrack.glyphStyle;
+  var trackID     = glyphTrack.trackID;
+  var dwidth      = glyphTrack.glyphsGB.display_width;
+    
+  glyphTrack.expressLine1 = null;
+  glyphTrack.expressLine2 = null;
+  if(glyphTrack.glyphStyle != "interaction-map") { return; }
+  if(!glyphTrack.edge_array) { return; }
+  if(glyphTrack.edge_array.length == 0) { return; }
+
+  var height = glyphTrack.track_height;
+  if(!height || height < 20) { height = 20; }
+  glyphTrack.track_height = height;
+  
+  var middle = 12+glyphTrack.track_height;
+  
+  var strkw = "1px";
+  
+  var expressLine1 = document.createElementNS(svgNS,'g');
+  expressLine1.setAttributeNS(null, 'style', 'stroke-width:'+strkw+";");
+  if(!glyphTrack.glyphsGB.exportSVGconfig) {
+    expressLine1.setAttributeNS(null, "onmousedown", "selectTrackRegion('startdrag', \"" + glyphTrack.trackID + "\");");
+    expressLine1.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \"" + glyphTrack.trackID + "\");");
+    expressLine1.setAttributeNS(null, "onmousemove", "selectTrackRegion('drag', \"" + glyphTrack.trackID + "\");");
+  }
+  if(glyphTrack.xyplot_fill) {
+    expressLine1.style.opacity = "0.75";
+    expressLine1.style.strokeWidth = "1px";
+  }
+
+  glyphTrack.expressLine1 = expressLine1;
+  
+  var region_start = glyphTrack.glyphsGB.start; 
+  var region_end   = glyphTrack.glyphsGB.end; 
+  if(glyphTrack.whole_chrom_scale) { //drawing whole chromosome
+    region_start = 0;
+    if(glyphTrack.glyphsGB.chrom_length>0) { region_end = glyphTrack.glyphsGB.chrom_length; }
+  }
+  
+  if((glyphTrack.interaction_style != "box") && (glyphTrack.interaction_style != "elipse") &&
+     (glyphTrack.interaction_style != "diamond")) { 
+    glyphTrack.interaction_style = "diamond";
+  }
+
+  var min_interact_dist = 0;
+  var max_interact_dist = 0;
+  var max_boxwidth = 0;
+  var edge_array = glyphTrack.edge_array;
+  for(var i=0; i<edge_array.length; i++) {
+    var edge = edge_array[i];
+    if(!edge) { continue; }
+    if(!edge.feature1 || !edge.feature2) { continue; }
+
+    var f1 = edge.feature1;
+    var f2 = edge.feature2;
+    
+    f1.middle = (f1.start + f1.end) /2; 
+    f1.width = f1.end - f1.start +1;
+    
+    f2.middle = (f2.start + f2.end) /2; 
+    f2.width = f2.end - f2.start +1;
+
+    edge.start    = Math.min(f1.start, f2.start);
+    edge.end      = Math.max(f1.end, f2.end);
+    edge.middle   = (edge.start + edge.end)/2;
+    
+    edge.boxwidth      = (f1.width + f2.width) / 2;
+    edge.interact_dist = Math.abs(f1.middle - f2.middle);
+    if(edge.interact_dist > max_interact_dist) { max_interact_dist = edge.interact_dist; }
+    if(edge.boxwidth > max_boxwidth) { max_boxwidth = edge.boxwidth; }
+    
+    if(edge.interact_dist>0) {
+      if(min_interact_dist==0) { min_interact_dist = edge.interact_dist; }
+      if(edge.interact_dist < min_interact_dist) { min_interact_dist = edge.interact_dist; }
+    }
+  }
+  if(glyphTrack.max_interaction>0 && max_interact_dist>glyphTrack.max_interaction) {
+    max_interact_dist =  glyphTrack.max_interaction;
+  }
+
+  //var box_height = height*(max_boxwidth/(max_interact_dist+max_boxwidth));
+  var box_height = height*(max_boxwidth/max_interact_dist);
+  if(glyphTrack.interaction_grid) {
+    box_height = (dwidth*max_boxwidth)/(region_end-region_start)/2;
+  }
+
+  // console.log("gLyphsTrack_render_interaction_map("+glyphTrack.trackID+") "+edge_array.length+" edges");
+  // console.log(glyphTrack.trackID+" interaction_map min_interact_dist:"+min_interact_dist);
+  // console.log(glyphTrack.trackID+" interaction_map max_interact_dist:"+max_interact_dist);
+  // console.log(glyphTrack.trackID+" interaction_map max_boxwidth:"+max_boxwidth);
+  // console.log(glyphTrack.trackID+" interaction_map box_height:"+box_height+"px");
+  //if(glyphTrack.selected_edge) { console.log(glyphTrack.trackID+" interaction_map has selected_edge idx:"+glyphTrack.selected_edge.eidx); }
+
+  //precalc xfm, yfh and max_interact_height
+  var max_interact_height = 1;
+  for(var i=0; i<edge_array.length; i++) {
+    var edge = edge_array[i];
+    if(!edge) { continue; }
+    if(!edge.feature1 || !edge.feature2) { continue; }
+
+    var xfm = dwidth*(edge.middle-region_start)/(region_end-region_start); 
+    
+    var xfw = dwidth*(edge.boxwidth/(region_end-region_start)); 
+    //var xfw = dwidth*(edge.interact_dist/(region_end-region_start)); 
+
+    var yfh = height*(edge.interact_dist/max_interact_dist);  //scaled use height & max_interact_dist
+    if(glyphTrack.interaction_grid) {
+      yfh = (dwidth*edge.interact_dist)/(region_end-region_start)/2;  //45deg use dwidth and region width
+    }
+    if(glyphTrack.interaction_flip) { yfh = height - yfh; }
+
+    if(glyphTrack.glyphsGB.flip_orientation) { xfm = dwidth - xfm; }
+       
+    if(yfh > max_interact_height) { max_interact_height = yfh; }
+    //if(xfw < 2) { xfw = 2; } //min 3px width
+    
+    edge.xfm = xfm;
+    edge.yfh = yfh;
+    edge.xfw = xfw;
+    //console.log("gLyphsTrack_render_arc("+glyphTrack.trackID+") arc xfs:"+edge.xfs+"  xfe:"+edge.xfe+"  height:"+edge.arc_height);
+  }
+  //console.log(glyphTrack.trackID+" max_interact_height="+max_interact_height);
+
+  
+  //now render
+  var selected_block = null;
+  for(var i=0; i<edge_array.length; i++) {
+    var edge = edge_array[i];
+    if(!edge) { continue; }
+    
+    var xfm = edge.xfm;
+    var yfh = edge.yfh;
+
+    //var interact_height = edge.arc_height * (height / max_interact_height);
+  
+    if(xfm < 0) { continue; }
+    if(xfm > dwidth) { continue; }
+    if(edge.interact_dist <= 0) { continue; }
+    if(yfh > height) { continue; }
+       
+    var colour = gLyphsTrackFeatureColour(glyphTrack, edge);
+    if(!colour || colour.zcr<0.01) { continue; } //also tried 0.05 but that is 5% and maybe too much
+
+    //var y_offset = 12-(box_height/2);
+    var y_offset = 12;
+    var block = null;
+    if(glyphTrack.interaction_style == "box") {
+      block = document.createElementNS(svgNS,'rect');
+      block.setAttribute('x', xfm-(edge.xfw/2));
+      block.setAttribute('y', edge.yfh+12-box_height);
+      block.setAttribute('width', edge.xfw);
+      block.setAttribute('height', box_height);
+      //block.style.stroke = colour.getCSSHexadecimalRGB();
+      block.style.fill = colour.getCSSHexadecimalRGB();
+      expressLine1.appendChild(block);
+    }
+    if(glyphTrack.interaction_style == "elipse") {
+      //elipse version
+      block = document.createElementNS(svgNS,'ellipse');
+      block.setAttribute('cx', xfm);
+      block.setAttribute('cy', edge.yfh+12-(box_height/2));
+      block.setAttribute('rx', edge.xfw/2);
+      block.setAttribute('ry', box_height/2);
+      //block.style.stroke = colour.getCSSHexadecimalRGB();
+      block.style.fill = colour.getCSSHexadecimalRGB();
+      expressLine1.appendChild(block);
+    }
+    if(glyphTrack.interaction_style == "diamond") {
+      //polgon/diamond version TODO still needs some work or clipbox
+      block = document.createElementNS(svgNS,'polygon');
+      var points = (xfm-(edge.xfw/2))+","+(y_offset+edge.yfh);
+      points += " "+(xfm)+","+(y_offset+edge.yfh-box_height);
+      points += " "+(xfm+(edge.xfw/2))+","+(y_offset+edge.yfh);
+      points += " "+(xfm)+","+(y_offset+edge.yfh+box_height);
+      block.setAttribute('points', points);
+      //block.style.stroke = colour.getCSSHexadecimalRGB();
+      block.style.fill = colour.getCSSHexadecimalRGB();
+      expressLine1.appendChild(block);    
+    }
+    
+    if(glyphTrack.selected_edge && (edge.eidx == glyphTrack.selected_edge.eidx)) {
+      selected_block = block;
+    }
+    edge.interaction_block = block;
+
+    if(!glyphTrack.glyphsGB.exportSVGconfig && block) {
+      block.setAttributeNS(null, "onmouseover", "gLyphsTrackEdgeInfo(\""+glyphTrack.trackID+"\", \""+(edge.eidx)+"\");");
+      block.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
+      //block.setAttributeNS(null, "onmouseup", "selectTrackRegion('enddrag','"+glyphTrack.trackID+"','"+edge.eidx+"');");
+      block.onmouseup = function(glyphTrack, eidx) { return function() {
+          eedbClearSearchTooltip();
+          var selected_edge = glyphTrack.selected_edge;
+          selectTrackRegion('enddrag', trackID, -1);
+          if(glyphTrack.selection || (selected_edge && eidx == selected_edge.eidx)) {
+            glyphTrack.selected_edge = null;
+          } else {            
+            glyphTrack.selected_edge = glyphTrack.edge_array[eidx];
+          }
+          gLyphsRenderTrack(glyphTrack);
+          gLyphsDrawTrack(glyphTrack.trackID);
+        }; }(glyphTrack, edge.eidx);
+    }
+  }
+  
+  if(selected_block) {
+    selected_block.style.stroke = "#000000";
+    selected_block.style.strokeWidth = "2px";
+    expressLine1.appendChild(selected_block); //moves to end of children so it is drawn on top
+    if(glyphTrack.selected_edge) { //should be but just incase
+      var line = document.createElementNS(svgNS,'polyline');
+      line.setAttributeNS(null, 'fill', 'none');
+      line.setAttributeNS(null, 'stroke', 'darkgray');
+      //line.setAttributeNS(null, 'style', 'stroke: darkgray; stroke-width: 1px');
+      var f1 = glyphTrack.selected_edge.feature1;
+      var f2 = glyphTrack.selected_edge.feature2
+      var xf1m = dwidth*(f1.middle-region_start)/(region_end-region_start); 
+      var xf2m = dwidth*(f2.middle-region_start)/(region_end-region_start); 
+
+      var yfh = glyphTrack.selected_edge.yfh;
+      var zy = y_offset;
+      if(glyphTrack.interaction_flip) { zy = height + y_offset;}
+
+      var points = xf1m+","+zy+" ";
+      points += glyphTrack.selected_edge.xfm +","+ (yfh+y_offset) + " ";
+      points += xf2m+","+zy;
+      line.setAttributeNS(null, 'points', points);
+      expressLine1.appendChild(line);    
+    }
+  }
+  
+  glyphTrack.interaction_highlight_g = document.createElementNS(svgNS,'g');
+  expressLine1.appendChild(glyphTrack.interaction_highlight_g);    
+}
+
+
+function gLyphsTrack_interaction_highlight(glyphTrack, edge) {
+  if(!glyphTrack || !edge) { return; }
+  if(!glyphTrack.interaction_highlight_g) { return; }
+  
+  // if(edge.interaction_block) {
+  //   edge.interaction_block.style.stroke = "#000000";
+  //   edge.interaction_block.style.strokeWidth = "2px";
+  //   glyphTrack.expressLine1.appendChild(edge.interaction_block); //moves to end of children so it is drawn on top
+  // }
+  
+  clearKids(glyphTrack.interaction_highlight_g);
+  
+  var line = document.createElementNS(svgNS,'polyline');
+  line.setAttributeNS(null, 'fill', 'none');
+  line.setAttributeNS(null, 'stroke', 'darkgray');
+  //line.setAttributeNS(null, 'style', 'stroke: darkgray; stroke-width: 1px');
+  var f1 = edge.feature1;
+  var f2 = edge.feature2
+  var xf1m = dwidth*(f1.middle-region_start)/(region_end-region_start); 
+  var xf2m = dwidth*(f2.middle-region_start)/(region_end-region_start); 
+
+  var yfh = edge.yfh;
+  var zy = y_offset;
+  if(glyphTrack.interaction_flip) { zy = height + y_offset;}
+
+  var points = xf1m+","+zy+" ";
+  points += edge.xfm +","+ (yfh+y_offset) + " ";
+  points += xf2m+","+zy;
+  line.setAttributeNS(null, 'points', points);
+  
+  glyphTrack.interaction_highlight_g.appendChild(line);
+  
+  glyphTrack.expressLine1.appendChild(glyphTrack.interaction_highlight_g); //moves to end of children so it is drawn on top
+
+  return line;
 }
 
 
@@ -4150,8 +4603,13 @@ function gLyphsTrack_render_experiment_heatmap(glyphTrack) {
       min = glyphTrack.scale_min_signal; 
     }
     if(glyphTrack.scale_max_signal != "auto") { 
-      max_total   = glyphTrack.scale_max_signal; 
-      max_express = glyphTrack.scale_max_signal; 
+      if(glyphTrack.scale_max_signal_percent>0) {
+        max_express = max_express * glyphTrack.scale_max_signal_percent;
+        max_total = max_total * glyphTrack.scale_max_signal_percent;
+      } else {
+        max_express = glyphTrack.scale_max_signal;
+        max_total = glyphTrack.scale_max_signal;
+      }
     }
 
     for(var feat_idx=0; feat_idx<features.length; feat_idx++) {
@@ -4354,6 +4812,16 @@ function gLyphsDrawExpressTrack(glyphTrack) {
   glyphTrack.top_group = document.createElementNS(svgNS,'g');
   var g1 = document.createElementNS(svgNS,'g');
   
+  //clipPath
+  var clipPath = document.createElementNS(svgNS,'clipPath');
+  clipPath.setAttributeNS(null, "id", "expressclip_"+glyphTrack.trackID);
+  var clipRect = document.createElementNS(svgNS,'rect');
+  clipRect.setAttributeNS(null, "x", "-10");
+  clipRect.setAttributeNS(null, "y", "12");
+  clipRect.setAttributeNS(null, "width", dwidth+10);
+  clipRect.setAttributeNS(null, "height", track_height);
+  clipPath.appendChild(clipRect);
+
   // make a backing rectangle to capture the selection events
   if(!glyphTrack.glyphsGB.exportSVGconfig || glyphTrack.backColor) {
     var backRect = document.createElementNS(svgNS,'rect');
@@ -4392,7 +4860,7 @@ function gLyphsDrawExpressTrack(glyphTrack) {
   // then the expression lines
   //
   var middle = 12+ Math.floor(track_height / 2.0);
-  if(glyphTrack.strandless) { middle = 12+track_height; }
+  if(glyphTrack.strandless && glyphTrack.glyphStyle!="xyplot") { middle = 12+track_height; }
 
   var expressLine1 = glyphTrack.expressLine1;
   var expressLine2 = glyphTrack.expressLine2;
@@ -4412,13 +4880,13 @@ function gLyphsDrawExpressTrack(glyphTrack) {
       expressLine2.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \"" + glyphTrack.trackID + "\");");
       expressLine2.setAttributeNS(null, "onmousemove", "selectTrackRegion('drag', \"" + glyphTrack.trackID + "\");");      
     }
-    if(glyphTrack.glyphStyle!="experiment-heatmap") {
-      var middleLine = g1.appendChild(document.createElementNS(svgNS,'polyline'));
-      middleLine.setAttributeNS(null, 'style', 'stroke: darkgray; stroke-width: 1px');
-      middleLine.setAttributeNS(null, 'points', "0,"+middle+" "+glyphTrack.glyphsGB.display_width+","+middle);
-    }
   }
-  
+  if((expressLine2 && glyphTrack.glyphStyle!="experiment-heatmap") || (glyphTrack.glyphStyle=="xyplot")) {
+    var middleLine = g1.appendChild(document.createElementNS(svgNS,'polyline'));
+    middleLine.setAttributeNS(null, 'style', 'stroke: darkgray; stroke-width: 1px');
+    middleLine.setAttributeNS(null, 'points', "0,"+middle+" "+glyphTrack.glyphsGB.display_width+","+middle);
+  }
+
   var revVal = glyphTrack.anti_max_express.toFixed(3);
   if(revVal>2) { revVal = glyphTrack.anti_max_express.toFixed(2); }
   if(revVal>10) { revVal = glyphTrack.anti_max_express.toFixed(1); }
@@ -4446,7 +4914,13 @@ function gLyphsDrawExpressTrack(glyphTrack) {
   //if((glyphTrack.max_express!=glyphTrack.anti_max_express) && (glyphTrack.max_express!=glyphTrack.sense_max_express)) {  
   //  new_title += " scale:"+scaleVal;
   //}
-  if(glyphTrack.scale_max_signal != "auto") { new_title += " fixscale:" + glyphTrack.scale_max_signal; }
+  if(glyphTrack.scale_max_signal != "auto") { 
+    if(glyphTrack.scale_max_signal_percent>0) {
+      new_title += " scale:" + (glyphTrack.scale_max_signal_percent*100)+"%";
+    } else {
+      new_title += " fixscale:" + glyphTrack.scale_max_signal;
+    }
+  }
   if(glyphTrack.logscale==1) { new_title += " log"; }
   new_title += "]";
   if(glyphTrack.has_expression) {
@@ -4477,7 +4951,8 @@ function gLyphsDrawExpressTrack(glyphTrack) {
   }
   
   if(glyphTrack.whole_chrom_scale) {
-    var glyph1 = gLyphsDrawCytoSpan(glyphTrack, glyphTrack.track_height+13);
+    //var glyph1 = gLyphsDrawCytoSpan(glyphTrack, glyphTrack.track_height+13);
+    var glyph1 = gLyphsDrawCytoSpan(glyphTrack, 23);
     g1.appendChild(glyph1);
   }
 
@@ -4485,9 +4960,13 @@ function gLyphsDrawExpressTrack(glyphTrack) {
   gLyphsDrawSelection(glyphTrack);
   
   g1.setAttributeNS(null, 'transform', "translate(10,0)");
+
+  glyphTrack.top_group.appendChild(clipPath);
+  g1.setAttributeNS(null, 'clip-path', "url(#"+clipPath.id+")");
+
   glyphTrack.top_group.appendChild(g1);
   svg.appendChild(glyphTrack.top_group);
-  
+
   glyphsExpPanelRecalcAndDraw(glyphTrack);
   gLyphsDrawSelection(glyphTrack);
 }
@@ -4670,9 +5149,14 @@ function gLyphsTrackCalcExperimentGroupArray(glyphTrack) {
       anti_max_express  = total_max_express;
     }
     if(glyphTrack.scale_max_signal != "auto") {
-      max_express = glyphTrack.scale_max_signal;
-      total_max_express = glyphTrack.scale_max_signal;
-    }    
+      if(glyphTrack.scale_max_signal_percent>0) {
+        max_express = max_express * glyphTrack.scale_max_signal_percent;
+        total_max_express = total_max_express * glyphTrack.scale_max_signal_percent;
+      } else {
+        max_express = glyphTrack.scale_max_signal;
+        total_max_express = glyphTrack.scale_max_signal;
+      }
+    }
   }  //group_array loop
   glyphTrack.max_express       = max_express;
   glyphTrack.total_max_express = total_max_express;
@@ -4703,6 +5187,18 @@ function gLyphsRenderSplitSignalTrack(glyphTrack) {
   }
   
   var group_array = gLyphsTrackCalcExperimentGroupArray(glyphTrack);
+
+  var total_max_express = glyphTrack.total_max_express;
+  var max_express = glyphTrack.max_express;
+  if(glyphTrack.scale_max_signal != "auto") {
+    if(glyphTrack.scale_max_signal_percent>0) {
+      max_express = max_express * glyphTrack.scale_max_signal_percent;
+      total_max_express = total_max_express * glyphTrack.scale_max_signal_percent;
+    } else {
+      max_express = glyphTrack.scale_max_signal;
+      total_max_express = glyphTrack.scale_max_signal;
+    }
+  }
 
   //
   // second loop on each group to create signal graphs
@@ -4856,14 +5352,14 @@ function gLyphsRenderSplitSignalTrack(glyphTrack) {
       if(feature.strand == "+") {xpos = xfs;} else {xpos = xfe;}
       //xpos += 0.5; //a bit off pixel wise since I use a 1.5px width stroke
       
-      var y_total = (height*2* feature.exp_total) / glyphTrack.total_max_express;
+      var y_total = (height*2* feature.exp_total) / total_max_express;
       if(y_total > height*2) { y_total = height*2; }
       
-      var y_sense = (height * feature.exp_sense) / glyphTrack.max_express;
+      var y_sense = (height * feature.exp_sense) / max_express;
       if(y_sense > height)  { y_sense = height; }
       if(y_sense < -height) { y_sense = -height; }
       
-      var y_anti = (height * feature.exp_antisense) / glyphTrack.max_express;
+      var y_anti = (height * feature.exp_antisense) / max_express;
       if(y_anti > height)  { y_anti = height; }
       if(y_anti < -height) { y_anti = -height; }
       
@@ -5640,7 +6136,7 @@ function gLyphsDrawTranscript(glyphTrack, feature, colour) {
       var fe = subfeature.end;
       if((subfeature.category == "block") || (subfeature.category == "exon")) {
         if(CDS_mode) { continue; }
-        if(thickstart == thickend) { continue; }
+        //if(thickstart == thickend) { continue; }
         if(fe < thickstart) { continue; }
         if(fs > thickend) { continue; }
         if(fs < thickstart) { fs = thickstart; }
@@ -6484,8 +6980,8 @@ function gLyphsDrawSelection(glyphTrack) {
     else if(len > 1000) { len = Math.round(len/100)/10.0 + "kb"; }
     else { len += "bp"; }
     var msg = "selection "+len+"<br>"+glyphTrack.glyphsGB.chrom+" "+fs+".."+fe;
-    msg += "<br>express total sense: "+ glyphTrack.express_total_sense_sum.toFixed(3);
-    msg += "<br>express total antisense: "+ glyphTrack.express_total_antisense_sum.toFixed(3);
+    if(glyphTrack.express_total_sense_sum) { msg += "<br>express total sense: "+ glyphTrack.express_total_sense_sum.toFixed(3); }
+    if(glyphTrack.express_total_antisense_sum) { msg += "<br>express total antisense: "+ glyphTrack.express_total_antisense_sum.toFixed(3); }
     selectRect.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\""+msg+"\",190);");
     selectRect.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
   }
@@ -6870,7 +7366,9 @@ function gLyphsScoreColorSpace2(glyphTrack, score, strand) {
   if(!colorspace) { colorspace = "fire1"; }
 
   var discrete = glyphTrack.colorspace_discrete;
-  if(!discrete) { discrete = zenbuColorSpaces[colorspace].discrete; }
+  if(!discrete) { 
+    if(zenbuColorSpaces[colorspace]) { discrete = zenbuColorSpaces[colorspace].discrete; }
+  }
 
   var logscale = glyphTrack.logscale;
   if(glyphTrack.glyphStyle=="experiment-heatmap") { logscale=false; } //now calculated in score
@@ -7064,9 +7562,10 @@ function gLyphsColorSpaceOptions(glyphTrack) {
   div2.setAttribute('style', "margin: 3px 1px 0px 7px;");
   var span4 = div2.appendChild(document.createElement('span'));
   //span4.setAttribute('style', "margin-left: 3px;");
-  span4.innerHTML = "min signal: ";
+  span4.innerHTML = "min signal:";
   var minInput = div2.appendChild(document.createElement('input'));
   minInput.className = "sliminput";
+  minInput.style.marginLeft = "1px";
   minInput.setAttribute('size', "5");
   minInput.setAttribute('type', "text");
   minInput.setAttribute('value', glyphTrack.scale_min_signal);
@@ -7076,9 +7575,10 @@ function gLyphsColorSpaceOptions(glyphTrack) {
 
   var span4 = div2.appendChild(document.createElement('span'));
   span4.setAttribute('style', "margin-left: 3px;");
-  span4.innerHTML = "max signal: ";
+  span4.innerHTML = "max signal:";
   var maxInput = div2.appendChild(document.createElement('input'));
   maxInput.className = "sliminput";
+  maxInput.style.marginLeft = "1px";
   maxInput.setAttribute('size', "5");
   maxInput.setAttribute('type', "text");
   maxInput.setAttribute('value', glyphTrack.scale_max_signal);
@@ -7086,7 +7586,7 @@ function gLyphsColorSpaceOptions(glyphTrack) {
   maxInput.setAttribute("onmouseover", "eedbMessageTooltip('max signal: "+(glyphTrack.max_score)+"',130);");
   maxInput.setAttribute("onmouseout", "eedbClearSearchTooltip();");
   if(glyphTrack.has_expression && glyphTrack.total_max_express) { 
-    minInput.setAttribute("onmouseover", "eedbMessageTooltip('min signal: 0',130);");
+    minInput.setAttribute("onmouseover", "eedbMessageTooltip('min signal: "+(glyphTrack.total_min_express)+"',130);");
     maxInput.setAttribute("onmouseover", "eedbMessageTooltip('max signal: "+(glyphTrack.total_max_express)+"',130);");
   }
   
@@ -7356,7 +7856,8 @@ function gLyphsCreateMoveBar(glyphTrack) {
   var height = parseInt(svg.getAttributeNS(null, 'height'));
 
   var add_resize = false;
-  if((glyphStyle=="signal-histogram" || glyphStyle=="xyplot" || glyphStyle=="arc" || glyphStyle=="1D-heatmap") && 
+  if((glyphStyle=="signal-histogram" || glyphStyle=="xyplot" || glyphStyle=="arc" || 
+      glyphStyle=="1D-heatmap" || glyphStyle=="interaction-map") && 
      (height>20)) { add_resize=true; }
 
   var g1 = document.createElementNS(svgNS,'g');
@@ -7870,15 +8371,30 @@ function glyphsGenerateTrackDOM(glyphTrack) {
   if(glyphTrack.scale_min_signal) { trackDOM.setAttribute("scale_min_signal", glyphTrack.scale_min_signal); }
   if(glyphTrack.scale_max_signal) { trackDOM.setAttribute("scale_max_signal", glyphTrack.scale_max_signal); }
 
+  if(glyphTrack.show_hoverinfo) { trackDOM.setAttribute("show_hoverinfo", "true"); }
+  else { trackDOM.setAttribute("show_hoverinfo", "false"); }
+
+  if(glyphTrack.interaction_grid) { trackDOM.setAttribute("interaction_grid", "true"); }
+  if(glyphTrack.interaction_flip) { trackDOM.setAttribute("interaction_flip", "true"); }
+  if(glyphTrack.interaction_style) { trackDOM.setAttribute("interaction_style", glyphTrack.interaction_style); }
+  if(glyphTrack.max_interaction) { trackDOM.setAttribute("max_interaction", glyphTrack.max_interaction); }
+  
+  /*
+  //this seems to create more problems than it solves. best to just reload the experiments
+  //and not save the manual 'hide' state
   if(glyphTrack.experiments) {
     for(var expID in glyphTrack.experiments){
       var experiment = glyphTrack.experiments[expID];
-      var exp = doc.createElement("gLyphTrackExp");
-      exp.setAttribute("id", experiment.id);
-      if(experiment.hide) { exp.setAttribute("hide", experiment.hide); }
-      trackDOM.appendChild(exp);
+      if(experiment.hide && !experiment.demux_key) { 
+        var exp = doc.createElement("gLyphTrackExp");
+        exp.setAttribute("id", experiment.id);
+        if(experiment.hide) { exp.setAttribute("hide", experiment.hide); }
+        trackDOM.appendChild(exp);
+      }
     }
   }
+  */
+
   if(glyphTrack.description) {
     var desc = trackDOM.appendChild(doc.createElement("description"));
     desc.appendChild(doc.createTextNode(glyphTrack.description));
@@ -8072,6 +8588,15 @@ function gLyphsCreateTrackFromTrackDOM(trackDOM, glyphsGB) {
   if(trackDOM.getAttribute("exppanel_use_rgbcolor") == "true") { glyphTrack.exppanel_use_rgbcolor = true; }
   //if(trackDOM.getAttribute("strandless") == "true") { glyphTrack.strandless = true; }
 
+  glyphTrack.show_hoverinfo = true;
+  glyphTrack.interaction_grid = false;
+  glyphTrack.interaction_flip = false;
+  if(trackDOM.getAttribute("show_hoverinfo") == "false")   { glyphTrack.show_hoverinfo = false; }
+  if(trackDOM.getAttribute("interaction_grid") == "true") { glyphTrack.interaction_grid = true; }
+  if(trackDOM.getAttribute("interaction_flip") == "true") { glyphTrack.interaction_flip = true; }
+  if(trackDOM.getAttribute("interaction_style")) { glyphTrack.interaction_style = trackDOM.getAttribute("interaction_style"); }
+  if(trackDOM.getAttribute("max_interaction")) { glyphTrack.max_interaction = trackDOM.getAttribute("max_interaction"); }
+
   if(trackDOM.getAttribute("exptype")) { 
     glyphTrack.exptype = trackDOM.getAttribute("exptype"); 
     if(!glyphTrack.datatype) { glyphTrack.datatype = glyphTrack.exptype; }
@@ -8113,8 +8638,18 @@ function gLyphsCreateTrackFromTrackDOM(trackDOM, glyphsGB) {
     if(isNaN(glyphTrack.scale_max_signal) || (glyphTrack.scale_max_signal==0)) { glyphTrack.scale_max_signal = "auto"; }                                        
   }
   if(trackDOM.getAttribute("scale_max_signal")) {
-    glyphTrack.scale_max_signal  = parseFloat(trackDOM.getAttribute("scale_max_signal"));
-    if(isNaN(glyphTrack.scale_max_signal) || (glyphTrack.scale_max_signal==0)) { glyphTrack.scale_max_signal = "auto"; }                                        
+    var tval = trackDOM.getAttribute("scale_max_signal");
+    glyphTrack.scale_max_signal = parseFloat(tval);
+    if(isNaN(glyphTrack.scale_max_signal) || (glyphTrack.scale_max_signal==0)) { glyphTrack.scale_max_signal = "auto"; }
+    var mymatch = /^(\d+)\%$/.exec(tval);
+    if(mymatch && (mymatch.length == 2)) {
+      console.log("scale_max_signal is percentage : "+tval+" -> "+ mymatch[1]);
+      tval = parseFloat(mymatch[1]);
+      if(tval<0) { tval = 0; }
+      if(tval>100) { tval = 100; }
+      glyphTrack.scale_max_signal = tval+"%";
+      glyphTrack.scale_max_signal_percent = tval / 100.0;
+    }
   }
   glyphTrack.scale_min_signal = "auto";
   if(trackDOM.getAttribute("scale_min_signal")) {
@@ -9266,6 +9801,14 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
     return;
   }
   if(param == "tracksetUUID") {  glyphTrack.tracksetUUID = value; }
+  if(param == "curated_preset") {
+    newconfig.curated_preset = value;
+    //if(glyphTrack.DSI) { glyphTrack.DSI.master_mode = "upload"; }
+    //zenbuDatasourceInterfaceUpdate(glyphTrack.DSI.id);  
+    glyphsTrack_changeCuratedPreset(glyphTrack); 
+    zenbuReconfigureTrackPanel(glyphTrack);
+    return;    
+  }
   
   if(param == "overlap_mode") {  newconfig.overlap_mode = value; }
   if(param == "binning") {  newconfig.binning = value; }
@@ -9318,7 +9861,7 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
 
   if(param == "spstream") {  
     if(value == "predefined-clear") {
-      newconfig.spstream_mode = glyphTrack.spstream_mode; 
+      newconfig.spstream_mode = "predefined";
       newconfig.script = null;
       newconfig.spstream_changed = true;
       reconfigureStreamParams(glyphTrack);
@@ -9557,15 +10100,29 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
       if(newconfig.track_height >50) { newconfig.track_height = 50; } 
     } else if(glyphStyle == "1D-heatmap") {
       if(newconfig.track_height <3) { newconfig.track_height = 3; } 
-      if(newconfig.track_height >200) { newconfig.track_height = 200; }       
+      if(newconfig.track_height >200) { newconfig.track_height = 200; }
+    } else if(glyphStyle == "interaction-map") {
+      if(newconfig.track_height <20) { newconfig.track_height = 20; } 
     } else {
       if(newconfig.track_height <20) { newconfig.track_height = 20; } 
       if(newconfig.track_height >500) { newconfig.track_height = 500; } 
     }
   }
   if(param == "scale_max_signal") {  
-    newconfig.scale_max_signal = parseFloat(value); 
-    if(isNaN(newconfig.scale_max_signal) || (newconfig.scale_max_signal==0)) { newconfig.scale_max_signal = "auto"; } 
+    newconfig.scale_max_signal = parseFloat(value);
+    newconfig.scale_max_signal_percent = 0;
+    if(isNaN(newconfig.scale_max_signal) || (newconfig.scale_max_signal==0)) { newconfig.scale_max_signal = "auto"; }    
+    var mymatch = /^(\d+)\%$/.exec(value);
+    if(mymatch && (mymatch.length == 2)) {
+      console.log("scale_max_signal set to percentage : "+value+" -> "+ mymatch[1]);
+      var tval = parseFloat(mymatch[1]);
+      if(tval<0) { tval = 0; }
+      if(tval>100) { tval = 100; }
+      newconfig.scale_max_signal = tval+"%";
+      newconfig.scale_max_signal_percent = tval / 100.0;
+    }
+    //console.log("scale_max_signal ["+newconfig.scale_max_signal+"]");
+    //if(newconfig.scale_max_signal_percent) { console.log("scale_max_signal_percent : "+newconfig.scale_max_signal_percent); }
   }
   if(param == "scale_min_signal") {  
     newconfig.scale_min_signal = parseFloat(value); 
@@ -9600,6 +10157,31 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
   }
   if(param == "species_search") { newconfig.species_search = value; }
   if(param == "source_search_mode") { newconfig.source_search_mode = value; }
+
+  
+  if(param == "interaction_style") { 
+    newconfig.interaction_style = value;
+    createGlyphstyleSelect(glyphTrack); //refresh
+  }
+  if(param == "interaction_grid") { 
+    if(value) { newconfig.interaction_grid=true; }
+    else { newconfig.interaction_grid = false; }
+    createGlyphstyleSelect(glyphTrack); //refresh
+  }
+  if(param == "max_interaction") { 
+    newconfig.max_interaction = value;
+    //createGlyphstyleSelect(glyphTrack); //refresh
+  }
+  if(param == "interaction_flip") { 
+    if(value) { newconfig.interaction_flip=true; }
+    else { newconfig.interaction_flip = false; }
+    createGlyphstyleSelect(glyphTrack); //refresh
+  }
+  if(param == "show_hoverinfo") { 
+    if(value) { newconfig.show_hoverinfo=true; }
+    else { newconfig.show_hoverinfo = false; }
+    //createGlyphstyleSelect(glyphTrack); //refresh
+  }
 
   if(param == "accept-new") {
     var source_ids = "";
@@ -9655,6 +10237,7 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
       if(newconfig.datatype !== undefined) { glyphTrack.datatype = newconfig.datatype; }
       if(newconfig.track_height !== undefined) { glyphTrack.track_height = newconfig.track_height; }
       if(newconfig.scale_max_signal !== undefined) { glyphTrack.scale_max_signal = newconfig.scale_max_signal; }
+      if(newconfig.scale_max_signal_percent !== undefined) { glyphTrack.scale_max_signal_percent = newconfig.scale_max_signal_percent; }
       if(newconfig.scale_min_signal !== undefined) { glyphTrack.scale_min_signal = newconfig.scale_min_signal; }
       if(newconfig.exp_mincut !== undefined) { glyphTrack.exp_mincut = newconfig.exp_mincut; }
       if(newconfig.colorMode !== undefined) { glyphTrack.colorMode = newconfig.colorMode; }
@@ -9682,9 +10265,10 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
     //
     // set some defaults if they are not configured
     //
-    if(glyphTrack.title == "") { glyphTrack.title = glyphTrack.sources; }
+    //if(glyphTrack.title == "") { glyphTrack.title = glyphTrack.sources; }
 
     if(glyphTrack.glyphStyle == "signal-histogram" || glyphTrack.glyphStyle == "xyplot" || 
+       glyphTrack.glyphStyle == "interaction-map" ||
        glyphTrack.glyphStyle == "split-signal" || glyphTrack.glyphStyle == "arc") {
       //console.log("new express track so set some defaults");
       if(glyphTrack.exptype === undefined)   { glyphTrack.datatype = glyphTrack.exptype = glyphTrack.default_exptype; }
@@ -9760,6 +10344,11 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
       if(newconfig.overlap_mode !== undefined) { glyphTrack.overlap_mode = newconfig.overlap_mode; needReload=1; }
       if(newconfig.binning !== undefined) { glyphTrack.binning = newconfig.binning; needReload=1; }
       if(newconfig.whole_chrom_scale !== undefined) { glyphTrack.whole_chrom_scale = newconfig.whole_chrom_scale; needReload=1; }
+      if(newconfig.interaction_style !== undefined) { glyphTrack.interaction_style = newconfig.interaction_style; }
+      if(newconfig.interaction_grid !== undefined) { glyphTrack.interaction_grid = newconfig.interaction_grid; }
+      if(newconfig.interaction_flip !== undefined) { glyphTrack.interaction_flip = newconfig.interaction_flip; }
+      if(newconfig.max_interaction !== undefined) { glyphTrack.max_interaction = newconfig.max_interaction; }
+      if(newconfig.show_hoverinfo !== undefined) { glyphTrack.show_hoverinfo = newconfig.show_hoverinfo; }
       if(newconfig.xyplot_fill !== undefined) { glyphTrack.xyplot_fill = newconfig.xyplot_fill; }
       if(newconfig.experiment_merge !== undefined) { glyphTrack.experiment_merge = newconfig.experiment_merge; }
       if(newconfig.title !== undefined) { glyphTrack.title = newconfig.title; }
@@ -9769,6 +10358,7 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
       if(newconfig.track_height !== undefined) { glyphTrack.track_height = newconfig.track_height; }
       if(newconfig.scale_max_signal !== undefined) { glyphTrack.scale_max_signal = newconfig.scale_max_signal; }
       if(newconfig.scale_min_signal !== undefined) { glyphTrack.scale_min_signal = newconfig.scale_min_signal; }
+      if(newconfig.scale_max_signal_percent !== undefined) { glyphTrack.scale_max_signal_percent = newconfig.scale_max_signal_percent; }
       if(newconfig.exp_mincut !== undefined) { glyphTrack.exp_mincut = newconfig.exp_mincut; }
       if(newconfig.colorMode !== undefined) { glyphTrack.colorMode = newconfig.colorMode; if(newconfig.colorMode=="signal") { needReload=1; } }
       if(newconfig.featureSortMode !== undefined) { glyphTrack.featureSortMode = newconfig.featureSortMode; }
@@ -9800,7 +10390,7 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
           glyphTrack.checked_missing_mdata = false; //so it reloads
           glyphTrack.expfilter = "";
           glyphTrack.uuid = "";
-          glyphTrack.DSI.newconfig = new Object;
+          glyphTrack.DSI = null; //clear so it rebuilds
           console.log(glyphTrack.trackID+" new source_ids:"+glyphTrack.source_ids);
           //prepareTrackXHR(trackID);
           needReload=1;           
@@ -9876,7 +10466,13 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
     var cancelButton = document.getElementById(trackID + "_cancelConfigButton");
     var acceptButton = document.getElementById(trackID + "_acceptConfigButton");
     if(cancelButton) { cancelButton.removeAttribute("disabled"); }
-    if(acceptButton) { acceptButton.removeAttribute("disabled"); }
+    if(acceptButton) { 
+      acceptButton.removeAttribute("disabled");
+      var source_ids = "";
+      if(glyphTrack.source_ids) { source_ids = glyphTrack.source_ids; }
+      if(glyphTrack.newconfig && glyphTrack.newconfig.source_ids) { source_ids = glyphTrack.newconfig.source_ids; }
+      if(!glyphTrack.newconfig || !source_ids) { acceptButton.setAttribute("disabled", "disabled"); }
+    }
   }
   
   //--------------------------------------------------------
@@ -9912,6 +10508,134 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
     glyphTrack.download  = undefined;
     gLyphsDrawTrack(trackID);
   }
+}
+
+
+function glyphsTrack_changeCuratedPreset(glyphTrack) {
+  if(glyphTrack == null) { return; }
+  var trackID = glyphTrack.trackID;
+  var newconfig = glyphTrack.newconfig;
+  var curated_preset = newconfig.curated_preset;
+  glyphTrack.noCache = false;
+  
+  if(curated_preset == "genes") {
+    newconfig.description = "display gene annotations";
+    newconfig.glyphStyle = "thick-arrow";
+    newconfig.colorMode = "strand";  //reset to default 
+    newconfig.spstream_mode = "none";
+    newconfig.spstream_changed = true;
+    newconfig.script = null   
+    newconfig.backColor  = "#F6F6F6";
+    newconfig.posStrandColor  = "#008000";
+    newconfig.revStrandColor  = "#800080";
+  }
+  if(curated_preset == "transcripts") {
+    newconfig.description = "display transcript annotations";
+    newconfig.glyphStyle = "transcript";
+    newconfig.colorMode = "strand";  //reset to default 
+    newconfig.spstream_mode = "none";
+    newconfig.spstream_changed = true;
+    newconfig.script = null
+    newconfig.backColor  = "#F6F6F6";
+    newconfig.posStrandColor  = "#008000";
+    newconfig.revStrandColor  = "#800080";
+  }
+  if(curated_preset == "CAGE") {
+    newconfig.description = "process CAGE BAM/CTSS files into TSS (transcription start site) signal plot";
+    newconfig.glyphStyle = "signal-histogram";
+    newconfig.colorMode = "strand";  //reset to default 
+    newconfig.spstream_mode = "expression";
+    newconfig.overlap_mode = "5end";
+    newconfig.spstream_changed = true;
+    newconfig.script = null
+    newconfig.exprbin_strandless = false;
+    newconfig.exprbin_add_count = false;
+    newconfig.exprbin_subfeatures = false;
+    newconfig.backColor  = "#F6F6F6";
+    newconfig.posStrandColor  = "#008000";
+    newconfig.revStrandColor  = "#800080";
+  }
+  if(curated_preset == "RNASeq") {
+    newconfig.description = "process RNASeq BAM files into exonic signal plot";
+    newconfig.glyphStyle = "signal-histogram";
+    newconfig.colorMode = "strand";  //reset to default 
+    newconfig.spstream_mode = "expression";
+    newconfig.overlap_mode = "height";
+    newconfig.spstream_changed = true;
+    newconfig.script = null
+    newconfig.exprbin_strandless = false;
+    newconfig.exprbin_add_count = false;
+    newconfig.exprbin_subfeatures = true;
+    newconfig.backColor  = "#F6F6F6";
+    newconfig.posStrandColor  = "#008000";
+    newconfig.revStrandColor  = "#800080";
+  }
+  if(curated_preset == "ChIPSeq") {
+    newconfig.description = "process ChIPSeq BAM files into signal plot";
+    newconfig.glyphStyle = "signal-histogram";
+    newconfig.colorMode = "strand";  //reset to default 
+    newconfig.spstream_mode = "expression";
+    newconfig.overlap_mode = "height";
+    newconfig.spstream_changed = true;
+    newconfig.script = null
+    newconfig.exprbin_strandless = true;
+    newconfig.exprbin_add_count = false;
+    newconfig.exprbin_subfeatures = false;
+    newconfig.backColor  = "#F6F6F6";
+    newconfig.posStrandColor  = "#12A0FF";
+    newconfig.revStrandColor  = "#808080"; //gray
+    // if(value == "experiment-heatmap" || value == "1D-heatmap") {
+    //   newconfig.exprbin_strandless = true;
+    //   newconfig.exprbin_subfeatures = true;
+    //   newconfig.overlap_mode = "height";
+    // }
+  }
+  if(curated_preset == "Hi-C / ChIA-PET") {
+    glyphTrack.noCache = true;
+    newconfig.glyphStyle = "interaction-map";
+    newconfig.colorMode = "signal";  //reset to default 
+    newconfig.spstream_mode = "predefined";
+    newconfig.spstream_changed = true;
+    newconfig.backColor  = "#F6F6F6";
+    newconfig.posStrandColor  = "#008000";
+    newconfig.revStrandColor  = "#800080";
+    newconfig.description = "process Hi-C / ChIA-PET paired-end BAM files into an interaction map. using max interaction length of 1Mbase and scan_extend_distance to 500,000bp";
+    glyphTrack.track_height = 200;
+    newconfig.script = new Object;
+    newconfig.script.name = "HiC interaction map";
+    newconfig.script.desc = "process HiC paired-end BAM files into an interaction-map";
+    newconfig.script.uuid = "Rlp0BEfZEV0nCZnBrkSAIB";
+    newconfig.script.spstreamXML = 
+    "<zenbu_script>\n\
+        <stream_processing>\n\
+            <spstream module=\"PairReads\">\n\
+                <output_unpaired>false</output_unpaired>\n\
+                <max_length>500000</max_length>\n\
+            </spstream>\n\
+            <spstream module=\"TemplateCluster\">\n\
+                <scan_extend_distance>250000</scan_extend_distance>\n\
+                <overlap_mode>5end</overlap_mode>\n\
+                <expression_mode>sum</expression_mode>\n\
+                <ignore_strand>true</ignore_strand>\n\
+                <overlap_subfeatures>false</overlap_subfeatures>\n\
+                <skip_empty_templates>true</skip_empty_templates>\n\
+                <side_stream>\n\
+                    <spstream module=\"FeatureEmitter\">\n\
+                        <fixed_grid>true</fixed_grid>\n\
+                        <both_strands>false</both_strands>\n\
+                        <width>10000</width>\n\
+                        <overlap>0</overlap>\n\
+                    </spstream>\n\
+                </side_stream>\n\
+            </spstream>\n\
+            <spstream module=\"EdgeLengthFilter\">\n\
+                <min_length>10001</min_length>\n\
+            </spstream>\n\
+        </stream_processing>\n</zenbu_script>";
+    reconfigureStreamParams(glyphTrack);
+  }
+			
+  reconfigureStreamParams(glyphTrack);
 }
 
 
@@ -10191,20 +10915,24 @@ function gLyphsTrackToggleSubpanel(trackID, mode) {
   if((mode=="none") || (mode == glyphTrack.subpanelMode)) {
     //same so toggle off;
     if(glyphTrack.signalCSI) { glyphTrack.signalCSI.newconfig = new Object(); } //clear
-    if(glyphTrack.signal_user_color) { zenbuColorSpaceSetUserColor(glyphTrack.signal_user_color); }
+    if(glyphTrack.signal_user_color) { 
+      zenbuColorSpaceSetUserColor(glyphTrack.signal_user_color); 
+      if(glyphTrack.signalCSI) { glyphTrack.signalCSI.single_color = glyphTrack.signal_user_color; }
+    }
     glyphTrack.subpanelMode = "none";
     glyphTrack.newconfig = undefined;
     glyphTrack.download = undefined;
     return;
   }
-  glyphTrack.subpanelMode = mode;
   
+  if(mode == "refresh") { mode = glyphTrack.subpanelMode; }
   if(mode == "reconfig") {
     zenbuReconfigureTrackPanel(glyphTrack);
   }
   if(mode == "download") {
     gLyphsDownloadTrackPanel(glyphTrack);
   }
+  glyphTrack.subpanelMode = mode;
 }
 
 
@@ -10221,11 +10949,10 @@ function zenbuReconfigureTrackPanel(glyphTrack) {
 
   var trackRect = glyphTrack.trackDiv.getBoundingClientRect();  
 
-  //glyphTrack.newconfig = new Object;
-  //if(glyphTrack.script) {
-  //  //always clone the script into newconfig
-  //  glyphTrack.newconfig.script = Object.clone(glyphTrack.script);
-  //} 
+  if(glyphTrack.signal_user_color) { 
+    zenbuColorSpaceSetUserColor(glyphTrack.signal_user_color); 
+    if(glyphTrack.signalCSI) { glyphTrack.signalCSI.single_color = glyphTrack.signal_user_color; }
+  }
   
   var divFrame = document.createElement('div');
   divFrame.id = trackID+"_reconfigure_divframe";
@@ -10325,10 +11052,12 @@ function zenbuReconfigureTrackPanel(glyphTrack) {
   var span0 = tdiv.appendChild(document.createElement('span'));
   span0.setAttribute('style', "margin: 0px 1px 3px 3px; font-size:12px; font-family:arial,helvetica,sans-serif; vertical-align:top; ");
   span0.innerHTML = "title:"; 
+  var title = glyphTrack.title;
+  if(glyphTrack.newconfig && glyphTrack.newconfig.title !== undefined) {  title = glyphTrack.newconfig.title; }
   var titleInput = tdiv.appendChild(document.createElement('input'));
   titleInput.setAttribute('style', "width:90%; margin: 1px 1px 1px 1px; font-size:10px; font-family:arial,helvetica,sans-serif;");
   titleInput.setAttribute('type', "text");
-  titleInput.setAttribute('value', glyphTrack.title);
+  titleInput.setAttribute('value', title);
   titleInput.setAttribute("onkeyup", "reconfigTrackParam(\""+ trackID+"\", 'title', this.value);");
   titleInput.setAttribute("onchange", "reconfigTrackParam(\""+ trackID+"\", 'title', this.value);");
 
@@ -10336,18 +11065,39 @@ function zenbuReconfigureTrackPanel(glyphTrack) {
   tdiv.setAttribute('style', "margin-left:3px; font-size:12px; font-family:arial,helvetica,sans-serif;");
   tdiv.innerHTML = "description:";
 
+  var description = glyphTrack.description;
+  if(glyphTrack.newconfig && glyphTrack.newconfig.description !== undefined) {  description = glyphTrack.newconfig.description; }
   var descInput = infoDiv.appendChild(document.createElement('textarea'));
   descInput.setAttribute('style', "min-width:480px; max-width:480px; min-height:30px; margin: 3px 5px 3px 5px; font-size:10px; font-family:arial,helvetica,sans-serif;");
   descInput.setAttribute('rows', 3);
   descInput.setAttribute("onkeyup", "reconfigTrackParam(\""+ trackID+"\", 'description', this.value);");
   descInput.setAttribute("onchange", "reconfigTrackParam(\""+ trackID+"\", 'description', this.value);");
-  if(glyphTrack.description) { 
-    descInput.setAttribute("value", glyphTrack.description); 
-    descInput.innerHTML = glyphTrack.description; 
+  if(description) { 
+    descInput.setAttribute("value", description); 
+    descInput.innerHTML = description; 
   }
+  
+  if(!glyphTrack.source_ids) {    
+    var tdiv = infoDiv.appendChild(document.createElement('div'));
+    tdiv.setAttribute("style", "margin:5px 0px 5px 10px; font-size:12px; font-family:arial,helvetica,sans-serif; float:right;");
+    var span1 = tdiv.appendChild(document.createElement('span'));
+    span1.innerHTML = "curated preset:"
+    var modeSelect = tdiv.appendChild(document.createElement('select'));
+    modeSelect.className = "dropdown";
+    modeSelect.setAttribute("onchange", "reconfigTrackParam(\""+ trackID+"\", 'curated_preset', this.value);");
+    modeSelect.setAttribute("style", "margin-left:3px; ");
 
+    var modes = ["please select", "genes", "transcripts", "CAGE", "RNASeq", "ChIPSeq", "Hi-C / ChIA-PET"];
+    for(var i=0; i<modes.length; i++) {
+      var tmode = modes[i];
+      var option = modeSelect.appendChild(document.createElement('option'));
+      option.setAttribute("value", tmode);
+      option.innerHTML = tmode;
+      if(glyphTrack.newconfig && (glyphTrack.newconfig.curated_preset == tmode)) { option.setAttribute("selected", "selected"); }
+    }
+  }
+  
   infoDiv.appendChild(document.createElement('hr'));
-
 
   //----------  Data sources
   //
@@ -10392,9 +11142,17 @@ function zenbuReconfigureTrackPanel(glyphTrack) {
     
   if(!glyphTrack.DSI) {
     glyphTrack.DSI = zenbuDatasourceInterface();
+    glyphTrack.DSI.master_mode = "search";
+    glyphTrack.DSI.newconfig = new Object;
+    glyphTrack.DSI.trackID = glyphTrack.trackID;
+    glyphTrack.DSI.source_ids = glyphTrack.source_ids;
+    glyphTrack.DSI.collaboration_filter = "all"; //might change to a save state
   }
-  glyphTrack.DSI.newconfig = new Object;
-  glyphTrack.DSI.trackID = glyphTrack.trackID;
+  glyphTrack.DSI.edit_datasource_query = false;  //start up not in edit mode
+  if(!glyphTrack.DSI.source_ids) { 
+    glyphTrack.DSI.edit_datasource_query = true; 
+    glyphTrack.reconfig_div.style.left = (trackRect.right + window.scrollX - 765) +"px; ";
+  }
   glyphTrack.DSI.allowChangeDatasourceMode = false;
   glyphTrack.DSI.enableResultFilter = false;
   glyphTrack.DSI.allowMultipleSelect = true;
@@ -10403,14 +11161,9 @@ function zenbuReconfigureTrackPanel(glyphTrack) {
   glyphTrack.DSI.style.marginRight = "5px";  
   glyphTrack.DSI.main_div = glyphTrack.trackDiv;
   glyphTrack.DSI.config_subpanel = glyphTrack.reconfig_div;
-  glyphTrack.DSI.source_ids = glyphTrack.source_ids;
-  glyphTrack.DSI.collaboration_filter = "all"; //might change to a save state
   glyphTrack.DSI.species_filter = glyphTrack.glyphsGB.asm;
-  glyphTrack.DSI.edit_datasource_query = false;  //start up not in edit mode
-  if(!glyphTrack.DSI.source_ids) { 
-    glyphTrack.DSI.edit_datasource_query = true; 
-    glyphTrack.reconfig_div.style.left = (trackRect.right + window.scrollX - 765) +"px; ";
-  }
+  glyphTrack.DSI.assembly = glyphTrack.glyphsGB.asm;
+  glyphTrack.DSI.enableUploadSearchToggle = true;
   tdiv.appendChild(glyphTrack.DSI);
   glyphTrack.DSI.updateCallOutFunction = gLyphsTrackDSIUpdate;  
   zenbuDatasourceInterfaceUpdate(glyphTrack.DSI.id);
@@ -10483,41 +11236,33 @@ function zenbuReconfigureTrackPanel(glyphTrack) {
   //
   //---------- Visualization
   //
-  divFrame.appendChild(document.createElement('hr'));
+  var visualizeDiv = divFrame.appendChild(document.createElement('div'));
+  visualizeDiv.id = trackID + "_visualizeDiv";
+  
+  visualizeDiv.appendChild(document.createElement('hr'));
   //wiki help
-  helpdiv = divFrame.appendChild(document.createElement('div'));
+  helpdiv = visualizeDiv.appendChild(document.createElement('div'));
   helpdiv.setAttribute("style", "float:right; margin-right:3px; padding:0px 3px 0px 3px; font-size:10px; color:#505050; background-color:#D0D0D0;");
   helpdiv.setAttribute("onclick", "zenbuRedirect('https://zenbu-wiki.gsc.riken.jp/zenbu/wiki/index.php/Track_visualization_styles');");
   helpdiv.setAttribute("onmouseover", "eedbMessageTooltip('need help with visualization options?<br>check out the wiki pages',180);");
   helpdiv.setAttribute("onmouseout", "eedbClearSearchTooltip();");
   helpdiv.innerHTML = "?";
 
-  var visualizeDiv = divFrame.appendChild(document.createElement('div'));
-  tspan = visualizeDiv.appendChild(document.createElement('span'));
+  var tdiv = visualizeDiv.appendChild(document.createElement('div'));
+  tspan = tdiv.appendChild(document.createElement('span'));
   tspan.setAttribute("style", "font-size:12px; font-family:arial,helvetica,sans-serif; font-weight:bold;");
   tspan.innerHTML ="Visualization: ";
 
-  /*
-  var div1 = divFrame.appendChild(document.createElement('div'));
-  var span0 = div1.appendChild(document.createElement('span'));
-  span0.setAttribute('style', "margin: 0px 1px 3px 3px; font-size:12px; font-family:arial,helvetica,sans-serif;");
-  span0.innerHTML = "title:"; 
-  var titleInput = div1.appendChild(document.createElement('input'));
-  titleInput.setAttribute('style', "width:90%; margin: 1px 1px 1px 1px; font-size:10px; font-family:arial,helvetica,sans-serif;");
-  titleInput.setAttribute('type', "text");
-  titleInput.setAttribute('value', glyphTrack.title);
-  titleInput.setAttribute("onkeyup", "reconfigTrackParam(\""+ trackID+"\", 'title', this.value);");
-  titleInput.setAttribute("onchange", "reconfigTrackParam(\""+ trackID+"\", 'title', this.value);");
-  */
-
-  //----------
   var glyphSelect = createGlyphstyleSelect(glyphTrack);
-  divFrame.appendChild(glyphSelect);
-
+  visualizeDiv.appendChild(glyphSelect);
+  
   //
   //----------  buttons
   //
   divFrame.appendChild(document.createElement('hr'));
+  var source_ids = "";
+  if(glyphTrack.source_ids) { source_ids = glyphTrack.source_ids; }
+  if(glyphTrack.newconfig && glyphTrack.newconfig.source_ids) { source_ids = glyphTrack.newconfig.source_ids; }
 
   var button2 = document.createElement('input');
   button2.id = trackID + "_acceptConfigButton";
@@ -10526,7 +11271,7 @@ function zenbuReconfigureTrackPanel(glyphTrack) {
   button2.className = "medbutton";
   button2.style.float = "right";
   button2.setAttribute("onclick", "reconfigTrackParam(\""+ trackID+"\", 'accept-reconfig');");
-  if(!glyphTrack.newconfig) { button2.setAttribute("disabled", "disabled"); }
+  if(!glyphTrack.newconfig || !source_ids) { button2.setAttribute("disabled", "disabled"); }
   divFrame.appendChild(button2);
 
   var button1 = document.createElement('input');
@@ -10540,8 +11285,7 @@ function zenbuReconfigureTrackPanel(glyphTrack) {
   if(!glyphTrack.newconfig) { button1.setAttribute("disabled", "disabled"); }
   divFrame.appendChild(button1);
   
-  //--
-  
+  //--  
   var button5 = document.createElement('input');
   button5.type = "button";
   button5.value = "reload";
@@ -10600,8 +11344,29 @@ function gLyphsTrackDSIUpdate(uniqID, mode) {
   console.log("gLyphsTrackDSIUpdate "+uniqID+" "+glyphTrack.trackID+" mode:"+mode);
 
   if(mode=="select_source") {
+    if(glyphTrack.newconfig === undefined) { glyphTrack.newconfig = new Object; }
+    if(!glyphTrack.title && !glyphTrack.newconfig.title) {
+      var new_title = "";
+      var sources_hash = zenbuDSI.newconfig.sources_hash;
+      for(var srcid in sources_hash) {
+        var source = sources_hash[srcid];
+        if(!source) { continue; }
+        if(source.selected) {
+          if(new_title == "") { new_title = source.name; }
+        }
+      }
+      if(new_title) { glyphTrack.newconfig.title = new_title; }
+      //reconfigTrackParam(glyphTrack.trackID, 'title', new_title);
+      zenbuReconfigureTrackPanel(glyphTrack);
+    }
     reconfigTrackParam(glyphTrack.trackID, 'source_ids', zenbuDSI.newconfig.source_ids);
     createDatatypeSelect(glyphTrack.trackID); //refresh
+  } else if(mode=="upload_filename") {
+    var trackName = zenbuDSI.upload.file_path;
+    if(zenbuDSI.upload.display_name) { trackName = zenbuDSI.upload.display_name; }
+    console.log("upload_filename: [" + zenbuDSI.upload.file_path+"] ["+zenbuDSI.upload.display_name+"]");
+    reconfigTrackParam(glyphTrack.trackID, 'title', trackName);
+    zenbuReconfigureTrackPanel(glyphTrack);
   } else {
     reconfigTrackParam(glyphTrack.trackID, 'refresh');
   }
@@ -10638,19 +11403,20 @@ function createGlyphstyleSelect(glyphTrack) {
   var zeroexpCheck = document.getElementById(trackID + "_glyphselect_hidezeroexps_check");
   var expressOptDiv  = document.getElementById(trackID + "_extendedExpressOptions");
   var expressOpts2  = document.getElementById(trackID + "_expressOptions2");
+  var configOpts3   = document.getElementById(trackID + "_configOptions3");
   var dtypeSelect    = document.getElementById(trackID + "_glyphselect_datatype");
   var strandColorDiv = document.getElementById(trackID + "_glyphselect_strand_colors");  
   //var strandlessOpt = document.getElementById(trackID + "_strandlessOption");
   var fillOpt       = document.getElementById(trackID + "_fillOption");
   var featSortModeSpan = document.getElementById(trackID + "_featSortModeSpan");
-
+  
   if(!div1) {
     div1 = document.createElement('div');
     div1.id = trackID + "_glyphselectDiv";
     div1.setAttribute("style", "margin:2px 0px 2px 0px;");
 
     var span2 = div1.appendChild(document.createElement('span'));
-    span2.innerHTML = "visualization style: ";
+    span2.innerHTML = "visualization style:";
 
     glyphSelect = div1.appendChild(document.createElement('select'));
     glyphSelect.id = trackID + "_glyphselect";
@@ -10673,6 +11439,7 @@ function createGlyphstyleSelect(glyphTrack) {
     var levelInput = expressOptDiv.appendChild(document.createElement('input'));
     levelInput.id = trackID + "_trackHeightInput";
     levelInput.className = "sliminput";
+    levelInput.style.marginLeft = "0px";
     levelInput.setAttribute('size', "5");
     levelInput.setAttribute('type', "text");
     levelInput.setAttribute('value', glyphTrack.track_height);
@@ -10755,6 +11522,11 @@ function createGlyphstyleSelect(glyphTrack) {
     span1.innerHTML = "log scale";
 
     //--- end expressOptDiv
+
+    //variable block which is cleared and rebuilt as needed below
+    configOpts3 = div1.appendChild(document.createElement('div'));
+    configOpts3.id = trackID + "_configOptions3";
+    configOpts3.setAttribute('style', "margin-left: 7px; display:block");
 
     /*
     colorCheck = div1.appendChild(document.createElement('input'));
@@ -10852,28 +11624,37 @@ function createGlyphstyleSelect(glyphTrack) {
     tspan2 = strandColorDiv.appendChild(document.createElement('span'));
     tspan2.setAttribute('style', "margin: 1px 4px 1px 0px; font-size:10px; font-family:arial,helvetica,sans-serif; ");
     tspan2.innerHTML = "sense color:";
-    var colorInput = strandColorDiv.appendChild(document.createElement('input'));
-    colorInput.setAttribute('value', glyphTrack.posStrandColor);
-    colorInput.setAttribute('size', "7");
-    colorInput.setAttribute("onchange", "reconfigTrackParam(\""+ trackID+"\", 'posStrandColor', this.value);");
-    colorInput.color = new jscolor.color(colorInput);
-    strandColorDiv.appendChild(colorInput);
+    var strandColorInput = strandColorDiv.appendChild(document.createElement('input'));
+    strandColorInput.id = trackID + "_glyphselect_strandColorInput";
+    var val = glyphTrack.posStrandColor;
+    if(glyphTrack.newconfig && glyphTrack.newconfig.posStrandColor) { val = glyphTrack.newconfig.posStrandColor; }
+    strandColorInput.setAttribute('value', val);
+    strandColorInput.setAttribute('size', "7");
+    strandColorInput.setAttribute("onchange", "reconfigTrackParam(\""+ trackID+"\", 'posStrandColor', this.value);");
+    strandColorInput.color = new jscolor.color(strandColorInput);
+    strandColorDiv.appendChild(strandColorInput);
     
     tspan2 = strandColorDiv.appendChild(document.createElement('span'));
     tspan2.setAttribute('style', "margin: 1px 4px 1px 3px; font-size:10px; font-family:arial,helvetica,sans-serif; ");
     tspan2.innerHTML = "anti-sense color:";
-    var colorInput = strandColorDiv.appendChild(document.createElement('input'));
-    colorInput.setAttribute('value', glyphTrack.revStrandColor);
-    colorInput.setAttribute('size', "7");
-    colorInput.setAttribute("onchange", "reconfigTrackParam(\""+ trackID+"\", 'revStrandColor', this.value);");
-    colorInput.color = new jscolor.color(colorInput);
-    strandColorDiv.appendChild(colorInput);
+    var revStrandColorInput = strandColorDiv.appendChild(document.createElement('input'));
+    revStrandColorInput.id = trackID + "_glyphselect_revStrandColorInput";
+    var val = glyphTrack.revStrandColor;
+    if(glyphTrack.newconfig && glyphTrack.newconfig.revStrandColor) { val = glyphTrack.newconfig.revStrandColor; }
+    revStrandColorInput.setAttribute('value', val);
+    revStrandColorInput.setAttribute('size', "7");
+    revStrandColorInput.setAttribute("onchange", "reconfigTrackParam(\""+ trackID+"\", 'revStrandColor', this.value);");
+    revStrandColorInput.color = new jscolor.color(revStrandColorInput);
+    strandColorDiv.appendChild(revStrandColorInput);
     
     tspan2 = strandColorDiv.appendChild(document.createElement('span'));
     tspan2.setAttribute('style', "margin: 1px 4px 1px 30px; font-size:10px; font-family:arial,helvetica,sans-serif; ");
     tspan2.innerHTML = "background color:";
     var backColorInput = strandColorDiv.appendChild(document.createElement('input'));
-    backColorInput.setAttribute('value', glyphTrack.backColor);
+    backColorInput.id = trackID + "_glyphselect_backColorInput";
+    var val = glyphTrack.backColor;
+    if(glyphTrack.newconfig && glyphTrack.newconfig.backColor) { val = glyphTrack.newconfig.backColor; }
+    backColorInput.setAttribute('value', val);
     backColorInput.setAttribute('size', "7");
     backColorInput.setAttribute("onchange", "reconfigTrackParam(\""+ trackID+"\", 'backColor', this.value);");
     backColorInput.color = new jscolor.color(backColorInput);
@@ -10881,9 +11662,11 @@ function createGlyphstyleSelect(glyphTrack) {
 
   }
   glyphSelect.innerHTML = "";
+  configOpts3.innerHTML = "";
 
   var styles = new Array;
-  styles.push("signal-histogram", "split-signal", "xyplot", "arc", "1D-heatmap", "experiment-heatmap");
+  styles.push("signal-histogram", "split-signal", "xyplot", "1D-heatmap", "experiment-heatmap");
+  styles.push("arc", "interaction-map");
   styles.push("thick-arrow", "medium-arrow", "thin-arrow", "arrow", "centroid");
   styles.push("transcript", "transcript2", "thick-transcript", "thin-transcript");
   styles.push("box", "thick-box", "thin-box");
@@ -10908,7 +11691,7 @@ function createGlyphstyleSelect(glyphTrack) {
   if(colorMode == "mdata")  { colorRadio3.checked = "checked"; }
   if(featureSortMode == "position") { featSortRadio1.checked = "checked"; }
   if(featureSortMode == "signal")   { featSortRadio2.checked = "checked"; }
-
+  
   //if(zeroexpCheck) {
   //  if(hidezeroexps) { zeroexpCheck.checked = true; }
   //  else { zeroexpCheck.checked = false; }
@@ -10957,12 +11740,89 @@ function createGlyphstyleSelect(glyphTrack) {
     expressOpts2.style.display  = "none";
     colorModeDiv.style.display  = "block";
     featSortModeSpan.style.display = "none";
+  } else if(glyphStyle == "interaction-map") {
+    expressOptDiv.style.display = "block";
+    //strandlessOpt.style.display  = "inline";
+    fillOpt.style.display  = "none";
+    expressOpts2.style.display  = "none";
+    colorModeDiv.style.display  = "block";
+    featSortModeSpan.style.display = "none";
   } else {
     expressOptDiv.style.display = "none";
     colorModeDiv.style.display  = "block";
     featSortModeSpan.style.display = "inline";
   }
 
+  //configOpts3 rebuild section
+  if(glyphStyle == "interaction-map") {
+    //configOpts3.style.display = 'inline';
+    tspan2 = configOpts3.appendChild(document.createElement('span'));
+    tspan2.innerHTML = "interaction style:";
+
+    var interaction_style = glyphTrack.interaction_style;
+    if(glyphTrack.newconfig && glyphTrack.newconfig.interaction_style) { 
+      interaction_style = glyphTrack.newconfig.interaction_style; }
+
+    var optSelect = configOpts3.appendChild(document.createElement('select'));
+    optSelect.setAttribute('name', "interaction_style");
+    optSelect.className = "dropdown";
+    optSelect.style.margin = "1px 4px 1px 4px";
+    optSelect.setAttribute("onchange", "reconfigTrackParam(\""+ trackID+"\", 'interaction_style', this.value);");
+    var styleTypes = ["diamond", "elipse", "box"];
+    for(var i=0; i<styleTypes.length; i++) {
+      var dtype = styleTypes[i];
+      var option = optSelect.appendChild(document.createElement('option'));
+      option.setAttribute("value", dtype);
+      if(dtype == interaction_style) { option.setAttribute("selected", "selected"); }
+      option.innerHTML = dtype;
+    }
+    
+    var interaction_grid = glyphTrack.interaction_grid;
+    if(glyphTrack.newconfig && glyphTrack.newconfig.interaction_grid !== undefined) { 
+      interaction_grid = glyphTrack.newconfig.interaction_grid; }
+    var tcheck = configOpts3.appendChild(document.createElement('input'));
+    tcheck.setAttribute('style', "margin: 0px 1px 0px 10px;");
+    tcheck.setAttribute('type', "checkbox");
+    if(interaction_grid) { tcheck.setAttribute('checked', "checked"); }
+    tcheck.setAttribute("onclick", "reconfigTrackParam(\""+ trackID+"\", 'interaction_grid', this.checked);");
+    tspan = configOpts3.appendChild(document.createElement('span'));
+    tspan.innerHTML = "45degs";
+
+    var interaction_flip = glyphTrack.interaction_flip;
+    if(glyphTrack.newconfig && glyphTrack.newconfig.interaction_flip !== undefined) { 
+      interaction_flip = glyphTrack.newconfig.interaction_flip; }
+    var tcheck = configOpts3.appendChild(document.createElement('input'));
+    tcheck.setAttribute('style', "margin: 0px 1px 0px 10px;");
+    tcheck.setAttribute('type', "checkbox");
+    if(interaction_flip) { tcheck.setAttribute('checked', "checked"); }
+    tcheck.setAttribute("onclick", "reconfigTrackParam(\""+ trackID+"\", 'interaction_flip', this.checked);");
+    tspan = configOpts3.appendChild(document.createElement('span'));
+    tspan.innerHTML = "flip";
+
+    var max_interaction = glyphTrack.max_interaction;
+    if(glyphTrack.newconfig && glyphTrack.newconfig.max_interaction !== undefined) { 
+      max_interaction = glyphTrack.newconfig.max_interaction; }
+    if(!max_interaction) { max_interaction=0; }
+    tspan = configOpts3.appendChild(document.createElement('span'));
+    tspan.style.marginLeft = "7px";
+    tspan.innerHTML = "max interaction:";
+    var tinput = configOpts3.appendChild(document.createElement('input'));
+    tinput.className = "sliminput";
+    tinput.style.margin = "0px 7px 0px 1px";
+    tinput.setAttribute('size', "5");
+    tinput.setAttribute('type', "text");
+    tinput.setAttribute('value', max_interaction);
+    tinput.setAttribute("onkeyup", "reconfigTrackParam(\""+ trackID+"\", 'max_interaction', this.value);");
+  }
+  var hoverInfoCheck = configOpts3.appendChild(document.createElement('input'));
+  hoverInfoCheck.style = "margin: 1px 2px 1px 0px;";
+  hoverInfoCheck.type = "checkbox";
+  if(glyphTrack.show_hoverinfo) { hoverInfoCheck.setAttribute('checked', "checked"); }
+  hoverInfoCheck.setAttribute("onclick", "reconfigTrackParam(\""+ trackID+"\", 'show_hoverinfo', this.checked);");
+  var span1 = configOpts3.appendChild(document.createElement('span'));
+  span1.innerHTML = "hoverinfo";
+
+  
   // display datatype
   dtypeSelect.style.display = 'none';
   if(glyphTrack.datatypes) {
@@ -12537,6 +13397,7 @@ function selectTrackRegion(mode, trackID, featureID) {
     glyphTrack.delay_experiment_draw = false;
     glyphTrack.experiment_ranksum_enrichment = null; //clear this so it recalcs
     currentSelectTrackID = null;
+    //glyphTrack.selected_edge = null;
     console.log("enddrag xstart:"+glyphTrack.selection.xstart+"  xend:"+glyphTrack.selection.xend+"  featureID:"+featureID);
     if(glyphTrack.selection.xend == glyphTrack.selection.xstart) {
       //single point click so no selection
@@ -12546,24 +13407,28 @@ function selectTrackRegion(mode, trackID, featureID) {
         var fidx = Math.floor(featureID);
         if(fidx == featureID) {
           var obj = glyphTrack.feature_array[fidx];
-          if(glyphTrack.selected_feature && !glyphTrack.selected_feature.id && !obj.id) {
-            gLyphsTrackSelectFeature(glyphTrack); //clear feature selection
-          } else {
-            console.log("set glyphTrack.selected_feature "+obj.name+" id["+obj.id+"] fidx["+obj.fidx+"]");
-            gLyphsTrackSelectFeature(glyphTrack, obj);
+          if(obj) {
+            if(glyphTrack.selected_feature && !glyphTrack.selected_feature.id && !obj.id) {
+              gLyphsTrackSelectFeature(glyphTrack); //clear feature selection
+            } else {
+              console.log("set glyphTrack.selected_feature "+obj.name+" id["+obj.id+"] fidx["+obj.fidx+"]");
+              gLyphsTrackSelectFeature(glyphTrack, obj);
+            }
+            gLyphsRenderTrack(glyphTrack);
+            gLyphsDrawTrack(trackID);
           }
-          gLyphsRenderTrack(glyphTrack);
-          gLyphsDrawTrack(trackID);
         } else {
           console.log("feature select by ID not fidx");
           var feature = eedbGetObject(featureID);
-          gLyphsTrackSelectFeature(glyphTrack, feature);
-          gLyphsRenderTrack(glyphTrack);
-          gLyphsDrawTrack(trackID);
+          if(feature) {
+            gLyphsTrackSelectFeature(glyphTrack, feature);
+            gLyphsRenderTrack(glyphTrack);
+            gLyphsDrawTrack(trackID);
+          }
         }
       } else {
         //single point click not on feature will recenter
-        if(glyphTrack.last_select_point == chrpos) {      
+        if(glyphTrack.last_select_point == chrpos && (featureID!=-1)) {      
           gLyphsRecenterView(glyphTrack.glyphsGB, chrpos);
           glyphTrack.last_select_point = -1;    
         } else {

@@ -12,6 +12,11 @@
 
   <link href="../css/edgeExpress.css" rel="stylesheet" type="text/css"></link>
 
+  <!-- dhtmlhistory toolkit -->
+  <textarea id="historyStorageField" style="position: absolute; top: -1000px; left: -1000px;"></textarea>
+  <script language="Javascript" type="text/javascript" src="../jscript/dhtmlHistory.js"></script>
+  <!--                      -->
+
   <script language="Javascript" type="text/javascript" src="../jscript/Colour.js"></script>
   <script language="Javascript" type="text/javascript" src="../jscript/rgbcolor.js"></script>
   <script language="Javascript" type="text/javascript" src="../jscript/prototype-1.6.0.3.js"></script>
@@ -19,21 +24,11 @@
   <script language="Javascript" type="text/javascript" src="../jscript/eedb_variables.js"></script>
 
   <script language="Javascript" type="text/javascript" src="../jscript/eedb_common.js"></script>
-  <script language="Javascript" type="text/javascript" src="../jscript/eedb_search_beta.js"></script>
-
-  <!-- new split version --> 
-  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_colorspace.js"></script>
-  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_datasource_interface.js"></script>
-  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_configuration_interface.js"></script>
-  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_feature_info.js"></script>
-
-  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_glyphsTrack.js"></script>
-  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_glyphsExpPanel.js"></script>
-  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_glyphsGB.js"></script>
-  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_glyphs_page.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_search.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_gLyphs.js"></script>
 
   <script>
-    function glyphsSwitchStable() {
+    function glyphsSwitchBeta() {
       console.log("window.location.href: "+window.location.href);
       console.log("window.location.pathname: "+window.location.pathname);
       var url = window.location.href;
@@ -52,13 +47,13 @@
         url_base = url_base.substring(0,p1);
         console.log("url_base "+ url_base);
       }
-      var new_url = url_base +"index_stable.html"+url_params;
+      var new_url = url_base +"index_3.0.html"+url_params;
       console.log("new_url "+ new_url);
       if(window.top) { window.top.location= new_url; }
       else { window.location= new_url; }
     }
+    zenbuVersion="2.11";
   </script>
-
 
 </head>
 
@@ -72,7 +67,7 @@
 <tr>
 <td rowspan="2" width="50px" nowrap valign="top">
 <img height="60px" src="../images/zenbu_logo_small.png"></img>
-<br><span style="font-style:italic; font-size:14px; font-weight:bold; color:orange; margin-right:5px; ">3.0</span><input style="font-size:10px;" type="button" class="slimbutton" value="revert v2.11" onClick="glyphsSwitchStable()"></input>
+<br><span style="font-style:italic; font-size:12px; font-weight:bold; color:orange; margin-right:5px; ">2.11</span><input style="font-size:12px;" type="button" class="slimbutton" value="v3.0" onClick="glyphsSwitchBeta()"></input>
 </td>
 <td valign="bottom"><div id="top_menu" style="clear:both; white-space:nowrap; margin:0px; padding:0px;">
   <a href="../">ZENBU</a>
@@ -110,12 +105,33 @@
 <div id='mainContents'>
 <!--              -->
 
+<!-- EEDB search system -->
+<div>
+<form onsubmit="return false;">
+<span onclick="eedbClearSearchResults('glyphsSearchBox1')"></span>
+<input id="glyphsSearchBox1_inputID" type="text" class="sliminput" autocomplete="off" onkeyup="glyphsMainSearchInput('glyphsSearchBox1', this.value, event)" width="700px" ></input>
+<input type="button" value="search" class="slimbutton" onclick="glyphsMainSearchInput('glyphsSearchBox1', '', event)" />
+<input type="button" value="clear" class="slimbutton" onclick="eedbClearSearchResults('glyphsSearchBox1')" />
+</form>
+<div id="glyphsSearchBox1" class="EEDBsearchSet">
+<div id="glyphsSearchBox1_messageID"></div>
+</div>
+</div>
+<!--              -->
+
 <div id="message"></div>
 <div id="global_panel_layer"></div>
-<div id="feature_info"></div>
-<div id="source_info"></div>
 
-<div id="genome_region_div" style="display:block;"></div>
+<table><tr>
+<td><div id="feature_info"></div></td>
+<td><div id="source_info"></div></td>
+</tr></table>
+
+<div id="genome_region_div" style="display:block;">
+  <div id="gLyphTrackSet"></div>
+</div>
+
+<div id="experiment_express_frame" style="visibility:hidden;" ></div>
 
 <!--              -->
 <img src="../images/blank.gif"></img>
@@ -130,7 +146,7 @@
   <tr class="small">
     <td nowrap="nowrap"><div align="left"><a href="http://www.ims.riken.jp/english/">RIKEN Center for Integrative Medical Sciences (IMS)</a></div></td>
     <td><div align="center">ZENBU <span id="zenbuVersionSpan"></span></div></td>
-    <td><div align="right">Copyright 2009-2021 RIKEN, Japan. All rights reserved.</div></td>
+    <td><div align="right">Copyright 2009-2020 RIKEN, Japan. All rights reserved.</div></td>
   </tr>
 </table>
 <!--                                     -->
