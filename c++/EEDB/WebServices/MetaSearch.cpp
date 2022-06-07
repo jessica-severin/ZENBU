@@ -1,4 +1,4 @@
-/* $Id: MetaSearch.cpp,v 1.86 2017/01/17 05:39:28 severin Exp $ */
+/* $Id: MetaSearch.cpp,v 1.100 2020/10/02 10:41:22 severin Exp $ */
 
 /***
 
@@ -55,7 +55,10 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <iostream>
 #include <string>
 #include <stdarg.h>
+#include <sys/stat.h>
 #include <sys/types.h>
+#include <fcntl.h>
+#include <sys/time.h>
 #include <sys/mman.h>
 //#include <yaml.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost
@@ -76,6 +79,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <EEDB/SPStreams/FederatedSourceStream.h>
 #include <EEDB/SPStreams/MultiMergeStream.h>
 #include <EEDB/WebServices/MetaSearch.h>
+#include <EEDB/Tools/OSCFileParser.h>
 
 #include "fcgi_stdio.h"  //must be include after everything since it replaces printf 
 
@@ -196,7 +200,29 @@ void  EEDB::WebServices::MetaSearch::postprocess_parameters() {
       p1 = strtok(NULL, ", \t");
     }
     free(buf);
-  }  
+  }
+  
+  //setup _feature_id_hash for edge system
+  if(_parameters.find("feature_ids")!=_parameters.end()) {
+    char* buf = (char*)malloc(_parameters["feature_ids"].size()+2);
+    strcpy(buf, _parameters["feature_ids"].c_str());
+    char *p1 = strtok(buf, ", \t");
+    while(p1!=NULL) {
+      if(strlen(p1) > 0) {
+        string dbid = p1;
+        string uuid, objClass;
+        long int objID;
+        MQDB::unparse_dbid(dbid, uuid, objID, objClass);
+        if(objClass == "Feature") {
+          _feature_id_hash[dbid] = NULL;
+          _filter_peer_ids[uuid] = true;
+        }
+      }
+      p1 = strtok(NULL, ", \t");
+    }
+    free(buf);
+  }
+  
 }
 
 
@@ -207,19 +233,19 @@ bool  EEDB::WebServices::MetaSearch::execute_request() {
   if(_parameters["mode"] == string("search")) {
     search_feature();
   } else if(_parameters["mode"] == string("feature_sources")) {
-    //show_feature_sources();
-    show_all_sources();
+    show_datasources();
   } else if(_parameters["mode"] == string("features")) {
-    show_feature_list();
+    show_features();
   } else if(_parameters["mode"] == string("edge_sources")) {
-    show_edge_sources();
+    show_datasources();
   } else if(_parameters["mode"] == string("experiments")) {
-    //show_experiments();
-    show_all_sources();
+    show_datasources();
   } else if(_parameters["mode"] == string("expression_datatypes")) {
     show_expression_datatypes();
   } else if(_parameters["mode"] == string("sources")) {
-    show_all_sources();
+    show_datasources();
+  } else if(_parameters["mode"] == string("edges")) {
+    show_edges();
   } else if(_parameters["mode"] == string("mdstats")) {
     show_source_metadata_stats();
   } else if(_parameters["mode"] == string("mdranksum")) {
@@ -262,7 +288,9 @@ void EEDB::WebServices::MetaSearch::process_xml_parameters() {
   if((node = root_node->first_node("peer_names")) != NULL) { _parameters["peers"] = node->value(); }
   if((node = root_node->first_node("source_names")) != NULL) { _parameters["source_names"] = node->value(); }
   if((node = root_node->first_node("id")) != NULL) { _parameters["id"] = node->value(); }
-  
+  if((node = root_node->first_node("feature_ids")) != NULL) { _parameters["feature_ids"] = node->value(); }
+  if((node = root_node->first_node("edge_search_depth")) != NULL) { _parameters["edge_search_depth"] = node->value(); }
+
   if((node = root_node->first_node("collab")) != NULL)        { _parameters["collab"] = node->value(); }
   if((node = root_node->first_node("collaboration")) != NULL) { _parameters["collaboration"] = node->value(); }
   
@@ -286,7 +314,15 @@ void EEDB::WebServices::MetaSearch::process_xml_parameters() {
 
   if((node = root_node->first_node("authenticate")) != NULL) { hmac_authorize_user(); }
 
-  if((node = root_node->first_node("ranksum_input")) != NULL) { 
+  if((node = root_node->first_node("include_matching")) != NULL) {
+    _parameters["filter_include_matching"] = "true";
+    rapidxml::xml_node<> *mdnode = node->first_node("mdkeys");
+    if(mdnode) { _parameters["filter_include_matching_by_mdkeys"] = mdnode->value(); }
+    rapidxml::xml_node<> *pfnode = node->first_node("post_filter");
+    if(pfnode) { _parameters["filter_include_matching_post_filter"] = pfnode->value(); }
+  }
+
+  if((node = root_node->first_node("ranksum_input")) != NULL) {
     rapidxml::xml_node<> *fnode = node->first_node("feature");
     while(fnode) {
       EEDB::Feature *feature = EEDB::Feature::realloc();
@@ -401,6 +437,46 @@ GFF2, GFF3, and BED are common formats.  XML is supported in all access modes, b
   double   total_time  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
   printf("<p>processtime_sec : %1.6f\n", total_time);
   printf("<hr/>\n");
+
+  //parameters
+  if(!_parameters.empty()) {
+    printf("<h3>Parameters</h3>\n");
+    map<string,string>::iterator it1;
+    for(it1=_parameters.begin(); it1!=_parameters.end(); it1++) {
+      if((*it1).first.empty() || (*it1).second.empty()) { continue; }
+      printf("%s = [%s]<br>\n", (*it1).first.c_str(), (*it1).second.c_str());
+    }
+  }
+  if(!_collaboration_filter.empty()) {
+    printf("collaboration_filter : %s<br>\n", _collaboration_filter.c_str());
+  }
+  if(!_filter_peer_ids.empty()) {
+    printf("<p><b>filter_peer_ids</b>\n");
+    map<string, bool>::iterator  it2;
+    for(it2 = _filter_peer_ids.begin(); it2 != _filter_peer_ids.end(); it2++) {
+      printf("<br>%s\n", (*it2).first.c_str());
+    }
+  }
+  if(!_filter_source_ids.empty()) {
+    printf("<p><b>filter_source_ids</b>\n");
+    map<string, bool>::iterator  it2;
+    for(it2 = _filter_source_ids.begin(); it2 != _filter_source_ids.end(); it2++) {
+      printf("<br>%s\n", (*it2).first.c_str());
+    }
+  }
+  if(!_filter_source_names.empty()) {
+    printf("<p><b>filter_source_names</b>\n");
+    for(unsigned int i=0; i<_filter_source_names.size(); i++) {
+      printf("<br>%s\n", _filter_source_names[i].c_str());
+    }
+  }
+  if(!_filter_ids_array.empty()) {
+    printf("<p><b>filter_ids_array</b>\n");
+    vector<string>::iterator  it;
+    for(it = _filter_ids_array.begin(); it != _filter_ids_array.end(); it++) {
+      printf("<br>%s\n", (*it).c_str());
+    }
+  }
 
   printf("</body>\n");
   printf("</html>\n");
@@ -640,7 +716,7 @@ sub process_url_request {
   } elsif($self->{'mode'} eq 'expression_datatypes') {
     show_expression_datatypes($self);
   } elsif($self->{'mode'} eq 'sources') {
-    show_all_sources($self);
+    show_datasources($self);
   } elsif($self->{'mode'} eq 'chrom') {
     show_chromosomes($self);
   } elsif(defined($self->{'id'})) {
@@ -815,8 +891,8 @@ void EEDB::WebServices::MetaSearch::search_feature() {
 
 
 
-void EEDB::WebServices::MetaSearch::show_all_sources() {  
-  printf("Content-type: text/xml\r\n");
+void EEDB::WebServices::MetaSearch::show_datasources() {  
+  printf("Content-type: text/xml; charset=UTF-8\r\n");
   printf("Access-Control-Allow-Origin: *\r\n");
   printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
   printf("\r\n");
@@ -840,38 +916,115 @@ void EEDB::WebServices::MetaSearch::show_all_sources() {
   string source_mode ="";
   if(_parameters["mode"] == string("feature_sources")) { source_mode = "FeatureSource"; }
   if(_parameters["mode"] == string("experiments")) { source_mode = "Experiment"; }
+  if(_parameters["mode"] == string("edge_sources")) { source_mode = "EdgeSource"; }
 
   if(_parameters.find("filter") != _parameters.end()) {
     printf("<filter>%s</filter>\n",html_escape(_parameters["filter"]).c_str());
-    stream->stream_data_sources(source_mode, _parameters["filter"]);
+    //stream->stream_data_sources(source_mode, _parameters["filter"]);
+    stream->stream_data_sources(source_mode);  //new code will perform filtering here
   } else {
     stream->stream_data_sources(source_mode);
   }
   
-  vector<EEDB::DataSource*>   t_sources;
-  map<string, EEDB::Peer*>    t_peers;
-  
-  while(EEDB::DataSource *obj = (EEDB::DataSource*)stream->next_in_stream()) {
-    if(!obj->peer_uuid()) { continue; }  //something wrong or a 'proxy' source
-    t_sources.push_back(obj);
+  map<string, bool>             matching_mdtags;
+  map<string, EEDB::Metadata*>  matching_mdata;
+  if(_parameters.find("filter_include_matching_by_mdkeys")!=_parameters.end()) {
+    char* buf = (char*)malloc(_parameters["filter_include_matching_by_mdkeys"].size()+2);
+    strcpy(buf, _parameters["filter_include_matching_by_mdkeys"].c_str());
+    char *p1 = strtok(buf, ", \t");
+    while(p1!=NULL) {
+      if(strlen(p1) > 0) {
+        string mdkey = p1;
+        matching_mdtags[mdkey] = true;
+      }
+      p1 = strtok(NULL, ", \t");
+    }
+    free(buf);
+  }
 
-    if(obj->classname() == EEDB::FeatureSource::class_name) { 
-      _global_source_counts["FeatureSource"][obj->db_id()] = true;
-    }      
-    if(obj->classname() == EEDB::Experiment::class_name) {
-      _global_source_counts["Experiment"][obj->db_id()] = true;
+  vector<EEDB::DataSource*>   t_sources;
+  vector<EEDB::DataSource*>   all_sources;
+  map<string, EEDB::Peer*>    t_peers;
+
+  while(EEDB::DataSource *source = (EEDB::DataSource*)stream->next_in_stream()) {
+    if(!source->peer_uuid()) { continue; }  //something wrong or a 'proxy' source
+    
+    if((source->classname() != EEDB::FeatureSource::class_name) &&
+       (source->classname() != EEDB::Experiment::class_name) &&
+       (source->classname() != EEDB::EdgeSource::class_name) &&
+       (source->classname() != EEDB::Assembly::class_name)) { continue; }
+
+    all_sources.push_back(source);
+
+    if(source->classname() == EEDB::FeatureSource::class_name) {
+      _global_source_counts["FeatureSource"][source->db_id()] = true;
     }
-    if(obj->classname() == EEDB::EdgeSource::class_name) {
-      _global_source_counts["EdgeSource"][obj->db_id()] = true;
+    if(source->classname() == EEDB::Experiment::class_name) {
+      _global_source_counts["Experiment"][source->db_id()] = true;
     }
-    if(obj->classname() == EEDB::Assembly::class_name) {
-      _global_source_counts["Assembly"][obj->db_id()] = true;
+    if(source->classname() == EEDB::EdgeSource::class_name) {
+      _global_source_counts["EdgeSource"][source->db_id()] = true;
+    }
+    if(source->classname() == EEDB::Assembly::class_name) {
+      _global_source_counts["Assembly"][source->db_id()] = true;
+    }
+
+    //perform primary filter
+    if(_parameters.find("filter") != _parameters.end()) {
+      EEDB::MetadataSet  *mdset = source->metadataset();
+      if((mdset != NULL) and (!(mdset->check_by_filter_logic(_parameters["filter"])))) { continue; }
     }
     
-    if(obj->peer_uuid()) {
-      string uuid = obj->peer_uuid();
+    //collect the set of Mdata for secondary match-search
+    if(!matching_mdtags.empty()) {
+      vector<EEDB::Metadata*> t_md = source->metadataset()->all_metadata_with_tags(matching_mdtags);
+      for(unsigned k=0; k<t_md.size(); k++) {
+        string keyval = t_md[k]->type() + t_md[k]->data();
+        matching_mdata[keyval] = t_md[k];
+      }
+    }
+      
+    t_sources.push_back(source);
+    
+    if(source->peer_uuid()) {
+      string uuid = source->peer_uuid();
       EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
       if(peer) { t_peers[uuid] = peer; }    
+    }
+  }
+  
+  if(!matching_mdata.empty()) {
+    //found matching metadata to perform secondary search of matching/control datasources
+    fprintf(stderr, "perform secondary match/control group search with metadata\n");
+    map<string, EEDB::Metadata*>::iterator it_md;
+    for(it_md = matching_mdata.begin(); it_md !=matching_mdata.end(); it_md++) {
+      fprintf(stderr, "  match with %s\n", (*it_md).second->simple_xml().c_str());
+    }
+    for(unsigned k=0; k<all_sources.size(); k++) {
+      EEDB::DataSource *source = all_sources[k];
+      EEDB::MetadataSet  *mdset = source->metadataset();
+      if(!mdset) { continue; }
+
+      if(_parameters.find("filter_include_matching_post_filter")!=_parameters.end()) {
+        if(!mdset->check_by_filter_logic(_parameters["filter_include_matching_post_filter"])) { continue; }
+      }
+      
+      bool include_match = false;
+      for(it_md = matching_mdata.begin(); it_md !=matching_mdata.end(); it_md++) {
+        if(mdset->has_metadata_like((*it_md).second->type(), (*it_md).second->data())) {
+          include_match = true;
+          break;
+        }
+      }
+      if(include_match) {
+        t_sources.push_back(source);
+        
+        if(source->peer_uuid()) {
+          string uuid = source->peer_uuid();
+          EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
+          if(peer) { t_peers[uuid] = peer; }
+        }
+      }
     }
   }
 
@@ -896,13 +1049,13 @@ void EEDB::WebServices::MetaSearch::show_all_sources() {
       //printf("<object id=\"%s\"/>\n", source->db_id().c_str());    
       if(source->classname() == EEDB::Experiment::class_name) {
         EEDB::Experiment *exp = (EEDB::Experiment*)source;
-        printf("<experiment id=\"%s\" platform=\"%s\" name=\"%s\"/>\n", exp->db_id().c_str(), exp->platform().c_str(), html_escape(source->display_name()).c_str());
+        printf("<experiment id=\"%s\" platform=\"%s\" name=\"%s\" create_timestamp=\"%ld\"/>\n", exp->db_id().c_str(), exp->platform().c_str(), html_escape(source->display_name()).c_str(), source->create_date());
       }
       if(source->classname() == EEDB::FeatureSource::class_name) {
-        printf("<featuresource id=\"%s\" name=\"%s\"/>\n", source->db_id().c_str(), html_escape(source->display_name()).c_str());
+        printf("<featuresource id=\"%s\" name=\"%s\" create_timestamp=\"%ld\"/>\n", source->db_id().c_str(), html_escape(source->display_name()).c_str(), source->create_date());
       }
       if(source->classname() == EEDB::EdgeSource::class_name) {
-        printf("<edgesource id=\"%s\" name=\"%s\"/>\n", source->db_id().c_str(), html_escape(source->display_name()).c_str());
+        printf("<edgesource id=\"%s\" name=\"%s\" create_timestamp=\"%ld\"/>\n", source->db_id().c_str(), html_escape(source->display_name()).c_str(), source->create_date());
       }
       if(source->classname() == EEDB::Assembly::class_name) {
         ((EEDB::Assembly*)source)->simple_xml(xml_buffer);
@@ -941,7 +1094,6 @@ void EEDB::WebServices::MetaSearch::show_all_sources() {
 }
 
 
-
 bool _feature_source_sort_func (EEDB::FeatureSource *a, EEDB::FeatureSource *b) { 
   // < function
   if(a == NULL) { return false; }  //real < NULL 
@@ -956,214 +1108,6 @@ bool _feature_source_sort_func (EEDB::FeatureSource *a, EEDB::FeatureSource *b) 
   if(a->name() < b->name()) { return true; }
   return false;
 }
-
-
-void EEDB::WebServices::MetaSearch::show_feature_sources() {  
-  printf("Content-type: text/xml\r\n");
-  printf("Access-Control-Allow-Origin: *\r\n");
-  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
-  printf("\r\n");
-  printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
-  printf("<feature_sources>\n");
-
-  if(_user_profile) { printf("%s", _user_profile->simple_xml().c_str()); } 
-
-  EEDB::SPStream  *stream = source_stream();
-
-  if(_parameters.find("filter") != _parameters.end()) {
-    printf("<filter>%s</filter>\n",html_escape(_parameters["filter"]).c_str());
-    stream->stream_data_sources("FeatureSource", _parameters["filter"]);
-  } else {
-    stream->stream_data_sources("FeatureSource");
-  }
-
-  list<EEDB::FeatureSource*>  t_fsrcs;
-  map<string, EEDB::Peer*>    t_peers;
-  long long int               total_feature_count = 0;
-  char                        buffer[2048];
-
-  
-  while(MQDB::DBObject *obj = stream->next_in_stream()) {
-    if(obj->classname() != EEDB::FeatureSource::class_name) { continue; }
-    if(!obj->peer_uuid()) { continue; }  //something wrong or a 'proxy' source
-    
-    //if($self->{'filter_sourcenames'}) { unless($self->{'filter_sourcenames'}->{$source->name}) { next; } }
-    //if($self->{'source_category_hash'}) { unless($self->{'source_category_hash'}->{$source->category}) { next; } }
-
-    t_fsrcs.push_back((EEDB::FeatureSource*)obj);
-
-    total_feature_count += ((EEDB::FeatureSource*)obj)->feature_count();
-    
-    string uuid = obj->peer_uuid();
-    EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
-    if(peer) { t_peers[uuid] = peer; }
-    
-    _global_source_counts["FeatureSource"][obj->db_id()] = true;
-  }
-  long int total_count = _global_source_counts["FeatureSource"].size();
-
-  snprintf(buffer, 2040, "<result_count method=\"feature_sources\" total=\"%ld\" filtered=\"%ld\" peers=\"%ld\" total_features=\"%lld\"/>\n", 
-      total_count, t_fsrcs.size(), t_peers.size(), total_feature_count);
-  printf("%s", buffer);
-
-  t_fsrcs.sort(_feature_source_sort_func);
-
-  list<EEDB::FeatureSource*>::iterator  it;
-  for(it = t_fsrcs.begin(); it != t_fsrcs.end(); it++) {
-    EEDB::FeatureSource *source = *it;
-    
-    string xml_buffer;
-    if(_parameters["format_mode"]  == "fullxml") {
-      source->xml(xml_buffer);
-    } else if(_parameters["format_mode"]  == "minxml") {
-      printf("<featuresource id=\"%s\" />\n", (*it)->db_id().c_str());
-    } else if(_parameters["format_mode"]  == "descxml") {
-      //source->desc_xml(xml_buffer);
-      source->mdata_xml(xml_buffer, _desc_xml_tags);
-    } else {
-      source->simple_xml(xml_buffer);
-    }
-    if(!xml_buffer.empty()) { printf("%s\n", xml_buffer.c_str()); }    
-  }
-
-  map<string, EEDB::Peer*>::iterator  it2;
-  for(it2 = t_peers.begin(); it2 != t_peers.end(); it2++) {
-    printf("%s\n", (*it2).second->xml().c_str());
-  }  
-  
-  struct timeval       endtime, time_diff;
-  gettimeofday(&endtime, NULL);
-  timersub(&endtime, &_starttime, &time_diff);
-  double   runtime  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
-  printf("<process_summary processtime_sec=\"%1.6f\" />\n", runtime);
-  printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
-  printf("</feature_sources>\n");    
-}
-
-
-
-void EEDB::WebServices::MetaSearch::show_edge_sources() {  
-  printf("Content-type: text/xml\r\n");
-  printf("Access-Control-Allow-Origin: *\r\n");
-  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
-  printf("\r\n");
-  printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
-  printf("<edge_sources>\n");
-  
-  /*
-  my $stream = input_stream($self);
-
-  my %options;
-  $options{'class'} = "EdgeSource";
-  if(defined($self->{'srcfilter'})) { $options{'filter'} = $self->{'srcfilter'}; }
-
-  my $src_hash = {};
-  $stream->stream_data_sources(%options);
-  while (my $source = $stream->next_in_stream) {
-    next unless($source->is_active eq 'y');
-    next unless($source->class eq "EdgeSource");
-    next if(defined($self->{'filter_sourcenames'}) and !($self->{'filter_sourcenames'}->{$source->name}));
-    $src_hash->{$source->db_id} = $source;
-  }
-  my @sources = values (%{$src_hash});
-
-  print header(-type => "text/xml", -charset=> "UTF8");
-  printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
-
-  printf("<edge_sources>\n");
-  foreach my $source (@sources) {
-    print($source->xml);
-  }
-  printf("</edge_sources>\n");
-  $stream->disconnect;
-  */
-  struct timeval       endtime, time_diff;
-  gettimeofday(&endtime, NULL);
-  timersub(&endtime, &_starttime, &time_diff);
-  double   runtime  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
-  printf("<process_summary processtime_sec=\"%1.6f\" />\n", runtime);
-  printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
-  printf("</edge_sources>\n");  
-}
-
-
-void EEDB::WebServices::MetaSearch::show_experiments() {  
-  printf("Content-type: text/xml\r\n");
-  printf("Access-Control-Allow-Origin: *\r\n");
-  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
-  printf("\r\n");
-  printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
-  printf("<experiments>\n");
-
-  if(_user_profile) { printf("%s", _user_profile->simple_xml().c_str()); } 
-
-  EEDB::SPStream  *stream = source_stream();
-
-  if(_parameters.find("filter") != _parameters.end()) {
-    printf("<filter>%s</filter>\n",html_escape(_parameters["filter"]).c_str());
-    stream->stream_data_sources("Experiment", _parameters["filter"]);
-  } else {
-    stream->stream_data_sources("Experiment");
-  }
-
-  bool format_minxml = false;
-  if(_parameters["format_mode"] == "minxml") { format_minxml=true; }
-
-  list<EEDB::Experiment*>     t_experiments;
-  map<string, EEDB::Peer*>    t_peers;
-  
-  while(MQDB::DBObject *obj = stream->next_in_stream()) {
-    if(obj->classname() != EEDB:: Experiment::class_name) { continue; }
-    if(!obj->peer_uuid()) { continue; }  //something wrong or a 'proxy' source
-    
-    t_experiments.push_back((EEDB::Experiment*)obj);
-
-    if(!format_minxml) {
-      string uuid = obj->peer_uuid();
-      EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
-      if(peer) { t_peers[uuid] = peer; }
-    }
-    
-    _global_source_counts["Experiment"][obj->db_id()] = true;
-  }
-  long int total_count = _global_source_counts["Experiment"].size();
-  printf("<result_count method=\"experiments\" total=\"%ld\" filtered=\"%ld\" peers=\"%ld\"/>\n", 
-      total_count, t_experiments.size(), t_peers.size());
-
-  t_experiments.sort(EEDB::Experiment::sort_func);
-
-  list<EEDB::Experiment*>::iterator  it;
-  for(it = t_experiments.begin(); it != t_experiments.end(); it++) {
-    EEDB::Experiment *source = *it;
-
-    string xml_buffer;
-    if(_parameters["format_mode"]  == "fullxml") {
-      source->xml(xml_buffer);
-    } else if(_parameters["format_mode"]  == "minxml") {
-      printf("<experiment id=\"%s\" platform=\"%s\" />\n", (*it)->db_id().c_str(), (*it)->platform().c_str());
-    } else if(_parameters["format_mode"]  == "descxml") {
-      //source->desc_xml(xml_buffer);
-      source->mdata_xml(xml_buffer, _desc_xml_tags);
-    } else {
-      source->simple_xml(xml_buffer);
-    }
-    if(!xml_buffer.empty()) { printf("%s\n", xml_buffer.c_str()); }
-  }
-
-  map<string, EEDB::Peer*>::iterator  it2;
-  for(it2 = t_peers.begin(); it2 != t_peers.end(); it2++) {
-    printf("%s\n", (*it2).second->xml().c_str());
-  }  
-  
-  struct timeval       endtime, time_diff;
-  gettimeofday(&endtime, NULL);
-  timersub(&endtime, &_starttime, &time_diff);
-  double   runtime  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
-  printf("<process_summary processtime_sec=\"%1.6f\" />\n", runtime);
-  printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
-  printf("</experiments>\n");  
-}
-
 
 
 void EEDB::WebServices::MetaSearch::show_expression_datatypes() {  
@@ -1209,103 +1153,6 @@ void EEDB::WebServices::MetaSearch::show_expression_datatypes() {
   printf("<process_summary processtime_sec=\"%1.6f\" />\n", runtime);
   printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
   printf("</expression_datatypes>\n");  
-}
-
-
-
-void EEDB::WebServices::MetaSearch::show_feature_list() {  
-  printf("Content-type: text/xml\r\n");
-  printf("Access-Control-Allow-Origin: *\r\n");
-  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
-  printf("\r\n");
-  printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
-  printf("<features>\n");
-
-  /*  
-  print header(-type => "text/xml", -charset=> "UTF8");
-  printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
-  printf("<features>\n");
-
-  my $stream = input_stream($self);
-
-  my @peers;
-  $stream->stream_peers();
-  while(my $peer = $stream->next_in_stream) {
-    next unless($peer);
-    next unless($peer->is_valid);  #maybe redundant since this mays be done inside the SourceStream
-    push @peers, $peer;
-  }
-
-  printf("<peers count=\"%d\" >\n", scalar(@peers));
-  foreach my $peer (@peers) { print($peer->xml); }
-  print("</peers>\n");
-
-
-  my $outmode = "simple_feature";
-  #if($self->{'submode'} eq "subfeature") { $outmode = "subfeature"; }
-  #if($self->{'mode'} eq 'express') { $outmode = "expression"; }
-  #if($self->{'submode'} eq "expression") { $outmode = "expression"; }
-  #if($self->{'submode'} eq "full_feature") { $outmode = "feature"; }
-  $stream->sourcestream_output($outmode);
-
-  my $total = 0;
-  my $result_count = 0;
-
-  if(defined($self->{'ids_array'})) {
-    my $stream2 = new EEDB::SPStream::StreamBuffer;
-    foreach my $id (@{$self->{'ids_array'}}) {
-      my $obj = $stream->fetch_object_by_id($id);
-      $stream2->add_objects($obj);
-    }
-    $stream = $stream2;
-  } else {
-    printf("<sources>\n");
-    $stream->stream_data_sources('class'=>'FeatureSource');
-    while (my $source = $stream->next_in_stream) {
-      next unless($source->is_active eq 'y');
-      next unless($source->class eq "FeatureSource");
-      print($source->simple_xml);
-      $total += $source->feature_count;
-    }
-    printf("</sources>\n");
-  }
-
-  my $name = $self->{'name'};
-  if(defined($name) and (length($name)>2)) {
-    if($name =~ /\s/) {
-      $stream->stream_features_by_metadata_search('filter' => $name);
-    } else {
-      $stream->stream_features_by_metadata_search('keyword_list' => $name);
-    }
-  } else {
-    $stream->stream_all();
-  }
-
-  while(my $feature = $stream->next_in_stream) { 
-    next unless($feature->feature_source);
-    next if($feature->feature_source->is_active ne 'y');
-    next if($feature->feature_source->is_visible ne 'y');
-    $result_count++;
-    if($self->{'format'} eq 'fullxml') { print($feature->xml); }
-    else { print($feature->simple_xml); }
-  }
-  printf("<result_count total=\"%s\" expected=\"%s\" />\n", $result_count, $total);
-
-  my $total_time = (time()*1000) - $self->{'starttime'};
-  printf("<process_summary processtime_sec=\"%1.3f\" />\n", $total_time/1000.0);
-  printf("<fastcgi invocation=\"%d\" pid=\"%s\" />\n", $connection_count, $$);
-  printf("</features>\n");
-  */
-  
-  struct timeval       endtime, time_diff;
-  gettimeofday(&endtime, NULL);
-  timersub(&endtime, &_starttime, &time_diff);
-  double   runtime  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
-
-  //printf("<process_summary processtime_sec=\"%1.3f\" loaded_sources=\"%s\"/>\n", $total_time/1000.0, scalar(keys(%$global_source_cache)));
-  printf("<process_summary processtime_sec=\"%1.6f\" />\n", runtime);
-  printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
-  printf("</features>\n");
 }
 
 
@@ -1781,3 +1628,415 @@ void  EEDB::WebServices::MetaSearch::show_ranksum_stats() {
   printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
   printf("</ranksum_stats>\n");    
 }
+
+
+//=================================================================
+//
+// Edges
+//
+
+void EEDB::WebServices::MetaSearch::show_edges() {
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
+  printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
+  printf("<edges>\n");
+  
+  if(_user_profile) { printf("%s", _user_profile->simple_xml().c_str()); }
+  
+  long int edge_count = 0;
+  long input_feature_count = 0;
+  struct timeval endtime, time_diff;
+
+  map<string, EEDB::Feature*>::iterator   it1;
+  
+  //gettimeofday(&endtime, NULL); timersub(&endtime, &_starttime, &time_diff);
+  //printf("===== before source_stream() %1.6f msec \n", (double)time_diff.tv_sec*1000.0 + ((double)time_diff.tv_usec)/1000.0);
+
+  EEDB::SPStreams::FederatedSourceStream  *stream = source_stream();
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &_starttime, &time_diff);
+  double   total_time  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+  //fprintf(stderr, "\nMetaSearch::show_edges get stream (%ld starting features) %1.6f sec\n", _feature_id_hash.size(), total_time);
+  
+  bool src_ids_changed = false;
+  if(!_filter_source_ids.empty()) {
+    //fprintf(stderr, "starting with %ld sources\n", _filter_source_ids.size());
+    //map<string, bool>::iterator  it2;
+    //for(it2 = _filter_source_ids.begin(); it2 != _filter_source_ids.end(); it2++) { fprintf(stderr, "%s\n", (*it2).first.c_str()); }
+    stream->stream_data_sources("EdgeSource");
+    while(EEDB::EdgeSource *source = (EEDB::EdgeSource*)stream->next_in_stream()) {
+      if(source->classname() != EEDB::EdgeSource::class_name) { continue; }
+      //if(!source->peer_uuid()) { continue; }  //something wrong or a 'proxy' source
+      //fprintf(stderr, "%s\n", source->simple_xml().c_str());
+      if(_filter_source_ids.find(source->feature_source1_dbid())==_filter_source_ids.end()) {
+        _filter_source_ids[source->feature_source1_dbid()] = true;
+        src_ids_changed = true;
+        fprintf(stderr, "add edge fsrcs %s\n", source->feature_source1_dbid().c_str());
+      }
+      if(_filter_source_ids.find(source->feature_source2_dbid())==_filter_source_ids.end()) {
+        _filter_source_ids[source->feature_source2_dbid()] = true;;
+        src_ids_changed = true;
+        fprintf(stderr, "add edge fsrcs %s\n", source->feature_source2_dbid().c_str());
+      }
+    }
+  }
+
+  if(src_ids_changed) { //rebuild stream in case there are new peers added
+    stream = source_stream(); 
+    gettimeofday(&endtime, NULL); timersub(&endtime, &_starttime, &time_diff);
+    //printf("===== after rebuild source_stream() %1.6f msec \n", (double)time_diff.tv_sec*1000.0 + ((double)time_diff.tv_usec)/1000.0);
+  }
+
+  if(!_filter_source_ids.empty()) {
+    stream->stream_data_sources();
+    while(EEDB::EdgeSource *source = (EEDB::EdgeSource*)stream->next_in_stream()) {
+      if(!source->peer_uuid()) { continue; }  //something wrong or a 'proxy' source
+      printf("%s", source->xml().c_str());
+    }
+  }
+  //fprintf(stderr, "now %ld sources in filter\n", _filter_source_ids.size());
+
+  input_feature_count = _feature_id_hash.size();
+  printf("<note>input %ld feature_ids</note>\n", _feature_id_hash.size());
+
+  long deep_loop=1;
+  if(_parameters.find("edge_search_depth")!=_parameters.end()) { 
+    deep_loop = strtol(_parameters["edge_search_depth"].c_str(), NULL, 10);
+    if(deep_loop<1) { deep_loop = 1; }
+  }
+  if(input_feature_count==0) { deep_loop=1; }
+  fprintf(stderr, "starting deep_loop = %ld\n", deep_loop);
+  
+  string xml_buffer;
+  while(deep_loop>0) {
+    //printf("<note>deep loop %ld</note>\n", deep_loop);
+    gettimeofday(&endtime, NULL);
+    timersub(&endtime, &_starttime, &time_diff);
+    double   total_time  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+    fprintf(stderr,"\nshow_edges loop %ld: input %ld feature_ids  %1.3fsecs\n", deep_loop, _feature_id_hash.size(), total_time);
+    
+    //pre-fetch features we know
+    //if(!stream->fetch_features(_feature_id_hash)) {
+    //  fprintf(stderr, "show_edges: failed to pre-fetch features\n");
+    //}
+    
+    //gettimeofday(&endtime, NULL);
+    //timersub(&endtime, &_starttime, &time_diff);
+    //total_time  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+    //fprintf(stderr, "\nMetaSearch::show_edges before stream edges %1.6f sec\n\n", total_time);
+
+    bool features_changed = false;
+    stream->stream_edges(_feature_id_hash, _parameters["filter"]);
+
+    //gettimeofday(&endtime, NULL);
+    //timersub(&endtime, &_starttime, &time_diff);
+    //total_time  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+    //fprintf(stderr, "\nMetaSearch::show_edges after stream_edges() setup %1.6f sec\n\n", total_time);
+
+    while(EEDB::Edge *edge = (EEDB::Edge*)stream->next_in_stream()) {
+      if(!edge) { continue; }
+      
+      if(deep_loop ==1) { 
+        //printf("%s", edge->simple_xml().c_str());
+        if(_parameters["format"] == "xml") {
+          if(_parameters["format_mode"]  == "fullxml") {
+            edge->xml(xml_buffer);
+          } else if(_parameters["format_mode"]  == "descxml") {
+            //edge->mdata_xml(xml_buffer, _desc_xml_tags);
+            edge->simple_xml(xml_buffer);
+          } else {
+            edge->simple_xml(xml_buffer);
+          }
+          //if(!xml_buffer.empty()) { printf("%s\n", xml_buffer.c_str()); xml_buffer.clear(); }
+        }
+        edge_count++;
+      }
+      
+      //if edges include new features, add to the _feature_id_hash
+      if(_feature_id_hash.find(edge->feature1_dbid()) == _feature_id_hash.end()) {
+        //fprintf(stderr, "add edge feature %s\n", edge->feature1_dbid().c_str());
+        _feature_id_hash[edge->feature1_dbid()] = NULL;
+        features_changed = true;
+      }
+      if(_feature_id_hash.find(edge->feature2_dbid()) == _feature_id_hash.end()) {
+        //fprintf(stderr, "add edge feature %s\n", edge->feature2_dbid().c_str());
+        _feature_id_hash[edge->feature2_dbid()] = NULL;
+        features_changed = true;
+      }
+
+      string fsrcid1 = edge->edge_source()->feature_source1_dbid();
+      string fsrcid2 = edge->edge_source()->feature_source2_dbid();
+      if(_filter_source_ids.find(fsrcid1) == _filter_source_ids.end()) {
+        //fprintf(stderr, "add filter_source %s\n", fsrcid1.c_str());
+        _filter_source_ids[fsrcid1] = true;
+      }
+      if(_filter_source_ids.find(fsrcid2) == _filter_source_ids.end()) {
+        //fprintf(stderr, "add filter_source %s\n", fsrcid2.c_str());
+        _filter_source_ids[fsrcid2] = true;
+      }
+
+      edge->release();
+    }
+    if(!xml_buffer.empty()) { printf("%s\n", xml_buffer.c_str()); xml_buffer.clear(); }
+
+    //rebuild stream in case there are new peers added
+    _filter_peer_ids.clear(); //clear the peer_ids and only rely on the source_ids
+    stream = source_stream(); 
+    deep_loop--;
+    if(!features_changed && deep_loop>1) { 
+      deep_loop = 1; 
+      fprintf(stderr, "features didn't change, so loop 1 more time to output edges\n");
+    }
+  }
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &_starttime, &time_diff);
+  total_time  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+  //fprintf(stderr, "\nMetaSearch::show_edges after deep_loop output edges %1.6f sec\n\n", total_time);
+
+  //get remaining features which were found by the edges
+  if(!stream->fetch_features(_feature_id_hash)) {
+    fprintf(stderr, "MetaSearch::show_edges failed to post-fetch features\n");
+  }
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &_starttime, &time_diff);
+  total_time  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+  //fprintf(stderr, "MetaSearch::show_edges after post-fetch remaining %ld features %1.6f sec\n", _feature_id_hash.size(), total_time);
+
+  unsigned feature_fail_count = 0;
+  for(it1=_feature_id_hash.begin(); it1!=_feature_id_hash.end(); it1++) {
+    EEDB::Feature *feature = (*it1).second;
+    if(feature) {
+      //printf("%s", feature->simple_xml().c_str());
+      if(_parameters["format"]  == "xml") {
+        if(_parameters["format_mode"]  == "fullxml") {
+          feature->xml(xml_buffer);
+        } else if(_parameters["format_mode"]  == "descxml") {
+          feature->mdata_xml(xml_buffer, _desc_xml_tags);
+        } else {
+          feature->simple_xml(xml_buffer);
+        }
+        //if(!xml_buffer.empty()) { printf("%s\n", xml_buffer.c_str()); xml_buffer.clear(); }
+      }
+    } else {
+      feature_fail_count++;
+      printf("<note>%s :: feature failed to fetch</note>\n", (*it1).first.c_str());
+    }
+  }
+  if(!xml_buffer.empty()) { printf("%s\n", xml_buffer.c_str()); xml_buffer.clear(); }
+  if(feature_fail_count>0) { fprintf(stderr, "MetaSearch::show_edges failed to fetch %d features\n", feature_fail_count); }
+  
+  printf("<result_count input_features=\"%ld\" connected_features=\"%ld\" edges=\"%ld\" />\n", input_feature_count, _feature_id_hash.size(), edge_count);
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &_starttime, &time_diff);
+  double   runtime  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+  fprintf(stderr, "MetaSearch::show_edges finished total time %1.6f\n", runtime);
+
+  printf("<process_summary processtime_sec=\"%1.6f\" />\n", runtime);
+  printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
+  printf("</edges>\n");
+}
+
+//=================================================================
+
+void EEDB::WebServices::MetaSearch::show_features() {
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
+  printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
+  printf("<features>\n");
+  
+  if(_user_profile) { printf("%s", _user_profile->simple_xml().c_str()); }
+  
+  struct timeval endtime, time_diff;
+  map<string, EEDB::Feature*>::iterator   it1;
+  
+  EEDB::Tools::OSCFileParser::sparse_expression(false);
+
+  EEDB::SPStreams::FederatedSourceStream  *stream = source_stream();
+
+  if(!_filter_source_ids.empty()) {
+    stream->stream_data_sources();
+    while(EEDB::EdgeSource *source = (EEDB::EdgeSource*)stream->next_in_stream()) {
+      if(!source->peer_uuid()) { continue; }  //something wrong or a 'proxy' source
+      printf("%s", source->xml().c_str());
+    }
+  }
+  //fprintf(stderr, "now %ld sources in filter\n", _filter_source_ids.size());
+
+  long input_feature_count = _feature_id_hash.size();
+  long output_feature_count = 0;
+  printf("<note>input %ld feature_ids</note>\n", _feature_id_hash.size());
+
+  string xml_buffer;
+  if(!_feature_id_hash.empty()) {
+    if(!stream->fetch_features(_feature_id_hash)) {
+      fprintf(stderr, "show_features: failed to pre-fetch features\n");
+    }
+    
+    gettimeofday(&endtime, NULL);
+    timersub(&endtime, &_starttime, &time_diff);
+    double total_time  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+    fprintf(stderr, "show_features fetch by feature_id_hash %1.6f\n", total_time);
+
+    unsigned feature_fail_count = 0;
+    for(it1=_feature_id_hash.begin(); it1!=_feature_id_hash.end(); it1++) {
+      EEDB::Feature *feature = (*it1).second;
+      if(feature) {
+        output_feature_count++;
+        //printf("%s", feature->simple_xml().c_str());
+        if(_parameters["format_mode"]  == "fullxml") {
+          feature->xml(xml_buffer);
+        } else if(_parameters["format_mode"]  == "descxml") {
+          feature->mdata_xml(xml_buffer, _desc_xml_tags);
+        } else {
+          feature->simple_xml(xml_buffer);
+        }
+        if(!xml_buffer.empty()) { printf("%s\n", xml_buffer.c_str()); xml_buffer.clear(); }
+      } else {
+        feature_fail_count++;
+        //printf("<note>%s :: not fetched</note>\n", (*it1).first.c_str());
+      }
+    }
+    if(feature_fail_count>0) { fprintf(stderr, "failed to fetch %d features\n", feature_fail_count); }
+  }
+  else if(!_filter_source_ids.empty()) {
+    //stream all features for specified sources
+    stream->stream_all_features();
+    while(EEDB::Feature *feature = (EEDB::Feature*)stream->next_in_stream()) {
+      if(!feature->peer_uuid()) { feature->release(); continue; }  //something wrong or a 'proxy' source
+      if(feature->classname() != EEDB::Feature::class_name) { feature->release(); continue; }
+
+      //perform primary filter
+      if(_parameters.find("filter") != _parameters.end()) {
+        EEDB::MetadataSet  *mdset = feature->metadataset();
+        if((mdset != NULL) and (!(mdset->check_by_filter_logic(_parameters["filter"])))) { continue; }
+      }
+
+      output_feature_count++;
+      //printf("%s", feature->simple_xml().c_str());
+      if(_parameters["format_mode"]  == "fullxml") {
+        feature->xml(xml_buffer);
+      } else if(_parameters["format_mode"]  == "descxml") {
+        feature->mdata_xml(xml_buffer, _desc_xml_tags);
+      } else {
+        feature->simple_xml(xml_buffer);
+      }
+      if(!xml_buffer.empty()) { printf("%s\n", xml_buffer.c_str()); xml_buffer.clear(); }
+      feature->release();
+    }
+    if(!xml_buffer.empty()) { printf("%s\n", xml_buffer.c_str()); xml_buffer.clear(); }
+  }
+  
+  printf("<result_count input_features=\"%ld\" output_features=\"%ld\" />\n", input_feature_count, output_feature_count);
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &_starttime, &time_diff);
+  double   runtime  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+  fprintf(stderr, "show_features finished total time %1.6f\n", runtime);
+
+  printf("<process_summary processtime_sec=\"%1.6f\" />\n", runtime);
+  printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
+  printf("</features>\n");
+  EEDB::Tools::OSCFileParser::sparse_expression(true);
+}
+
+
+/*
+void EEDB::WebServices::MetaSearch::show_features() {  
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
+  printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
+  printf("<features>\n");
+
+  print header(-type => "text/xml", -charset=> "UTF8");
+  printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
+  printf("<features>\n");
+
+  my $stream = input_stream($self);
+
+  my @peers;
+  $stream->stream_peers();
+  while(my $peer = $stream->next_in_stream) {
+    next unless($peer);
+    next unless($peer->is_valid);  #maybe redundant since this mays be done inside the SourceStream
+    push @peers, $peer;
+  }
+
+  printf("<peers count=\"%d\" >\n", scalar(@peers));
+  foreach my $peer (@peers) { print($peer->xml); }
+  print("</peers>\n");
+
+
+  my $outmode = "simple_feature";
+  #if($self->{'submode'} eq "subfeature") { $outmode = "subfeature"; }
+  #if($self->{'mode'} eq 'express') { $outmode = "expression"; }
+  #if($self->{'submode'} eq "expression") { $outmode = "expression"; }
+  #if($self->{'submode'} eq "full_feature") { $outmode = "feature"; }
+  $stream->sourcestream_output($outmode);
+
+  my $total = 0;
+  my $result_count = 0;
+
+  if(defined($self->{'ids_array'})) {
+    my $stream2 = new EEDB::SPStream::StreamBuffer;
+    foreach my $id (@{$self->{'ids_array'}}) {
+      my $obj = $stream->fetch_object_by_id($id);
+      $stream2->add_objects($obj);
+    }
+    $stream = $stream2;
+  } else {
+    printf("<sources>\n");
+    $stream->stream_data_sources('class'=>'FeatureSource');
+    while (my $source = $stream->next_in_stream) {
+      next unless($source->is_active eq 'y');
+      next unless($source->class eq "FeatureSource");
+      print($source->simple_xml);
+      $total += $source->feature_count;
+    }
+    printf("</sources>\n");
+  }
+
+  my $name = $self->{'name'};
+  if(defined($name) and (length($name)>2)) {
+    if($name =~ /\s/) {
+      $stream->stream_features_by_metadata_search('filter' => $name);
+    } else {
+      $stream->stream_features_by_metadata_search('keyword_list' => $name);
+    }
+  } else {
+    $stream->stream_all();
+  }
+
+  while(my $feature = $stream->next_in_stream) { 
+    next unless($feature->feature_source);
+    next if($feature->feature_source->is_active ne 'y');
+    next if($feature->feature_source->is_visible ne 'y');
+    $result_count++;
+    if($self->{'format'} eq 'fullxml') { print($feature->xml); }
+    else { print($feature->simple_xml); }
+  }
+  printf("<result_count total=\"%s\" expected=\"%s\" />\n", $result_count, $total);
+
+  my $total_time = (time()*1000) - $self->{'starttime'};
+  printf("<process_summary processtime_sec=\"%1.3f\" />\n", $total_time/1000.0);
+  printf("<fastcgi invocation=\"%d\" pid=\"%s\" />\n", $connection_count, $$);
+  printf("</features>\n");
+  
+  struct timeval       endtime, time_diff;
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &_starttime, &time_diff);
+  double   runtime  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+
+  //printf("<process_summary processtime_sec=\"%1.3f\" loaded_sources=\"%s\"/>\n", $total_time/1000.0, scalar(keys(%$global_source_cache)));
+  printf("<process_summary processtime_sec=\"%1.6f\" />\n", runtime);
+  printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
+  printf("</features>\n");
+}
+*/

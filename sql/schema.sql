@@ -30,6 +30,13 @@ CREATE TABLE `assembly` (
   PRIMARY KEY  (`assembly_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
+CREATE TABLE `assembly_2_metadata` (
+  `assembly_id` int(11) default NULL,
+  `metadata_id` int(11) default NULL,
+  KEY `assembly_id` (`assembly_id`),
+  KEY `metadata_id` (`metadata_id`)
+) ENGINE=MyISAM;
+
 --
 -- Table structure for table `chrom`
 --
@@ -39,12 +46,12 @@ CREATE TABLE `chrom` (
   `chrom_name` char(64) default NULL,
   `assembly_id` int(11) default NULL,
   `chrom_length` int(11) default NULL,
-  `chrom_type` char(64) default NULL,
-  `ncbi_chrom_name` char(64) default NULL,
-  `ncbi_chrom_acc` char(64) default NULL,
-  `refseq_chrom_acc` char(64) default NULL,
-  `chrom_name_alt1` char(64) default NULL,
-  `description` char(255) default NULL,
+  `chrom_type` char(64) default '',
+  `ncbi_chrom_name` char(64) default '',
+  `ncbi_chrom_acc` char(64) default '',
+  `refseq_chrom_acc` char(64) default '',
+  `chrom_name_alt1` char(64) default '',
+  `description` char(255) default '',
   PRIMARY KEY  (`chrom_id`),
   UNIQUE KEY `uqname` (`chrom_name`,`assembly_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
@@ -89,7 +96,7 @@ CREATE TABLE `experiment` (
   `series_point` float NOT NULL default '0',
   `is_active` char(1) NOT NULL default '',
   `is_visible` char(1) NOT NULL default '',
-  `owner_openid` varchar(255) NOT NULL default '',
+  `owner_identity` varchar(255) NOT NULL default '',
   `last_update` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
   PRIMARY KEY  (`experiment_id`),
   UNIQUE KEY `experiment_unq_name` USING BTREE (`exp_accession`)
@@ -231,7 +238,7 @@ CREATE TABLE `edge` (
   `feature2_id` int(11) default NULL,
   `direction` char(1) default NULL,
   `sub_type` char(16) default NULL,
-  `weight` float default NULL,
+  `weight` double default NULL,
   PRIMARY KEY  (`edge_id`),
   KEY `feature1_id` (`feature1_id`),
   KEY `feature2_id` (`feature2_id`),
@@ -273,9 +280,10 @@ CREATE TABLE `edge_source` (
   `is_active` char(1) NOT NULL default 'y',
   `is_visible` char(1) NOT NULL default 'y',
   `create_date` date default NULL,
-  `f1_ext_peer` varchar(255)  default NULL,
-  `f2_ext_peer` varchar(255)  default NULL,
-  `owner_openid` varchar(255) NOT NULL default '',
+  `featuresource1` varchar(255)  default NULL,
+  `featuresource2` varchar(255)  default NULL,
+  `edge_count` int(11) default NULL,  
+  `owner_identity` varchar(255) NOT NULL default '',
   `last_update` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
 
   PRIMARY KEY  (`edge_source_id`),
@@ -325,7 +333,7 @@ CREATE TABLE `feature_source` (
   `import_source` varchar(255) default NULL,
   `import_date` date default NULL,
   `feature_count` int(11) default NULL,  
-  `owner_openid` varchar(255) NOT NULL default '',
+  `owner_identity` varchar(255) NOT NULL default '',
   `last_update` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
   PRIMARY KEY  (`feature_source_id`),
   UNIQUE KEY `fsrc_unq` (`name`)
@@ -380,7 +388,7 @@ CREATE TABLE `feature_source_2_datatype` (
 CREATE TABLE `metadata` (
   `metadata_id` int(11) NOT NULL auto_increment,
   `data_type` varchar(255) character set utf8 collate utf8_bin default NULL,
-  `data` mediumtext character set utf8 collate utf8_bin,
+  `data` mediumtext character set UTF8 COLLATE UTF8_GENERAL_CI,
   PRIMARY KEY  USING BTREE (`metadata_id`),
   KEY `data_prefix` (`data`(256)),
   KEY `type` (`data_type`)

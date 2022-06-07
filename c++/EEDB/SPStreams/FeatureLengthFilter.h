@@ -1,4 +1,4 @@
-/* $Id: FeatureLengthFilter.h,v 1.3 2013/04/08 07:37:12 severin Exp $ */
+/* $Id: FeatureLengthFilter.h,v 1.4 2021/07/12 05:41:36 severin Exp $ */
 
 /***
 
@@ -76,6 +76,9 @@ class FeatureLengthFilter : public EEDB::SPStream {
    ~FeatureLengthFilter();                // destructor
     void init();                  // initialization method
     
+    void  min_length(long value);
+    void  max_length(long value);
+
   private:
     long int   _min_feature_length;
     long int   _max_feature_length;

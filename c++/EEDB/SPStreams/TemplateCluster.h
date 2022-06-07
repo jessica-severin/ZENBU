@@ -1,4 +1,4 @@
-/* $Id: TemplateCluster.h,v 1.20 2013/11/26 08:45:52 severin Exp $ */
+/* $Id: TemplateCluster.h,v 1.22 2020/04/28 01:28:55 severin Exp $ */
 
 /***
 
@@ -64,6 +64,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <vector>
 #include <deque>
 #include <EEDB/Feature.h>
+#include <EEDB/Edge.h>
 #include <EEDB/SPStreams/MergeStreams.h>
 
 using namespace std;
@@ -92,7 +93,9 @@ class TemplateCluster : public EEDB::SPStreams::MergeStreams {
     void  skip_empty_templates(bool value)              { _skip_empty_templates = value; }
     void  expression_mode(t_collate_express_mode value) { _expression_mode = value; }
     void  overlap_check_subfeatures(bool value);
-
+    void  overlap_distance(long value) { _overlap_distance = value; }
+    void  scan_extend_distance(long value) { _scan_extend_distance = value; }
+    
 
   protected:
     string                       _overlap_mode;
@@ -101,16 +104,22 @@ class TemplateCluster : public EEDB::SPStreams::MergeStreams {
     bool                         _skip_empty_templates;
     bool                         _template_stream_empty;
     bool                         _overlap_check_subfeatures;
+    long int                     _overlap_distance;
+    long int                     _scan_extend_distance;
     map<string,bool>             _subfeat_filter_categories;
     deque<EEDB::Feature*>        _template_buffer;
     deque<EEDB::Feature*>        _completed_templates;
     bool                         _stream_features_mode;
+    bool                         _edges_mode;
+    deque<EEDB::Edge*>           _edge_buffer;
 
-    EEDB::Feature*               _process_object(MQDB::DBObject* obj);
+    EEDB::Feature*               _process_feature(MQDB::DBObject* obj);
+    EEDB::Edge*                  _process_edge(MQDB::DBObject* obj);
     void                         _modify_ends(EEDB::Feature *feature);
     EEDB::Feature*               _extend_template_buffer();
     void                         _calc_template_significance(EEDB::Feature* feature);
     void                         _cluster_add_expression(EEDB::Feature *cluster, EEDB::Expression *express, long dup_count);
+    void                         _edge_merge_weight(EEDB::Edge *edge, EEDB::EdgeWeight *weight);
 
   //used for callback functions, should not be considered open API
   public:

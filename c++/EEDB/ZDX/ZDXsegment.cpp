@@ -1,4 +1,4 @@
-/*  $Id: ZDXsegment.cpp,v 1.87 2016/11/11 09:08:38 severin Exp $ */
+/*  $Id: ZDXsegment.cpp,v 1.89 2019/07/31 06:59:15 severin Exp $ */
 
 /*******
 
@@ -53,6 +53,8 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <iostream>
 #include <string>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <fcntl.h>
 #include <sys/time.h>
 #include <zlib.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost
@@ -85,6 +87,9 @@ void _zdx_zdxsegment_delete_func(MQDB::DBObject *obj) {
 }
 void _zdx_zdxsegment_xml_func(MQDB::DBObject *obj, string &xml_buffer) { 
   ((EEDB::ZDX::ZDXsegment*)obj)->_xml(xml_buffer);
+}
+string _zdx_zdxsegment_display_desc_func(MQDB::DBObject *obj) { 
+  return ((EEDB::ZDX::ZDXsegment*)obj)->_display_desc();
 }
 
 
@@ -119,7 +124,7 @@ void EEDB::ZDX::ZDXsegment::init() {
   _classname                 = EEDB::ZDX::ZDXsegment::class_name;
 
   _funcptr_delete            = _zdx_zdxsegment_delete_func;
-//_funcptr_display_desc      = _zdx_zdxsegment_display_desc_func;
+  _funcptr_display_desc      = _zdx_zdxsegment_display_desc_func;
   _funcptr_xml               = _zdx_zdxsegment_xml_func;
   _funcptr_simple_xml        = _zdx_zdxsegment_xml_func;
   
@@ -300,6 +305,12 @@ vector<EEDB::ZDX::ZDXsegment*>  EEDB::ZDX::ZDXsegment::fetch_claimed_segments(ZD
 
 string EEDB::ZDX::ZDXsegment::_display_desc() {
   string desc = "ZDXsegment";
+  if(_zchrom) {
+    desc += " "+assembly_name()+"::"+ chrom_name() +":";
+    char buffer[2048];
+    snprintf(buffer, 2040, " %ld..%ld", chrom_start(), chrom_end());
+    desc += buffer;
+  }
   return desc;
 }
 
@@ -1476,7 +1487,7 @@ bool EEDB::ZDX::ZDXsegment::reclaim_for_appending() {
   
   if(_zsegment.znode>0) {
     //already had features. need to read old features back in
-    //fprintf(stderr, "load previous features from segment %lld\n", _zsegment.znode);
+    //fprintf(stderr, "load previous features from %s znode:%lld\n", display_desc().c_str(), _zsegment.znode);
     _region_start   = -1;
     _region_end     = -1;
     if(_streambuffer) { _streambuffer->release_objects(); _streambuffer->release(); _streambuffer = NULL; }    
@@ -1494,8 +1505,10 @@ bool EEDB::ZDX::ZDXsegment::reclaim_for_appending() {
         count++;
       } else { 
         fprintf(stderr, "not feature in znode"); 
+        obj->release();
       }
     }
+    //fprintf(stderr, "loaded %ld previous features from %s znode:%lld\n", count, display_desc().c_str(), _zsegment.znode);
     //fprintf(stderr, "loaded %ld previous feature back in from segment %lld\n", count, _zsegment.znode);
     _streambuffer->release_objects();
     _streambuffer->release(); 

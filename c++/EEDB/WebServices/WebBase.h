@@ -1,4 +1,4 @@
-/* $Id: WebBase.h,v 1.63 2016/06/20 06:34:28 severin Exp $ */
+/* $Id: WebBase.h,v 1.65 2017/11/22 08:03:45 severin Exp $ */
 
 /***
 
@@ -109,6 +109,7 @@ class WebBase : public MQDB::DBObject {
     EEDB::SPStreams::FederatedSourceStream*  superuser_federated_source_stream();
 
     void                                     set_federation_seeds(EEDB::SPStream*  spstream);
+    void                                     set_superuser_federation_seeds(EEDB::SPStream*  spstream);
 
     EEDB::Assembly*  find_assembly(string assembly_name);
 
@@ -157,6 +158,8 @@ class WebBase : public MQDB::DBObject {
     long int             _connection_count;
     int                  _peer_search_depth;
     string               _default_genome;
+    bool                 _autobuild_cache_on_region_query;
+    string               _cross_domain_access_origins;
 
     string               _userDB_url;
     MQDB::Database*      _userDB;

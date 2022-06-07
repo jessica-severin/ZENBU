@@ -1,4 +1,4 @@
-/* $Id: Metadata.h,v 1.31 2014/11/10 05:31:08 severin Exp $ */
+/* $Id: Metadata.h,v 1.33 2018/12/05 00:43:41 severin Exp $ */
 
 /***
 
@@ -75,6 +75,7 @@ namespace EEDB {
   namespace JobQueue{  class Job; }
 
 class MetadataSet;
+class Assembly;
 class Feature;
 class Edge;
 class Expression;
@@ -102,13 +103,16 @@ class Metadata : public MQDB::MappedQuery {
     bool operator<(const EEDB::Metadata& b);
     bool operator>(const EEDB::Metadata& b);
 
-    //get atribute
+    //get attribute
     string  type() { return _type; }
     string  data() { return _data; }
     int     data_size() { return _data.size(); }
     
     void    extract_keywords(EEDB::MetadataSet *mdset);
     void    extract_mdkeys(map<string, bool> &mdkey_hash);
+
+    //set attribute
+    void   data(string val) { _data = val; }
                            
     // display
     string  display_contents();
@@ -118,6 +122,7 @@ class Metadata : public MQDB::MappedQuery {
     bool store(MQDB::Database *db);
     bool update();
 
+    bool store_link_to_assembly(EEDB::Assembly *obj);
     bool store_link_to_feature(EEDB::Feature *obj);
     bool store_link_to_edge(EEDB::Edge *obj);
     bool store_link_to_experiment(EEDB::Experiment *obj);
@@ -156,6 +161,7 @@ class Metadata : public MQDB::MappedQuery {
     //
     static Metadata*         fetch_by_id(MQDB::Database *db, long int id);
     static vector<DBObject*> fetch_all(MQDB::Database *db);
+    static vector<DBObject*> fetch_all_by_assembly_id(MQDB::Database *db, long int id);
     static vector<DBObject*> fetch_all_by_feature_id(MQDB::Database *db, long int id);
     static vector<DBObject*> fetch_all_by_edge_id(MQDB::Database *db, long int id);
     static vector<DBObject*> fetch_all_by_experiment_id(MQDB::Database *db, long int id);

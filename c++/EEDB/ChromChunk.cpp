@@ -1,4 +1,4 @@
-/* $Id: ChromChunk.cpp,v 1.45 2015/10/15 03:42:24 severin Exp $ */
+/* $Id: ChromChunk.cpp,v 1.46 2018/08/13 03:41:13 severin Exp $ */
 
 /******
 
@@ -370,15 +370,11 @@ string EEDB::ChromChunk::get_subsequence(long int start, long int end) {
 }
 
 
-
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // DBObject override methods
 //
 //////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////// DBObject instance override methods //////////
 
 
 void  EEDB::ChromChunk::init_from_row_map(map<string, dynadata> &row_map) {
@@ -395,6 +391,112 @@ void  EEDB::ChromChunk::init_from_row_map(map<string, dynadata> &row_map) {
     _chrom_name      = row_map["chrom_name"].i_string;
   }
 }
+
+
+MQDB::DBObject*  EEDB::ChromChunk::create(map<string, dynadata> &row_map, Database* db) {
+  ChromChunk* obj = new EEDB::ChromChunk;
+  obj->database(db);
+  obj->init_from_row_map(row_map);
+  return obj;
+}
+
+
+EEDB::ChromChunk*  EEDB::ChromChunk::fetch_by_id(MQDB::Database *db, long int id) {
+  ChromChunk* obj = (ChromChunk*) MQDB::DBCache::check_cache(db, id, "ChromChunk");
+  if(obj!=NULL) { obj->retain(); return obj; }
+  
+  const char *sql = "SELECT * FROM chrom_chunk join chrom using(chrom_id) join assembly using(assembly_id) WHERE chrom_chunk_id=?";
+  obj = (EEDB::ChromChunk*) MQDB::fetch_single(EEDB::ChromChunk::create, db, sql, "d", id);
+  
+  MQDB::DBCache::add_to_cache(obj);
+  return obj;
+}
+
+
+vector<DBObject*>  EEDB::ChromChunk::fetch_all(MQDB::Database *db) {
+  const char *sql = "SELECT * FROM chrom_chunk join chrom using(chrom_id) join assembly using(assembly_id)";
+  return MQDB::fetch_multiple(EEDB::ChromChunk::create, db, sql, "");
+}
+
+/* TODO...
+ static vector<DBObject*>
+ fetch_all_for_feature(Feature *feature) {
+ vector<DBObject*> result;
+ if(feature == NULL) { return result; }
+ if(feature->database() == NULL) { return result; }
+ Database *db = feature->database();
+ const char *sql = "SELECT * FROM feature_2_chunk JOIN chrom_chunk using(chrom_chunk_id) ".
+ "JOIN chrom using(chrom_id) JOIN assembly using(assembly_id) ".
+ "WHERE feature_id=?";
+ return MQDB::fetch_multiple(EEDB::ChromChunk::create, db, sql, "d", feature->primary_id());
+ }
+ */
+
+vector<DBObject*>  EEDB::ChromChunk::fetch_all_by_assembly_name(Database *db, string assembly_name) {
+  const char *sql = "SELECT * FROM chrom_chunk JOIN chrom USING(chrom_id) JOIN assembly USING(assembly_id) \
+  WHERE (ncbi_version=? or ucsc_name=?) ORDER BY chrom_chunk_id";
+  return MQDB::fetch_multiple(EEDB::ChromChunk::create, db, sql,
+                              "ss", assembly_name.c_str(), assembly_name.c_str());
+}
+
+
+vector<DBObject*>  EEDB::ChromChunk::fetch_all_by_named_region(Database *db, string assembly_name, string chrom_name, long int start, long int end) {
+  char buffer[2048];
+  string sql = "SELECT * FROM chrom_chunk JOIN chrom USING(chrom_id) JOIN assembly USING(assembly_id) \
+  WHERE (ncbi_version=? or ucsc_name=?) AND chrom_name = ?";
+  if(start>0) { snprintf(buffer, 2040, " AND chrom_end >= %ld", start); sql += buffer; }
+  if(end>0)   { snprintf(buffer, 2040, " AND chrom_start <= %ld", end); sql += buffer; }
+  sql += " ORDER BY chrom_start";
+  return MQDB::fetch_multiple(EEDB::ChromChunk::create, db, sql.c_str(), "sss",
+                              assembly_name.c_str(), assembly_name.c_str(), chrom_name.c_str());
+}
+
+
+EEDB::ChromChunk*  EEDB::ChromChunk::fetch_first_for_region_start(Database *db, string assembly_name, string chrom_name, long int start) {
+  char buffer[2048];
+  string sql = "SELECT * FROM chrom_chunk JOIN chrom USING(chrom_id) JOIN assembly USING(assembly_id) \
+  WHERE (ncbi_version=? or ucsc_name=?) AND chrom_name = ?";
+  if(start>0) { snprintf(buffer, 2040, " AND chrom_end >= %ld", start); sql += buffer; }
+  sql += " ORDER BY chrom_start LIMIT 1";
+  return (EEDB::ChromChunk*)MQDB::fetch_single(EEDB::ChromChunk::create, db, sql.c_str(), "sss",
+                                               assembly_name.c_str(), assembly_name.c_str(), chrom_name.c_str());
+}
+
+
+bool EEDB::ChromChunk::store() {
+  if(!_chrom) { return false; }
+  MQDB::Database *db = _chrom->database();
+  if(db==NULL) { return false; }
+  if(check_exists_db()) { return true; }
+  
+  const char* sql = "INSERT ignore INTO chrom_chunk (chrom_id,chrom_start,chrom_end,chunk_len) VALUES(?,?,?,?)";
+  db->do_sql(sql, "dddd", _chrom->primary_id(), _chrom_start, _chrom_end, 1+_chrom_end-_chrom_start);
+  
+  if(!check_exists_db()) { return false; }  //checks the database and sets the id
+  
+  //now store the sequence
+  if(!_sequence.empty()) {
+    sql = "INSERT ignore INTO chrom_chunk_seq (chrom_chunk_id, length, sequence) VALUES(?,?,?)";
+    db->do_sql(sql, "dds", _primary_db_id, _sequence.size(), _sequence.c_str());
+  }
+  return true;
+}
+
+
+bool EEDB::ChromChunk::check_exists_db() {
+  if(!_chrom) { return false; }
+  MQDB::Database *db = _chrom->database();
+  if(db==NULL) { return false; }
+  
+  const char* sql = "SELECT chrom_chunk_id from chrom_chunk WHERE chrom_id=? AND chrom_start=? and chrom_end=?";
+  dynadata value = db->fetch_col_value(sql, "ddd",  _chrom->primary_id(), _chrom_start, _chrom_end);
+  if(value.type != MQDB::INT) { return false; }
+  
+  _primary_db_id = value.i_int;
+  database(db);
+  return true;
+}
+
 
 
 //////////////////////////////////////////////////////////
@@ -438,6 +540,8 @@ sub EEDB::ChromChunk::create_chunks {
 //
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+
 /*
 sub store {
   my $self = shift;
@@ -458,63 +562,16 @@ sub store {
   $self->primary_id($dbID);
   
   //now store the sequence
-  $self->store_seq();
-}
-*/
-
-/*
-sub check_exists_db {
-  my $self = shift;
-  my $db   = shift;
-  
-  return undef unless($db);
-  my $sql = "select chrom_chunk_id from chrom_chunk where chrom_id=? and chrom_start=? and chrom_end=?";
-  my $dbID = $db->fetch_col_value($sql, $self->chrom_id, $self->chrom_start, $self->chrom_end);
-  if($dbID) {
-    $self->primary_id($dbID);
-    $self->database($db);
-    return $self;
-  } else {
-    return undef;
-  }
-}
-*/
-
-/*
-sub store_seq {
-  my $self = shift;
-  
-  return unless(defined($self->{'_sequence'}));
-
-  my $dbh = $self->database->get_connection;  
-  my $sql = "INSERT ignore INTO chrom_chunk_seq (chrom_chunk_id, sequence) VALUES(?,?)";
-  my $sth = $dbh->prepare($sql);
-  $sth->execute($self->primary_id, $self->sequence->seq);
-  $sth->finish;
+ return unless(defined($self->{'_sequence'}));
+ 
+ my $dbh = $self->database->get_connection;
+ my $sql = "INSERT ignore INTO chrom_chunk_seq (chrom_chunk_id, sequence) VALUES(?,?)";
+ my $sth = $dbh->prepare($sql);
+ $sth->execute($self->primary_id, $self->sequence->seq);
+ $sth->finish;
 }
 */
 
 
-/*
-sub _fetch_sequence {
-  my $self = shift;
-
-  my $sql = "SELECT sequence FROM chrom_chunk_seq WHERE chrom_chunk_id=?";
-  my $seq = $self->fetch_col_value($self->database, $sql, $self->primary_id);
-  return unless(defined($seq));
-  my $name = sprintf("chunk%d-%s-%s-%d", $self->id, $self->assembly_name, $self->chrom_name, $self->chrom_start);
-  my $bioseq = Bio::Seq->new(-id=>$name, -seq=>$seq);
-  $self->sequence($bioseq); 
-}
-
-
-sub _fetch_chrom_id_for_store {
-  my $self = shift;
-
-  my $sql = "SELECT chrom_id FROM chrom join assembly using(assembly_id) WHERE chrom_name=? and (ncbi_version=? or ucsc_name=?)";
-  my $chrom_id = $self->fetch_col_value($self->database, $sql, $self->chrom_name, $self->assembly_name, $self->assembly_name);
-  $self->chrom_id($chrom_id);
-}
-*/
 
 

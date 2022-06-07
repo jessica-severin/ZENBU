@@ -1,4 +1,4 @@
-/* $Id: SPStream.cpp,v 1.99 2016/08/09 05:35:56 severin Exp $ */
+/* $Id: SPStream.cpp,v 1.108 2021/07/08 04:43:20 severin Exp $ */
 
 /***
 
@@ -101,6 +101,14 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <EEDB/SPStreams/FlipStrand.h>
 #include <EEDB/SPStreams/MannWhitneyRanksum.h>
 #include <EEDB/SPStreams/CachePoint.h>
+#include <EEDB/SPStreams/SiteFinder.h>
+#include <EEDB/SPStreams/DemultiplexSource.h>
+#include <EEDB/SPStreams/CAGECorrection.h>
+#include <EEDB/SPStreams/AppendExpression.h>
+#include <EEDB/SPStreams/PairReads.h>
+#include <EEDB/SPStreams/EdgeLengthFilter.h>
+#include <EEDB/SPStreams/DumbBellToEdge.h>
+#include <EEDB/SPStreams/MergeEdges.h>
 
 
 using namespace std;
@@ -146,6 +154,15 @@ void _spstream_default_get_proxies_by_name(EEDB::SPStream* node, string proxy_na
 }
 void _spstream_default_get_dependent_datasource_ids(EEDB::SPStream* node, map<string, bool> &source_ids) {
   ((EEDB::SPStream*)node)->_get_dependent_datasource_ids(source_ids);
+}
+void _spstream_default_stream_all_features_func(EEDB::SPStream* node) {
+  ((EEDB::SPStream*)node)->_stream_all_features();
+}
+bool _spstream_default_fetch_features_func(EEDB::SPStream* node, map<string, EEDB::Feature*> &fid_hash) {
+  return ((EEDB::SPStream*)node)->_fetch_features(fid_hash);
+}
+void _spstream_default_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash, string search_logic) {
+  ((EEDB::SPStream*)node)->_stream_edges(fid_hash, search_logic);
 }
 void _spstream_default_reset_stream_node_func(EEDB::SPStream* node) {
   //this is not passed down the stream, but can be replaced by subclasses
@@ -195,12 +212,15 @@ void EEDB::SPStream::init() {
   //function pointer code
   _funcptr_next_in_stream                     = _spstream_default_next_in_stream_func;
   _funcptr_fetch_object_by_id                 = _spstream_default_fetch_object_by_id_func;
+  _funcptr_fetch_features                     = _spstream_default_fetch_features_func;
   _funcptr_disconnect                         = _spstream_default_disconnect_func;
   _funcptr_stream_clear                       = _spstream_default_stream_clear_func;
   _funcptr_stream_by_named_region             = _spstream_default_stream_by_named_region_func;
   _funcptr_stream_features_by_metadata_search = _spstream_default_stream_features_by_metadata_search_func;
+  _funcptr_stream_all_features                = _spstream_default_stream_all_features_func;
   _funcptr_stream_data_sources                = _spstream_default_stream_data_sources_func;
   _funcptr_stream_chromosomes                 = _spstream_default_stream_chromosomes_func;
+  _funcptr_stream_edges                       = _spstream_default_stream_edges_func;
   _funcptr_stream_peers                       = _spstream_default_stream_peers_func;
   _funcptr_reload_stream_data_sources         = _spstream_default_reload_stream_data_sources_func;
   _funcptr_reset_stream_node                  = _spstream_default_reset_stream_node_func;
@@ -361,6 +381,11 @@ MQDB::DBObject* EEDB::SPStream::fetch_object_by_id(string id) {
   return _funcptr_fetch_object_by_id(this, id);
 }  
 
+bool EEDB::SPStream::fetch_features(map<string, EEDB::Feature*> &fid_hash) {
+  reset_stream_node();
+  return _funcptr_fetch_features(this, fid_hash);
+}
+
 
 /***** stream_clear
   Description: re-initialize the stream-stack back to a clear/empty state
@@ -433,6 +458,23 @@ void EEDB::SPStream::stream_chromosomes(string assembly_name, string chrom_name)
   _funcptr_stream_chromosomes(this, assembly_name, chrom_name);
 }
 
+/***** stream_edges
+ Description: stream edges based on filters ,peers, sources and a list of features
+ *****/
+
+void EEDB::SPStream::stream_edges(map<string, EEDB::Feature*> fid_hash, string search_logic) {
+  reset_stream_node();
+  _funcptr_stream_edges(this, fid_hash, search_logic);
+}
+
+/***** stream_all_features
+ Description: stream all features based on filters ,peers, and sources
+ *****/
+
+void EEDB::SPStream::stream_all_features() {
+  reset_stream_node();
+  _funcptr_stream_all_features(this);
+}
 
 /***** stream_peers
   Description: stream all known peers from database
@@ -572,6 +614,13 @@ EEDB::SPStream* EEDB::SPStream::_xmlnode_create_spstream(void *xml_node) {
   if(modname == "FeatureEmitter")    { spstream = new EEDB::SPStreams::FeatureEmitter(xml_node); }
   if(modname == "ObjectCount")       { spstream = new EEDB::SPStreams::ObjectCount(xml_node); }
   if(modname == "Proxy")             { spstream = new EEDB::SPStreams::Proxy(xml_node); }
+  if(modname == "SiteFinder")        { spstream = new EEDB::SPStreams::SiteFinder(xml_node); }
+  if(modname == "DemultiplexSource") { spstream = new EEDB::SPStreams::DemultiplexSource(xml_node); }
+  if(modname == "PairReads")         { spstream = new EEDB::SPStreams::PairReads(xml_node); }
+  if(modname == "CAGECorrection")    { spstream = new EEDB::SPStreams::CAGECorrection(xml_node); }
+  if(modname == "AppendExpression")  { spstream = new EEDB::SPStreams::AppendExpression(xml_node); }
+  if(modname == "DumbBellToEdge")    { spstream = new EEDB::SPStreams::DumbBellToEdge(xml_node); }
+  if(modname == "MergeEdges")        { spstream = new EEDB::SPStreams::MergeEdges(xml_node); }
 
   if(modname == "FederatedSourceStream")     { spstream = new  EEDB::SPStreams::FederatedSourceStream(xml_node); }
   if(modname == "CachePoint")                { spstream = new  EEDB::SPStreams::CachePoint(xml_node); }
@@ -587,6 +636,7 @@ EEDB::SPStream* EEDB::SPStream::_xmlnode_create_spstream(void *xml_node) {
   if(modname == "ResizeFeatures")            { spstream = new  EEDB::SPStreams::ResizeFeatures(xml_node); }
   if(modname == "ExpressionDatatypeFilter")  { spstream = new  EEDB::SPStreams::ExpressionDatatypeFilter(xml_node); }
   if(modname == "FeatureLengthFilter")       { spstream = new  EEDB::SPStreams::FeatureLengthFilter(xml_node); }
+  if(modname == "EdgeLengthFilter")          { spstream = new  EEDB::SPStreams::EdgeLengthFilter(xml_node); }
   if(modname == "MakeStrandless")            { spstream = new  EEDB::SPStreams::MakeStrandless(xml_node); }
   if(modname == "TopHits")                   { spstream = new  EEDB::SPStreams::TopHits(xml_node); }
   if(modname == "NormalizeRPKM")             { spstream = new  EEDB::SPStreams::NormalizeRPKM(xml_node); }
@@ -646,6 +696,11 @@ MQDB::DBObject* EEDB::SPStream::_fetch_object_by_id(string fid) {
   return NULL;
 }
 
+bool EEDB::SPStream::_fetch_features(map<string, EEDB::Feature*> &fid_hash) {
+  if(source_stream() != NULL) { return source_stream()->fetch_features(fid_hash); }
+  return false;
+}
+
 void EEDB::SPStream::_stream_clear() {
   if(source_stream() != NULL) { source_stream()->stream_clear(); }
 }
@@ -663,6 +718,10 @@ void EEDB::SPStream::_stream_features_by_metadata_search(string search_logic) {
   if(source_stream() != NULL) { source_stream()->stream_features_by_metadata_search(search_logic); }
 }
 
+void EEDB::SPStream::_stream_all_features() {
+  if(source_stream() != NULL) { source_stream()->stream_all_features(); }
+}
+
 void EEDB::SPStream::_stream_data_sources(string classname, string filter_logic) {
   if(source_stream() != NULL) { source_stream()->stream_data_sources(classname, filter_logic); }
 }
@@ -673,6 +732,10 @@ void EEDB::SPStream::_get_dependent_datasource_ids(map<string, bool> &source_ids
 
 void EEDB::SPStream::_stream_chromosomes(string assembly_name, string chrom_name) {
   if(source_stream() != NULL) { source_stream()->stream_chromosomes(assembly_name, chrom_name); }
+}
+
+void EEDB::SPStream::_stream_edges(map<string, EEDB::Feature*> fid_hash, string search_logic) {
+  if(source_stream() != NULL) { source_stream()->stream_edges(fid_hash, search_logic); }
 }
 
 void EEDB::SPStream::_stream_peers() {

@@ -1,4 +1,4 @@
-/* $Id: Chrom.h,v 1.33 2016/11/11 09:08:38 severin Exp $ */
+/* $Id: Chrom.h,v 1.36 2018/08/13 03:38:49 severin Exp $ */
 
 /***
 
@@ -117,6 +117,7 @@ class Chrom : public MQDB::MappedQuery {
   
     bool         check_exists_db(MQDB::Database *db);
     bool         store(MQDB::Database *db);
+    void         update();
 
     void         zdxstream(EEDB::ZDX::ZDXstream* zstream); //used for Chrom/ChromChunk loaded into ZDX files
 
@@ -142,7 +143,8 @@ class Chrom : public MQDB::MappedQuery {
     // static member functions for object retrieval from database
     //
     static Chrom*             fetch_by_id(MQDB::Database *db, long int id);
-    vector<DBObject*>         fetch_all(MQDB::Database *db);
+    static Chrom*             fetch_by_assembly_chrom_name_acc(Assembly *assembly, string name_acc);
+    static vector<DBObject*>  fetch_all(MQDB::Database *db);
     static vector<DBObject*>  fetch_all_by_assembly(Assembly *assembly);
   
 

@@ -1,4 +1,4 @@
-/* $Id: User.h,v 1.28 2015/02/27 09:32:45 severin Exp $ */
+/* $Id: User.h,v 1.29 2018/08/13 04:05:37 severin Exp $ */
 
 /***
 
@@ -88,6 +88,7 @@ class User : public MQDB::MappedQuery {
     string    email_identity();
     string    nickname();
     string    hmac_secretkey();
+    string    status();
 
     vector<string>      openIDs();
 
@@ -159,6 +160,7 @@ class User : public MQDB::MappedQuery {
     string           _nickname;
     string           _hmac_secretkey;
     bool             _has_password;
+    string           _status;
 
     EEDB::MetadataSet*    _metadataset;
     EEDB::Peer*           _user_registry;

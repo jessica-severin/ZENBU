@@ -1,4 +1,4 @@
-/* $Id: MultiMergeStream.cpp,v 1.32 2015/02/05 07:25:41 severin Exp $ */
+/* $Id: MultiMergeStream.cpp,v 1.35 2020/03/02 08:26:32 severin Exp $ */
 
 /***
 
@@ -130,6 +130,17 @@ void _spstream_multimergestream_get_proxies_by_name_func(EEDB::SPStream* node, s
   ((EEDB::SPStreams::MultiMergeStream*)node)->_get_proxies_by_name(proxy_name, proxies);
 }
 
+bool _spstream_multimergestream_fetch_features_func(EEDB::SPStream* node, map<string, EEDB::Feature*> &fid_hash) {
+  return ((EEDB::SPStreams::MultiMergeStream*)node)->_fetch_features(fid_hash);
+}
+
+void _spstream_multimergestream_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash, string filter_logic) {
+  ((EEDB::SPStreams::MultiMergeStream*)node)->_stream_edges(fid_hash, filter_logic);
+}
+
+void _spstream_multimergestream_stream_all_features_func(EEDB::SPStream* node) {
+  ((EEDB::SPStreams::MultiMergeStream*)node)->_stream_all_features();
+}
 
 
 EEDB::SPStreams::MultiMergeStream::MultiMergeStream() {
@@ -174,7 +185,9 @@ void EEDB::SPStreams::MultiMergeStream::init() {
   _funcptr_stream_peers                       = _spstream_multimergestream_stream_peers_func;
   _funcptr_reset_stream_node                  = _spstream_multimergestream_reset_stream_node_func;
   _funcptr_get_proxies_by_name                = _spstream_multimergestream_get_proxies_by_name_func;
-
+  _funcptr_fetch_features                     = _spstream_multimergestream_fetch_features_func;
+  _funcptr_stream_edges                       = _spstream_multimergestream_stream_edges_func;
+  _funcptr_stream_all_features                = _spstream_multimergestream_stream_all_features_func;
 
   //attribute variables
   _source_stream        = NULL;  //super class variable not used
@@ -637,6 +650,36 @@ void  EEDB::SPStreams::MultiMergeStream::_disconnect() {
     if((*it)->stream == NULL) { continue; }
     (*it)->stream->disconnect();
   }
+}
+
+
+bool  EEDB::SPStreams::MultiMergeStream::_fetch_features(map<string, EEDB::Feature*> &fid_hash) {
+  vector<EEDB::SPStreams::MultistreamElement*>::iterator   it;
+  for(it = _sourcestreams.begin(); it != _sourcestreams.end(); it++) {
+    if((*it)->stream == NULL) { continue; }
+    if(!((*it)->stream->fetch_features(fid_hash))) { return false; }
+  }
+  return true;
+}
+
+
+void  EEDB::SPStreams::MultiMergeStream::_stream_edges(map<string, EEDB::Feature*> fid_hash, string filter_logic) {
+  vector<EEDB::SPStreams::MultistreamElement*>::iterator   it;
+  for(it = _sourcestreams.begin(); it != _sourcestreams.end(); it++) {
+    if((*it)->stream == NULL) { continue; }
+    (*it)->stream->stream_edges(fid_hash, filter_logic);
+  }
+  _init_active_streams();  //prepares for next_in_stream() calls
+}
+
+
+void  EEDB::SPStreams::MultiMergeStream::_stream_all_features() {
+  vector<EEDB::SPStreams::MultistreamElement*>::iterator   it;
+  for(it = _sourcestreams.begin(); it != _sourcestreams.end(); it++) {
+    if((*it)->stream == NULL) { continue; }
+    (*it)->stream->stream_all_features();
+  }
+  _init_active_streams();  //prepares for next_in_stream() calls
 }
 
 

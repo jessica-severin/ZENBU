@@ -41,7 +41,8 @@ var svgNS = "http://www.w3.org/2000/svg";
 var svgXlink = "http://www.w3.org/1999/xlink";
 var current_user=null;
 var current_error=null;
-var zenbu_embedded_view = false;;
+var zenbu_embedded_view = false;
+var zenbu_embedded_navigation = true;
 
 var eedbSearchCGI    = eedbWebRoot + "/cgi/eedb_search.cgi";
 var eedbSearchFCGI   = eedbWebRoot + "/cgi/eedb_search.fcgi";
@@ -194,10 +195,24 @@ function encodehtml(text) {
     var textneu = text.replace(/&/g,"&amp;");
     textneu = textneu.replace(/</g,"&lt;");
     textneu = textneu.replace(/>/g,"&gt;");
-    textneu = textneu.replace(/\n/g,"<br></br>");
+    textneu = textneu.replace(/\n/g,"<br>");
     textneu = textneu.replace(/\r/g,"");
     return(textneu);
   } else { return ""; }
+
+  /*
+  if(!String.prototype.decodeHTML) {
+    String.prototype.decodeHTML = function () {
+      return this.replace(/&apos;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/&gt;/g, '>')
+      .replace(/&lt;/g, '<')
+      .replace(/&amp;/g, '&');
+    };
+  }
+   "", '&quot;'
+   '', '&apos;'
+   */
 }
 
 
@@ -216,6 +231,7 @@ function escapeXml(unsafe) {
 
 // remove multiple, leading or trailing spaces in string
 function trim_string(s) {
+  if(!s) { return ""; }
   s = s.replace(/(^\s*)|(\s*$)/gi,"");
   s = s.replace(/[ ]{2,}/gi," ");
   s = s.replace(/\n /,"\n");
@@ -248,6 +264,34 @@ function createUUID() {
 }
 
 
+function zenbuGenerateUUID() {
+  //uses webservices to generate UUID server-side
+  var url = eedbConfigCGI + "?mode=validate_uuid";
+  var uuid = createUUID();  //backup use the javascript Rand code
+  
+  var saveConfigXHR=GetXmlHttpObject();
+  saveConfigXHR.open("GET", url, false);  //synchronous
+  saveConfigXHR.send(null);
+
+  if(saveConfigXHR.readyState!=4) return uuid;
+  if(saveConfigXHR.status!=200) { return uuid; }
+  if(saveConfigXHR.responseXML == null) { return uuid; }
+
+  var xmlDoc=saveConfigXHR.responseXML.documentElement;
+  if(xmlDoc==null) { return uuid; }
+  
+  var xml_uuid = xmlDoc.getElementsByTagName("config_uuid");
+  var xml_validation = xmlDoc.getElementsByTagName("validation_status");
+
+  if(xml_uuid && xml_uuid.length>0 && xml_validation && xml_validation.length>0) {
+    var validation = xml_validation[0].firstChild.nodeValue;
+    var t_uuid = xml_uuid[0].firstChild.nodeValue;
+    if(validation == "autogen_uuid") { uuid = t_uuid; }
+  }
+  return uuid;
+}
+
+
 function setCookie(c_name,value, exdays) {
   //document.getElementById("message").innerHTML = " cookies[" +document.cookie+"]";
   var exdate=new Date();
@@ -277,8 +321,97 @@ function numberWithCommas(x) {
 }
 
 function zenbuRedirect(newurl) {
-  window.location = newurl;
+  window.open(newurl, "_blank");
 }
+
+
+function zenbuParseLocation(query) {
+  var region = new Object();
+  region.asm     = "";
+  region.chrom   = "";
+  region.start   = -1;
+  region.end     = -1;
+  region.strand  = "";
+
+  var rtnval = false;
+
+  //first remove leading and trailing spaces
+  var match1 = /^(\s*)(.+)(\s*)$/.exec(query);
+  if(match1 && (match1.length == 4)) { 
+    query = match1[2]; 
+  }
+
+  //look for assembly is <asm>:: pattern
+  var asm_match = /^([\w-._]+)\:\:(.+)$/.exec(query);
+  if(asm_match && (asm_match.length == 3)) {
+    region.asm = asm_match[1];
+    query = asm_match[2];
+  }
+
+  var mymatch = /^([\w-._]+)\:(\d+)\.\.(\d+)([+-]*)$/.exec(query);
+  if(mymatch && (mymatch.length >= 4)) {
+    rtnval = true;
+    region.chrom = mymatch[1];
+    region.start = Math.floor(mymatch[2]);
+    region.end   = Math.floor(mymatch[3]);
+    if(mymatch.length==5) {
+      if(mymatch[4] == "-") { region.strand = "-"; }
+      if(mymatch[4] == "+") { region.strand = "+"; }
+    }
+    query = "";
+  }
+
+  var mymatch = /^([\w-._]+)\:(\d+)\-(\d+)([+-]*)$/.exec(query);
+  if(mymatch && (mymatch.length >= 4)) {
+    rtnval = true;
+    region.chrom = mymatch[1];
+    region.start = Math.floor(mymatch[2]);
+    region.end   = Math.floor(mymatch[3]);
+    if(mymatch.length==5) {
+      if(mymatch[4] == "-") { region.strand = "-"; }
+      if(mymatch[4] == "+") { region.strand = ";"; }
+    }
+    query = "";
+  }
+
+  var mymatch = /^([\w-._]+)\:$/.exec(query);
+  if(mymatch && (mymatch.length >= 2)) {
+    rtnval = true;
+    region.chrom = mymatch[1];
+    query = "";
+  }
+
+  var mymatch = /chr(\w+)/.exec(query);
+  if(!rtnval && mymatch && (mymatch.length == 2)) {
+    var toks = query.split(/[\s\:\.\-]/);
+    var num1, num2;
+    for(var i=0; i<toks.length; i++) {
+      var tok = toks[i];
+      if(!tok) { continue; }
+
+      var match2 = /^chr(\w+)/.exec(tok);
+      if(match2 && match2.length==2) {
+        region.chrom = "chr"+match2[1];
+	rtnval=true;
+      }
+      if(/\,/.test(tok)) { tok = tok.replace(/\,/g, ""); }
+      if(/^(\d+)$/.test(tok)) {
+        if(num1 === undefined) { num1 = Math.floor(tok); }
+	else { num2 = Math.floor(tok); }
+      }
+    }
+  }
+
+  if(region.end<region.start) {
+    var t = region.start;
+    region.start = region.end;
+    region.end = t;
+  }
+
+  if(rtnval) { return region; }
+  return undefined;
+}
+
 
 //==================================================
 //
@@ -371,6 +504,7 @@ function eedbLogoutCurrentUser() {
 
 
 function eedbGetCurrentUser() {
+  current_user = null;
   var url = eedbUserFCGI + "?mode=user";
 
   var userXHR=GetXmlHttpObject();
@@ -385,12 +519,12 @@ function eedbGetCurrentUser() {
   var xmlDoc=userXHR.responseXML.documentElement;
   if(xmlDoc==null)  return null;
   var userXML = xmlDoc.getElementsByTagName("eedb_user")[0];
-  return eedbParseUserXML(userXML);;
+  current_user = eedbParseUserXML(userXML);
+  return current_user;
 }
 
 
 function eedbParseUserXML(userXML) {
-  current_user = null;
   if(userXML) {
     var user = new Object;
     user.openID = "";
@@ -399,6 +533,9 @@ function eedbParseUserXML(userXML) {
     user.nickname = userXML.getAttribute("nickname");
     if(userXML.getAttribute("member_status")) {
       user.member_status = userXML.getAttribute("member_status");
+    }
+    if(userXML.getAttribute("status")) {
+      user.member_status = userXML.getAttribute("status");
     }
 
     var syms = userXML.getElementsByTagName("symbol");
@@ -430,9 +567,9 @@ function eedbParseUserXML(userXML) {
     var no_pass = userXML.getElementsByTagName("no_password");
     if(no_pass && (no_pass.length>0)) { user.no_password = true; }
 
-    current_user = user;
+    return  user;
   }
-  return current_user;
+  return null;
 }
 
 //-----------------------------------------------------------------------
@@ -477,29 +614,31 @@ function zenbuUserLoginPanel() {
   // title
   var div1 = login_panel.appendChild(document.createElement('div'));
   div1.setAttribute("style", "font-weight:bold; font-size:16px; margin-top:5px; ");
-  div1.innerHTML = "Welcome to ZENBU : User Login";
   
   // close button
   var a1 = div1.appendChild(document.createElement('a'));
   a1.setAttribute("target", "top");
   a1.setAttribute("href", "./#section=uploads");
   a1.setAttribute("onclick", "zenbuCloseUserLoginPanel();return false");
+  a1.setAttribute("style", "float: right;");
   var img1 = a1.appendChild(document.createElement('img'));
-  img1.setAttribute("src", eedbWebRoot+"/images/close_icon16px.png");
-  img1.setAttribute("style", "float: right;");
+  img1.setAttribute("src", eedbWebRoot+"/images/close_icon16px_gray.png");
   img1.setAttribute("width", "16");
   img1.setAttribute("height", "16");
   img1.setAttribute("alt","close");
+
+  span1 = div1.appendChild(document.createElement('span'));
+  span1.innerHTML = "Welcome to ZENBU : User Login";
   
 
   var table1 = login_panel.appendChild(document.createElement('table'));
   //table1.setAttribute("border", "2");
   table1.setAttribute("width", "100%");
-  var tbody = table1.appendChild(new Element('tbody'));
-  var tr0 = tbody.appendChild(new Element('tr'));
+  var tbody = table1.appendChild(document.createElement('tbody'));
+  var tr0 = tbody.appendChild(document.createElement('tr'));
 
   //login email/password left side
-  var td0 = tr0.appendChild(new Element('td'));
+  var td0 = tr0.appendChild(document.createElement('td'));
   td0.setAttribute("width","50%");
 
   //<form id="bridgeForm" action="#" target="loginframe" autocomplete="on">
@@ -507,17 +646,17 @@ function zenbuUserLoginPanel() {
   //  <input type="password" name="password" id="password"/>
   //</form>
 
-  var form2 = td0.appendChild(new Element('form'));
+  var form2 = td0.appendChild(document.createElement('form'));
   form2.setAttribute("autocomplete", "on");
   form2.setAttribute("action", "#");
   form2.id = "zenbu_login_form";
 
-  var div2 = form2.appendChild(new Element('div'));
-  div2.setAttribute("style", "overflow:hidden; display:inline-block;");
-  var span1 = div2.appendChild(new Element('label'));
+  var div2 = form2.appendChild(document.createElement('div'));
+  div2.setAttribute("style", "margin-bottom:3px;");
+  var span1 = div2.appendChild(document.createElement('label'));
   span1.setAttribute("style", "width:110px; display:inline-block;");
   span1.innerHTML = "email address :";
-  span1 = div2.appendChild(new Element('span'));
+  span1 = div2.appendChild(document.createElement('span'));
   var input1 = span1.appendChild(document.createElement('input'));
   input1.id  = "user_login_panel_email";
   input1.setAttribute("type", "text");
@@ -526,12 +665,12 @@ function zenbuUserLoginPanel() {
   input1.setAttribute("size", "40");
   input1.setAttribute("style", "width:250px;");
 
-  div2 = form2.appendChild(new Element('div'));
-  div2.setAttribute("style", "overflow:hidden; display:inline-block;");
-  span1 = div2.appendChild(new Element('span'));
+  div2 = form2.appendChild(document.createElement('div'));
+  div2.setAttribute("style", "margin-bottom:5px;");
+  span1 = div2.appendChild(document.createElement('span'));
   span1.setAttribute("style", "width:110px; display:inline-block;");
   span1.innerHTML = "password :";
-  span1 = div2.appendChild(new Element('span'));
+  span1 = div2.appendChild(document.createElement('span'));
   span1.setAttribute("style", "padding-right:5px;");
   var input1 = span1.appendChild(document.createElement('input'));
   input1.id  = "user_login_panel_password";
@@ -542,10 +681,10 @@ function zenbuUserLoginPanel() {
   input1.setAttribute("style", "width:250px;");
   input1.setAttribute("onkeyup", "if(event && event.which == 13) { zenbuSubmitPasswordLogin(); }");
 
-  div2 = form2.appendChild(new Element('div'));
+  div2 = form2.appendChild(document.createElement('div'));
   div2.setAttribute("style", "text-align:center; border:1px;");
 
-  var button = div2.appendChild(new Element('button'));
+  var button = div2.appendChild(document.createElement('button'));
   button.setAttribute("style", "font-size:14px; padding: 1px 4px; align:center; width:150px; margin-left:5px; margin-right:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
   button.setAttribute("type", "button");
   button.setAttribute("onMouseOver", "this.style.background='#CCCCCC';");
@@ -553,14 +692,14 @@ function zenbuUserLoginPanel() {
   button.setAttribute("onclick", "zenbuSubmitPasswordLogin();");
   button.innerHTML ="log in";
 
-  a1 = div2.appendChild(new Element('a'));
+  a1 = div2.appendChild(document.createElement('a'));
   a1.setAttribute("href", "./");
   a1.setAttribute("style", "font-size:12px; padding: 1px 4px; margin-left:15px;");
   a1.setAttribute("onclick", "zenbuForgotPasswordPanel(); return false;");
   a1.innerHTML ="Forgot your password?";
 
   //new user right side
-  var td2 = tr0.appendChild(new Element('td'));
+  var td2 = tr0.appendChild(document.createElement('td'));
   td2.setAttribute("width","50%");
   td2.setAttribute("rowspan", "3");
   td2.setAttribute("style", "border-left:2pt dotted gray; padding-left:10px;");
@@ -569,7 +708,7 @@ function zenbuUserLoginPanel() {
   var span2 = div2.appendChild(document.createElement('span'));
   span2.setAttribute("style", "font-size:12px; font-weight:bold;");
   span2.innerHTML = "New user?";
-  var button = div2.appendChild(new Element('button'));
+  var button = div2.appendChild(document.createElement('button'));
   button.setAttribute("style", "font-size:12px; padding: 1px 4px; align:center; width:150px; margin-left:15px; margin-right:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
   button.setAttribute("type", "button");
   button.setAttribute("onclick", "zenbuNewUserCreatePanel();");
@@ -692,12 +831,12 @@ function zenbuUserLoginPanel() {
   input2.setAttribute("value", "Continue");
   
   div4 = login_panel.appendChild(document.createElement('div'));
-  div4.setAttribute("style", "margin:10px 0px 10px 0px; font-size:12px");
+  div4.setAttribute("style", "margin:10px 0px 10px 0px; font-size:12px;");
   span1 = div4.appendChild(document.createElement('span'));
   span1.setAttribute("style", "color:red");
   span1.innerHTML = "Notice: ";
   span1 = div4.appendChild(document.createElement('span'));
-  span1.innerHTML = "<a href='https://www.myopenid.com/'>myopenid</a> shut down their services on February 1st 2014. Google has also shutdown their OpenID service in March of 2015. For all previous myopenID users, please either create a new account or contact [severin{at}gsc.riken.jp] to help with converting your old account.";
+  span1.innerHTML = "<a href='https://www.myopenid.com/'>myopenid</a> shut down their services on February 1st 2014. Google has also shutdown their OpenID service in March of 2015.<br>For all previous myopenID users, please either create a new account or contact [jessica.severin{at}riken.jp] to help with converting your old account.";
 }
 
 
@@ -755,7 +894,7 @@ function zenbuNewUserCreatePanel() {
   input1.setAttribute("name", "email");
   input1.setAttribute("size", "40");
   
-  var button = div1.appendChild(new Element('button'));
+  var button = div1.appendChild(document.createElement('button'));
   button.setAttribute('style', "margin: 0px 0px 0px 10px;");
   button.setAttribute("type", "button");
   button.setAttribute("onclick", "zenbuSubmitNewUserCreate();");
@@ -775,7 +914,7 @@ function zenbuNewUserCreatePanel() {
     span1.innerHTML = "that email is already registered.";
     //span1.innerHTML = "that email is already registered. Did you forget your password?";
 
-    a1 = div1.appendChild(new Element('a'));
+    a1 = div1.appendChild(document.createElement('a'));
     a1.setAttribute("href", "./");
     a1.setAttribute("style", "font-size:12px; padding: 1px 4px; margin-right:15px;");
     a1.setAttribute("onclick", "zenbuForgotPasswordPanel(); return false;");
@@ -786,7 +925,7 @@ function zenbuNewUserCreatePanel() {
     div1.setAttribute("style", "margin-top:5px; font-size:12px; ");
     div1.innerHTML = "would you like to reset the password for [" + login_panel.prev_email + "]";
 
-    var button = div1.appendChild(new Element('button'));
+    var button = div1.appendChild(document.createElement('button'));
     button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:15px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
     button.setAttribute("type", "button");
     button.setAttribute("onclick", "zenbuSubmitForgotPassword(\""+login_panel.prev_email+"\");");
@@ -827,7 +966,7 @@ function zenbuForgotPasswordPanel() {
 
   div1 = login_panel.appendChild(document.createElement('div'));
   div1.setAttribute('style', "margin: 10px 0px 10px 0px; text-decoration:none; font-size:12px;");
-  div1.innerHTML ="<br>Please enter your email and we will send you a validation link back to zenbu to allow you to access your account and reset your forgotten password.";
+  div1.innerHTML ="<br>Please enter your email and we will send you an email with a validation code to reset your forgotten password.";
   //div1.innerHTML +="  This will allow other users to identify you by your email.";
   
   div1 = login_panel.appendChild(document.createElement('div'));
@@ -839,12 +978,16 @@ function zenbuForgotPasswordPanel() {
   input1.setAttribute("type", "text");
   input1.setAttribute("name", "email");
   input1.setAttribute("size", "40");
-  
-  var button = div1.appendChild(new Element('button'));
-  button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:15px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
-  button.setAttribute("type", "button");
-  button.setAttribute("onclick", "zenbuSubmitForgotPassword();");
-  button.innerHTML ="send reset password email";
+  if(login_panel.validation_sent) {
+    input1.value = login_panel.validation_email;
+    input1.setAttribute("disabled", "true");
+  } else {
+    var button = div1.appendChild(document.createElement('button'));
+    button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:15px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+    button.setAttribute("type", "button");
+    button.setAttribute("onclick", "zenbuSubmitForgotPassword();");
+    button.innerHTML ="send reset password email";
+  }
 
   if(current_error) {
     div1 = login_panel.appendChild(document.createElement('div'));
@@ -854,8 +997,25 @@ function zenbuForgotPasswordPanel() {
 
   if(login_panel.validation_sent) {
     div1 = login_panel.appendChild(document.createElement('div'));
-    div1.setAttribute("style", "margin-top:15px; font-weight:bold; font-size:12px;");
-    div1.innerHTML = "validation email sent to your email address. Please click the link sent in the email to activate your account and set your password.";
+    div1.setAttribute("style", "margin-top:15px; font-size:12px;");
+    //div1.innerHTML = "validation email sent to your email address. Please click the link sent in the email to activate your account and set your password.";
+    div1.innerHTML = "validation email sent to your email address. <br>Please enter the <b>validation code</b> sent in the email to activate your account and set your password.";
+
+    div1 = login_panel.appendChild(document.createElement('div'));
+    var label1 = div1.appendChild(document.createElement('label'));
+    label1.setAttribute("style", "font-weight:none; color:black;");
+    label1.innerHTML = "validation code: ";
+    var input1 = div1.appendChild(document.createElement('input'));
+    input1.id  = "zenbu_user_profile_valid_code";
+    input1.setAttribute("type", "text");
+    input1.setAttribute("name", "valid_code");
+    input1.setAttribute("size", "40");
+  
+    var button = div1.appendChild(document.createElement('button'));
+    button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:15px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+    button.setAttribute("type", "button");
+    button.setAttribute("onclick", "zenbuSendEmailValidationCheck();");
+    button.innerHTML ="validate";
   }
 }
 
@@ -916,13 +1076,13 @@ function zenbuSubmitForgotPassword(email) {
 
   var email_input = document.getElementById("zenbu_user_profile_email");
   if(!email && email_input) { 
-    var email = email_input.value;
+    email = email_input.value;
   }
 
   if(!email) { 
     current_error = new Object;
     current_error.message = "please enter an email address";
-    //zenbuNewUserCreatePanel(); 
+    zenbuForgotPasswordPanel(); 
     return; 
   }
 
@@ -937,8 +1097,52 @@ function zenbuSubmitForgotPassword(email) {
   xhr.send(paramXML);
 
   var login_panel = document.getElementById("zenbu_login_panel");
-  if(login_panel) { login_panel.validation_sent = true; }
+  if(login_panel) { 
+    login_panel.validation_sent = true; 
+    login_panel.validation_email = email; 
+  }
   zenbuForgotPasswordPanel(); 
+}
+
+
+function zenbuSendEmailValidationCheck(email, valid_code) {
+  current_error = null;
+
+  var email_input = document.getElementById("zenbu_user_profile_email");
+  if(!email && email_input) { 
+    email = email_input.value;
+  }
+
+  if(!email) { 
+    current_error = new Object;
+    current_error.message = "please enter an email address";
+    zenbuForgotPasswordPanel(); 
+    return; 
+  }
+  console.log("validate email ["+email+"]");
+
+  var valid_code_input = document.getElementById("zenbu_user_profile_valid_code");
+  if(!valid_code && valid_code_input) { 
+    valid_code = valid_code_input.value;
+  }
+  console.log("validate email ["+email+"] code["+valid_code+"]");
+
+  var paramXML = "<zenbu_query>\n";
+  paramXML += "<mode>validate</mode>\n";
+  paramXML += "<profile_email>"+ email +"</profile_email>";
+  paramXML += "<valid_code>"+ valid_code +"</valid_code>";
+  paramXML += "</zenbu_query>\n";
+
+  var xhr=GetXmlHttpObject();
+  xhr.open("POST", eedbUserCGI, false);
+  xhr.setRequestHeader("Content-Type", "application/xml; charset=UTF-8;");
+  xhr.send(paramXML);
+
+  var login_panel = document.getElementById("zenbu_login_panel");
+  if(login_panel) { login_panel.validation_sent = true; }
+  //zenbuForgotPasswordPanel(); 
+
+  location.reload();
 }
 
 
@@ -988,7 +1192,7 @@ function zenbuValidateEmailPanel() {
   input1.setAttribute("size", "40");
   if(current_user && current_user.email) { input1.setAttribute("value", current_user.email); }
   
-  button = div1.appendChild(new Element('button'));
+  button = div1.appendChild(document.createElement('button'));
   button.setAttribute('style', "margin: 0px 0px 0px 10px;");
   button.setAttribute("type", "button");
   button.setAttribute("onclick", "zenbuSubmitEmailValidation();");
@@ -1092,7 +1296,7 @@ function zenbuClearMessage() {
 }
   
 
-function zenbuGeneralWarn(message) {
+function zenbuGeneralWarn(message, title) {
   var main_div = document.getElementById("message");
   if(!main_div) { return; }
 
@@ -1105,17 +1309,18 @@ function zenbuGeneralWarn(message) {
 
   var divFrame = document.createElement('div');
   main_div.appendChild(divFrame);
-  divFrame.setAttribute('style', "position:absolute; background-color:LightYellow; text-align:left; "
-                            +"border:inset; border-width:1px; padding: 3px 7px 3px 7px; "
+  divFrame.setAttribute('style', "position:absolute; background-color:lightgray; text-align:left; "
+                            +"border-radius: 7px; border: solid 2px #808080; padding: 3px 7px 3px 7px; "
                             +"z-index:1; "
-                            +"left:" + ((winW/2)-200) +"px; "
+                            +"left:" + ((winW/2)-220) +"px; "
                             +"top:"+ypos+"px; "
-                            +"width:400px;"
+                            +"width:440px;"
                              );
   var tdiv = divFrame.appendChild(document.createElement('div'));
   tdiv.setAttribute('style', "font-size:14px; font-weight:bold;");
   var tspan = tdiv.appendChild(document.createElement('span'));
-  tspan.innerHTML = "Warning:";
+  tspan.innerHTML = "Alert:";
+  if(title) { tspan.innerHTML = title; }
 
   var a1 = tdiv.appendChild(document.createElement('a'));
   a1.setAttribute("target", "top");
@@ -1174,4 +1379,32 @@ function complement_base(base) {
   if(base == "C") { return "G"; }
   if(base == "G") { return "C"; }
   if(base == "T") { return "A"; }
+}
+
+
+function luminosity_contrast(R1,G1,B1, R2,G2,B2) {
+  //should be >5 for visibility
+  var L1 = 0.2126 * Math.pow(R1/255, 2.2) +
+           0.7152 * Math.pow(G1/255, 2.2) +
+           0.0722 * Math.pow(B1/255, 2.2);
+ 
+  var L2 = 0.2126 * Math.pow(R2/255, 2.2) +
+           0.7152 * Math.pow(G2/255, 2.2) +
+           0.0722 * Math.pow(B2/255, 2.2);
+ 
+  var lum = 0;
+  if(L1 > L2) { lum = (L1+0.05) / (L2+0.05); }
+  else { lum = (L2+0.05) / (L1+0.05); }
+  console.log("luminosity = "+lum);
+  return lum;
+}
+
+
+function zenbu_object_clone(obj) {
+  if(!obj) { return null; }
+  if(Array.isArray(obj)) {
+    return [].concat(obj);
+  } else {
+    return Object.assign({ }, obj);
+  }
 }

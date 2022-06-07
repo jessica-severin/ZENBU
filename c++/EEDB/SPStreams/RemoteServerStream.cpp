@@ -1,4 +1,4 @@
-/* $Id: RemoteServerStream.cpp,v 1.71 2016/10/28 08:46:53 severin Exp $ */
+/* $Id: RemoteServerStream.cpp,v 1.73 2020/10/02 23:44:15 severin Exp $ */
 
 /***
 
@@ -214,7 +214,7 @@ void EEDB::SPStreams::RemoteServerStream::init() {
   _user            = NULL;
   _restream_start  = -1;
   
-  _server_url = "http://fantom.gsc.riken.jp/zenbu/"; //default
+  _server_url = "https://fantom.gsc.riken.jp/zenbu/"; //default
 
   curl_global_init(CURL_GLOBAL_ALL);  
 }
@@ -712,6 +712,10 @@ MQDB::DBObject* EEDB::SPStreams::RemoteServerStream::_fetch_object_by_id(string 
     rapidxml::xml_node<> *node = root_node->first_node("featuresource");
     if(node) { obj = new EEDB::FeatureSource(node); }
   }
+  if(objClass == "EdgeSource") {
+    rapidxml::xml_node<> *node = root_node->first_node("edgesource");
+    if(node) { obj = new EEDB::EdgeSource(node); }
+  }
   if(objClass == "Symbol") {
     rapidxml::xml_node<> *node = root_node->first_node("symbol");
     if(node) { obj = new EEDB::Symbol(node); }
@@ -730,7 +734,6 @@ MQDB::DBObject* EEDB::SPStreams::RemoteServerStream::_fetch_object_by_id(string 
   }
   
   /*
-  if(objClass == "EdgeSource")    { return EEDB::EdgeSource::fetch_by_id(_database, objID); }
   if(objClass == "Edge")          { return EEDB::Edge::fetch_by_id(_database, objID); }
   if(objClass == "Expression")    { return EEDB::Expression::fetch_by_id(_database, objID); }
   */
@@ -922,6 +925,7 @@ void  EEDB::SPStreams::RemoteServerStream::_stream_data_sources(string classname
   
   if(classname == "Experiment") { paramXML += "<mode>experiments</mode>"; }
   else if(classname == "FeatureSource") { paramXML += "<mode>feature_sources</mode>"; }
+  else if(classname == "EdgeSource") { paramXML += "<mode>edge_sources</mode>"; }
   else { paramXML += "<mode>sources</mode>"; }
 
   if(!_collaboration_filter.empty()) { paramXML += "<collab>"+html_escape(_collaboration_filter)+"</collab>"; }
@@ -1025,6 +1029,20 @@ void  EEDB::SPStreams::RemoteServerStream::_stream_data_sources(string classname
     source->release();
     node = node->next_sibling("featuresource");
   }
+
+  node = root_node->first_node("edgesource");
+  while(node) {
+    EEDB::EdgeSource *source = new EEDB::EdgeSource(node);
+    string uuid = source->peer_uuid();
+    EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
+    if(peer && peer->is_remote()) {
+      streambuffer->add_object(source);
+      _add_datasource(source);
+    }
+    source->release();
+    node = node->next_sibling("edgesource");
+  }
+  
   
   free(chunk.memory);
   doc.clear();

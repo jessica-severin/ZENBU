@@ -1,4 +1,4 @@
-/* $Id: OSCFileParser.cpp,v 1.205 2016/11/08 08:59:47 severin Exp $ */
+/* $Id: OSCFileParser.cpp,v 1.227 2022/02/02 10:40:59 severin Exp $ */
 
 /***
 
@@ -54,11 +54,14 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <iostream>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include <string>
 #include <stdarg.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <zlib.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost
 #include <boost/algorithm/string.hpp>
 #include <EEDB/Experiment.h>
@@ -97,20 +100,43 @@ string  EEDB::Tools::OSC_column::display_desc() {
   char buffer[2048];
   string  str;
 
-  snprintf(buffer, 2040, "column[%d] ", colnum);
-  str = buffer;
-  str += colname;
-  /*
-  if($colobj->{'experiment'}) {
-    $str .= "     ". $colobj->{'experiment'}->display_desc . "\n";
+  unsigned int max_origname = 0;
+  unsigned int max_name = 0;
+
+  string name = "";
+  int len = (max_origname) - orig_colname.size();
+  while(len>0) {len--; name +=" ";}
+  name += orig_colname + string(" => ") + colname;
+  
+  len = max_name - colname.size(); while(len>0) {len--; name +=" ";}
+  snprintf(buffer, 2000, "   col[%3d] %10s  ", colnum, osc_namespace().c_str());
+  str += buffer;
+  str += name;
+  
+  string dtype;
+  if(datatype) { dtype = datatype->type(); }
+  
+  if(oscnamespace == EXPRESSION) {
+    if(!description.empty()) { str += " :: " + description; }
+    str += "\n";
+    
+    len = 20 - dtype.size();
+    while(len>0) {len--; dtype +=" ";}
+    snprintf(buffer, 2000, "%18s %s %s", "", dtype.c_str(), experiment->display_desc().c_str());
+    str += buffer;
   }
-  foreach my $key (keys(%$colobj)) {
-    next if($key == 'experiment');
-    next if($key == 'colnum');
-    next if($key == 'colname');
-    $str .= sprintf("     %s => %s\n", $key, $colobj->{$key});
+  
+  if((oscnamespace == EDGE) && (datatype)) {
+    if((colname == "edgef1_name") || (colname == "edgef2_name")) {
+      str += " ["+dtype + "]";
+    }
+    if(colname == "edge_weight") {
+      str += " ["+dtype + "]";
+    }
   }
-  */
+  
+  if(!description.empty()) { str += " :: " + description; }
+  
   return str;
 }
 
@@ -125,6 +151,21 @@ void  EEDB::Tools::OSC_column::xml(string &xml_buffer) {
     snprintf(buffer, 2040, " datatype=\"%s\" expid=\"%s\"", datatype->type().c_str(), experiment->db_id().c_str());
     xml_buffer.append(buffer);    
   }
+
+  if((oscnamespace == EDGE) && datatype) {
+    snprintf(buffer, 2040, " datatype=\"%s\"", datatype->type().c_str());
+    xml_buffer.append(buffer);
+    if(!expname.empty()) {
+      snprintf(buffer, 2040, " expname=\"%s\"", expname.c_str());
+      xml_buffer.append(buffer);
+    }
+  }
+
+  if(!orig_colname.empty() && (orig_colname!=colname)) {
+    snprintf(buffer, 2040, " orig_colname=\"%s\"", orig_colname.c_str());
+    xml_buffer.append(buffer);
+  }
+
   xml_buffer.append(">");
 
   if(!description.empty()) { xml_buffer += "<description>"+description+"</description>"; }
@@ -154,12 +195,17 @@ void EEDB::Tools::OSC_column::init_from_xmlnode(void *xml_node) {
     colname = attr->value();
     orig_colname = attr->value();
   }
-  if((attr = root_node->first_attribute("namespace"))) { 
+  if((attr = root_node->first_attribute("orig_colname"))) {
+    orig_colname = attr->value();
+  }
+
+  if((attr = root_node->first_attribute("namespace"))) {
     oscnamespace = IGNORE;
     if(strcmp(attr->value(), "feature")==0) { oscnamespace = FEATURE; }
     if(strcmp(attr->value(), "genomic")==0) { oscnamespace = GENOMIC; }
     if(strcmp(attr->value(), "metadata")==0) { oscnamespace = METADATA; }
     if(strcmp(attr->value(), "expression")==0) { oscnamespace = EXPRESSION; }
+    if(strcmp(attr->value(), "edge")==0) { oscnamespace = EDGE; }
   }
     
   if((node = root_node->first_node("description")) != NULL) { description = node->value(); }
@@ -184,6 +230,19 @@ void EEDB::Tools::OSC_column::init_from_xmlnode(void *xml_node) {
       //fprintf(stderr, "reading totals from XML sum:%f single:%f map:%f\n", express_total, singlemap_total, mapnorm_total);
     }
   }
+  
+  if(oscnamespace == EDGE) {
+    data            = NULL;
+    datatype        = NULL;
+
+    if((attr = root_node->first_attribute("datatype"))) {
+      datatype = EEDB::Datatype::get_type(attr->value());
+    }
+    if((attr = root_node->first_attribute("expname"))) {
+      expname = attr->value();  //placeholder and for future-proofing
+    }
+  }
+  
 }
 
 
@@ -191,7 +250,8 @@ void EEDB::Tools::OSC_column::init_from_xmlnode(void *xml_node) {
 
 //initialize global variables
 bool    EEDB::Tools::OSCFileParser::_load_source_metadata = true;
-
+bool    EEDB::Tools::OSCFileParser::_sparse_expression = true;
+bool    EEDB::Tools::OSCFileParser::_sparse_metadata = false;
 
 
 EEDB::Tools::OSCFileParser::OSCFileParser() {
@@ -217,19 +277,21 @@ void EEDB::Tools::OSCFileParser::init() {
   _idx_end      = -1;
   _idx_strand   = -1;
   _idx_mapcount = -1;
+  _idx_demux_fsrc = _idx_demux_exp = -1;
   _idx_name = _idx_fid = _idx_score = _idx_fsrc_category = _idx_fsrc_id = -1;
   _idx_bed_block_count = _idx_bed_block_sizes = _idx_bed_block_starts = -1;
   _idx_bed_thickstart = _idx_bed_thickend = -1;
   _idx_sam_flag = _idx_cigar = _idx_sam_opt = -1;    
   _idx_ctg_cigar = _idx_gff_attributes = -1;
+  _idx_edge_f1 = _idx_edge_f2 = -1;
 
   _primary_feature_source = NULL;
+  _primary_edge_source = NULL;
   _subfeature_edgesource  = NULL;
   _default_assembly       = NULL;
   _peer = NULL;
   _segment_mode           = OSCTAB;
   _coordinate_system      = UNDEF;
-  _sparse_expression      = true;
   
   _parameters.clear();
   _column_descriptions.clear();
@@ -300,17 +362,47 @@ string EEDB::Tools::OSCFileParser::display_desc() {
     str += buffer;
     str += name;
 
-    if(!colobj->description.empty()) { str += " :: " + colobj->description; }
-    str += "\n";
+    //if(!colobj->description.empty()) { str += " :: " + colobj->description; }
+    //str += "\n";
 
     if(colobj->oscnamespace == EXPRESSION) {
+      if(!colobj->description.empty()) { str += " :: " + colobj->description; }
+      str += "\n";
+
       string datatype = colobj->datatype->type();
       len = 20 - datatype.size(); 
       while(len>0) {len--; datatype +=" ";}
-      snprintf(buffer, 2000, "%18s %s %s\n", "", datatype.c_str(), colobj->experiment->display_desc().c_str());
+      snprintf(buffer, 2000, "%18s %s %s", "", datatype.c_str(), colobj->experiment->display_desc().c_str());
       str += buffer;
       has_expression = true;
     }
+
+    if((colobj->oscnamespace == EDGE) && (colobj->datatype)) { 
+      string datatype = colobj->datatype->type();
+      //string strpad;
+      //len = 20 - datatype.size(); 
+      //while(len>0) {len--; strpad += " ";}
+      //snprintf(buffer, 2000, "%18s %s %s\n", colobj->colname.c_str(), datatype.c_str(), colobj->experiment->display_desc().c_str());
+      //snprintf(buffer, 2000, "%18s %s\n", colobj->colname.c_str(), datatype.c_str());
+      //str += buffer;
+
+      //for(unsigned i=0; i<22; i++) { str += " "; }
+      if((colobj->colname == "edgef1_name") || (colobj->colname == "edgef2_name")) {
+        //str += strpad + "["+datatype + "] mdkey"; 
+        //str += "                      mdkey["+datatype + "]"; 
+        str += " ["+datatype + "]"; 
+      }
+      if(colobj->colname == "edge_weight") {
+        //str += strpad + "["+datatype + "] weight"; 
+        //str += "                      weight["+datatype + "]"; 
+        str += " ["+datatype + "]"; 
+      }
+      //str += "\n";
+    }
+
+    if(!colobj->description.empty()) { str += " :: " + colobj->description; }
+    str += "\n";
+
     /*
     if(($colobj->{'namespace'} == "expression") and 
        (_do_mapnormalize) and 
@@ -323,6 +415,11 @@ string EEDB::Tools::OSCFileParser::display_desc() {
     }
     */
   }
+
+  if(_coordinate_system == EDGES) { 
+    str += "-- EDGE-based file\n";
+    return str;
+  }
   
   if(_parameters["genome_assembly"].empty() && (_idx_asm==-1)) { 
     str += "-- ERROR no genome assembly specified\n"; 
@@ -330,11 +427,15 @@ string EEDB::Tools::OSCFileParser::display_desc() {
   } 
   else {
     str += "-- default genome : [" + _parameters["genome_assembly"]+ "]\n"; 
-    if(_coordinate_system == UNDEF) { 
-      str += "-- FAILED genome-coordinate namespace check\n";
-      if(_idx_chrom == -1) { str += "   ERROR: you are missing a [chrom] column\n"; }
-      if(_idx_start == -1) { str += "   ERROR: you are missing a [start.0base] or [start.1base] column\n"; }
-    }
+  }
+  if(_coordinate_system == UNDEF &&(_parameters["genome_assembly"]!="non-genomic")) { 
+    str += "-- FAILED genome-coordinate and edge namespace checks\n";
+    if(_idx_chrom == -1) { str += "   ERROR: you are missing a [chrom] column\n"; }
+    if(_idx_start == -1) { str += "   ERROR: you are missing a [start.0base] or [start.1base] column\n"; }
+    if(_idx_edge_f1 == -1) { str += "   ERROR: you are missing a [edgef1] column\n"; }
+    if(_idx_edge_f2 == -1) { str += "   ERROR: you are missing a [edgef2] column\n"; }
+  }
+  if((_coordinate_system == BASE0) || (_coordinate_system == BASE1)) {
     if(_coordinate_system == BASE0) { str += "-- has 0base genome-coordinate namespace\n"; }
     if(_coordinate_system == BASE1) { str += "-- has 1base genome-coordinate namespace\n"; }
     if((_idx_end==-1) && (_idx_cigar==-1)) { 
@@ -343,15 +444,57 @@ string EEDB::Tools::OSCFileParser::display_desc() {
     if((_idx_strand==-1) && (_idx_sam_flag==-1)) { 
       str += "   WARNING: you have not specified a [strand] or [sam_flag] column so all features will be strandless\n";
     }
+    if(has_expression) { str += "-- expression data present\n"; }
+    else { str += "-- WARNING no expression data present\n"; }
   }
 
   //if($self->{'_has_subfeatures'}) { print("-- has block subfeature structure\n"); }
   //if(_do_mapnormalize) { print("-- can perform simple map normalization\n"); }
   //if(_idx_mapcount != -1) { print(" -- activate simple mapnormalization\n"); }
-  if(has_expression) { str += "-- expression data present\n"; }
-  else { str += "-- WARNING no expression data present\n"; }
+  //if(has_expression) { str += "-- expression data present\n"; }
+  //else { str += "-- WARNING no expression data present\n"; }
   
   return str;
+}
+
+string EEDB::Tools::OSCFileParser::error_message() {
+  string str;
+  
+  if(_coordinate_system == EDGES) {
+    return "";
+  }
+  
+  if(_coordinate_system == UNDEF) {
+    if((_idx_edge_f1 != -1) || (_idx_edge_f2 != -1)) {
+      str = "failed column checks: appears to be edge file but ";
+      if(_idx_edge_f1 == -1) { str += "missing [edgef1] column "; }
+      if(_idx_edge_f2 == -1) { str += "missing [edgef2] column "; }
+      return str;
+    }
+    if((_idx_chrom != -1) || (_idx_start != -1) || (_idx_end != -1) || (_idx_strand != -1)) {
+      str = "failed column checks: appears to be genomic file but ";
+      if(_idx_chrom == -1)  { str += "missing [eedb:chrom] column; "; }
+      if(_idx_start == -1)  { str += "missing [eedb:start.0base] or [eedb:start.1base] column; "; }
+      if(_idx_end == -1)    { str += "missing [eedb:end] column; "; }
+      if(_idx_strand == -1) { str += "missing [eedb:strand] column; "; }
+      return str;
+    }
+  }
+  
+  if((_coordinate_system == BASE0) || (_coordinate_system == BASE1)) {
+    if(_parameters["genome_assembly"].empty() && (_idx_asm==-1)) {
+      return "no genome assembly is defined";
+    }
+    //if((_idx_end==-1) && (_idx_cigar==-1)) {
+    //  str += "   WARNING: you have not specified an [end] or [sam_cigar] column so all features will be 1base long\n";
+    //}
+    //if((_idx_strand==-1) && (_idx_sam_flag==-1)) {
+    // str += "   WARNING: you have not specified a [strand] or [sam_flag] column so all features will be strandless\n";
+    //}
+    //if(has_expression) { str += "-- expression data present\n"; }
+    //else { str += "-- WARNING no expression data present\n"; }
+  }
+  return "";
 }
 
 
@@ -482,7 +625,7 @@ void EEDB::Tools::OSCFileParser::_transfer_parameters_to_source(EEDB::DataSource
   EEDB::Metadata *md = mdset->find_metadata("gff_mdata", "");
   if(md) { mdset->add_from_gff_attributes(md->data()); }
 
-  mdset->extract_keywords();
+  //mdset->extract_keywords();
 }
 
 
@@ -500,6 +643,7 @@ void  EEDB::Tools::OSCFileParser::set_datasource(EEDB::DataSource* source) {
   if(source->classname() == EEDB::EdgeSource::class_name) {
     EEDB::EdgeSource* esrc = (EEDB::EdgeSource*)source;
     if(esrc->category() == "subfeature") { _subfeature_edgesource = esrc; }
+    if(esrc->primary_id() == 1) { _primary_edge_source = esrc; }
   }
   _data_sources.push_back(source);
   _sources_cache[source->db_id()] = source;
@@ -716,11 +860,14 @@ bool  EEDB::Tools::OSCFileParser::init_from_oscheader_file(string path) {
       p3=line;
       while(*p3 != '\0') {
         p2=p3;  //beginning of new column
-        while((*p3 != '\0') && (*p3 != '\t')) { p3++; }
+        while((*p3 != '\0') && (*p3 != '\t') && (*p3 != '\r')) { p3++; }
         if(*p3 != '\0') { //not finished yet
           *p3 = '\0';  //null terminate column
           p3++;
         }
+        while(*p2== ' ') { p2++; } //remove leading spaces, is null terminated so no worries
+        char *p4 = p3-2; //last char before \0
+        while((*p4== ' ') && (p4>p2)) { *p4 = '\0'; p4--; } //remove trailing spaces, move null termination
         columns.push_back(string(p2));
       }
       _parse_column_names(columns);
@@ -755,7 +902,13 @@ bool  EEDB::Tools::OSCFileParser::init_from_oscheader_file(string path) {
     OSC_column *colobj = &(_columns[i]);    
     if(colobj->datatype != NULL) {
       //fprintf(stderr, "set featuresource datatype [%s]\n", colobj->datatype->type().c_str());
-      primary_feature_source()->add_datatype(colobj->datatype);
+      if((_coordinate_system == BASE0) || (_coordinate_system == BASE1)) {
+        primary_feature_source()->add_datatype(colobj->datatype);
+      }
+      if(_coordinate_system == EDGES) {
+        primary_edge_source()->add_datatype(colobj->datatype);
+      }
+      //primary_feature_source()->add_datatype(colobj->datatype);
       //primary_feature_source()->metadataset()->add_tag_symbol("eedb:expression_datatype", colobj->datatype->type() + "_pm");
     }
   }
@@ -1115,7 +1268,9 @@ bool EEDB::Tools::OSCFileParser::init_from_bed_file(string path) {
   columns.push_back("eedb:start.0base");
   columns.push_back("eedb:end");
 
-  if(bed_column_count>=4)  { columns.push_back("eedb:name"); }
+  if(bed_column_count==4)  { columns.push_back("eedb:score"); }  //specific BED4/bedGraph format
+  if(bed_column_count>4)   { columns.push_back("eedb:name"); }
+  
   if(bed_column_count>=5)  { columns.push_back("eedb:score"); }
   if(bed_column_count>=6)  { columns.push_back("eedb:strand"); }
   if(bed_column_count>=7)  { columns.push_back("eedb:bed_thickstart"); }
@@ -1261,6 +1416,7 @@ bool EEDB::Tools::OSCFileParser::init_from_xml_file(string path) {
     node = section_node->first_node();
     while(node) {
       if(strcmp(node->name(), "experiment")==0) {
+        //fprintf(stderr, "OSCFileParser::init_from_xml_file parsing experiment\n");
         EEDB::Experiment *exp = new EEDB::Experiment(node, _load_source_metadata);
         //if(_peer) { exp->peer_uuid(_peer->uuid()); }
         set_datasource(exp);
@@ -1272,8 +1428,11 @@ bool EEDB::Tools::OSCFileParser::init_from_xml_file(string path) {
         set_datasource(fsrc);
         sources_map[fsrc->db_id()] = fsrc;
       }
-      if(strcmp(node->name(), "edge_source")==0) {
-        //TODO: edge_source
+      if(strcmp(node->name(), "edgesource")==0) {
+        //if(_peer) { esrc->peer_uuid(_peer->uuid()); }
+        EEDB::EdgeSource *esrc = new EEDB::EdgeSource(node);
+        set_datasource(esrc);
+        sources_map[esrc->db_id()] = esrc;
       }
       node = node->next_sibling();
     }
@@ -1371,16 +1530,19 @@ void  EEDB::Tools::OSCFileParser::_process_column(OSC_column *colobj) {
     if(colobj->colname == "eedb:bed_thickend")     { colobj->oscnamespace = GENOMIC; _idx_bed_thickend = i; }
 
     if(colobj->colname == "eedb:mapcount")     { colobj->oscnamespace = EXPRESSION; _idx_mapcount = i; }
-
+    
     if(colobj->colname == "eedb:name")         { colobj->oscnamespace = FEATURE; _idx_name = i; }
     if(colobj->colname == "id")                { colobj->oscnamespace = FEATURE; _idx_name = i; }
     if(colobj->colname == "eedb:feature_id")   { colobj->oscnamespace = FEATURE; _idx_fid = i; }
+    if(colobj->colname == "eedb:primary_id")   { colobj->oscnamespace = FEATURE; _idx_fid = i; }
 
     if(colobj->colname == "eedb:score")        { colobj->oscnamespace = FEATURE; _idx_score = i; }
     if(colobj->colname == "eedb:significance") { colobj->oscnamespace = FEATURE; _idx_score = i; }
 
     if(colobj->colname == "eedb:fsrc_category"){ colobj->oscnamespace = FEATURE; _idx_fsrc_category = i; }
     if(colobj->colname == "eedb:fsrc_id")      { colobj->oscnamespace = FEATURE; _idx_fsrc_id = i; }
+    if(colobj->colname == "eedb:demux_fsrc")   { colobj->oscnamespace = FEATURE; _idx_demux_fsrc = i; }
+    if(colobj->colname == "eedb:demux_exp")    { colobj->oscnamespace = FEATURE; _idx_demux_exp = i; }
 
     if(colobj->colname == "eedb:sam_flag")     { colobj->oscnamespace = METADATA; _idx_sam_flag = i; }
     if(colobj->colname == "eedb:sam_cigar")    { colobj->oscnamespace = METADATA; _idx_cigar = i; }
@@ -1389,6 +1551,12 @@ void  EEDB::Tools::OSCFileParser::_process_column(OSC_column *colobj) {
     if(colobj->colname == "eedb:ctg_cigar")    { colobj->oscnamespace = GENOMIC; _idx_ctg_cigar = i; }
     if(colobj->colname == "gff:attributes")    { colobj->oscnamespace = METADATA; _idx_gff_attributes = i; }
 
+    if(colobj->colname == "edgef1")            { colobj->oscnamespace = EDGE; colobj->colname = "edgef1_name"; _idx_edge_f1 = i; }
+    if(colobj->colname == "edgef2")            { colobj->oscnamespace = EDGE; colobj->colname = "edgef2_name"; _idx_edge_f2 = i; }
+    if(colobj->colname == "edgef1_name")       { colobj->oscnamespace = EDGE; _idx_edge_f1 = i; }
+    if(colobj->colname == "edgef2_name")       { colobj->oscnamespace = EDGE; _idx_edge_f2 = i; }
+    if(colobj->colname == "edgef1_id")         { colobj->oscnamespace = EDGE; _idx_edge_f1 = i; }
+    if(colobj->colname == "edgef2_id")         { colobj->oscnamespace = EDGE; _idx_edge_f2 = i; }
 
     //
     // expression namespace
@@ -1436,6 +1604,41 @@ void  EEDB::Tools::OSCFileParser::_process_column(OSC_column *colobj) {
     //if((colobj->oscnamespace != "genomic") and (colobj->oscnamespace != "")) {
     //    push @{$self->{'_variable_columns'}}, $colobj;
     //}    
+
+    //EDGES
+    if(colobj->colname.find("edgef1.")==0) {
+      string t_str = colobj->colname.substr(7);
+      colobj->oscnamespace = EDGE;
+      colobj->colname      = "edgef1_name";
+      colobj->datatype     = EEDB::Datatype::get_type(t_str);
+      _idx_edge_f1 = i;
+    }
+    if(colobj->colname.find("edgef2.")==0) {
+      string t_str = colobj->colname.substr(7);
+      colobj->oscnamespace = EDGE;
+      colobj->colname      = "edgef2_name";
+      colobj->datatype     = EEDB::Datatype::get_type(t_str);
+      _idx_edge_f2 = i;
+    }
+    if(colobj->colname.find("ewt.")==0) {
+      string t_str = colobj->colname.substr(4);
+      //printf("ewt [%s]\n", t_str.c_str());
+      size_t p1 = t_str.find('.');
+      if(p1!=string::npos) {
+        datatype = t_str.substr(0,p1);
+        exp_name = t_str.substr(p1+1);
+      } else {  // just exp.<data_type>  assume to use feature source name like score_as_expression
+        datatype = t_str;
+        exp_name = primary_edge_source()->name();
+      }
+
+      colobj->oscnamespace = EDGE;
+      colobj->colname      = "edge_weight";
+      colobj->datatype     = EEDB::Datatype::get_type(datatype);
+      colobj->expname      = exp_name;
+      //_get_experiment(colobj);
+    }
+ 
 }
 
 
@@ -1469,13 +1672,16 @@ void  EEDB::Tools::OSCFileParser::postprocess_columns() {
     if(colobj->colname == "eedb:name")             { _idx_name = i; }
     if(colobj->colname == "id")                    { _idx_name = i; }
     if(colobj->colname == "eedb:feature_id")       { _idx_fid = i; }
+    if(colobj->colname == "eedb:primary_id")       { _idx_fid = i; }
 
     if(colobj->colname == "eedb:score")            { _idx_score = i; }
     if(colobj->colname == "eedb:significance")     { _idx_score = i; }
 
     if(colobj->colname == "eedb:fsrc_category")    { _idx_fsrc_category = i; }
     if(colobj->colname == "eedb:fsrc_id")          { _idx_fsrc_id = i; }
-
+    if(colobj->colname == "eedb:demux_fsrc")       { _idx_demux_fsrc = i; }
+    if(colobj->colname == "eedb:demux_exp")        { _idx_demux_exp = i; }
+    
     if(colobj->colname == "eedb:sam_flag")         { _idx_sam_flag = i; }
     if(colobj->colname == "eedb:sam_cigar")        { _idx_cigar = i; }
     if(colobj->colname == "eedb:sam_opt")          { _idx_sam_opt = i; }
@@ -1483,9 +1689,15 @@ void  EEDB::Tools::OSCFileParser::postprocess_columns() {
     if(colobj->colname == "eedb:ctg_cigar")        { _idx_ctg_cigar = i; }
     if(colobj->colname == "gff:attributes")        { _idx_gff_attributes = i; }
 
+    if(colobj->colname == "edgef1_id")             { _idx_edge_f1 = i; }
+    if(colobj->colname == "edgef2_id")             { _idx_edge_f2 = i; }
+
     if((colobj->oscnamespace == EXPRESSION) and (colobj->datatype == mapcount)) { _idx_mapcount = i; }
   }
   
+  if((_idx_edge_f1!=-1) && (_idx_edge_f2!=-1)) {
+    _coordinate_system = EDGES;
+  }
 
   if((_idx_start!=-1) && (_idx_chrom!=-1)) {
     //minimum for genomic coordinates is a chrom and start
@@ -1631,7 +1843,7 @@ void EEDB::Tools::OSCFileParser::_convert_column_name_aliases(OSC_column *colobj
 }
 
 
-bool EEDB::Tools::OSCFileParser::_segment_line(char* line) {
+bool EEDB::Tools::OSCFileParser::segment_line(char* line) {
   //performs in-situ buffer modification like strtok() and rapidxml
   //to columnate and prepare line buffer for parsing
 
@@ -1645,8 +1857,9 @@ bool EEDB::Tools::OSCFileParser::_segment_line(char* line) {
   p2=line;
   colnum=0;
   if(_segment_mode == OSCTAB) {
-    while(*p2 != '\0') {
-      if(colnum >= numcols) { break; } //more columns then expected
+    bool ok = true;
+    while(ok) {
+      if(colnum >= numcols) { break; } //more columns than expected, not an error, just ignore extras
       if(*p2=='\"' || *p2=='\'') { p2++; } //column starts with a " or ' 
       p1=p2;  //beginning of new column
       while((*p2 != '\0') && (*p2 != '\t')) { p2++; }
@@ -1655,6 +1868,8 @@ bool EEDB::Tools::OSCFileParser::_segment_line(char* line) {
       if(*p2 != '\0') { //not finished yet
         *p2 = '\0';  //null terminate column
         p2++;
+      } else {
+        ok = false;
       }
     }
   }
@@ -1676,7 +1891,7 @@ bool EEDB::Tools::OSCFileParser::_segment_line(char* line) {
   if(colnum != numcols) {
     //not expected numbed of columns, line is not valid
     char strbuf[8192];
-    snprintf(strbuf, 8192, "ERROR with dataline - %d columns expected %d", colnum, numcols);
+    snprintf(strbuf, 8192, "column count error - read %d, expected %d", colnum, numcols);
     _parameters["_parsing_error"] = strbuf;
     for(int i=0; i < numcols; i++) { _columns[i].data = NULL; }
     return false;
@@ -1764,6 +1979,10 @@ void  EEDB::Tools::OSCFileParser::test_scan_file(string path) {
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+vector<EEDB::Tools::OSC_column>*  EEDB::Tools::OSCFileParser::columns() {
+  return &_columns;
+}
+
 /***** convert_dataline_to_feature
   Description  : given the header structure, it will parse a single dataline 
                  from the file into objects (Feature, Metadata, Expression)
@@ -1776,7 +1995,7 @@ EEDB::Feature* EEDB::Tools::OSCFileParser::convert_dataline_to_feature(
                 map<string, bool> &sourceid_filter) {
   if(line==NULL) { return NULL; }
   //if(_debug_level>2) { printf("convertLINE: %s\n", line); }
-  if(!_segment_line(line)) { return NULL; }  //some problems
+  if(!segment_line(line)) { return NULL; }  //some problems
 
   EEDB::Feature *feature = EEDB::Feature::realloc();
   
@@ -1795,7 +2014,21 @@ EEDB::Feature* EEDB::Tools::OSCFileParser::convert_dataline_to_feature(
   } else {
     feature->feature_source(primary_feature_source());
   }
+  
+  //fsrc demux if needed
+  if(_idx_demux_fsrc != -1 && (feature->feature_source()!=NULL)) {
+    string demux_key = _columns[_idx_demux_fsrc].data;
+    EEDB::FeatureSource *fsrc = feature->feature_source();
+    //fprintf(stderr, "demux_key[%s]\n", demux_key.c_str());
+    if(!demux_key.empty()) {
+      EEDB::FeatureSource *demux_fsrc = (EEDB::FeatureSource*)fsrc->subsource_for_key(demux_key);
+      if(demux_fsrc) {
+        feature->feature_source(demux_fsrc);  //switch to demuxed FeatureSource
+      }
+    }
+  } 
 
+  
   //id/name setting
   if(_idx_fid != -1)   { feature->primary_id(strtol(_columns[_idx_fid].data, NULL, 10)); }
   if(_idx_score != -1) { feature->significance(strtod(_columns[_idx_score].data, NULL)); }
@@ -1888,6 +2121,7 @@ EEDB::Feature* EEDB::Tools::OSCFileParser::convert_dataline_to_feature(
     EEDB::Tools::OSC_column *colobj = &(_columns[i]);
     if(colobj->oscnamespace == METADATA) {
       if((outputmode == SIMPLE_EXPRESSION) || (outputmode == SKIPMETADATA)) { continue; }
+      if(_sparse_metadata and ((colobj->data == NULL) or (colobj->data[0] == '\0'))) { continue; }
       feature->metadataset()->add_tag_data(colobj->colname, colobj->data);
       if(_idx_gff_attributes == i) { _convert_gff_attributes(feature); }
     }
@@ -1902,10 +2136,11 @@ EEDB::Feature* EEDB::Tools::OSCFileParser::convert_dataline_to_feature(
       double exp_value = strtod(_columns[i].data, NULL);
 
       if(i == _idx_score) {  //score_as_expression [this is the 'score' column and tagged as EXPRESSION]
+        //fprintf(stderr, "score as expression dtype[%s]\n", colobj->datatype->type().c_str());
         if(datatypes.find("unity") != datatypes.end()) { 
           feature->add_expression(colobj->experiment, EEDB::Datatype::get_type("unity"), 1);
         }
-        if(datatypes.find(colobj->datatype->type()) != datatypes.end()) {
+        if(datatypes.empty() || (datatypes.find(colobj->datatype->type()) != datatypes.end())) {
           feature->add_expression(colobj->experiment, colobj->datatype, exp_value);
         }
 
@@ -1973,10 +2208,27 @@ EEDB::Feature* EEDB::Tools::OSCFileParser::convert_dataline_to_feature(
       }
     }
   }
+    
+  //last perform experiment demux if needed
+  if(_idx_demux_exp != -1) {
+    string demux_key = _columns[_idx_demux_exp].data;
+    //fprintf(stderr, "exp demux_key[%s]\n", demux_key.c_str());    
+    vector<EEDB::Expression*>  expression = feature->expression_array();
+    //fprintf(stderr, "feature has %ld expression values\n", expression.size());
+    for(unsigned int i=0; i<expression.size(); i++) {
+      EEDB::Experiment *exp = expression[i]->experiment();
+      if(!exp) { continue; }
+      EEDB::Experiment *demux_exp = (EEDB::Experiment*)exp->subsource_for_key(demux_key);
+      if(demux_exp && (demux_exp->classname() == EEDB::Experiment::class_name)) {
+        expression[i]->experiment(demux_exp);  //switch to demuxed Experiment
+      }
+    }
+  }
+
   
   return feature;
 }
- 
+
 
 bool  EEDB::Tools::OSCFileParser::_convert_bed_block_extensions(EEDB::Feature *feature) {
   if((_idx_bed_block_count==-1) or (_idx_bed_block_sizes==-1) or (_idx_bed_block_starts==-1)) { return true; }
@@ -1995,16 +2247,20 @@ bool  EEDB::Tools::OSCFileParser::_convert_bed_block_extensions(EEDB::Feature *f
   long int thickEnd   = feature->chrom_end();
   long int blockCount = strtol(_columns[_idx_bed_block_count].data, NULL, 10);
   
+  //fixing the thick logic. using as BED defines as the start and end of exons
   if(_idx_bed_thickstart != -1) { 
-    //thinkStart is really the end of the 5'UTR region in 0base
-    //so converting to 1base means not doing anything
-    thickStart = strtol(_columns[_idx_bed_thickstart].data, NULL, 10); 
+    if(strlen(_columns[_idx_bed_thickstart].data) > 0) {
+      thickStart = strtol(_columns[_idx_bed_thickstart].data, NULL, 10); 
+      if(_coordinate_system == BASE0) { thickStart++; }
+      if(thickStart < feature->chrom_start()) { thickStart = feature->chrom_start(); }
+    }
   }
   if(_idx_bed_thickend   != -1) { 
-    //thinkEnd is really the start of the 3'UTR region in 0base
-    //so need to +1 to convert to 1base coordinate system
-    thickEnd = strtol(_columns[_idx_bed_thickend].data, NULL, 10); 
-    if(_coordinate_system == BASE0) { thickEnd++; }
+    if(strlen(_columns[_idx_bed_thickend].data) > 0) {
+      thickEnd = strtol(_columns[_idx_bed_thickend].data, NULL, 10); 
+      if(thickEnd < feature->chrom_start()) { thickEnd = feature->chrom_end(); }
+      if(thickEnd > feature->chrom_end())   { thickEnd = feature->chrom_end(); }
+    }
   }
 
   char *size1  = _columns[_idx_bed_block_sizes].data;
@@ -2025,7 +2281,7 @@ bool  EEDB::Tools::OSCFileParser::_convert_bed_block_extensions(EEDB::Feature *f
     while((*size2 != '\0') and (*size2 != ',')) { size2++; }
     if(*size2 == '\0' && i!=blockCount-1) {
       fprintf(stderr, "OSCFileParser::_convert_bed_block_extensions ERROR not enough sizes %d / %ld\n", i+1, blockCount);
-      fprintf(stderr, "ERROR with dataline -- %s", output_current_dataline().c_str());
+      fprintf(stderr, "ERROR with dataline -- %s", output_current_dataline().substr(0,255).c_str());
       snprintf(strbuf, 8192, "convert_bed_block_extensions ERROR not enough sizes %d / %ld\n", i+1, blockCount);
       _parameters["_parsing_error"] = strbuf;
       return false;
@@ -2038,7 +2294,7 @@ bool  EEDB::Tools::OSCFileParser::_convert_bed_block_extensions(EEDB::Feature *f
     while((*start2 != '\0') and (*start2 != ',')) { start2++; }
     if(*start2 == '\0' && i!=blockCount-1) {
       fprintf(stderr, "OSCFileParser::_convert_bed_block_extensions ERROR not enough starts %d / %ld\n", i+1, blockCount);
-      fprintf(stderr, "ERROR with dataline -- %s", output_current_dataline().c_str());
+      fprintf(stderr, "ERROR with dataline -- %s", output_current_dataline().substr(0,255).c_str());
       snprintf(strbuf, 8192, "convert_bed_block_extensions ERROR not enough starts %d / %ld\n", i+1, blockCount);
       _parameters["_parsing_error"] = strbuf;
       return false;
@@ -2049,7 +2305,7 @@ bool  EEDB::Tools::OSCFileParser::_convert_bed_block_extensions(EEDB::Feature *f
     start2 = start1;
     if(bstart < prev_bstart) {
       fprintf(stderr, "OSCFileParser::_convert_bed_block_extensions ERROR starts not in order %ld < previous %ld\n", bstart, prev_bstart);
-      fprintf(stderr, "ERROR with dataline -- %s", output_current_dataline().c_str());
+      fprintf(stderr, "ERROR with dataline -- %s", output_current_dataline().substr(0,255).c_str());
       snprintf(strbuf, 8192, "convert_bed_block_extensions ERROR starts not in order %ld < previous %ld\n", bstart, prev_bstart);
       _parameters["_parsing_error"] = strbuf;
       return false;
@@ -2070,9 +2326,10 @@ bool  EEDB::Tools::OSCFileParser::_convert_bed_block_extensions(EEDB::Feature *f
     feature->add_subfeature(subfeat);
     subfeat->release(); //retained by feature
     
+    //defining the head UTRs before thickStart
     if(thickStart > subfeat->chrom_start()) {
       long int uend = subfeat->chrom_end();
-      if(thickStart < uend) { uend = thickStart; }
+      if(thickStart-1 <= uend) { uend = thickStart-1; }
 
       EEDB::Feature *utr = EEDB::Feature::realloc();
       utr->chrom(feature->chrom());
@@ -2093,9 +2350,10 @@ bool  EEDB::Tools::OSCFileParser::_convert_bed_block_extensions(EEDB::Feature *f
       utr->release(); //retained by feature
     }
 
+    //defining the tail UTRs after thickEnd
     if(thickEnd < subfeat->chrom_end()) {
       long int ustart = subfeat->chrom_start();
-      if(thickEnd > ustart) { ustart = thickEnd; }
+      if(thickEnd+1 >= ustart) { ustart = thickEnd+1; }
 
       EEDB::Feature *utr = EEDB::Feature::realloc();
       utr->chrom(feature->chrom());
@@ -2300,13 +2558,129 @@ string  EEDB::Tools::OSCFileParser::output_current_dataline() {
   
   if(_parameters.find("_skip_ignore_on_output") != _parameters.end()) { skip_ignore=true; }
 
+  long count=0;
   for(unsigned int i=0; i < _columns.size(); i++) { 
     if(skip_ignore && (_columns[i].oscnamespace == IGNORE)) { continue; }
-    if(!outputline.empty()) { outputline += "\t"; }
+    if(count>0) { outputline += "\t"; }
     if(_columns[i].data) { outputline += _columns[i].data; }
+    count++;
   }
   outputline += "\n";
   return outputline;
+}
+
+
+EEDB::Edge*  EEDB::Tools::OSCFileParser::convert_dataline_to_edge(char* line) {
+  if(line==NULL) { return NULL; }
+  //if(_debug_level>2) { printf("convertLINE: %s\n", line); }
+  if(!segment_line(line)) { return NULL; }  //some problems
+  return convert_segmented_columns_to_edge();
+}
+
+EEDB::Edge*    EEDB::Tools::OSCFileParser::convert_segmented_columns_to_edge() {
+  //EEDB::Edge *edge = new EEDB::Edge(); //maybe need realloc system like for Feature
+  EEDB::Edge *edge = EEDB::Edge::realloc();
+
+  edge->edge_source(primary_edge_source());
+  edge->direction('+');
+  
+  //create all internal data structures so that lazyload is not triggered later
+  edge->metadataset(); 
+
+  //id/name setting
+  if(_idx_fid != -1)   { edge->primary_id(strtol(_columns[_idx_fid].data, NULL, 10)); }
+
+  //set edge feature1/feature2 either by primary_id or by dynamic mdata/name lookup
+  //mdata/name is used during initially loading, while the primary_id is after oscdb is built and indexed
+  if(_idx_edge_f1 != -1) {
+    EEDB::Tools::OSC_column *colobj = &(_columns[_idx_edge_f1]);
+    if((colobj->oscnamespace == EEDB::Tools::EDGE) && (colobj->colname == "edgef1_id")) { 
+      edge->feature1_id( strtol(colobj->data, NULL, 10) );
+    }
+    if((colobj->oscnamespace == EEDB::Tools::EDGE) && (colobj->colname == "edgef1_name")) {
+      //edge->feature1_dbid(colobj->data);
+      /*
+      char strbuf[8192];
+      string mdkey;
+      if(colobj->datatype) { mdkey = colobj->datatype->type(); }
+      string f1_name = colobj->data;
+      //fprintf(stderr, "look up f1 [%s][%s] in [%s]\n", mdkey.c_str(), f1_name.c_str(), primary_edge_source()->feature_source1()->display_name().c_str());
+      vector<DBObject*> farray;
+      if(mdkey.empty() || (mdkey == "name") || (mdkey == "primary_name")) {
+        farray = EEDB::Feature::fetch_all_by_source_primary_name(primary_edge_source()->feature_source1(), f1_name);
+      } else {
+        farray = EEDB::Feature::fetch_all_by_source_metadata(primary_edge_source()->feature_source1(), mdkey, f1_name);
+      }
+      //printf("  edgef1_name got %ld features\n", farray.size());
+      if(farray.size() == 1) { 
+        EEDB::Feature *feature1 = (EEDB::Feature*)(farray[0]);
+        edge->feature1(feature1);
+        feature1->release();  //edge does a retain
+      } else {
+        fprintf(stderr, "ERROR with dataline -- %s", output_current_dataline().substr(0,255).c_str());
+        snprintf(strbuf, 8190, "ERROR looking up uniq edge-feature1[%s] returned %ld", f1_name.c_str(), farray.size());
+        _parameters["_parsing_error"] = strbuf;
+        return NULL;
+      }
+      */
+    }
+    //printf("%s", feature1->simple_xml().c_str());
+  }
+  if(_idx_edge_f2 != -1) {
+    EEDB::Tools::OSC_column *colobj = &(_columns[_idx_edge_f2]);
+    if((colobj->oscnamespace == EEDB::Tools::EDGE) && (colobj->colname == "edgef2_id")) { 
+      edge->feature2_id( strtol(colobj->data, NULL, 10) );
+    }
+    if((colobj->oscnamespace == EEDB::Tools::EDGE) && (colobj->colname == "edgef2_name")) {
+      //edge->feature2_dbid(colobj->data);
+      /*
+      string mdkey;
+      if(colobj->datatype) { mdkey = colobj->datatype->type(); }
+      string f2_name = colobj->data;
+      //fprintf(stderr, "look up f2 [%s][%s] in [%s]\n", mdkey.c_str(), f2_name.c_str(), primary_edge_source()->feature_source2()->display_name().c_str());
+      vector<DBObject*> farray;
+      if(mdkey.empty() || (mdkey == "name") || (mdkey == "primary_name")) {
+        farray = EEDB::Feature::fetch_all_by_source_primary_name(primary_edge_source()->feature_source2(), f2_name);
+      } else {
+        farray = EEDB::Feature::fetch_all_by_source_metadata(primary_edge_source()->feature_source2(), mdkey, f2_name);
+      }
+      //printf("  edgef2_name got %ld features\n", farray.size());
+      if(farray.size() == 1) { 
+        EEDB::Feature *feature2 = (EEDB::Feature*)(farray[0]);
+        edge->feature2(feature2);
+        feature2->release();  //edge does a retain
+      } else {
+        fprintf(stderr, "ERROR with dataline -- %s", output_current_dataline().substr(0,255).c_str());
+        snprintf(strbuf, 8190, "ERROR looking up uniq edge-feature2[%s] returned %ld", f2_name.c_str(), farray.size());
+        _parameters["_parsing_error"] = strbuf;
+        return false;
+      }
+      */
+    }
+    //printf("%s", feature2->simple_xml().c_str());
+  }
+
+  //edge_weights
+  for(int i=0; i < (int)_columns.size(); i++) {
+    EEDB::Tools::OSC_column *colobj = &(_columns[i]);
+    if(colobj->oscnamespace != EEDB::Tools::EDGE) { continue; }
+    if(colobj->colname != "edge_weight") { continue; }
+    string datatype = colobj->datatype->type();
+    edge->add_edgeweight(primary_edge_source(), datatype, strtod(colobj->data, NULL));
+  }   
+
+  // metadata
+  for(int i=0; i < (int)_columns.size(); i++) {
+    EEDB::Tools::OSC_column *colobj = &(_columns[i]);
+    if(colobj->oscnamespace == METADATA) {
+      if(_sparse_metadata and ((colobj->data == NULL) or (colobj->data[0] == '\0'))) { continue; }
+      edge->metadataset()->add_tag_data(colobj->colname, colobj->data);
+    }
+  }
+
+  //fprintf(stderr, "%s", edge->xml().c_str());
+  
+  return edge;
 }
 
 
@@ -2441,6 +2815,85 @@ EEDB::FeatureSource*  EEDB::Tools::OSCFileParser::primary_feature_source() {
 }
 
 
+EEDB::EdgeSource*  EEDB::Tools::OSCFileParser::primary_edge_source() {
+  if(_primary_edge_source != NULL) { return _primary_edge_source; }
+
+  //not set this is part of creation process
+  if(!_peer) {
+    _peer = new EEDB::Peer();
+    _peer->create_uuid();
+  }
+  
+  _primary_edge_source = new EEDB::EdgeSource();
+  _data_sources.push_back(_primary_edge_source);
+
+  _primary_edge_source->peer_uuid(_peer->uuid());
+  _primary_edge_source->primary_id(1);
+  _primary_edge_source->create_date(time(NULL));
+  _primary_edge_source->is_active(true);
+  _primary_edge_source->is_visible(true);
+
+  if(_parameters.find("_source_name") != _parameters.end()) {
+    _primary_edge_source->name(_parameters["_source_name"]);    
+  }
+  else if(_parameters.find("display_name") != _parameters.end()) {
+    _primary_edge_source->name(_parameters["display_name"]);    
+  }
+
+  if(_parameters.find("_source_category") != _parameters.end()) {
+    _primary_edge_source->category(_parameters["_source_category"]);    
+  }
+  if(_parameters.find("_source_classification") != _parameters.end()) {
+    _primary_edge_source->category(_parameters["_source_classification"]);    
+  }
+  
+  if(_parameters.find("_owner_identity") != _parameters.end()) {
+    _primary_edge_source->owner_identity(_parameters["_owner_identity"]);    
+  }
+
+  if(_parameters.find("_featuresource1_dbid") != _parameters.end()) {
+    _primary_edge_source->feature_source1_dbid(_parameters["_featuresource1_dbid"]);    
+  }
+  if(_parameters.find("_featuresource2_dbid") != _parameters.end()) {
+    _primary_edge_source->feature_source2_dbid(_parameters["_featuresource2_dbid"]);    
+  }
+  
+  _transfer_parameters_to_source(_primary_edge_source);
+  
+  //$fsrc->import_source($self->{'_inputfile'});
+  //$fsrc->import_date(scalar(gmtime()) . " GMT");
+
+  //add to the global sources cache
+  EEDB::DataSource::add_to_sources_cache(_primary_edge_source);
+  //fprintf(stderr, "OSCFileParser created primary source %s\n", _primary_edge_source->xml().c_str());
+
+  /*
+  EEDB::FeatureSource* fsrc1 = NULL;
+  EEDB::FeatureSource* fsrc2 = NULL;
+
+  if(_parameters.find("edgesource") != _parameters.end()) {
+    edgesource = (EEDB::EdgeSource*) stream->fetch_object_by_id(_parameters["edgesource"]);
+    fsrc1 = (EEDB::FeatureSource*) stream->fetch_object_by_id(edgesource->feature_source1_dbid());
+    fsrc2 = (EEDB::FeatureSource*) stream->fetch_object_by_id(edgesource->feature_source2_dbid());
+    //TODO: set the ocfileparser edgesource once available
+  } else {
+    fsrc1 = (EEDB::FeatureSource*) stream->fetch_object_by_id(_parameters["featuresource1"]);
+    fsrc2 = (EEDB::FeatureSource*) stream->fetch_object_by_id(_parameters["featuresource2"]);
+    edgesource = oscfileparser->get_edgesource("");
+    edgesource->feature_source1_dbid(fsrc1->db_id());
+    edgesource->feature_source2_dbid(fsrc2->db_id());
+  }
+  printf("\n%s", edgesource->xml().c_str());
+  printf("fsrc1: %s", fsrc1->simple_xml().c_str());
+  printf("fsrc2: %s", fsrc2->simple_xml().c_str());
+  */
+
+  return _primary_edge_source;
+}
+
+
+
+
 EEDB::FeatureSource*  EEDB::Tools::OSCFileParser::_get_category_featuresource(string category) {  
   if(_category_featuresources.find(category) != _category_featuresources.end()) {
     return _category_featuresources[category];
@@ -2474,6 +2927,39 @@ EEDB::FeatureSource*  EEDB::Tools::OSCFileParser::_get_category_featuresource(st
 }
 
 
+EEDB::EdgeSource*  EEDB::Tools::OSCFileParser::get_edgesource(string category) {  
+  if(_category_edgesources.find(category) != _category_edgesources.end()) {
+    return _category_edgesources[category];
+  }
+  
+  EEDB::EdgeSource *source = new EEDB::EdgeSource();
+  string name = primary_feature_source()->name();
+  if(!category.empty()) { name += "_" + category; }
+  source->name(name);  
+  source->category(category);
+  source->primary_id(_create_source_id++);
+  source->peer_uuid(primary_feature_source()->peer_uuid());
+  source->create_date(time(NULL));
+
+  if(_parameters.find("_owner_identity") != _parameters.end()) {
+    source->owner_identity(_parameters["_owner_identity"]);    
+  }
+  
+  //$fsrc->import_source($self->{'_inputfile'});
+
+  _transfer_parameters_to_source(source);
+
+  _data_sources.push_back(source);
+  _category_edgesources[category] = source;
+
+  //add to the global sources cache
+  EEDB::DataSource::add_to_sources_cache(source);
+  //fprintf(stderr, "OSCFileParser created category source %s\n", source->xml().c_str());
+
+  return source;
+}
+
+
 void EEDB::Tools::OSCFileParser::_get_experiment(OSC_column *colobj) {
   //printf("OSCFileParser::_get_experiment col[%d]\n", colobj->colnum);
   vector<EEDB::DataSource*>::iterator   it;
@@ -2498,6 +2984,7 @@ void EEDB::Tools::OSCFileParser::_get_experiment(OSC_column *colobj) {
     colobj->experiment->display_name(tname);
     colobj->experiment->primary_id(_create_source_id++);
     colobj->experiment->peer_uuid(primary_feature_source()->peer_uuid());
+    colobj->experiment->create_date(time(NULL));
     
     if(_parameters.find("eedb:platform") != _parameters.end()) {
       colobj->experiment->platform(_parameters["eedb:platform"]);
@@ -2591,7 +3078,6 @@ EEDB::Chrom*  EEDB::Tools::OSCFileParser::_get_chrom(const char* chrom_name) {
   if(chrom_name==NULL) { return NULL; }
   if(_default_assembly == NULL) { return NULL; }
   return _default_assembly->get_chrom(chrom_name);
-  return NULL;
 }
 
 
@@ -2616,7 +3102,7 @@ EEDB::Chrom*  EEDB::Tools::OSCFileParser::_get_chrom(const char* asm_name, const
  *
  */
 
-bool  EEDB::Tools::OSCFileParser::sort_input_file() {
+string  EEDB::Tools::OSCFileParser::sort_input_file() {
   //
   // read the input file and subdivide into separate chromosomes
   //
@@ -2630,24 +3116,26 @@ bool  EEDB::Tools::OSCFileParser::sort_input_file() {
   map<string, EEDB::Chrom*>  chroms;
   
   string path = _parameters["_inputfile"];
-  if(path.empty()) { return false; }
+  if(path.empty()) { return ""; }
   fprintf(stderr,"sort_input_file [%s]\n", path.c_str());
 
   gzFile gz = gzopen(path.c_str(), "rb");
-  if(!gz) { return false; }  //failed to open
+  if(!gz) { return ""; }  //failed to open
 
   int chrom_idx, start_idx, end_idx, strand_idx; 
   get_genomic_column_indexes(chrom_idx, start_idx, end_idx, strand_idx);
   if(chrom_idx== -1 || start_idx==-1) {
     fprintf(stderr, "oscfile header does not defined chrom or chrom_start columns");
-    return false;
+    return "";
   }
   
   //create tmp working dir
-  string builddir = path + "_zosc_sortdir";
+  string builddir = path + "_sortdir/";
   if(mkdir(builddir.c_str(), 0777)) {
-    fprintf(stderr, "filesystem error: unable to create sort workdir");
-    return false;
+    if(errno != EEXIST) { //already existing is OK, otherwise error
+      fprintf(stderr, "filesystem error: unable to create sort workdir");
+      return "";
+    }
   }
   fprintf(stderr, "using workdir [%s]\n", builddir.c_str());
   
@@ -2659,12 +3147,6 @@ bool  EEDB::Tools::OSCFileParser::sort_input_file() {
   
   //first I need to split the file on chromosome since the unix sort does not allow
   //mixing of alpha and numerical sorting on different columns
-  string workdir = builddir + "/workdir/";
-  if(mkdir(workdir.c_str(), 0000755)== -1) {
-    if(errno != EEXIST) { return false; }  //already existing is OK, otherwise error
-  }
-    
-        
   gettimeofday(&starttime, NULL);
   long int count=0;
   while(gzgets(gz, data_buffer, 24576) != NULL) {
@@ -2676,6 +3158,7 @@ bool  EEDB::Tools::OSCFileParser::sort_input_file() {
       }
     }
     count++;
+    if(data_buffer[0] == '#') { continue; }
     
     char *p1=data_buffer;
     while((*p1 != '\0') && (*p1 != '\n') && (*p1 != '\r')) { p1++; }
@@ -2684,7 +3167,8 @@ bool  EEDB::Tools::OSCFileParser::sort_input_file() {
     linebuffer = data_buffer;
     EEDB::Feature* feature = convert_dataline_to_feature(data_buffer, SIMPLE_FEATURE, datatypes, source_ids);
     if(!feature) { //unable to parse the line
-      continue; 
+      fprintf(stderr, "failed to parse line %ld during sort:: %s\n", count, data_buffer);
+      return "";
     }
     
     string chrname = "unmapped";
@@ -2700,7 +3184,7 @@ bool  EEDB::Tools::OSCFileParser::sort_input_file() {
     int chrfd=0;
     if(chrom_outfiles.find(chrname) == chrom_outfiles.end()) {
       //create chrom outfile
-      string tpath = workdir + chrname;
+      string tpath = builddir + chrname;
       //fprintf(stderr, "create chr_outfile [%s]\n", tpath.c_str());
       chrfd = open(tpath.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
       chrom_outfiles[chrname] = chrfd;
@@ -2738,7 +3222,7 @@ bool  EEDB::Tools::OSCFileParser::sort_input_file() {
   snprintf(buffer, 8190, "sort -n -k%d ", start_idx+1);
   sort_cmd = buffer;
   if(end_idx != -1) { 
-    snprintf(buffer, 8190, "-k%d ", end_idx+1);
+    snprintf(buffer, 8190, "-k%dr ", end_idx+1);
     sort_cmd += buffer;
   }
   if(strand_idx != -1) { 
@@ -2746,7 +3230,10 @@ bool  EEDB::Tools::OSCFileParser::sort_input_file() {
     sort_cmd += buffer;
   }
   
-  string sort_path = path + ".sort";
+  string sort_path = path;
+  size_t p1 = sort_path.rfind(".gz");
+  if(p1!=string::npos) { sort_path.resize(p1); }
+  sort_path += ".sort";
   unlink(sort_path.c_str());
   fprintf(stderr, "merging sorts into [%s]\n", sort_path.c_str());
   int sort_fd = open(sort_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
@@ -2765,11 +3252,12 @@ bool  EEDB::Tools::OSCFileParser::sort_input_file() {
   for(chr_it3=chrom_list.begin(); chr_it3!=chrom_list.end(); chr_it3++) {
     fprintf(stderr, "sort chrom [%s]\n", (*chr_it3)->chrom_name().c_str());
     
-    string chrfile     = workdir + (*chr_it3)->chrom_name();
+    string chrfile     = builddir + (*chr_it3)->chrom_name();
     string sortchrfile = chrfile+".sort";
         
     string cmd = sort_cmd;
     cmd += chrfile +" > " + sortchrfile;
+    fprintf(stderr, "\t%s\n", cmd.c_str());
     system(cmd.c_str());
     
     //concat into main file
@@ -2785,29 +3273,23 @@ bool  EEDB::Tools::OSCFileParser::sort_input_file() {
     unlink(sortchrfile.c_str());
     
   }
-  rmdir(workdir.c_str());
+  rmdir(builddir.c_str());
   close(sort_fd);
   
   //switch the original and sort files
-  string old_path = path + ".unsorted";
-  rename(path.c_str(), old_path.c_str());
-  rename(sort_path.c_str(), path.c_str());
+  //string old_path = path + ".unsorted";
+  //rename(path.c_str(), old_path.c_str());
+  //rename(sort_path.c_str(), path.c_str());
   
   gettimeofday(&endtime, NULL);
   timersub(&endtime, &starttime, &difftime);
   runtime = (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0;
   
   rate = (double)count / runtime;
-  fprintf(stderr, "processed %ld objects\n", count);
-  fprintf(stderr, "  %1.6f msec\n", runtime*1000.0);
-  if(rate>1000000.0) {
-    fprintf(stderr, "  %1.3f mega objs/sec\n", rate/1000000.0); 
-  } else if(rate>2000.0) {
-    fprintf(stderr, "  %1.3f kilo objs/sec\n", rate/1000.0); 
-  } else {
-    fprintf(stderr, "  %1.3f objs/sec\n", rate); 
-  }
+  fprintf(stderr, "sorted %ld objects\n", count);
+  fprintf(stderr, "  %1.6f sec\n", runtime);
+  fprintf(stderr, "  %1.3f objs/sec\n", rate); 
   
-  return true;
+  return sort_path;
 }
 

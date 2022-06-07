@@ -1,4 +1,4 @@
-/* $Id: zenbu_common.h,v 1.1 2016/02/01 07:01:02 severin Exp $ */
+/* $Id: zenbu_common.h,v 1.2 2019/08/01 02:56:00 severin Exp $ */
 
 /***
 
@@ -52,6 +52,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #ifndef _EEDB_WEBSERVICES_COMON_H
 #define _EEDB_WEBSERVICES_COMON_H
 
+extern string     _send_email_method;
 extern string     _smtp_server_url;
 extern string     _smtp_server_user;
 extern string     _smtp_server_passwd;

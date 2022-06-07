@@ -78,9 +78,11 @@ function ZenbuCircosElement(elementID) {
   this.configSubpanel     = zenbuCircosElement_configSubpanel;
 
   //internal methods
-  this.postprocessEdges   = zenbuCircosElement_postprocessEdges;
-  this.fetchAssembly      = zenbuCircosElement_fetch_assembly;
-  this.renderEdges        = zenbuCircosElement_renderEdges;
+  this.postprocessEdges    = zenbuCircosElement_postprocessEdges;
+  this.postprocessFeatures = zenbuCircosElement_postprocessFeatures;
+  this.fetchAssembly       = zenbuCircosElement_fetch_assembly;
+  this.renderEdges         = zenbuCircosElement_renderEdges;
+  this.renderFeatures      = zenbuCircosElement_renderFeatures;
   
   return this;
 }
@@ -127,12 +129,7 @@ function zenbuCircosElement_generateConfigDOM() {
 //TODO: these are placeholders for now, still need to figure out how to integrate subclass into main code
 
 function zenbuCircosElement_elementEvent(mode, value, value2) {
-  //var datasourceElement = this;
-  //if(this.datasourceElementID) {
-  //  var ds = current_report.elements[this.datasourceElementID];
-  //  if(ds) { datasourceElement = ds; }
-  //  else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  //}
+  //var datasourceElement = this.datasource();
   
   if(mode == "focus_chrom_name") {
     console.log("zenbuCircosElement_elementEvent -- focus_chrom_name");
@@ -213,15 +210,13 @@ function zenbuCircosElement_postprocess() {
   
   this.fetchAssembly();  //fetch if needed
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
 
   if(datasourceElement.datasource_mode == "edge") {
     this.postprocessEdges();
+  }
+  if(datasourceElement.datasource_mode == "feature") {
+    this.postprocessFeatures();
   }
   //no need to extra postprocessing of datasource="feature"
 }
@@ -233,12 +228,7 @@ function zenbuCircosElement_postprocessEdges() {
   var elementID = this.elementID;
   console.log("zenbuCircosElement_postprocessEdges: " + elementID);
   
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
 
   var feature_count = datasourceElement.feature_array.length;
   var edge_count    = datasourceElement.edge_array.length;
@@ -291,6 +281,51 @@ function zenbuCircosElement_postprocessEdges() {
   console.log("zenbuCircosElement_postprocessEdges " +(runtime)+"msec");
 }
 
+
+function zenbuCircosElement_postprocessFeatures() {
+  var starttime = new Date();
+  
+  var elementID = this.elementID;
+  console.log("zenbuCircosElement_postprocessFeatures: " + elementID);
+  
+  var datasourceElement = this.datasource();
+
+  var feature_count = datasourceElement.feature_array.length;
+  //console.log("zenbuCircosElement_postprocessFeatures: " + feature_count+ " features, "+datasourceElement.filter_count+" filtered");
+
+  this.title = this.title_prefix;
+  
+  this.fetchAssembly();  //fetch if needed
+  if(this.assembly && this.assembly.chroms_hash) {
+    for(var chrom_name in this.assembly.chroms_hash) {
+      var chrom = this.assembly.chroms_hash[chrom_name];
+      if(!chrom) { continue; }
+      chrom.has_connections = false;
+    }
+  }
+  
+  if(datasourceElement.datasource_mode == "feature") {
+    this.filter_count=0;
+    //datasourceElement.feature_array.sort(this.tableSortFunc());
+    for(j=0; j<datasourceElement.feature_array.length; j++) {
+      var feature = datasourceElement.feature_array[j];
+      if(!feature) { continue; }
+      if(!feature.filter_valid) { continue; }
+      if(datasourceElement.show_only_search_matches && !feature.search_match) { continue; }
+
+      this.filter_count++;
+      
+      if(this.assembly && this.assembly.chroms_hash) {
+        var chrom1 = this.assembly.chroms_hash[feature.chrom];
+        if(chrom1) { chrom1.has_connections = true; }
+      }
+    }
+  }
+  console.log("zenbuCircosElement_postprocessFeatures: " + feature_count+ " features, "+this.filter_count+" filtered");
+  var endtime = new Date();
+  var runtime = (endtime.getTime() - starttime.getTime());
+  console.log("zenbuCircosElement_postprocessFeatures " +(runtime)+"msec");
+}
 
 //=================================================================================
 // fetch assembly
@@ -425,6 +460,7 @@ function zenbuCircosElement_draw() {
   var main_div = this.main_div;
   if(!main_div) { return; }
 
+  var datasourceElement = this.datasource();
   this.fetchAssembly();  //fetch if needed
 
   //if(this.filter_count == 0) { //use the query feature
@@ -528,7 +564,8 @@ function zenbuCircosElement_draw() {
       else { arc_start = arc_end; }
     }
     
-    this.renderEdges(svg);
+    if(datasourceElement.datasource_mode == "edge")    { this.renderEdges(svg); }
+    if(datasourceElement.datasource_mode == "feature") { this.renderFeatures(svg); }
   } 
   else {
     var circle1 = svg.appendChild(document.createElementNS(svgNS,'circle'));
@@ -556,12 +593,7 @@ function zenbuCircosElement_renderEdges(svg) {
   var main_div = this.main_div;
   if(!main_div) { return; }
 
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
   if(datasourceElement.datasource_mode != "edge") { return; }
     
   //console.log("zenbuCircosElement_renderEdges ["+this.elementID+"]");
@@ -647,7 +679,90 @@ function zenbuCircosElement_renderEdges(svg) {
     
     line1.setAttribute("onmouseover", "zenbuCircosElement_edgeHoverInfo('"+this.elementID+"','"+j+"');");
     line1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    line1.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select', '"+ edge.id+"');");
+    line1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select', '"+ edge.id+"');");
+  }
+}
+
+
+function zenbuCircosElement_renderFeatures(svg) {
+  if(!this.assembly) { return; }
+  if(!svg) { return; }
+    
+  var main_div = this.main_div;
+  if(!main_div) { return; }
+
+  var datasourceElement = this.datasource();
+  if(datasourceElement.datasource_mode != "feature") { return; }
+    
+  //console.log("zenbuCircosElement_renderFeatures ["+this.elementID+"]");
+
+  var height = parseInt(main_div.clientHeight);
+  var width = parseInt(main_div.clientWidth);
+  height = height - 50;
+  width = width -10;
+    
+  var radius = width;
+  if(height<radius) { radius = height; }
+  radius = (radius / 2.0)-10;
+  //console.log("zenbuCircosElement_renderFeatures width["+width+"] height["+height+"]  radius["+radius+"]");
+  
+  for(j=0; j<datasourceElement.feature_array.length; j++) {
+    var feature = datasourceElement.feature_array[j];
+    if(!feature) { continue; }
+    feature.selected = false;
+    if(this.selected_feature && (feature.id == this.selected_feature.id)) { feature.selected=true; }
+  }
+  datasourceElement.feature_array.sort(reports_circos_feature_sort_func);
+
+  //make sure the columns are sorted for the hover-info
+  this.dtype_columns.sort(reports_column_order_sort_func);
+
+  var t1 = performance.now();
+  //console.log("after sort " + (t1 - t0) + " msec.");
+  
+  for(j=0; j<datasourceElement.feature_array.length; j++) {
+    var feature = datasourceElement.feature_array[j];
+    if(!feature) { continue; }
+    if(!feature.filter_valid) { continue; }
+    if(datasourceElement.show_only_search_matches && !feature.search_match) { continue; }
+
+    //ok render the feature    
+    var chrom1 = this.assembly.chroms_hash[feature.chrom];
+    if(!chrom1) { continue; }
+    if(chrom1.chrom_length==0) { continue; }
+    var chrom2 = chrom1;
+    
+    arc_f1 = chrom1.arc_start + (feature.start)*(chrom1.arc_end - chrom1.arc_start)/chrom1.chrom_length;
+    var point_f1 = polarToCartesian((width/2.0), height/2.0, radius-25, arc_f1);
+    //console.log("circos feature.f1 ["+feature.chrom+"] :"+feature.start+" : "+arc_f1+" : "+point_f1.x+","+point_f1.y);
+
+    arc_f2 = chrom2.arc_start + (feature.end)*(chrom2.arc_end - chrom2.arc_start)/chrom2.chrom_length;
+    var point_f2 = polarToCartesian((width/2.0), height/2.0, radius-25, arc_f2);
+    //console.log("circos feature.f2 ["+feature.chrom+"] :"+feature.start+" : "+arc_f2+" : "+point_f2.x+","+point_f2.y);
+    
+    //   <line x1="0" y1="0" x2="200" y2="200" style="stroke:rgb(255,0,0);stroke-width:2" />
+    
+    var d = ["M", point_f1.x, point_f1.y, 
+             //"L", point_f2.x, point_f2.y
+             "C", width/2.0, height/2.0, point_f2.x, point_f2.y, point_f2.x, point_f2.y,
+             "C", point_f2.x, point_f2.y, width/2.0, height/2.0, point_f1.x, point_f1.y
+            ];
+
+    var line1 = svg.appendChild(document.createElementNS(svgNS,'path'));
+    line1.setAttributeNS(null, 'd', d.join(" "));
+    line1.setAttributeNS(null, 'stroke', "#808080");
+    line1.setAttributeNS(null, 'stroke-width', "1px");
+    //line1.setAttributeNS(null, 'fill', "red");
+    line1.setAttributeNS(null, 'fill', "transparent");
+    
+    if(this.selected_feature && (feature.id == this.selected_feature.id)) {
+      line1.setAttributeNS(null, 'stroke', "rgba(255,0,225,0.9)");
+      line1.setAttributeNS(null, 'stroke-width', "5px");
+    }
+    
+    line1.setAttribute("onmouseover", "zenbuCircosElement_featureHoverInfo('"+this.elementID+"','"+j+"');");
+    line1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+    line1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select', '"+ feature.id+"');");
   }
 }
 
@@ -665,11 +780,7 @@ function zenbuCircosElement_edgeHoverInfo(elementID, edgeIdx) {
   var reportElement = current_report.elements[elementID];
   if(!reportElement) { return; }
 
-  var datasourceElement = reportElement;
-  if(reportElement.datasourceElementID) {
-    var ds = current_report.elements[reportElement.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-  }
+  var datasourceElement = reportElement.datasource();
   if(!datasourceElement) { return; }
   if(datasourceElement.datasource_mode != "edge") { return; }
     
@@ -679,6 +790,23 @@ function zenbuCircosElement_edgeHoverInfo(elementID, edgeIdx) {
   zenbuReports_hoverInfo(reportElement, edge);
 }
 
+
+function zenbuCircosElement_featureHoverInfo(elementID, featureIdx) {
+  var toolTipLayer = document.getElementById("toolTipLayer");
+  if(!toolTipLayer) { return; }
+
+  var reportElement = current_report.elements[elementID];
+  if(!reportElement) { return; }
+
+  var datasourceElement = reportElement.datasource();
+  if(!datasourceElement) { return; }
+  if(datasourceElement.datasource_mode != "feature") { return; }
+    
+  var feature = datasourceElement.feature_array[featureIdx];
+  if(!feature) { return; }
+  
+  zenbuReports_hoverInfo(reportElement, feature);
+}
 
 //=================================================================================
 //
@@ -691,12 +819,7 @@ function zenbuCircosElement_configSubpanel() {
   
   var configdiv = this.config_options_div;
   
-  var datasourceElement = this;
-  if(this.datasourceElementID) {
-    var ds = current_report.elements[this.datasourceElementID];
-    if(ds) { datasourceElement = ds; }
-    else { console.log("failed to find datasource ["+this.datasourceElementID+"]"); }
-  }
+  var datasourceElement = this.datasource();
     
   div1 = configdiv.appendChild(document.createElement('div'));
   var genomeWidget = zenbuGenomeSelectWidget("filter_search", this.elementID);
@@ -805,6 +928,18 @@ function reports_circos_edge_sort_func(a,b) {
   return 0;
 }
 
+function reports_circos_feature_sort_func(a,b) {
+  if(!a) { return 1; }
+  if(!b) { return -1; }
+
+  if(a.selected) { return 1; }
+  if(b.selected) { return -1; }
+
+  if(a.id < b.id) { return -1; }
+  if(a.id > b.id) { return  1; }
+
+  return 0;
+}
 
 function reports_circos_chrom_sort_func(a,b) {
   if(!a) { return 1; }

@@ -1,4 +1,4 @@
-/* $Id: SourceStream.cpp,v 1.149 2016/05/13 08:55:21 severin Exp $ */
+/* $Id: SourceStream.cpp,v 1.158 2020/03/02 08:27:06 severin Exp $ */
 
 /***
 
@@ -110,7 +110,16 @@ void _spstream_sourcestream_reset_stream_node_func(EEDB::SPStream* node) {
 bool _spstream_sourcestream_stream_by_named_region_func(EEDB::SPStream* node, string assembly_name, string chrom_name, long int start, long int end) {
   return ((EEDB::SPStreams::SourceStream*)node)->_stream_by_named_region(assembly_name, chrom_name, start, end);
 }
-void _spstream_sourcestream_xml_func(MQDB::DBObject *obj, string &xml_buffer) { 
+bool _spstream_sourcestream_fetch_features_func(EEDB::SPStream* node, map<string, EEDB::Feature*> &fid_hash) {
+  return ((EEDB::SPStreams::SourceStream*)node)->_fetch_features(fid_hash);
+}
+void _spstream_sourcestream_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash, string filter_logic) {
+  ((EEDB::SPStreams::SourceStream*)node)->_stream_edges(fid_hash, filter_logic);
+}
+void _spstream_sourcestream_stream_all_features_func(EEDB::SPStream* node) {
+  ((EEDB::SPStreams::SourceStream*)node)->_stream_all_features();
+}
+void _spstream_sourcestream_xml_func(MQDB::DBObject *obj, string &xml_buffer) {
   ((EEDB::SPStreams::SourceStream*)obj)->_xml(xml_buffer);
 }
 void _spstream_sourcestream_stream_clear_func(EEDB::SPStream* node) {
@@ -154,7 +163,9 @@ void EEDB::SPStreams::SourceStream::init() {
   _funcptr_stream_chromosomes                 = _spstream_sourcestream_stream_chromosomes_func;
   _funcptr_stream_peers                       = _spstream_sourcestream_stream_peers_func;
   _funcptr_reset_stream_node                  = _spstream_sourcestream_reset_stream_node_func;
-
+  _funcptr_fetch_features                     = _spstream_sourcestream_fetch_features_func;
+  _funcptr_stream_edges                       = _spstream_sourcestream_stream_edges_func;
+  _funcptr_stream_all_features                = _spstream_sourcestream_stream_all_features_func;
 
   //attribute variables
   _source_stream                 = NULL;
@@ -193,6 +204,16 @@ void EEDB::SPStreams::SourceStream::_xml(string &xml_buffer) {
   _xml_start(xml_buffer);  //superclass
 
   if(_database) { xml_buffer.append(_database->xml()); }
+
+  if(!_filter_source_ids.empty()) {
+    xml_buffer.append("<filter_source_ids>");
+    map<string, bool>::iterator it4;
+    for(it4 = _filter_source_ids.begin(); it4 != _filter_source_ids.end(); it4++) {
+      if(it4!=_filter_source_ids.begin()) { xml_buffer.append(","); }
+      xml_buffer.append((*it4).first);
+    }
+    xml_buffer.append("</filter_source_ids>");
+  }
 
   /*
   $str .= sprintf("<sourcestream_output value=\"%s\"/>\n", _sourcestream_output);
@@ -484,6 +505,158 @@ void EEDB::SPStreams::SourceStream::_stream_features_by_metadata_search(string f
 }
 
 
+bool  EEDB::SPStreams::SourceStream::_fetch_features(map<string, EEDB::Feature*> &fid_hash) {
+  if(_database ==NULL) { return false; }
+  if(_database->uuid() ==NULL) { return false; }
+  //if(!_source_is_active) { return NULL; }
+  if(fid_hash.empty()) { return true; }
+  
+  //_database->disconnect();
+  vector<long int> fids;
+  
+  map<string, EEDB::Feature*>::iterator   it;
+  for(it = fid_hash.begin(); it != fid_hash.end(); it++) {
+    if((*it).second != NULL) { continue; }  //skip if feature already fetched
+    
+    string fid = (*it).first;
+    
+    string   uuid, objClass;
+    long int objID = -1;
+    
+    unparse_eedb_id(fid, uuid, objID, objClass);
+    
+    if(uuid.empty()) { return false; }
+    if(uuid != _database->uuid()) { continue; }
+    if(objClass != "Feature") { continue; }
+    fids.push_back(objID);
+    
+    //version1 direct fetch
+    //EEDB::Feature *feature = EEDB::Feature::fetch_by_id(_database, objID);
+    //if(!feature) { return false; }
+    //(*it).second = feature;
+    //fprintf(stderr, "%s", feature->simple_xml().c_str());
+  }
+  fprintf(stderr, "need to fetch %ld ids from peer[%s]\n", fids.size(), _database->uuid());
+  
+  //version2 using multi-fetch
+  vector<MQDB::DBObject*>  features = EEDB::Feature::fetch_all_by_ids(_database, fids);
+  //fprintf(stderr, "multifetch returned %ld\n", features.size());
+  vector<MQDB::DBObject*>::iterator it3;
+  for(it3 = features.begin(); it3 != features.end(); it3++) {
+    if((*it3) == NULL) { continue; }
+    EEDB::Feature * feature = (EEDB::Feature*)(*it3);
+    if(fid_hash.find(feature->db_id()) == fid_hash.end()) {
+      fprintf(stderr, "SourceStream::_fetch_features something wrong, fetched feature which is not in the fid_hash [%s]\n",
+              feature->db_id().c_str());
+      return false;
+    }
+    fid_hash[feature->db_id()] = feature;
+    //fprintf(stderr, "%s", feature->simple_xml().c_str());
+  }
+  if(fids.size() != features.size()) { return false; }
+  return true;
+}
+
+
+void  EEDB::SPStreams::SourceStream::_stream_edges(map<string, EEDB::Feature*> fid_hash, string filter_logic) {
+  if(_database ==NULL) { return; }
+  if(!_source_is_active) { return; }
+  if(_peer_uuid==NULL) { return; }
+  fprintf(stderr, "SourceStream::_stream_edges peer[%s]\n", _peer_uuid);
+  
+  map<string, bool>::iterator  it1;
+  vector<long int>             esrc_ids;
+  
+  string uuid, objClass;
+  long int objID;
+  
+  for(it1 = _filter_source_ids.begin(); it1 != _filter_source_ids.end(); it1++) {
+    string fid = (*it1).first;
+    unparse_eedb_id(fid, uuid, objID, objClass);
+    if(uuid.empty()) { continue; }
+    if(uuid != string(_peer_uuid)) { continue; }
+    if(objClass != string("EdgeSource")) { continue; }
+    esrc_ids.push_back(objID);
+  }
+  if(esrc_ids.empty()) {
+    fprintf(stderr, "stream_edges peer[%s] no matching edge_sources\n", _peer_uuid);
+    return;
+  }
+  
+  //get feature_ids matching my database
+  vector<long int> fids;
+  map<string, EEDB::Feature*>::iterator   it2;
+  for(it2 = fid_hash.begin(); it2 != fid_hash.end(); it2++) {
+    string fid = (*it2).first;
+    string   uuid, objClass;
+    long int objID = -1;
+    unparse_eedb_id(fid, uuid, objID, objClass);
+    
+    if(objClass != "Feature") { continue; }
+    if(uuid.empty()) { continue; }
+    //if(uuid != _database->uuid()) { continue; }  //TODO: need to check against the edge_source peers
+    fids.push_back(objID);
+  }
+  if(!fid_hash.empty() && fids.empty()) {
+    fprintf(stderr, "stream_edges peer[%s] no matching features\n", _peer_uuid);
+    return;
+  }
+  //fprintf(stderr, "need to fetch edges connected to %ld features %ld src from peer[%s]\n", fids.size(), esrc_ids.size(), _database->uuid());
+
+  EEDB::SPStreams::StreamBuffer *streambuffer = new EEDB::SPStreams::StreamBuffer();
+  _source_stream = streambuffer;
+
+  vector<EEDB::Edge*>  edges = EEDB::Edge::fetch_all_by_sources_features(_database, esrc_ids, fids);
+  //fprintf(stderr, "fetched %ld edges\n", edges.size());
+  
+  vector<EEDB::Edge*>::iterator it3;
+  for(it3 = edges.begin(); it3 != edges.end(); it3++) {
+    EEDB::Edge *edge = (*it3);
+    streambuffer->add_object(edge);
+  }
+}
+
+
+void  EEDB::SPStreams::SourceStream::_stream_all_features() {
+  if(_database ==NULL) { return; }
+  if(!_source_is_active) { return; }
+  if(_peer_uuid==NULL) { return; }
+  
+  if(_source_stream != NULL) {
+    _source_stream->disconnect();
+    _source_stream->release();
+  }
+  EEDB::SPStreams::StreamBuffer *streambuffer = new EEDB::SPStreams::StreamBuffer();
+  _source_stream = streambuffer;
+  
+  map<string, bool>::iterator  it1;
+  vector<long int> fsrc_ids;
+  string uuid, objClass;
+  long int objID;
+  
+  for(it1 = _filter_source_ids.begin(); it1 != _filter_source_ids.end(); it1++) {
+    string fid = (*it1).first;
+    unparse_eedb_id(fid, uuid, objID, objClass);
+    if(uuid.empty()) { continue; }
+    if(uuid != string(_peer_uuid)) { continue; }
+    if(objClass != string("FeatureSource")) { continue; }
+    fsrc_ids.push_back(objID);
+  }
+  
+  vector<DBObject*> features = EEDB::Feature::fetch_all_by_sources(_database, fsrc_ids);
+  //fprintf(stderr, "SourceStream::_stream_all_features: fetched %ld features\n", features.size());
+
+  vector<DBObject*>::iterator it3;
+  for(it3 = features.begin(); it3 != features.end(); it3++) {
+    EEDB::Feature *feature = (EEDB::Feature*)(*it3);
+    if(feature->classname() != EEDB::Feature::class_name) {
+      fprintf(stderr, "problem, featch returned non-features\n");
+      continue;
+    }
+    streambuffer->add_object(feature);
+  }
+}
+
 
 /***** stream_by_named_region
 
@@ -604,7 +777,9 @@ void  EEDB::SPStreams::SourceStream::_stream_chromosomes(string assembly_name, s
   for(unsigned int i=0; i<_assembly_cache.size(); i++) {
     EEDB::Assembly *assembly = (EEDB::Assembly*)_assembly_cache[i];
     if(!assembly_name.empty() and 
+       (boost::algorithm::to_lower_copy(assembly->assembly_name()) != assembly_name) and 
        (boost::algorithm::to_lower_copy(assembly->ncbi_version()) != assembly_name) and 
+       (boost::algorithm::to_lower_copy(assembly->ncbi_assembly_accession()) != assembly_name) and 
        (boost::algorithm::to_lower_copy(assembly->ucsc_name()) != assembly_name)) { continue; }
     
     assembly->retain();
@@ -712,8 +887,8 @@ void EEDB::SPStreams::SourceStream::_reload_stream_data_sources() {
   vector<MQDB::DBObject*> fsrcs      = EEDB::FeatureSource::fetch_all(_database);
   _add_to_sources_cache(fsrcs);
 
-  //vector<MQDB::DBObject*> esrcs      = EEDB::EdgeSource::fetch_all(_database);
-  //_add_to_sources_cache(esrcs);
+  vector<MQDB::DBObject*> esrcs      = EEDB::EdgeSource::fetch_all(_database);
+  _add_to_sources_cache(esrcs);
 
   vector<MQDB::DBObject*> assemblies = EEDB::Assembly::fetch_all(_database);
   for(unsigned int i=0; i<assemblies.size(); i++) {

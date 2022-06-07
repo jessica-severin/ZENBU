@@ -1,4 +1,4 @@
-/* $Id: ObjectCount.cpp,v 1.7 2015/04/06 03:38:00 severin Exp $ */
+/* $Id: ObjectCount.cpp,v 1.8 2019/07/31 06:59:15 severin Exp $ */
 
 /***
 
@@ -54,6 +54,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <iostream>
 #include <string>
 #include <stdarg.h>
+#include <sys/time.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost
 #include <boost/algorithm/string.hpp>
 #include <EEDB/Experiment.h>

@@ -1,5 +1,5 @@
 
-/* $Id: MultiMergeStream.h,v 1.18 2014/11/25 09:35:16 severin Exp $ */
+/* $Id: MultiMergeStream.h,v 1.21 2020/03/02 08:26:32 severin Exp $ */
 
 /***
 
@@ -137,6 +137,9 @@ class MultiMergeStream : public EEDB::SPStream {
     void               _get_dependent_datasource_ids(map<string,bool> &source_ids);
     void               _reload_stream_data_sources();
     void               _get_proxies_by_name(string proxy_name, vector<EEDB::SPStream*> &proxies);
+    void               _stream_edges(map<string, EEDB::Feature*> fid_hash, string filter_logic);
+    bool               _fetch_features(map<string, EEDB::Feature*> &fid_hash);
+    void               _stream_all_features();
 
 };
 

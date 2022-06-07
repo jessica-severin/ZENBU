@@ -1,4 +1,4 @@
-/*  $Id: FeatureSource.cpp,v 1.128 2016/09/16 06:58:41 severin Exp $ */
+/*  $Id: FeatureSource.cpp,v 1.133 2021/06/25 04:24:51 severin Exp $ */
 
 /***
 NAME - EEDB::FeatureSource
@@ -82,6 +82,9 @@ EEDB::FeatureSource::~FeatureSource() {
 void _eedb_featuresource_delete_func(MQDB::DBObject *obj) { 
   delete (EEDB::FeatureSource*)obj;
 }
+EEDB::DataSource* _eedb_featuresource_copy_func(EEDB::DataSource *obj) { 
+  return ((EEDB::FeatureSource*)obj)->_copy(NULL);
+}
 string _eedb_featuresource_display_desc_func(MQDB::DBObject *obj) { 
   //_funcptr_display_desc = _dbobject_default_display_desc_func;
   return ((EEDB::FeatureSource*)obj)->_display_desc();
@@ -111,11 +114,28 @@ void EEDB::FeatureSource::init() {
   _funcptr_xml               = _eedb_featuresource_xml_func;
   _funcptr_simple_xml        = _eedb_featuresource_simple_xml_func;
   _funcptr_mdata_xml         = _eedb_featuresource_mdata_xml_func;
+  _funcptr_copy              = _eedb_featuresource_copy_func;
 
   _feature_count             = -1;
   _create_date               = 0;
 }
 
+EEDB::DataSource* EEDB::FeatureSource::_copy(EEDB::DataSource* copy) {
+  if(!copy) { copy = new EEDB::FeatureSource; }
+
+  EEDB::DataSource::_copy(copy);
+  
+  if(copy->classname() == EEDB::FeatureSource::class_name) {
+    EEDB::FeatureSource *fsrc = (EEDB::FeatureSource*)copy;
+    fsrc->_category         = _category;
+    fsrc->_import_source    = _import_source;
+    fsrc->_comments         = _comments;
+    fsrc->_feature_count    = _feature_count;
+  }
+  
+  //fprintf(stderr, "FeatureSource::_copy finished\n");
+  return copy;
+}
 
 EEDB::FeatureSource*  EEDB::FeatureSource::new_from_name(MQDB::Database *db, string category, string name) {
   if(name.empty()) { return NULL; }
@@ -219,7 +239,9 @@ void EEDB::FeatureSource::_xml(string &xml_buffer) {
     xml_buffer += buffer;
   }
   EEDB::MetadataSet *mdset = metadataset();
-  if(mdset!=NULL) { mdset->xml(xml_buffer); }
+  if(mdset!=NULL) { 
+    mdset->xml(xml_buffer);
+  }
 
   expression_datatypes(); //to lazy load if needed
   map<string, EEDB::Datatype*>::iterator it;
@@ -335,6 +357,7 @@ void EEDB::FeatureSource::parse_metadata_into_attributes() {
   if(!_owner_identity.empty()) { 
     _metadataset.add_metadata("eedb:owner_email", _owner_identity);
   }
+  _metadataset.add_metadata("eedb:dbid", db_id());
 }
 
 
@@ -482,7 +505,13 @@ void  EEDB::FeatureSource::init_from_row_map(map<string, dynadata> &row_map) {
   _import_source   = row_map["import_source"].i_string;
   _comments        = row_map["comments"].i_string;
   _feature_count   = row_map["feature_count"].i_int;
-  _owner_identity  = row_map["owner_openid"].i_string;
+
+  if(row_map["owner_openid"].type == MQDB::STRING) {
+    _owner_identity = row_map["owner_openid"].i_string;
+  }
+  if(row_map["owner_identity"].type == MQDB::STRING) {
+    _owner_identity = row_map["owner_identity"].i_string;
+  }
 
   if(row_map["import_date"].type == MQDB::STRING) {
     string date_string = row_map["import_date"].i_string;
@@ -531,12 +560,13 @@ bool EEDB::FeatureSource::store(MQDB::Database *db) {
   if(_is_visible) { visible_char = "y"; }
 
   db->do_sql("INSERT ignore INTO feature_source \
-              (name, category, import_source, import_date, is_active, is_visible) \
-              VALUES(?,?,?,?,?,?)", "ssssss", 
+              (name, category, import_source, import_date, owner_identity, is_active, is_visible) \
+              VALUES(?,?,?,?,?,?,?)", "sssssss", 
              name().c_str(),
              _category.c_str(),
              _import_source.c_str(),
              create_date_string().c_str(),
+             _owner_identity.c_str(),
              active_char,
              visible_char
             );

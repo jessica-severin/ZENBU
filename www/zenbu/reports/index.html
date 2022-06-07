@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html >
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en" dir="ltr">
+<head>
+  <meta http-equiv="X-UA-Compatible" content="chrome=1" />
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <META HTTP-EQUIV="CACHE-CONTROL" CONTENT="NO-CACHE" />
+
+  <title>ZENBU - analysis reports</title>
+
+  <link href="../css/edgeExpress.css" rel="stylesheet" type="text/css"></link>
+  <link href="../css/zenbu_reports.css" rel="stylesheet" type="text/css"></link>
+
+  <!--
+  <script language="Javascript" type="text/javascript" src="../jscript/jquery-3.2.1.js"></script>
+  <script src="https://d3js.org/d3.v4.min.js"></script>
+  <link rel="stylesheet" type="text/css" href="//cdn.datatables.net/1.10.15/css/jquery.dataTables.css">
+  <script type="text/javascript" charset="utf8" src="//cdn.datatables.net/1.10.15/js/jquery.dataTables.js"></script>
+  -->
+
+  <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.1.4/Chart.min.js"></script> -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.6.0/Chart.js"></script>
+
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+  <script language="Javascript" type="text/javascript" src="../jscript/cytoscape.min.js"></script>
+
+  <script language="Javascript" type="text/javascript" src="../jscript/Colour.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/rgbcolor.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/jscolor/jscolor.js"></script>
+
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_variables.js"></script>
+
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_common.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_search_beta.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_feature_info.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_colorspace.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_datasource_interface.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_configuration_interface.js"></script>
+
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_glyphsTrack.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_glyphsExpPanel.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_glyphsGB.js"></script>
+
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_table_element.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_treelist_element.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_chart_element.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_html_element.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_gb_element.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_category_element.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_heatmap_element.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_colorscale_element.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_filter_element.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_search_element.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_circos_element.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_genomewide_element.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_cytoscape_element.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_reports.js"></script>
+
+  <script>
+  //var reportsInitParams = new Object();
+  //reportsInitParams.configUUID  = "f6demo";
+  //reportsInitParams.display_width = Math.floor(1200);
+  </script>
+
+</head>
+
+
+<body style="min-width:800px;" onload="eedbInitToolTips();reportsInit();">
+
+<!-- START OF HEADER -->
+<div id="header">
+
+<table width="100%" cellpadding="0px" >
+<tr>
+<td rowspan="3" width="50px" nowrap valign="top">
+<img height="60px" src="../images/zenbu_logo_small.png"></img>
+</td>
+<td valign="bottom">
+<div id="top_menu" style="clear:both; white-space:nowrap; margin:0px; padding:0px;">
+  <a href="../">ZENBU</a>
+  <a href="../gLyphs">genome browser</a>
+  <a href="../reports" class="selected">analysis reports</a>
+  <a href="../dex">data explorer</a>
+  <a href="../user">user upload & share</a>
+  <a href="http://fantom.gsc.riken.jp/zenbu/wiki">documentation wiki</a>
+</div></td>
+<td width="1px" valign="bottom"><img height="27px" src="../images/riken-logo_big.png"></img></td>
+</tr>
+
+<tr><td colspan="3">
+<div style="float:right;">
+  <div id="eedb_login_div"></div>
+  <div>
+    <div id="zenbu_reports_edit_tools" style="margin-right:3px; float:right;"> 
+      <input type="button" class="medbutton" value="create page"></input>
+    </div>
+  </div>
+</div>
+
+<div style="margin-left:80px; width:80%;">
+<center> <div id="reports_title" style="font-size:20px; font-weight:bold;"></div> </center>
+</div>
+</td></tr>
+</table>
+
+</div>
+<!-- END OF HEADER -->
+
+
+<!-- FLOATING PANELS -->
+<div id="toolTipLayer" style="z-index:100; position:absolute; visibility: hidden"></div>
+<div id="feature_info"></div>
+<div id="source_info"></div>
+<div id="global_panel_layer"></div>
+
+<!-- START OF MAIN CONTENTS OF THE WEB PAGE -->
+<div id="message"></div>
+
+<div id='zenbuReportsDiv'></div> <!-- zenbuReportsDiv -->
+
+<!--              -->
+<img src="../images/blank.gif"></img>
+</div>
+<!--END OF MAIN CONTENTS OF THE WEB PAGE -->
+
+<!-- START OF FOOTER -->
+<div>
+<!--                 -->
+  <table width="95%" border="0" cellspacing="3" cellpadding="2" align='center' 
+         style="margin:1px auto 3px auto; border-color:#999999; border-style:solid; border-top-width:1px; border-bottom-width:1px;">
+  <tr class="small">
+    <td nowrap="nowrap"><div align="left"><a href="http://www.ims.riken.jp/english/" target="top">RIKEN Center for Integrative Medical Sciences (IMS)</a></div></td>
+    <td><div align="center">ZENBU <span id="zenbuVersionSpan"></span></div></td>
+    <td><div align="right">Copyright &copy; 2009-2020 RIKEN, Japan. All rights reserved.</div></td>
+  </tr>
+</table>
+<!--                                     -->
+</div>
+<!-- END OF FOOTER -->
+
+</body>
+</html>

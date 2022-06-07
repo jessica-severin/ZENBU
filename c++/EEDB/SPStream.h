@@ -1,4 +1,4 @@
-/* $Id: SPStream.h,v 1.30 2015/12/07 09:00:15 severin Exp $ */
+/* $Id: SPStream.h,v 1.34 2020/03/02 08:26:32 severin Exp $ */
 
 /***
 
@@ -64,7 +64,8 @@ using namespace std;
 using namespace MQDB;
 
 namespace EEDB {
-
+class Feature;  //forward reference
+  
 class SPStream : public MQDB::DBObject {
   public:  //global class level
     static const char*  class_name;
@@ -86,16 +87,20 @@ class SPStream : public MQDB::DBObject {
 
     MQDB::DBObject*  next_in_stream();
     MQDB::DBObject*  fetch_object_by_id(string fid);
-    
+    bool             fetch_features(map<string, EEDB::Feature*> &fid_hash);
+  
     //stream setup routines
     void             disconnect();
     void             stream_clear();
     bool             stream_by_named_region(string assembly_name, string chrom_name, long int start, long int end); 
     void             stream_features_by_metadata_search(string search_logic);
+    void             stream_all_features();
     void             stream_data_sources();
     void             stream_data_sources(string classname);
     void             stream_data_sources(string classname, string search_logic);
     void             stream_chromosomes(string assembly_name, string chrom_name);
+    void             stream_edges(map<string, EEDB::Feature*> fid_hash, string search_logic);
+
     void             stream_peers();
     void             reload_stream_data_sources();
     void             reset_stream_node();
@@ -122,19 +127,22 @@ class SPStream : public MQDB::DBObject {
     
     MQDB::DBObject* (*_funcptr_next_in_stream)(EEDB::SPStream* node);
     MQDB::DBObject* (*_funcptr_fetch_object_by_id)(EEDB::SPStream* node, string fid);
+    bool            (*_funcptr_fetch_features)(EEDB::SPStream* node, map<string, EEDB::Feature*> &fid_hash);
     void            (*_funcptr_disconnect)(EEDB::SPStream* node);
     void            (*_funcptr_stream_clear)(EEDB::SPStream* node);
     bool            (*_funcptr_stream_by_named_region)(EEDB::SPStream* node, string assembly_name, string chrom_name, long int start, long int end); 
     void            (*_funcptr_stream_features_by_metadata_search)(EEDB::SPStream* node, string search_logic);
+    void            (*_funcptr_stream_all_features)(EEDB::SPStream* node);
     void            (*_funcptr_stream_data_sources)(EEDB::SPStream* node, string classname, string search_logic);
     void            (*_funcptr_stream_chromosomes)(EEDB::SPStream* node, string assembly_name, string chrom_name);
+    void            (*_funcptr_stream_edges)(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash, string search_logic);
     void            (*_funcptr_stream_peers)(EEDB::SPStream* node);
     void            (*_funcptr_reload_stream_data_sources)(EEDB::SPStream* node);
     void            (*_funcptr_reset_stream_node)(EEDB::SPStream* node);
     void            (*_funcptr_get_proxies_by_name)(EEDB::SPStream* node, string name, vector<EEDB::SPStream*> &proxies);
     void            (*_funcptr_get_dependent_datasource_ids)(EEDB::SPStream* node, map<string, bool> &source_ids);
-    
-    static EEDB::SPStream* _xmlnode_create_spstream(void *xml_node);  //internal 
+
+    static EEDB::SPStream* _xmlnode_create_spstream(void *xml_node);  //internal
 
 
   //internal API used for callback functions, should not be considered open API
@@ -146,13 +154,16 @@ class SPStream : public MQDB::DBObject {
   
     MQDB::DBObject*   _next_in_stream();
     MQDB::DBObject*   _fetch_object_by_id(string fid);
+    bool              _fetch_features(map<string, EEDB::Feature*> &fid_hash);
     void              _stream_clear();
     void              _reset_stream_node();
     bool              _stream_by_named_region(string assembly_name, string chrom_name, long int start, long int end);
     void              _stream_features_by_metadata_search(string search_logic);
+    void              _stream_all_features();
     void              _stream_data_sources(string classname, string filter_logic);
     void              _stream_dependent_data_sources();
     void              _stream_chromosomes(string assembly_name, string chrom_name);
+    void              _stream_edges(map<string, EEDB::Feature*> fid_hash, string search_logic);
     void              _stream_peers();
     void              _reload_stream_data_sources();
     void              _disconnect();
@@ -162,5 +173,27 @@ class SPStream : public MQDB::DBObject {
 };
 
 };   //namespace
+
+//default function prototypes
+MQDB::DBObject* _spstream_default_next_in_stream_func(EEDB::SPStream* node);
+MQDB::DBObject* _spstream_default_fetch_object_by_id_func(EEDB::SPStream* node, string fid);
+void _spstream_default_stream_clear_func(EEDB::SPStream* node);
+bool _spstream_default_stream_by_named_region_func(EEDB::SPStream* node, string assembly_name, string chrom_name, long int start, long int end);
+void _spstream_default_stream_features_by_metadata_search_func(EEDB::SPStream* node, string search_logic);
+void _spstream_default_stream_data_sources_func(EEDB::SPStream* node, string classname, string filter_logic);
+void _spstream_default_stream_chromosomes_func(EEDB::SPStream* node, string assembly_name, string chrom_name);
+void _spstream_default_stream_peers_func(EEDB::SPStream* node);
+void _spstream_default_reload_stream_data_sources_func(EEDB::SPStream* node);
+void _spstream_default_disconnect_func(EEDB::SPStream* node);
+void _spstream_default_get_proxies_by_name(EEDB::SPStream* node, string proxy_name, vector<EEDB::SPStream*> &proxies);
+void _spstream_default_get_dependent_datasource_ids(EEDB::SPStream* node, map<string, bool> &source_ids);
+void _spstream_default_stream_all_features_func(EEDB::SPStream* node);
+bool _spstream_default_fetch_features_func(EEDB::SPStream* node, map<string, EEDB::Feature*> &fid_hash);
+void _spstream_default_stream_edges_func(EEDB::SPStream* node, map<string, EEDB::Feature*> fid_hash, string search_logic);
+void _spstream_default_reset_stream_node_func(EEDB::SPStream* node);
+void _eedb_spstream_delete_func(MQDB::DBObject *obj);
+void _eedb_spstream_xml_func(MQDB::DBObject *obj, string &xml_buffer);
+void _eedb_spstream_simple_xml_func(MQDB::DBObject *obj, string &xml_buffer);
+string _eedb_spstream_display_desc_func(MQDB::DBObject *obj);
 
 #endif

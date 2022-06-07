@@ -1,4 +1,4 @@
-/* $Id: UploadServer.h,v 1.16 2016/05/13 09:07:05 severin Exp $ */
+/* $Id: UploadServer.h,v 1.18 2021/04/06 09:59:58 severin Exp $ */
 
 /***
 
@@ -117,6 +117,8 @@ class UploadServer : public WebBase {
     void        show_user();
     void        show_upload_status();
     void        show_queue_status();
+    void        clear_failed_jobs();
+    void        clear_blocked_jobs();
     void        redirect_to_mydata();
   
     void        delete_uploaded_database();

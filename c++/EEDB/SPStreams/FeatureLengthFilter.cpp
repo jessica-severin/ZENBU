@@ -1,4 +1,4 @@
-/* $Id: FeatureLengthFilter.cpp,v 1.9 2013/04/08 07:37:12 severin Exp $ */
+/* $Id: FeatureLengthFilter.cpp,v 1.11 2021/07/12 05:41:36 severin Exp $ */
 
 /***
 
@@ -112,16 +112,16 @@ void EEDB::SPStreams::FeatureLengthFilter::init() {
 void EEDB::SPStreams::FeatureLengthFilter::_xml(string &xml_buffer) {
   _xml_start(xml_buffer);  //from superclass
   
+  char buffer[256];
   //older style of <ignore_strand value="1" />
   if(_min_feature_length >=0) { 
-    
-    char buffer[256];
     snprintf(buffer, 256, "<min_length>%ld</min_length>", _min_feature_length);
     xml_buffer.append(buffer);    
+  }
+  if(_max_feature_length >=0) { 
     snprintf(buffer, 256, "<max_length>%ld</max_length>", _max_feature_length);
     xml_buffer.append(buffer);    
   }
-  
   _xml_end(xml_buffer);  //from superclass
 }
 
@@ -143,6 +143,20 @@ EEDB::SPStreams::FeatureLengthFilter::FeatureLengthFilter(void *xml_node) {
     _max_feature_length = strtol(node->value(), NULL, 10);
   }
 }
+
+/*****************************************************************************************/
+
+void  EEDB::SPStreams::FeatureLengthFilter::min_length(long value) {
+  if(value < 0) { value = abs(value); }
+  _min_feature_length = value;
+}
+
+void  EEDB::SPStreams::FeatureLengthFilter::max_length(long value) {
+  if(value < 0) { value = abs(value); }
+  _max_feature_length = value;
+}
+
+/*****************************************************************************************/
 
 
 MQDB::DBObject* EEDB::SPStreams::FeatureLengthFilter::_next_in_stream() {

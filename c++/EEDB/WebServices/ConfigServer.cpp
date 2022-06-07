@@ -1,4 +1,4 @@
-/* $Id: ConfigServer.cpp,v 1.124 2016/11/11 09:08:38 severin Exp $ */
+/* $Id: ConfigServer.cpp,v 1.131 2020/10/02 11:27:20 severin Exp $ */
 
 /***
 
@@ -55,7 +55,10 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <iostream>
 #include <string>
 #include <stdarg.h>
+#include <sys/stat.h>
 #include <sys/types.h>
+#include <fcntl.h>
+#include <sys/time.h>
 #include <sys/mman.h>
 //#include <yaml.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost
@@ -171,10 +174,15 @@ bool EEDB::WebServices::ConfigServer::process_url_request() {
 
   if(_parameters.find("uuid")!=_parameters.end()) { 
     if((_parameters["mode"] != "delete") && (_parameters["mode"] != "create_trackcache") &&
-        (_parameters["mode"] != "moveconfig")) { _parameters["mode"] = "config"; }
+        (_parameters["mode"] != "moveconfig") && (_parameters["mode"] != "validate_uuid")) {
+      _parameters["mode"] = "config";
+    }
   }
-  if(_parameters.find("basename")!=_parameters.end()) { 
+  if(_parameters.find("basename")!=_parameters.end()) {  //TODO: may deprecate 'basename' with the new fixed_id system (2018-1-11)
     _parameters["mode"] = "config";
+  }
+  if((_parameters.find("fixed_id")!=_parameters.end()) && (_parameters["mode"].empty())) {
+    _parameters["mode"] = "fixed_id_editors";
   }
 
   if(_parameters.find("config_uuid")!=_parameters.end()) { 
@@ -186,13 +194,15 @@ bool EEDB::WebServices::ConfigServer::process_url_request() {
     string cfg = _parameters["configtype"];
     _parameters["configtype"].clear();
      
-    if(cfg == "view")   { cfg = "eeDB_gLyphs_configs"; }
-    if(cfg == "glyphs") { cfg = "eeDB_gLyphs_configs"; }
-    if(cfg == "gLyphs") { cfg = "eeDB_gLyphs_configs"; }
-    if(cfg == "track")  { cfg = "eeDB_gLyph_track_configs"; }
-    if(cfg == "script") { cfg = "ZENBU_script_configs"; }
-    
-    if((cfg == "eeDB_gLyphs_configs") or (cfg == "eeDB_gLyph_track_configs") or 
+    if(cfg == "view")    { cfg = "eeDB_gLyphs_configs"; }
+    if(cfg == "glyphs")  { cfg = "eeDB_gLyphs_configs"; }
+    if(cfg == "gLyphs")  { cfg = "eeDB_gLyphs_configs"; }
+    if(cfg == "track")   { cfg = "eeDB_gLyph_track_configs"; }
+    if(cfg == "script")  { cfg = "ZENBU_script_configs"; }
+    if(cfg == "report")  { cfg = "ZENBU_reports_configs"; }
+    if(cfg == "reports") { cfg = "ZENBU_reports_configs"; }
+
+    if((cfg == "eeDB_gLyphs_configs") or (cfg == "eeDB_gLyph_track_configs") or (cfg == "ZENBU_reports_configs") or
        (cfg == "ZENBU_script_configs") or (cfg == "ZENBU_user_annotations")) {
       _parameters["configtype"] = cfg;
     }
@@ -221,6 +231,16 @@ bool EEDB::WebServices::ConfigServer::process_url_request() {
     move_config_collaboration();
   } else if(_parameters["mode"] == string("saveconfig")) {
     register_config();
+  } else if(_parameters["mode"] == string("validate_uuid")) {
+    validate_uuid();
+  } else if(_parameters["mode"] == string("fixed_id_editors")) {
+    show_fixed_id_editors();
+  } else if(_parameters["mode"] == string("change_editor_mode")) {
+    change_fixed_id_editor_mode();
+  } else if(_parameters["mode"] == string("add_editor")) {
+    change_fixed_id_editor("add");
+  } else if(_parameters["mode"] == string("remove_editor")) {
+    change_fixed_id_editor("remove");
   } else {
     return EEDB::WebServices::WebBase::execute_request();
   }
@@ -259,6 +279,9 @@ void EEDB::WebServices::ConfigServer::process_xml_parameters() {
   
   if((node = root_node->first_node("uuid")) != NULL) { _parameters["uuid"] = node->value(); }
   if((node = root_node->first_node("uuid_list")) != NULL) { _parameters["uuid_list"] = node->value(); }
+  if((node = root_node->first_node("fixed_id")) != NULL) { _parameters["fixed_id"] = node->value(); }
+  if((node = root_node->first_node("editor_mode")) != NULL) { _parameters["editor_mode"] = node->value(); }
+  if((node = root_node->first_node("user_identity")) != NULL) { _parameters["user_identity"] = node->value(); }
 
   if((node = root_node->first_node("peer_names")) != NULL) { _parameters["peers"] = node->value(); }
   if((node = root_node->first_node("source_names")) != NULL) { _parameters["source_names"] = node->value(); }
@@ -304,7 +327,10 @@ void EEDB::WebServices::ConfigServer::show_api() {
   printf $cgi->header(-cookie=>$cookie, -type => "text/html", -charset=> "UTF8");
   */
 
-  printf("Content-type: text/html\r\n\r\n");
+  printf("Content-type: text/html\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<!DOCTYPE html  PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n");
 
   printf("<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en-US\" xml:lang=\"en-US\">\n");
@@ -389,11 +415,15 @@ EEDB::FeatureSource*  EEDB::WebServices::ConfigServer::get_config_source(string 
 *****************************************************************************/
 
 void  EEDB::WebServices::ConfigServer::show_config_xml() {
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
 
   EEDB::Configuration *config = NULL;
   
   if(_parameters.find("uuid")!=_parameters.end()) {
+    fprintf(stderr, "ConfigServer::show_config_xml [%s]\n", _parameters["uuid"].c_str());
     config = get_config_uuid(_parameters["uuid"]); 
   }
   //if(_parameters.find("basename")!=_parameters.end()) { 
@@ -401,6 +431,7 @@ void  EEDB::WebServices::ConfigServer::show_config_xml() {
   //}
   
   if(!config) {
+    fprintf(stderr, "ConfigServer::show_config_xml [%s] - failed to load\n", _parameters["uuid"].c_str());
     printf("<configuration>not found</configuration>\n");
     return;
   }
@@ -411,9 +442,18 @@ void  EEDB::WebServices::ConfigServer::show_config_xml() {
   EEDB::Metadata *date_md   = config->metadataset()->find_metadata("date", "");
 
   if(configXML.empty()) {
-    printf("<configuration>not found</configuration>\n");
+    fprintf(stderr, "ConfigServer::show_config_xml [%s] - missing configXML\n", _parameters["uuid"].c_str());
+    printf("<configuration>not found, no configXML</configuration>\n");
     return;
   }
+  
+  if(!config->fixed_id().empty()) {
+    string check_msg, editor_status;
+    if(config->check_fixed_id_editor(config->fixed_id(), _user_profile, editor_status, check_msg)) {
+      config->metadataset()->add_tag_data("fixed_id_editor_status", editor_status);
+    }
+  }
+
 
   if(configXML.find("</eeDBgLyphsConfig>")!=string::npos) {
     _session_data["last_view_config"] = config->uuid();
@@ -463,7 +503,14 @@ EEDB::Configuration*  EEDB::WebServices::ConfigServer::get_config_uuid(string uu
   EEDB::Configuration* config = NULL;
   if(_userDB) {
     config = EEDB::Configuration::fetch_by_uuid(_userDB, uuid, _user_profile);
-    if(config) { return config; }
+    if(config) {
+      if(config->collaboration()) {
+        config->collaboration()->member_status("MEMBER"); //to allow the load_members to happen
+        string status = config->collaboration()->member_status(_user_profile);
+        config->collaboration()->member_status(status);
+      }
+      return config;
+    }
   }
 
   vector<EEDB::Peer*>::iterator  it;
@@ -527,7 +574,10 @@ void EEDB::WebServices::ConfigServer::show_user_last_config() {
     if(md) { _parameters["uuid"] = md->data(); }
     show_config_xml();
   } else {
-    printf("Content-type: text/xml\r\n\r\n");
+    printf("Content-type: text/xml\r\n");
+    printf("Access-Control-Allow-Origin: *\r\n");
+    printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+    printf("\r\n");
     printf("<eeDBgLyphsConfig></eeDBgLyphsConfig>\n");
   }
 }
@@ -643,7 +693,10 @@ vector<EEDB::Configuration*>  EEDB::WebServices::ConfigServer::get_configs_searc
 
 
 void EEDB::WebServices::ConfigServer::search_configs() {  
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<results>\n");
   
   if(!_userDB) { printf("</results>\n"); return; }
@@ -659,7 +712,8 @@ void EEDB::WebServices::ConfigServer::search_configs() {
   if(config_type == "eeDB_gLyph_track_configs") { config_type = "TRACK"; }
   if(config_type == "ZENBU_script_configs")     { config_type = "SCRIPT"; }
   if(config_type == "eeDB_gLyphs_autoconfigs")  { config_type = "AUTOSAVE"; }
-  
+  if(config_type == "ZENBU_reports_configs")    { config_type = "REPORT"; }
+
   int total_configs  = 0;
   int filter_count   = 0;
   
@@ -706,6 +760,8 @@ void EEDB::WebServices::ConfigServer::search_configs() {
     }
   }    
 
+  fprintf(stderr, "ConfigServer::search_configs fetched %ld configs\n", configs.size());
+
   for(unsigned i=0; i<configs.size(); i++) {
     EEDB::Configuration *config = (EEDB::Configuration*)configs[i];
     total_configs++;
@@ -721,15 +777,15 @@ void EEDB::WebServices::ConfigServer::search_configs() {
       filter_count++;
       
       if(_parameters["format_mode"] == "minxml") {
-        printf("<configuration uuid=\"%s\" type=\"%s\" access_count=\"%d\" create_date=\"%s\">", 
-               config->uuid().c_str(), config->config_type().c_str(), config->access_count(), config->create_date_string().c_str());
+        printf("<configuration uuid=\"%s\" fixed_id=\"%s\" type=\"%s\" access_count=\"%d\" create_date=\"%s\">", 
+               config->uuid().c_str(), config->fixed_id().c_str(), config->config_type().c_str(), config->access_count(), config->create_date_string().c_str());
         if(config->collaboration()) { printf("%s", config->collaboration()->min_xml().c_str()); }
         else { printf("<collaboration name=\"private\" uuid=\"private\" />"); }
         printf("</configuration>\n");
       }
       else if(_parameters["format_mode"] == "descxml") {
-        printf("<configuration uuid=\"%s\" type=\"%s\" access_count=\"%d\" create_date=\"%s\">\n",    
-               config->uuid().c_str(), config->config_type().c_str(), config->access_count(), config->create_date_string().c_str());
+        printf("<configuration uuid=\"%s\" fixed_id=\"%s\" type=\"%s\" access_count=\"%d\" create_date=\"%s\">\n",    
+               config->uuid().c_str(), config->fixed_id().c_str(), config->config_type().c_str(), config->access_count(), config->create_date_string().c_str());
         printf("<mdata type=\"eedb:display_name\">%s</mdata>\n", html_escape(config->display_name()).c_str());
         printf("<mdata type=\"description\">%s</mdata>\n", html_escape(config->description()).c_str());
         printf("</configuration>\n");
@@ -763,7 +819,10 @@ void EEDB::WebServices::ConfigServer::search_configs() {
 
 
 void EEDB::WebServices::ConfigServer::show_config_list() {  
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<configuration_list>\n");
   
   if(!_userDB) { printf("</results>\n"); return; }
@@ -856,7 +915,10 @@ void EEDB::WebServices::ConfigServer::show_config_list() {
 
 
 void  EEDB::WebServices::ConfigServer::delete_config_xml() {
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<delete_config>\n");
 
   if(_user_profile) { printf("%s", _user_profile->simple_xml().c_str()); }
@@ -900,7 +962,10 @@ void  EEDB::WebServices::ConfigServer::delete_config_xml() {
 
 
 void  EEDB::WebServices::ConfigServer::move_config_collaboration() {
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<move_config>\n");
   
   if(_user_profile) { printf("%s", _user_profile->simple_xml().c_str()); }
@@ -948,7 +1013,10 @@ void  EEDB::WebServices::ConfigServer::move_config_collaboration() {
 *****************************************************************************/
 
 void  EEDB::WebServices::ConfigServer::register_config() {  
-  printf("Content-type: text/xml\r\n\r\n");
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
   printf("<config_upload>\n");
   
   rapidxml::xml_node<> *root_node = (rapidxml::xml_node<>*)_config_node;
@@ -957,6 +1025,7 @@ void  EEDB::WebServices::ConfigServer::register_config() {
     if(root_node->name() == string("eeDBgLyphsTrackConfig")) { _register_track_config(); }
     if(root_node->name() == string("ZENBU_script_config"))   { _register_script_config(); }
     if(root_node->name() == string("ZENBU_user_annotation")) { _register_user_annotation(); }
+    if(root_node->name() == string("ZENBU_reports_page_config"))  { _register_reports_config(); }
   } else {
     printf("<error>no configXML node</error>\n");
   }
@@ -991,6 +1060,8 @@ void  EEDB::WebServices::ConfigServer::_register_view_config() {
   
   if((node = root_node->first_node("autoconfig")) != NULL) {
     config->config_type("AUTOSAVE");
+  } else if(_parameters["collaboration_uuid"] != "private") {
+    collaboration = get_collaboration(_parameters["collaboration_uuid"]);
   } else if((node = root_node->first_node("collaboration")) != NULL) {
     if((attr = node->first_attribute("uuid"))) {
       collaboration = get_collaboration(attr->value());
@@ -1104,6 +1175,17 @@ void  EEDB::WebServices::ConfigServer::_register_view_config() {
     config->link_to_collaboration(collaboration); 
   }
   
+  if(_parameters.find("fixed_id")!=_parameters.end()) { 
+    string fixed_id = _parameters["fixed_id"];
+    //perform the fixed_id relink (unlink previous, set current)
+    string check_msg, check_status;
+    if(config->check_fixed_id_editor(fixed_id, _user_profile, check_status, check_msg)) {
+      if(config->assign_to_fixed_id(fixed_id, _user_profile)) { 
+        fprintf(stderr, "assigned view %s to fixed_id [%s]\n", config->uuid().c_str(), config->fixed_id().c_str()); 
+      }
+    }
+  }
+
   //now increment usage and update user last_config
   config->update_usage();
   _session_data["last_view_config"] = config->uuid();
@@ -1130,12 +1212,14 @@ void  EEDB::WebServices::ConfigServer::_register_track_config() {
   
   EEDB::Collaboration *collaboration = NULL;
   
-  if((node = root_node->first_node("collaboration")) != NULL) {
+  if(_parameters["collaboration_uuid"] != "private") {
+    collaboration = get_collaboration(_parameters["collaboration_uuid"]);
+  } else if((node = root_node->first_node("collaboration")) != NULL) {
     if((attr = node->first_attribute("uuid"))) {
       collaboration = get_collaboration(attr->value());
     }
   }
-  
+
   string uuid = MQDB::uuid_b64string();
   config->uuid(uuid); 
   
@@ -1234,12 +1318,14 @@ void  EEDB::WebServices::ConfigServer::_register_script_config() {
   
   EEDB::Collaboration *collaboration = NULL;
   
-  if((node = root_node->first_node("collaboration")) != NULL) {
+  if(_parameters["collaboration_uuid"] != "private") {
+    collaboration = get_collaboration(_parameters["collaboration_uuid"]);
+  } else if((node = root_node->first_node("collaboration")) != NULL) {
     if((attr = node->first_attribute("uuid"))) {
       collaboration = get_collaboration(attr->value());
     }
   }
-  
+
   string uuid = MQDB::uuid_b64string();
   config->uuid(uuid); 
   
@@ -1407,4 +1493,421 @@ void  EEDB::WebServices::ConfigServer::_register_user_annotation() {
   //send result back
   printf("<feature id=\"%s\" />\n", feature->db_id().c_str());
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void  EEDB::WebServices::ConfigServer::_register_reports_config() {
+  if(!_param_doc || !_config_node) { return; }
+  rapidxml::xml_document<>  *doc = (rapidxml::xml_document<>*)_param_doc;
+  rapidxml::xml_node<>      *root_node = (rapidxml::xml_node<>*)_config_node;
+  rapidxml::xml_node<>      *node;
+  rapidxml::xml_attribute<> *attr;
+  
+  printf("<note>_register_reports_config</note>");
+  
+  if(!_user_profile || !_userDB) {
+    printf("<validation_error>no_user_login</validation_error>\n");
+    printf("<error_message>no user login</error_message>\n");
+    return;
+  }
+  
+  //TODO: completely change this uuid approach. alter schema to add configuration.fixed_id varchar(255) default NULL unique
+  //now every config keeps the unique UUID (which does not change) like previous design.
+  //The new column (fixed_id) can be used for aliasing and redirection/update to a view while keeping a fixed URL/ID on the public side
+  //query with fetch_by_uuid() will search both uuid and fixed_id columns
+  //save/create will always generate a new uuid which never changes, but if fixed_id is set (on save) like for reports then it will also reassign the fixed_id
+  
+  //fixed_id check/overwrite code
+  string uuid = MQDB::uuid_b64string();  //new uuid for this config
+
+  string fixed_id, prev_fixed_uuid;
+  
+  if(_parameters.find("fixed_id")!=_parameters.end()) {
+    fixed_id = _parameters["fixed_id"];
+    //check validity, find old config if this will replace
+    
+    EEDB::Configuration *config2 = NULL;
+    config2 = EEDB::Configuration::fetch_by_uuid(_userDB, fixed_id, _user_profile);
+    if(config2) {
+      printf("<stored_config_type>%s</stored_config_type>", config2->config_type().c_str());
+      if(config2->uuid() == fixed_id) {
+        printf("<validation_error>fixed_id_overlaps_uuid</validation_error>\n");
+        printf("<error_message>configuration [%s] is uuid, can not use as fixed_id</error_message>\n", fixed_id.c_str());
+        return;
+      }
+      if(config2->config_type() != "REPORT") {
+        printf("<validation_error>exists_but_not_report</validation_error>\n");
+        printf("<error_message>configuration [%s] exists, but it is not a zenbu_report so can not edit</error_message>\n", fixed_id.c_str());
+        return;
+      }
+    
+      //user can fetch so now double check owner and collaboration security
+      string check_msg, editor_status;
+      config2->check_fixed_id_editor(fixed_id, _user_profile, editor_status, check_msg);
+      if(editor_status!="fixed_id_editor" && editor_status!="fixed_id_owner") { 
+        printf("<validation_error>exists_secured_non_editable</validation_error>\n");
+        printf("<error_message>configuration [%s] exists, user has read access, but can not edit</error_message>\n", fixed_id.c_str());
+        return;
+      }
+    }
+    
+    if(!config2) {
+      //perform global super-user check if someone else is using that uuid
+      config2 = EEDB::Configuration::fetch_by_uuid(_userDB, fixed_id);  //not secured version
+      if(config2) {
+        //config exists by another user which is outside this users read scope
+        printf("<stored_config_type>%s</stored_config_type>", config2->config_type().c_str());
+        printf("<validation_error>exists_security_fault</validation_error>\n");
+        printf("<error_message>configuration [%s] exists but outside user's security privilege space</error_message>\n", fixed_id.c_str());
+        return;
+      }
+    }
+    
+    if(config2) {
+      printf("<validation_status>replace_fixed_id</validation_status>\n");
+      printf("<note>previous config uuid[%s] will be unlinked from fixed_id[%s] and new config [%s] will get the fixed_id</note>\n",
+             config2->uuid().c_str(), fixed_id.c_str(), uuid.c_str());
+      //TODO: config2->assign_to_fixed_id("");  //unlinks from fixed_id?
+      //prev_fixed_uuid = config2->uuid();
+    } else {
+      printf("<validation_status>new_fixed_id</validation_status>\n");
+    }
+  }
+  
+  EEDB::Configuration *config = new EEDB::Configuration;
+  config->config_type("REPORT");
+  
+  EEDB::Collaboration *collaboration = NULL;
+  if(_parameters["collaboration_uuid"] != "private") {
+    fprintf(stderr, "_register_reports_config via collaboration_uuid link to collaboration [%s]\n", _parameters["collaboration_uuid"].c_str());
+    collaboration = get_collaboration(_parameters["collaboration_uuid"]);
+  } else if((node = root_node->first_node("collaboration")) != NULL) {
+    if((attr = node->first_attribute("uuid"))) {
+      collaboration = get_collaboration(attr->value());
+    }
+  }
+  
+  EEDB::MetadataSet  *mdset = config->metadataset();
+  EEDB::Metadata     *md;
+  if(_user_profile) {
+    config->owner(_user_profile);
+    mdset->add_tag_symbol("eedb:owner_email", _user_profile->email_identity());
+  }
+  
+  if((node = root_node->first_node("summary")) != NULL) {
+    if((attr = node->first_attribute("title"))) {
+      md = mdset->add_tag_data("eedb:display_name", attr->value());
+    }
+    
+    if((attr = node->first_attribute("desc"))) {
+      md = mdset->add_tag_data("description", attr->value());
+    }
+    
+    if((attr = node->first_attribute("asm"))) {
+      mdset->add_tag_symbol("eedb:assembly_name", attr->value());
+    }
+  }
+  md = mdset->add_tag_data("date", _create_date_string());
+  
+  config->uuid(uuid);
+  mdset->add_tag_symbol("uuid", uuid);
+
+  /*
+  //use timestamp to order uuid_history
+  //TODO: need to transfer the uuid_history from the previous view which this one is derived from
+  struct timeval  nowtime;
+  gettimeofday(&nowtime, NULL);
+  char buffer[2048];
+  long ts = nowtime.tv_sec;
+  sprintf(buffer, "timestamp:%ld;uuid:%s;", ts, uuid.c_str());
+  mdset->add_tag_data("uuid_history", buffer);  //stores this uuid with timestamp, this carries forward to each derived view so preserves history
+  
+  if(!prev_fixed_uuid.empty()) {
+    long ts = nowtime.tv_sec;
+    sprintf(buffer, "timestamp:%ld;prev_fixed_uuid:%s;", ts, prev_fixed_uuid.c_str());
+    mdset->add_tag_data("prev_fixed_uuid", buffer);  //previous owner of fixed_id
+  }
+   */
+
+  //if(getenv("SERVER_NAME")) { mdset->add_tag_data("Server_Name", getenv("SERVER_NAME")); }
+  //if(getenv("HTTP_HOST")) { mdset->add_tag_data("Http_Host", getenv("HTTP_HOST")); }
+  //if(getenv("SERVER_PORT")) { mdset->add_tag_data("Server_Port", getenv("SERVER_PORT")); }
+  //if(getenv("SERVER_SOFTWARE")) { mdset->add_tag_data("Server_Software", getenv("SERVER_SOFTWARE")); }
+  //if(getenv("SERVER_PROTOCOL")) { mdset->add_tag_data("Server_Protocol", getenv("SERVER_PROTOCOL")); }
+  //if(getenv("GATEWAY_INTERFACE")) { mdset->add_tag_data("CGI_Revision", getenv("GATEWAY_INTERFACE")); }
+  //if(getenv("HTTP_USER_AGENT")) { mdset->add_tag_data("browser", getenv("HTTP_USER_AGENT")); }
+  //if(getenv("REMOTE_ADDR")) { mdset->add_tag_data("REMOTE_ADDR", getenv("REMOTE_ADDR")); }
+  //if(getenv("HTTP_REFERER")) { mdset->add_tag_data("HTTP_REFERER", getenv("HTTP_REFERER")); }
+  
+  
+  //- add the configUUID
+  node = doc->allocate_node(rapidxml::node_element, "configUUID", uuid.c_str());
+  root_node->append_node(node);
+  
+  //reconstruct the configXML string
+  std::string out_string;
+  rapidxml::print(std::back_inserter(out_string), *root_node, 0);
+  mdset->add_tag_data("configXML", out_string);
+  
+  mdset->remove_duplicates();
+  mdset->extract_keywords();
+  
+  config->store(_userDB);
+  
+  if(collaboration) { config->link_to_collaboration(collaboration); }
+  
+  if(!fixed_id.empty()) {
+    //perform the fixed_id relink (unlink previous, set current)
+    string check_msg, check_status;
+    if(config->check_fixed_id_editor(fixed_id, _user_profile, check_status, check_msg)) {
+      if(!config->assign_to_fixed_id(fixed_id, _user_profile)) {
+        printf("<note>failed to assign to fixed_id</note>\n");
+        fixed_id.clear();
+      }
+    } else {
+      fixed_id.clear();
+    }
+    printf("<check_fixed_id_editor status=\'%s\'>%s</check_fixed_id_editor>",
+            check_status.c_str(), check_msg.c_str());
+  }
+  
+  //send result back
+  printf("<configXML uuid=\"%s\" ", uuid.c_str());
+  if(!fixed_id.empty()) { printf("fixed_id=\"%s\" ", fixed_id.c_str()); }
+  printf("/>\n", uuid.c_str());
+  
+  printf("%s\n", config->xml().c_str());
+}
+
+//=============================================================================
+
+void EEDB::WebServices::ConfigServer::validate_uuid() {
+  //multipurpose method: generate new UUID if none sent,
+  //if uuid sent then validate if it doesn't exit
+  //  or if exists then that user has security clearance to edit/overwrite that config
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
+  printf("<config_uuid_validation>\n");
+
+  string check_msg, check_status;
+
+  if(!_user_profile || !_userDB) {
+    printf("<validation_status>no_user</validation_status>\n");
+    printf("<validation_message>no user login</validation_message>\n");
+  } else {
+    printf("%s", _user_profile->simple_xml().c_str());
+
+    if(_parameters.find("uuid") == _parameters.end()) {
+      //none sent so generate a new one, optional double check DB
+      string uuid = MQDB::uuid_b64string();
+      printf("<config_uuid>%s</config_uuid>", uuid.c_str());
+      printf("<validation_status>autogen_uuid</validation_status>\n");
+    } else {
+      string uuid = _parameters["uuid"];
+      printf("<config_uuid>%s</config_uuid>", uuid.c_str());
+      
+      EEDB::Configuration *config = NULL;
+      config = EEDB::Configuration::fetch_by_uuid(_userDB, uuid, _user_profile);
+      if(config) {
+        printf("<config_type>%s</config_type>", config->config_type().c_str());
+        if(config->check_fixed_id_editor(uuid, _user_profile, check_status, check_msg)) {
+          //I can read the config and edit it
+          printf("<validation_status>exists_secured_editable</validation_status>\n");
+          printf("<check_status>%s</check_status>\n", check_status.c_str());
+          printf("<check_message>%s</check_message>\n", check_msg.c_str());
+        } else {
+          printf("<validation_status>exists_secured_non_editable</validation_status>\n");
+          printf("<validation_message>configuration exists, user has read access, but can not edit</validation_message>\n");
+          printf("<check_status>%s</check_status>\n", check_status.c_str());
+          printf("<check_message>%s</check_message>\n", check_msg.c_str());
+        }
+        /*
+        //user can fetch so now double check owner and collaboration security
+        if(config->owner()->email_identity() == _user_profile->email_identity()) {
+          printf("<validation_status>exists_secured_owner</validation_status>\n");
+        } else {
+          printf("<validation_status>exists_secured_non_editable</validation_status>\n");
+          printf("<validation_message>configuration exists, user has read access, but can not edit</validation_message>\n");
+        }
+        */
+      }
+      
+      if(!config) {
+        //perform global super-user check if someone else is using that uuid
+        config = EEDB::Configuration::fetch_by_uuid(_userDB, uuid);  //not secured version
+        if(config) {
+          printf("<config_type>%s</config_type>", config->config_type().c_str());
+          //config exists by another user which is outside this users scope
+          printf("<validation_status>exists_security_fault</validation_status>\n");
+          printf("<validation_message>exists but user doesn't have read access</validation_message>\n");
+        }
+      }
+      
+      if(!config) {
+        printf("<validation_status>valid_new_uuid</validation_status>\n");
+      }
+    }
+  }
+  
+  struct timeval       endtime, time_diff;
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &_starttime, &time_diff);
+  double   runtime  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+  printf("<process_summary processtime_sec=\"%1.6f\" />\n", runtime);
+  printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
+  
+  printf("</config_uuid_validation>\n");
+}
+
+
+void  EEDB::WebServices::ConfigServer::show_fixed_id_editors() {
+  printf("Content-type: text/xml\r\n");
+  printf("Access-Control-Allow-Origin: *\r\n");
+  printf("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Content-Disposition, Accept\r\n");
+  printf("\r\n");
+  printf("<config_fixed_id_editors>\n");
+  
+  if(_parameters.find("_change_editor_mode_error") != _parameters.end()) {
+    printf("<error>%s</error>\n", _parameters["_change_editor_mode_error"].c_str());
+  }
+  if(_parameters.find("_error_message") != _parameters.end()) {
+    printf("<error_message>%s</error_message>\n", _parameters["_error_message"].c_str());
+  }
+
+  string check_msg, check_status;
+  
+  if(_user_profile) { printf("%s", _user_profile->simple_xml().c_str()); }
+  string fixed_id;
+  if(_parameters.find("fixed_id") != _parameters.end()) { fixed_id = _parameters["fixed_id"]; }
+
+  EEDB::Configuration *config = EEDB::Configuration::fetch_by_uuid(_userDB, fixed_id, _user_profile);
+  if(config) {
+    printf("%s", config->simple_xml().c_str());
+    
+    string check_msg, check_status;
+    if(config->check_fixed_id_editor(fixed_id, _user_profile, check_status, check_msg)) {
+      printf("<check_status>%s</check_status>\n", check_status.c_str());
+
+      string editor_mode = "OWNER_ONLY";
+      dynadata value = _userDB->fetch_col_value("SELECT editor_mode FROM configuration_fixed WHERE fixed_id=?", "s", fixed_id.c_str());
+      if((value.type == MQDB::STRING) && (!value.i_string.empty())) { editor_mode = value.i_string; }
+      printf("<editor_mode>%s</editor_mode>\n", editor_mode.c_str());
+      
+      if(editor_mode == "USER_LIST") {
+        //fetch the editors
+        const char* sql = "SELECT u.*, editor_status FROM user u JOIN configuration_fixed_editors using(user_id) WHERE fixed_id =? ";
+        vector<MQDB::DBObject*> users = MQDB::fetch_multiple(EEDB::User::create, _userDB, sql, "s", fixed_id.c_str());
+        if(!users.empty()) {
+          printf("<editors>\n");
+          vector<MQDB::DBObject*>::iterator  it;
+          for(it = users.begin(); it != users.end(); it++) {
+            EEDB::User *user = (EEDB::User*)(*it);
+            printf("%s\n", user->simple_xml().c_str());
+          }
+          printf("</editors>\n");
+        }
+      }
+    }
+  }
+  
+  struct timeval       endtime, time_diff;
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &_starttime, &time_diff);
+  double   runtime  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+  printf("<process_summary processtime_sec=\"%1.6f\" />\n", runtime);
+  printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
+  
+  printf("</config_fixed_id_editors>\n");
+}
+
+
+void EEDB::WebServices::ConfigServer::change_fixed_id_editor_mode() {
+  //must be owner of fixed_id in order to change editor_mode
+  string fixed_id;
+  string editor_mode = "OWNER_ONLY";
+  if(_parameters.find("fixed_id") != _parameters.end()) { fixed_id = _parameters["fixed_id"]; }
+  if(_parameters.find("editor_mode") != _parameters.end()) { editor_mode = _parameters["editor_mode"]; }
+  if(editor_mode!="USER_LIST" && editor_mode!="COLLABORATORS") { editor_mode = "OWNER_ONLY"; }
+  
+  if(!_user_profile) {
+    _parameters["_change_editor_mode_error"] = "not_owner";
+    return show_fixed_id_editors();
+  }
+  
+  dynadata value = _userDB->fetch_col_value("SELECT editor_status FROM configuration_fixed_editors WHERE fixed_id=? and user_id=?", "sd",
+                                            fixed_id.c_str(), _user_profile->primary_id());
+  if((value.type != MQDB::STRING) || (value.i_string != "OWNER")) {
+    _parameters["_change_editor_mode_error"] = "not_owner";
+    return show_fixed_id_editors();
+  }
+  
+  const char* sql = "INSERT INTO configuration_fixed (fixed_id, editor_mode) VALUES(?, ?) ON DUPLICATE KEY UPDATE editor_mode=?";
+  _userDB->do_sql(sql, "sss", fixed_id.c_str(), editor_mode.c_str(), editor_mode.c_str());
+
+  show_fixed_id_editors();
+}
+
+
+void EEDB::WebServices::ConfigServer::change_fixed_id_editor(string mode) {
+  //must be owner of fixed_id in order to change editors list
+  string fixed_id;
+  if(_parameters.find("fixed_id") != _parameters.end()) { fixed_id = _parameters["fixed_id"]; }
+  //if(_parameters.find("editor_mode") != _parameters.end()) { editor_mode = _parameters["editor_mode"]; }
+  //if(editor_mode!="USER_LIST" && editor_mode!="COLLABORATORS") { editor_mode = "OWNER_ONLY"; }
+  
+  if(!_user_profile) {
+    _parameters["_change_editor_mode_error"] = "not_owner";
+    return show_fixed_id_editors();
+  }
+  dynadata value = _userDB->fetch_col_value("SELECT editor_status FROM configuration_fixed_editors WHERE fixed_id=? and user_id=?", "sd",
+                                            fixed_id.c_str(), _user_profile->primary_id());
+  if((value.type != MQDB::STRING) || (value.i_string != "OWNER")) {
+    _parameters["_change_editor_mode_error"] = "not_owner";
+    return show_fixed_id_editors();
+  }
+
+  EEDB::User *user = EEDB::User::fetch_by_email(_userDB, _parameters["user_identity"]);
+  if(!user) { user = EEDB::User::fetch_by_openID(_userDB, _parameters["user_identity"]); }
+  if(!user) {
+    _parameters["_change_editor_mode_error"] = "editor_not_in_system";
+    _parameters["_error_message"] = "editor ["+_parameters["user_identity"]+"] not found in system. Please invite them through collaboration system";
+    return show_fixed_id_editors();
+  }
+  
+  if(user->primary_id() == _user_profile->primary_id()) {
+    _parameters["_change_editor_mode_error"] = "editor_is_owner";
+    _parameters["_error_message"] = "can't add/remove owner as an editor";
+    return show_fixed_id_editors();
+  }
+  //_parameters["_error_message"] += "adding editor ["+_parameters["user_identity"]+"] user_id "+ l_to_string(user->primary_id());
+
+  if(mode == "add") {
+    const char* sql = "INSERT INTO configuration_fixed_editors (fixed_id, user_id, editor_status) VALUES(?, ?, 'EDITOR')";
+    _userDB->do_sql(sql, "sd", fixed_id.c_str(), user->primary_id());
+  }
+  if(mode == "remove") {
+    const char* sql = "DELETE FROM configuration_fixed_editors where fixed_id=? and user_id=? and editor_status='EDITOR'";
+    _userDB->do_sql(sql, "sd", fixed_id.c_str(), user->primary_id());
+  }
+
+  /*
+  string msg ="\n\nHello ZENBU collaborator "+user->nickname()+"\n\n";
+  msg += "ZENBU user ";
+  msg += _user_profile->nickname() + "<"+ _user_profile->email_identity() + "> ";
+  msg += " has added you to their collaboration ["+collaboration->display_name() +"] on ZENBU  at "+ _web_url;
+  msg += " to share data and visualizations.\n\n";
+  msg += "Please click the link see your new collaboration\n";
+  msg += _web_url + "/user/#section=collaborations";
+  fprintf(stderr, "%s\n", msg.c_str());
+  
+  string subj = "You are now member of ZENBU collaboration '"+collaboration->display_name()+"'";
+  send_email(user->email_identity(), subj, msg);
+  */
+  
+  show_fixed_id_editors();
+}
+
 

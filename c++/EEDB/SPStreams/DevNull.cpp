@@ -1,4 +1,4 @@
-/* $Id: DevNull.cpp,v 1.4 2013/04/08 07:37:12 severin Exp $ */
+/* $Id: DevNull.cpp,v 1.5 2021/07/02 08:50:02 severin Exp $ */
 
 /***
 
@@ -134,11 +134,11 @@ MQDB::DBObject* EEDB::SPStreams::DevNull::_next_in_stream() {
   if(_source_stream==NULL) { return NULL; }
   while((obj = _source_stream->next_in_stream()) != NULL) {      
     //non-feature objects are just passed through this module      
-    if(obj->classname() != EEDB::Feature::class_name) {
+    if((obj->classname() != EEDB::Feature::class_name) && (obj->classname() != EEDB::Edge::class_name)) {
       return obj;
     }
 
-    //Features are sucked into black hole.....
+    //Features and Edges are sucked into black hole.....
     obj->release();
   }  
   return NULL; 

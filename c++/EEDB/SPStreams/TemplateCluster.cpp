@@ -1,4 +1,4 @@
-/* $Id: TemplateCluster.cpp,v 1.53 2016/08/09 05:33:51 severin Exp $ */
+/* $Id: TemplateCluster.cpp,v 1.55 2020/04/28 01:28:55 severin Exp $ */
 
 /***
 
@@ -119,9 +119,13 @@ void EEDB::SPStreams::TemplateCluster::init() {
   _skip_empty_templates  = true;
   _stream_features_mode  = false;;
   _overlap_check_subfeatures = false; //extend overlap logic to require subfeature overlap
+  _overlap_distance      = 0;
+  _scan_extend_distance  = 0;
+  _edges_mode            = false;
 
   _completed_templates.clear();
   _template_buffer.clear();
+  _edge_buffer.clear();
 }
 
 void EEDB::SPStreams::TemplateCluster::display_info() {
@@ -169,27 +173,41 @@ MQDB::DBObject* EEDB::SPStreams::TemplateCluster::_next_in_stream() {
   if((_source_stream!=NULL) and (!_template_stream_empty or !_template_buffer.empty())) {
     while((obj = _source_stream->next_in_stream()) != NULL) {
 
-      //non-feature\expression objects on the primary source stream
-      //are just passed through this module      
-      if(obj->classname() != EEDB::Feature::class_name) {
+      if(obj->classname() == EEDB::Feature::class_name) {
+        //if cluster is returned then it is completed
+        EEDB::Feature *cluster = _process_feature(obj);
+        obj->release();
+        if(cluster!=NULL) { return cluster; }        
+      }
+      else if(obj->classname() == EEDB::Edge::class_name) {
+        //if clustered edge is returned then it is completed
+        EEDB::Edge *edge = _process_edge(obj);
+        obj->release();
+        if(edge!=NULL) { return edge; }        
+      }
+      else {
+        //everything else is just passed through this module      
         return obj;
       }
 
-      //if cluster is returned then it is completed
-      EEDB::Feature *cluster = _process_object(obj);
-      obj->release();
-      if(cluster!=NULL) { return cluster; }
-      
       //if the template stream is empty and there are no templates in the buffer for
       //analysis, then we can stop processing, so clear the primary stream
       if(_template_stream_empty && _template_buffer.empty()) {
-         _source_stream->stream_clear(); 
-         //fprintf(stderr, "TemplateCluster:: templates done\n");
-         break;
+        _source_stream->stream_clear(); 
+        //fprintf(stderr, "TemplateCluster:: templates done\n");
+        break;
       }
     }
   }
   
+  //TODO: if _edges_mode so some final magic here
+  
+  if(!_edge_buffer.empty()) {
+    EEDB::Edge* edge = _edge_buffer.front();
+    _edge_buffer.pop_front();
+    return edge; 
+  }
+
   //
   // input stream is empty so move all _template_buffer into _completed_templates
   //
@@ -198,7 +216,7 @@ MQDB::DBObject* EEDB::SPStreams::TemplateCluster::_next_in_stream() {
     _template_buffer.pop_front();
     if(cluster!=NULL) {
       _calc_template_significance(cluster);
-      if(_skip_empty_templates and (cluster->significance() <= 0.0)) {
+      if(_edges_mode or (_skip_empty_templates and (cluster->significance() <= 0.0))) {
         cluster->release();
       } else {
         _completed_templates.push_back(cluster);
@@ -262,10 +280,19 @@ void EEDB::SPStreams::TemplateCluster::_reset_stream_node() {
 
 
 bool EEDB::SPStreams::TemplateCluster::_stream_by_named_region(string assembly_name, string chrom_name, long int start, long int end) {
+  if(_overlap_distance>0) { 
+    start -= _overlap_distance; 
+    if(end>0) { end += _overlap_distance; }
+  }
+  if(_scan_extend_distance>0) { 
+    start -= _scan_extend_distance; 
+    if(end>0) { end += _scan_extend_distance; }
+  }
+  if(start<0) { start = -1; }
   _region_start = start;
   _region_end   = end;
 
-  //fprintf(stderr,"TemplateCluster::_stream_by_named_region[%ld] %s %s %d .. %d\n", (long)this, assembly_name.c_str(), chrom_name.c_str(), start, end);
+  fprintf(stderr,"TemplateCluster::_stream_by_named_region[%ld] %s %s %ld .. %ld\n", (long)this, assembly_name.c_str(), chrom_name.c_str(), start, end);
 
   _stream_features_mode  = true;
 
@@ -274,15 +301,16 @@ bool EEDB::SPStreams::TemplateCluster::_stream_by_named_region(string assembly_n
     _template_stream_empty = true;
     return true;
   }
-  side_stream()->stream_by_named_region(assembly_name, chrom_name, start, end);
+  //side_stream()->stream_by_named_region(assembly_name, chrom_name, start, end);
+  side_stream()->stream_by_named_region(assembly_name, chrom_name, start, -1);
   
   //get first feature on the side stream
   EEDB::Feature *cluster = _extend_template_buffer();
   if(!cluster) { return true; }
   
   //check if first side-feature starts outside region, if so then done before we start
-  if((_region_end>0) and (cluster->chrom_start() > _region_end)) {
-    fprintf(stderr, "TemplateCluster::_stream_by_named_region -- done before we start\n");
+  if((_region_end>0) and (cluster->min_start() > _region_end)) {
+    //fprintf(stderr, "TemplateCluster::_stream_by_named_region -- done before we start\n");
     cluster->release();
     _stream_clear();
     _template_stream_empty = true;
@@ -295,14 +323,14 @@ bool EEDB::SPStreams::TemplateCluster::_stream_by_named_region(string assembly_n
   
   //now slave the primary stream to the first cluster start and stream it
   //open-ended until the end of the templates  
-  return source_stream()->stream_by_named_region(assembly_name, chrom_name, cluster->chrom_start(), -1);
+  return source_stream()->stream_by_named_region(assembly_name, chrom_name, cluster->min_start(), -1);
 }
 
 //
 ////////////////////////////////////////////////////////////
 //
 
-EEDB::Feature* EEDB::SPStreams::TemplateCluster::_process_object(MQDB::DBObject* obj) {
+EEDB::Feature* EEDB::SPStreams::TemplateCluster::_process_feature(MQDB::DBObject* obj) {
   if(obj==NULL) { return NULL; }
   
   EEDB::Feature  *in_feature =NULL;
@@ -316,7 +344,7 @@ EEDB::Feature* EEDB::SPStreams::TemplateCluster::_process_object(MQDB::DBObject*
   //
   if(!_template_buffer.empty()) {
     cluster = _template_buffer.front();
-    while((cluster!=NULL) and (cluster->chrom_end() < in_feature->chrom_start())) { 
+    while(!_edges_mode && (cluster!=NULL) and (cluster->max_end() < in_feature->chrom_start())) { 
       _template_buffer.pop_front();
       _calc_template_significance(cluster);
       if(_skip_empty_templates and (cluster->significance() <= 0.0)) { 
@@ -338,7 +366,7 @@ EEDB::Feature* EEDB::SPStreams::TemplateCluster::_process_object(MQDB::DBObject*
     //fprintf(stderr, "in_feature%s", in_feature->simple_xml().c_str());
     //fprintf(stderr, "_template_buffer.empty [region %ld .. %ld]\n", _region_start, _region_end);
     cluster = _extend_template_buffer();
-    while((cluster!=NULL) and (cluster->chrom_end() < in_feature->chrom_start())) {
+    while(!_edges_mode && (cluster!=NULL) and (cluster->max_end() < in_feature->chrom_start())) {
       skips++;
       cluster = _template_buffer.front();
       _template_buffer.pop_front();
@@ -355,11 +383,11 @@ EEDB::Feature* EEDB::SPStreams::TemplateCluster::_process_object(MQDB::DBObject*
 
   //
   // do work on the end of the buffer, 
-  // fill in until we hit a template which is beyond(>obj)
+  // fill in until we hit a template which is beyond(>in_feature)
   //
   if(!_template_buffer.empty()) { 
     cluster = _template_buffer.back();
-    while(cluster and (cluster->chrom_start() <= in_feature->chrom_end())) {
+    while(cluster and (cluster->min_start() <= in_feature->chrom_end())) {
       cluster = _extend_template_buffer();
     }
   }
@@ -398,13 +426,22 @@ EEDB::Feature* EEDB::SPStreams::TemplateCluster::_process_object(MQDB::DBObject*
     }
   }
 
-  if(!_completed_templates.empty()) {
+  if(!_edges_mode && !_completed_templates.empty()) {
     EEDB::Feature *cluster = _completed_templates.front();
     _completed_templates.pop_front();
     return cluster;
-  } else { 
-    return NULL; 
   }
+  if(_edges_mode) {
+    if(template_hits.empty() || template_hits.size() >1) {
+      fprintf(stderr, "%s hits %ld templates: WARN\n", in_feature->chrom_location().c_str(), template_hits.size());
+    }
+    //fprintf(stderr, "%s hits %ld templates\n", in_feature->chrom_location().c_str(), template_hits.size());
+    if(!template_hits.empty()) {
+      cluster = template_hits[0];
+      return cluster;
+    }
+  }
+  return NULL; 
 }
 
 
@@ -419,7 +456,7 @@ EEDB::Feature*  EEDB::SPStreams::TemplateCluster::_extend_template_buffer() {
   }
 
   EEDB::Feature *feature = (EEDB::Feature*)obj;
-  if((obj!=NULL) and (_region_end>0) and (feature->chrom_start() > _region_end)) {
+  if(!_edges_mode and (obj!=NULL) and (_region_end>0) and (feature->min_start() > _region_end)) {
     //template is outside query region so can stop
     obj->release();
     obj = NULL;
@@ -431,8 +468,8 @@ EEDB::Feature*  EEDB::SPStreams::TemplateCluster::_extend_template_buffer() {
     _side_stream->stream_clear();
   } else { 
     _template_buffer.push_back((EEDB::Feature*)obj); 
+    //fprintf(stderr, "extend_template_buffer : %s\n", feature->chrom_location().c_str());
   }
-
   return (EEDB::Feature*)obj;
 }
 
@@ -497,6 +534,10 @@ void EEDB::SPStreams::TemplateCluster::_modify_ends(EEDB::Feature *feature) {
     if(feature->strand() == '-') { feature->chrom_end(start); }
     if(feature->strand() == ' ') { feature->chrom_start(end); }
   }
+  if(_overlap_distance > 0) {
+    feature->chrom_start(feature->chrom_start() - _overlap_distance);
+    feature->chrom_end(feature->chrom_end() + _overlap_distance);
+  }
 }
 
 
@@ -542,6 +583,7 @@ void EEDB::SPStreams::TemplateCluster::_cluster_add_expression(EEDB::Feature *cl
   //fprintf(stderr, "    merged v=%f d=%f\n", expr->value(), expr->duplication());
 }
 
+
 /*****************************************************************************************/
 
 void EEDB::SPStreams::TemplateCluster::_xml(string &xml_buffer) {
@@ -559,6 +601,16 @@ void EEDB::SPStreams::TemplateCluster::_xml(string &xml_buffer) {
     xml_buffer.append(_overlap_mode);
     xml_buffer.append("</overlap_mode>"); 
   }
+  if(_overlap_distance > 0) {
+    char buffer[256];
+    snprintf(buffer, 256, "<distance>%ld</distance>", _overlap_distance);
+    xml_buffer.append(buffer);        
+  }  
+  if(_scan_extend_distance > 0) {
+    char buffer[256];
+    snprintf(buffer, 256, "<scan_extend_distance>%ld</scan_extend_distance>", _scan_extend_distance);
+    xml_buffer.append(buffer);        
+  }  
 
   if(_overlap_check_subfeatures) { xml_buffer.append("<overlap_subfeatures>true</overlap_subfeatures>"); }
   else { xml_buffer.append("<overlap_subfeatures>false</overlap_subfeatures>"); }
@@ -608,7 +660,17 @@ EEDB::SPStreams::TemplateCluster::TemplateCluster(void *xml_node) {
     if(mode == "mean")  { _expression_mode = CL_MEAN; }
     if(mode == "none")  { _expression_mode = CL_NONE; }
   }
-  
+
+  if((node = root_node->first_node("distance")) != NULL) {
+    _overlap_distance = strtol(node->value(), NULL, 10);
+    if(_overlap_distance<0) { _overlap_distance = 0; }
+  }
+  if(((node = root_node->first_node("scan_extend_distance")) != NULL) ||
+     ((node = root_node->first_node("prescan_distance")) != NULL)) {
+    _scan_extend_distance = strtol(node->value(), NULL, 10);
+    if(_scan_extend_distance<0) { _scan_extend_distance = 0; }
+  }
+
   _skip_empty_templates = true;
   if((node = root_node->first_node("skip_empty_templates")) != NULL) { 
     if(string(node->value()) == "false") { _skip_empty_templates=false; }
@@ -640,6 +702,121 @@ EEDB::SPStreams::TemplateCluster::TemplateCluster(void *xml_node) {
   }
 }
 
+//---------------------------------------------------------------------
+//
+// Edge version of code
+//
+//---------------------------------------------------------------------
+
+EEDB::Edge* EEDB::SPStreams::TemplateCluster::_process_edge(MQDB::DBObject* obj) {
+  if(obj==NULL) { return NULL; }
+  
+  EEDB::Edge  *in_edge =NULL;
+  if(obj->classname() == EEDB::Edge::class_name) { in_edge = (EEDB::Edge*)obj; }
+  if(in_edge==NULL) { return NULL; }
+
+//   fprintf(stderr, "process_edge %c %ld..%ld (%ld bp) %s : %s - %s\n", 
+//           in_edge->direction(), in_edge->chrom_start(), in_edge->chrom_end(),
+//           in_edge->chrom_end() - in_edge->chrom_start() +1,
+//           in_edge->feature1()->primary_name().c_str(), 
+//           in_edge->feature1()->chrom_location().c_str(), in_edge->feature2()->chrom_location().c_str());
+
+  if((_region_end>0) and (in_edge->chrom_start() > _region_end)) {
+    fprintf(stderr, "edge starts after _region_end : STOP IT!!!\n");
+    //we can stop processing, so clear the primary stream
+    _source_stream->stream_clear(); 
+    //fprintf(stderr, "TemplateCluster:: templates done\n");
+    fprintf(stderr, "final edge_buffer %ld edges\n", _edge_buffer.size());
+    return NULL;
+  }
+
+  //process f1/f2 into templates and update in_edge with templates
+  _edges_mode = true;
+  EEDB::Feature *f1 = _process_feature(in_edge->feature1());
+  if(f1) {
+    //fprintf(stderr, "f1 %s => %s\n", in_edge->feature1()->chrom_location().c_str(), f1->chrom_location().c_str());
+    in_edge->feature1(f1);
+  }
+  
+  EEDB::Feature *f2 = _process_feature(in_edge->feature2());
+  if(f2) {
+    //fprintf(stderr, "f2 %s => %s\n", in_edge->feature2()->chrom_location().c_str(), f2->chrom_location().c_str());
+    in_edge->feature2(f2);
+  }
+
+  //TODO: magic to merge edges
+  EEDB::Edge *out_edge = NULL;
+  for(unsigned int i=0; i<_edge_buffer.size(); i++) { 
+    EEDB::Edge *tedge = _edge_buffer[i];
+    if(!tedge) { continue; }
+    
+    if((tedge->feature1() == in_edge->feature1()) && 
+       (tedge->feature2() == in_edge->feature2())) {
+      //fprintf(stderr, "merge into template edge %s - %s\n", tedge->feature1()->chrom_location().c_str(), tedge->feature2()->chrom_location().c_str());
+      //metadata
+      tedge->metadataset()->merge_metadataset(in_edge->metadataset());
+      tedge->metadataset()->remove_duplicates();
+    
+      //TODO: edge_weight
+      vector<EEDB::EdgeWeight*>  weights = in_edge->edgeweight_array();
+      for(unsigned int j=0; j<weights.size(); j++) {
+        _edge_merge_weight(tedge, weights[j]);
+      }
+
+      out_edge = tedge;
+      break;
+    } 
+  }
+  
+  if(!out_edge) {
+    //fprintf(stderr, "new template edge  f1 %s => f2 %s\n", in_edge->feature1()->chrom_location().c_str(), in_edge->feature2()->chrom_location().c_str());
+    in_edge->calc_direction();
+    in_edge->retain();
+    _edge_buffer.push_back(in_edge);
+  }
+
+  //return out_edge; //not sure, I think I have to keep all edges in buffer until end
+  return NULL;
+}
 
 
+void EEDB::SPStreams::TemplateCluster::_edge_merge_weight(EEDB::Edge *edge, EEDB::EdgeWeight *weight) {
+  if(weight==NULL or edge==NULL) { return; }
+  if(weight->weight() == 0.0) { return; }
+  EEDB::DataSource *datasource = weight->datasource();
+  if(datasource==NULL) { return; }
+  
+  EEDB::EdgeWeight *wgt = edge->find_edgeweight(datasource, weight->datatype());
+  if(!wgt) {
+    //fprintf(stderr, "no weight for %s : just add\n", datasource->db_id().c_str());
+    edge->add_edgeweight(weight);
+    return;
+  }
+  
+  //fprintf(stderr, "  edge %s exp [%s] v=%f d=%f\n", edge->chrom_location().c_str(), expr->datatype()->type().c_str(), wgt->weight());
+  double value = wgt->weight();
+  switch(_expression_mode) {
+    case CL_MEAN: 
+    case CL_SUM: 
+      value     += weight->weight();
+      break;
+    case CL_MIN: 
+      if(weight->weight() < value) { 
+        value     = weight->weight(); 
+      }
+      break;
+    case CL_MAX: 
+      if(weight->weight() > value) { 
+        value = weight->weight(); 
+      }
+      break;
+    case CL_COUNT: 
+      value += 1.0;
+      break;
+    case CL_NONE: 
+      break;
+  }
+  wgt->weight(value);
+  //fprintf(stderr, "    merged v=%f d=%f\n", wgt->weight());
+}
 

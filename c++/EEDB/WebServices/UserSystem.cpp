@@ -1,4 +1,4 @@
-/* $Id: UserSystem.cpp,v 1.118 2016/10/05 08:52:58 severin Exp $ */
+/* $Id: UserSystem.cpp,v 1.125 2022/04/08 02:03:18 severin Exp $ */
 
 /***
 
@@ -174,6 +174,10 @@ bool EEDB::WebServices::UserSystem::execute_request() {
     collaboration_make_admin_user();
   } else if(_parameters["mode"] == "collaboration_revoke_admin_user") {
     collaboration_revoke_admin_user();
+  } else if(_parameters["mode"] == "collaboration_make_public") {
+    collaboration_make_public(true);
+  } else if(_parameters["mode"] == "collaboration_revoke_public") {
+    collaboration_make_public(false);
   } else if(_parameters["mode"] == "invite_user") {
     invite_user_to_collaboration();
   } else if(_parameters["mode"] == "accept_invitation") {
@@ -234,7 +238,7 @@ void EEDB::WebServices::UserSystem::show_api() {
   */
 
   printf("Content-type: text/html\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("\r\n");
   printf("<!DOCTYPE html  PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n");
 
@@ -484,7 +488,7 @@ void  EEDB::WebServices::UserSystem::parse_metadata_edit_commands(void *xml_node
 
 void EEDB::WebServices::UserSystem::show_user() {  
   printf("Content-type: text/xml\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
 
@@ -515,7 +519,7 @@ void  EEDB::WebServices::UserSystem::reset_session() {
   save_session();
 
   printf("Content-type: text/html\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("Location: %s/user/#section=profile\r\n", _web_url.c_str());
   printf("\r\n");
   
@@ -554,7 +558,7 @@ void EEDB::WebServices::UserSystem::password_login() {
   //save_session();
 
   printf("Content-type: text/xml\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<user>\n");
@@ -591,7 +595,7 @@ void EEDB::WebServices::UserSystem::logout() {
   save_session();
 
   printf("Content-type: text/xml\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<user>\n");
@@ -621,7 +625,7 @@ void  EEDB::WebServices::UserSystem::redirect_to_last_url() {
   printf("Content-type: text/html\r\n");
   string url = _web_url + "/user/#section=profile";  
   if(!_session_data["id"].empty()) { 
-    printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); 
+    printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); 
     string last_url = _session_data["last_url"];
     if(!last_url.empty()) { 
       url = last_url; 
@@ -635,7 +639,7 @@ void  EEDB::WebServices::UserSystem::redirect_to_last_url() {
 
 void  EEDB::WebServices::UserSystem::redirect_to_user_profile() {
   printf("Content-type: text/html\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("Location: %s/user/#section=profile\r\n", _web_url.c_str());
   printf("\r\n");  
 }
@@ -826,7 +830,7 @@ void  EEDB::WebServices::UserSystem::send_validation_email() {
   // display XML return status
   //
   printf("Content-type: text/xml\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<user_validation>\n");
@@ -868,6 +872,7 @@ void  EEDB::WebServices::UserSystem::send_password_reset_email() {
   msg += MQDB::uuid_b64string();
   msg += _parameters["profile_email"];
   string validcode = sha256(msg);  //sha512()
+  validcode.resize(24);
     
   //add the validation into the userDB
   const char* sql = "DELETE FROM user_email_validation WHERE user_id=?";
@@ -879,6 +884,10 @@ void  EEDB::WebServices::UserSystem::send_password_reset_email() {
   msg += "You have requested to reset the password for your account with email address <"+email+">.\n\n"; 
   msg += "To complete the password reset, please click the following link\n";
   msg += _web_url + "/cgi/eedb_user.cgi?profile_email="+email+";valid_code="+validcode;
+  msg += "\n\n";
+  //msg += "To complete the password reset, please enter this validation code into the password reset panel\n";
+  msg += "OR enter this validation code into the password reset panel\n";
+  msg += "\t"+validcode+"\n";
   msg += "\n\n";
   msg += "If you did not request a password reset, please just ignore this email.\n\n";
   
@@ -895,7 +904,7 @@ void  EEDB::WebServices::UserSystem::send_password_reset_email() {
   // display XML return status
   //
   printf("Content-type: text/xml\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<user_validation>\n");
@@ -956,7 +965,7 @@ void  EEDB::WebServices::UserSystem::send_invitation_email(EEDB::User *invited_u
   // display XML return status
   //
   printf("Content-type: text/xml\r\n");
-  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<user_validation>\n");
@@ -980,7 +989,7 @@ void EEDB::WebServices::UserSystem::receive_validation() {
   fprintf(stderr, "UserSystem::receive_validation\n");
 
   //printf("Content-type: text/xml\r\n");
-  //if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
+  //if(!_session_data["id"].empty()) { printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str()); }
   //printf("\r\n");
   //printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   //printf("<user_validation>\n");
@@ -1161,7 +1170,7 @@ void EEDB::WebServices::UserSystem::create_collaboration() {
 
 void EEDB::WebServices::UserSystem::show_collaborations() {  
   printf("Content-type: text/xml; charset=utf-8\r\n");
-  printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
+  printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   
@@ -1181,7 +1190,7 @@ void EEDB::WebServices::UserSystem::show_collaborations() {
     }    
   }
   
-  if(_user_profile && _public_collaboration &&
+  if(_public_collaboration &&
      ((_parameters.find("collaboration_uuid") == _parameters.end()) or (_parameters["collaboration_uuid"] == "public"))) { 
     if(collab_hash.find(_public_collaboration->group_uuid()) == collab_hash.end()) {
       collab_hash[_public_collaboration->group_uuid()] = _public_collaboration;
@@ -1271,6 +1280,16 @@ void EEDB::WebServices::UserSystem::ignore_collaboration() {
     collaboration->ignore_collaboration(_user_profile);
   }  
   show_collaborations();
+}
+
+void EEDB::WebServices::UserSystem::collaboration_make_public(bool value) {  
+  //must be owner of collaboration in order to accept a user's collaboration request
+  if(!_user_profile) { return show_user(); }
+  EEDB::Collaboration *collaboration = EEDB::Collaboration::fetch_by_uuid(_user_profile, _parameters["collaboration_uuid"]);
+  if(collaboration) {
+    collaboration->make_public(value);
+  }  
+  show_collaborations();  
 }
 
 
@@ -1401,16 +1420,6 @@ void EEDB::WebServices::UserSystem::share_uploaded_database() {
     return show_user(); 
   }
 
-  //
-  // first see if the database/peer we are trying to share is something I have the 
-  // privelidge to share
-  //
-  string sharedb_uuid = _parameters["sharedb_uuid"];  //might be uuid, or DataSource style
-  string uuid, objClass;
-  long int objID;  
-  MQDB::unparse_dbid(sharedb_uuid, uuid, objID, objClass);
-  if(uuid.empty()) { uuid = sharedb_uuid; }
-
   //user_registry is MINE-and-only-mine mini-federation. 
   //so all data in there is something I have uploaded and are responsible for
 
@@ -1420,27 +1429,10 @@ void EEDB::WebServices::UserSystem::share_uploaded_database() {
    return show_user();
   }
   
-  EEDB::SPStreams::FederatedSourceStream *stream = new EEDB::SPStreams::FederatedSourceStream;
-  stream->add_seed_peer(user_reg);   //only search in my user registry (my uploads)
-  stream->add_peer_id_filter(uuid);  //only search for requested sharedb peer
-
-  
-  EEDB::Peer *sharedb_peer = NULL;
-  stream->stream_peers();
-  while((sharedb_peer = (EEDB::Peer*)stream->next_in_stream())) {
-    if(sharedb_peer->uuid() == uuid) { break; }
-  }
-  if(!sharedb_peer or (sharedb_peer->uuid() != uuid)) {
-    _processing_error ="unable to find uploaded database";
-    return show_user();
-  }
-  
-  
   //
   // next get the collaboration we are sharing into
   //
   EEDB::Collaboration *collaboration = NULL;
-
   if(_parameters["collaboration_uuid"] == "public") {
     collaboration = _public_collaboration;
   } else if(_parameters["collaboration_uuid"] == "curated") {
@@ -1448,42 +1440,92 @@ void EEDB::WebServices::UserSystem::share_uploaded_database() {
   } else {
     collaboration = EEDB::Collaboration::fetch_by_uuid(_user_profile, _parameters["collaboration_uuid"]);
   }
-
+  
   if(!collaboration) {
-   _processing_error ="collaboration ["+ _parameters["collaboration_uuid"] +"] not found";
-   return show_user();
+    _processing_error ="collaboration ["+ _parameters["collaboration_uuid"] +"] not found";
+    return show_user();
   }
   
   if(!((collaboration->member_status() == "MEMBER") or (collaboration->member_status() == "OWNER") or (collaboration->member_status() == "ADMIN"))) {
-   _processing_error ="not a member of collaboration, so unable to share data with it";
-   return show_user();
+    _processing_error ="not a member of collaboration, so unable to share data with it";
+    return show_user();
   }
 
-  string error = collaboration->share_peer_database(sharedb_peer);
-  if(!error.empty()) {
-   _processing_error = error;
-   return show_user();
+  //
+  // next see if I am the owner of all of the database/peer that I am trying to share
+  //
+  EEDB::SPStreams::FederatedSourceStream *stream = new EEDB::SPStreams::FederatedSourceStream;
+  stream->add_seed_peer(user_reg);   //only search in my user registry (my uploads)
+
+  map<string, EEDB::Peer*>           share_peer_uuids;
+  map<string, EEDB::Peer*>::iterator it_peer;
+
+  if(_parameters.find("sharedb_uuid") != _parameters.end()) {
+    string sharedb_uuid = _parameters["sharedb_uuid"];  //might be uuid, or DataSource style
+    string uuid, objClass;
+    long int objID;
+    MQDB::unparse_dbid(sharedb_uuid, uuid, objID, objClass);
+    if(uuid.empty()) { uuid = sharedb_uuid; }
+    share_peer_uuids[uuid] = NULL;
+    stream->add_peer_id_filter(uuid);  //only search for requested sharedb peer
+  }
+  
+  if(!_filter_peer_ids.empty()) {
+    map<string, bool>::iterator  it2;
+    for(it2 = _filter_peer_ids.begin(); it2 != _filter_peer_ids.end(); it2++) {
+      share_peer_uuids[(*it2).first] = NULL;
+      stream->add_peer_id_filter((*it2).first);
+    }
+  }
+  
+  if(!_filter_source_ids.empty()) {
+    map<string, bool>::iterator  it2;
+    for(it2 = _filter_source_ids.begin(); it2 != _filter_source_ids.end(); it2++) {
+      string uuid, objClass;
+      long int objID;
+      MQDB::unparse_dbid((*it2).first, uuid, objID, objClass);
+      if(!uuid.empty()) {
+        share_peer_uuids[uuid] = NULL;
+        stream->add_peer_id_filter(uuid);
+      }
+    }
   }
 
-  /*
-  my $cgi = $self->{'cgi'};
-  if($self->{'session'}) {
-   my $cookie = $cgi->cookie($SESSION_NAME => $self->{'session'}->{'id'});
-   print $cgi->header(-cookie=>$cookie, -type => "text/xml", -charset=> "UTF8");
-  } else {
-   print $cgi->header(-type => "text/xml", -charset=> "UTF8");
+  //next stream the peers based on the filters set above and check against requested peer/sources
+  stream->stream_peers();
+  while(EEDB::Peer *peer = (EEDB::Peer*)stream->next_in_stream()) {
+    if(share_peer_uuids[peer->uuid()] == NULL) {
+      share_peer_uuids[peer->uuid()] = peer;
+    }
   }
-  */
+
+  //last loop on these peers and process the sharing and collect errors
+  
   printf("Content-type: text/xml; charset=utf-8\r\n");
-  printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
+  printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   
   printf("<share_uploaded_database>\n");
 
   if(_user_profile) { printf("%s", _user_profile->simple_xml().c_str()); } 
-  printf("<share>%s</share>\n", sharedb_peer->xml().c_str());
-  printf("%s\n", collaboration->xml().c_str());
+  printf("%s\n", collaboration->simple_xml().c_str());
+
+  for(it_peer=share_peer_uuids.begin(); it_peer!=share_peer_uuids.end(); it_peer++) {
+    EEDB::Peer* peer = it_peer->second;
+    if(!peer) {
+      _processing_error +="unable to find database["+(it_peer->first) + "]; ";
+      continue;
+    }
+    string error = collaboration->share_peer_database(peer);
+    if(error.empty()) {
+      printf("<share>%s</share>\n", peer->xml().c_str());
+    } else {
+      _processing_error += error + "; ";
+    }
+  }
+  
+  if(!_processing_error.empty()) { printf("<ERROR>%s</ERROR>\n", _processing_error.c_str()); }
 
   struct timeval  endtime, time_diff;
   gettimeofday(&endtime, NULL);
@@ -1569,7 +1611,7 @@ void EEDB::WebServices::UserSystem::unshare_uploaded_database() {
   
 
   printf("Content-type: text/xml; charset=utf-8\r\n");
-  printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
+  printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   
@@ -1626,7 +1668,7 @@ void EEDB::WebServices::UserSystem::upgrade_user_uploads() {
   }
   
   printf("Content-type: text/xml; charset=utf-8\r\n");
-  printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
+  printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<upgrade_user_uploads>\n");  
@@ -1706,7 +1748,7 @@ void EEDB::WebServices::UserSystem::edit_objects_metadata() {
   int object_count=0;
   
   printf("Content-type: text/xml; charset=utf-8\r\n");
-  printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
+  printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<edit_metadata>\n");  
@@ -1758,7 +1800,7 @@ void EEDB::WebServices::UserSystem::source_search_edit_metadata() {
   fprintf(stderr, "UserSystem::source_search_edit_metadata start at %1.3f msec\n", runtime);
 
   printf("Content-type: text/xml; charset=utf-8\r\n");
-  printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
+  printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<edit_metadata>\n");  
@@ -1970,8 +2012,7 @@ bool EEDB::WebServices::UserSystem::apply_mdata_edit_commands(MQDB::DBObject *ob
     //        obj_id.c_str());
     
     if(mdedit->mode == "add") {
-      EEDB::Metadata *md = mdset->add_tag_data(mdedit->tag, mdedit->newvalue);
-      md->extract_keywords(mdset);
+      mdset->add_tag_data(mdedit->tag, mdedit->newvalue);
     }
     
     if(mdedit->mode == "delete") {
@@ -1984,12 +2025,8 @@ bool EEDB::WebServices::UserSystem::apply_mdata_edit_commands(MQDB::DBObject *ob
       } else { 
         mdset->remove_metadata_like(mdedit->tag, mdedit->oldvalue); 
       }
-      EEDB::Metadata *md = mdset->add_tag_data(mdedit->tag, mdedit->newvalue);
-      md->extract_keywords(mdset);
+      mdset->add_tag_data(mdedit->tag, mdedit->newvalue);
     }
-    //if(mdedit->mode == "extract_keywords") {
-    //  mdset->extract_keywords();
-    //}
   }
   
   //always rebuild the keywords
@@ -2082,7 +2119,7 @@ void EEDB::WebServices::UserSystem::save_mdata_edits(MQDB::DBObject *obj) {
 
 void EEDB::WebServices::UserSystem::show_downloads() {  
   printf("Content-type: text/xml; charset=utf-8\r\n");
-  printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
+  printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   

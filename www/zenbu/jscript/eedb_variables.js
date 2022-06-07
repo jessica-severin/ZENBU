@@ -30,15 +30,18 @@
 // * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-var eedbWebRoot="/zenbu";
-var zenbuVersion="2.11.2";
+var eedbWebRoot="/zenbudev";
+var zenbuVersion="3.0.1 dev";
 
 //gLyphs
-var eedbDefaultAssembly = "hg19";
+var eedbDefaultAssembly = "hg38";
 var gLyphsInitParams = new Object();
-gLyphsInitParams.uuid = "RlgHnpZeKBTgvaFzqDtdnD";
+gLyphsInitParams.uuid = "empty";
+//gLyphsInitParams.uuid  = "RlgHnpZeKBTgvaFzqDtdnD";
+gLyphsInitParams.asm   = "hg38";
 gLyphsInitParams.title = "an alternate title test";
-gLyphsInitParams.location = "chr7:31342738..31347927";
+gLyphsInitParams.location = "chr19:49657992-49666908"; 
+gLyphsInitParams.loc   = "";
 gLyphsInitParams.display_width = Math.floor(970);
 
 //dex

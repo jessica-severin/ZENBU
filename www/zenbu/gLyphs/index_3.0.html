@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1 plus MathML 2.0 plus SVG 1.1//EN" "http://www.w3.org/2002/04/xhtml-math-svg/xhtml-math-svg.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en" dir="ltr">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <META HTTP-EQUIV="CACHE-CONTROL" CONTENT="NO-CACHE" />
+
+  <title>ZENBU - genome browser</title>
+
+  <link href="../css/zenbu_reports.css" rel="stylesheet" type="text/css"/>
+  <link href="../css/f4_style.css" rel="stylesheet" type="text/css"></link>
+
+  <link href="../css/edgeExpress.css" rel="stylesheet" type="text/css"></link>
+
+  <script language="Javascript" type="text/javascript" src="../jscript/Colour.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/rgbcolor.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/prototype-1.6.0.3.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/jscolor/jscolor.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_variables.js"></script>
+
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_common.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/eedb_search_beta.js"></script>
+
+  <!-- new split version --> 
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_colorspace.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_datasource_interface.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_configuration_interface.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_feature_info.js"></script>
+
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_glyphsTrack.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_glyphsExpPanel.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_glyphsGB.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_glyphs_page.js"></script>
+
+  <script>
+    function glyphsSwitchStable() {
+      console.log("window.location.href: "+window.location.href);
+      console.log("window.location.pathname: "+window.location.pathname);
+      var url = window.location.href;
+      var url_params = "";
+      var url_base = url;
+      var p1 = url.indexOf(window.location.pathname);
+      if(p1>=0) {
+        var p2 = p1 + window.location.pathname.length;
+        url_params = url.substring(p2);
+        url_base = url.substring(0,p2);
+        console.log("url_params "+ url_params);
+        console.log("url_base "+ url_base);
+      }
+      var p1 = url_base.indexOf("index");
+      if(p1>=0) {
+        url_base = url_base.substring(0,p1);
+        console.log("url_base "+ url_base);
+      }
+      var new_url = url_base +"index_stable.html"+url_params;
+      console.log("new_url "+ new_url);
+      if(window.top) { window.top.location= new_url; }
+      else { window.location= new_url; }
+    }
+  </script>
+
+
+</head>
+
+
+<body style="min-width:800px;" onload="eedbInitToolTips();gLyphsInit();">
+
+<!-- START OF HEADER -->
+<div id="header">
+
+<table width="100%" cellpadding="0px" >
+<tr>
+<td rowspan="2" width="50px" nowrap valign="top">
+<img height="60px" src="../images/zenbu_logo_small.png"></img>
+<br><span style="font-style:italic; font-size:14px; font-weight:bold; color:orange; margin-right:5px; ">3.0</span><input style="font-size:10px;" type="button" class="slimbutton" value="revert v2.11" onClick="glyphsSwitchStable()"></input>
+</td>
+<td valign="bottom"><div id="top_menu" style="clear:both; white-space:nowrap; margin:0px; padding:0px;">
+  <a href="../">ZENBU</a>
+  <a href="../gLyphs" class="selected">genome browser</a>
+  <a href="../reports">analysis reports</a>
+  <a href="../dex">data explorer</a>
+  <a href="../user">user upload & share</a>
+  <a href="http://fantom.gsc.riken.jp/zenbu/wiki">documentation wiki</a>
+</div></td>
+<td width="1px" valign="bottom"><img height="27px" src="../images/riken-logo_big.png"></img></td>
+</tr>
+<tr>
+<td colspan="3">
+<div id="eedb_login_div"></div>
+
+
+<div style="margin-left:80px;">
+<center>
+<table><tr><td align="center">
+<div id="gLyphs_title" style="font-size:20px; font-weight:bold;"></div>
+<div id="gLyphs_description" style="font-size:10px; width:100%;"></div>
+</td></tr></table>
+</center>
+</div>
+
+</td>
+</tr>
+</table>
+</div>
+<!-- END OF HEADER -->
+
+
+<div id="toolTipLayer" style="z-index:100; position:absolute; visibility: hidden"></div>
+<!-- START OF MAIN CONTENTS OF THE WEB PAGE -->
+<div id='mainContents'>
+<!--              -->
+
+<div id="message"></div>
+<div id="global_panel_layer"></div>
+<div id="feature_info"></div>
+<div id="source_info"></div>
+
+<div id="genome_region_div" style="display:block;"></div>
+
+<!--              -->
+<img src="../images/blank.gif"></img>
+</div>
+<!--END OF MAIN CONTENTS OF THE WEB PAGE -->
+
+<!-- START OF FOOTER -->
+<div>
+<!--                 -->
+  <table width="95%" border="0" cellspacing="3" cellpadding="2" align='center' 
+         style="margin:1px auto 3px auto; border-color:#999999; border-style:solid; border-top-width:1px; border-bottom-width:1px;">
+  <tr class="small">
+    <td nowrap="nowrap"><div align="left"><a href="http://www.ims.riken.jp/english/">RIKEN Center for Integrative Medical Sciences (IMS)</a></div></td>
+    <td><div align="center">ZENBU <span id="zenbuVersionSpan"></span></div></td>
+    <td><div align="right">Copyright 2009-2021 RIKEN, Japan. All rights reserved.</div></td>
+  </tr>
+</table>
+<!--                                     -->
+</div>
+<!-- END OF FOOTER -->
+
+</body>
+</html>

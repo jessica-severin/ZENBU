@@ -1,4 +1,4 @@
-/* $Id: ZenDB.cpp,v 1.28 2016/09/16 06:59:26 severin Exp $ */
+/* $Id: ZenDB.cpp,v 1.31 2021/05/22 01:43:18 severin Exp $ */
 
 /***
 
@@ -56,6 +56,9 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <string>
 #include <stdarg.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <sys/time.h>
 #include <zlib.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost
 #include <boost/algorithm/string.hpp>
@@ -779,6 +782,7 @@ bool  EEDB::SPStreams::ZenDB::save_xmldb() {
     source->metadataset()->remove_metadata_like("eedb:owner_OpenID","");
     source->metadataset()->remove_metadata_like("eedb:owner_email","");
     source->metadataset()->remove_metadata_like("eedb:owner_uuid","");
+    source->metadataset()->remove_metadata_like("eedb:dbid","");
   }
 
   //version the old XML database
@@ -1020,6 +1024,7 @@ EEDB::Experiment*  EEDB::SPStreams::ZenDB::_create_experiment() {
   for(unsigned int i=0; i<mdlist.size(); i++) {
     EEDB::Metadata *md = mdlist[i];
     source->metadataset()->add_metadata(md);
+    md->retain(); //add_metadata does not perform a retain
   }
   
   _add_datasource(source);  

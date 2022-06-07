@@ -1,4 +1,4 @@
-/* $Id: FeatureRename.cpp,v 1.5 2015/06/04 03:47:51 severin Exp $ */
+/* $Id: FeatureRename.cpp,v 1.7 2018/09/20 06:21:51 severin Exp $ */
 
 /***
 
@@ -81,6 +81,15 @@ void _spstream_featurerename_xml_func(MQDB::DBObject *obj, string &xml_buffer) {
   ((EEDB::SPStreams::FeatureRename*)obj)->_xml(xml_buffer);
 }
 
+bool _featurerename_mdata_name_sort_func (EEDB::Metadata *a, EEDB::Metadata *b) {
+  if(a == NULL) { return false; }  //a is NULL, so pick b
+  if(b == NULL) { return true; }   //b is NULL, so pick a
+  
+  if(a->data() < b->data()) { return false; }
+  if(a->data() > b->data()) { return true; }
+  
+  return false;
+}
 
 EEDB::SPStreams::FeatureRename::FeatureRename() {
   init();
@@ -117,6 +126,9 @@ void EEDB::SPStreams::FeatureRename::_xml(string &xml_buffer) {
   
   if(_source_name)   { xml_buffer.append("<source_name/>"); }
   if(_location_name) { xml_buffer.append("<location_name/>"); }
+  if(!_mdkey_format.empty()) {
+    xml_buffer += "<mdkey_format>" +_mdkey_format+ "</mdkey_format>";
+  }
   
   _xml_end(xml_buffer);  //from superclass
 }
@@ -127,14 +139,21 @@ EEDB::SPStreams::FeatureRename::FeatureRename(void *xml_node) {
   init();
   if(xml_node==NULL) { return; }
   
+  rapidxml::xml_node<>      *node;
+  
   _source_name   = false;
   _location_name = false;
+  _mdkey_format  = "";
   
   rapidxml::xml_node<> *root_node = (rapidxml::xml_node<>*)xml_node;
   if(string(root_node->name()) != "spstream") { return; }
   
   if(root_node->first_node("source_name") != NULL) { _source_name = true; }
   if(root_node->first_node("location_name") != NULL) { _location_name = true; }
+
+  if((node = root_node->first_node("mdkey_format")) != NULL) {
+    _mdkey_format = node->value();
+  }
 }
 
 
@@ -155,9 +174,15 @@ MQDB::DBObject* EEDB::SPStreams::FeatureRename::_next_in_stream() {
       }
       EEDB::Feature *feature = (EEDB::Feature*)obj;
       
-      string name;
-      if(_source_name && feature->feature_source()) { 
-        name = feature->feature_source()->name();
+      string name = "";
+
+      if(!_mdkey_format.empty()) {
+        name += _nameFromMetadataKeys(feature);
+      }
+
+      if(_source_name && feature->feature_source()) {
+        if(!name.empty()) { name += " "; }
+        name += feature->feature_source()->name();
       }
 
       if(_location_name) { 
@@ -165,7 +190,8 @@ MQDB::DBObject* EEDB::SPStreams::FeatureRename::_next_in_stream() {
         name += feature->chrom_location();
       }
       
-      feature->primary_name(name);
+      if(!name.empty()) { feature->primary_name(name); }
+      
       return feature;
 
     }
@@ -175,6 +201,76 @@ MQDB::DBObject* EEDB::SPStreams::FeatureRename::_next_in_stream() {
   return NULL; 
 }
 
+
+string EEDB::SPStreams::FeatureRename::_nameFromMetadataKeys(EEDB::Feature *feature) {
+  if(!feature) { return ""; }
+  
+  string name = feature->primary_name(); //set default
+  if(_mdkey_format.empty()) { return name; }  //return the old primary_name (no change)
+
+  if(feature->metadataset()->count() ==0 ) { return name; }
+  EEDB::MetadataSet *mdset = feature->metadataset();
+  
+  //finite state machine parser
+  name = "";
+  string mdkey = "";
+  long state=1;
+  unsigned pos=0;
+  
+  //fprintf(stderr, "mdkey_format [%s]\n", _mdkey_format.c_str());
+  while(state>0) {
+    if(pos > _mdkey_format.length()) { state=-1; break; }
+    char c1 = _mdkey_format[pos];
+    
+    switch(state) {
+      case(1): //mdkey
+        if(c1=='\0' || c1==' ' || c1=='\t' || c1=='\n' || c1==',' || c1=='\"') {
+          state=2;
+        } else {
+          mdkey += c1;
+          pos++;
+        }
+        break;
+        
+      case(2): // add mdkey value to name
+        //fprintf(stderr, "mdkey[%s]\n", mdkey.c_str());
+        if(!mdkey.empty()) {
+          vector<EEDB::Metadata*> md_list = mdset->find_all_metadata_like(mdkey, "");
+          std::sort(md_list.begin(), md_list.end(), _featurerename_mdata_name_sort_func);
+          for(unsigned k=0; k<md_list.size(); k++) {
+            EEDB::Metadata *md1 = md_list[k];
+            if(!md1) { continue; }
+            if(!name.empty()) { name += " "; }
+            name += md1->data();
+          }
+        }
+        mdkey = "";
+        if(c1=='\"') { state=3; } else { state=1;}
+        pos++;
+        break;
+        
+      case(3): // quoted string
+        if(c1=='\"') {
+          if(!name.empty()) { name += " "; }
+          name += mdkey;
+          mdkey = "";
+          pos++;
+          state = 1;
+        } else {
+          mdkey += c1;
+          pos++;
+        }
+        break;
+        
+      default:
+        state=-1;
+        break;
+    }
+  }
+  
+  //feature->primary_name(name);
+  return name;
+}
 
 
 

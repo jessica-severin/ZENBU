@@ -1,4 +1,4 @@
-/* $Id: zenbu_ncbi_genome_load.cpp,v 1.3 2017/02/09 07:37:53 severin Exp $ */
+/* $Id: zenbu_ncbi_genome_load.cpp,v 1.7 2020/02/05 05:33:42 severin Exp $ */
 
 /****
  
@@ -58,6 +58,8 @@
 #include <sys/time.h>
 #include <sys/dir.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <pwd.h>
 #include <curl/curl.h>
 #include <openssl/hmac.h>
@@ -68,46 +70,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/algorithm/string.hpp>
 
-#include <MQDB/Database.h>
-#include <MQDB/MappedQuery.h>
-#include <MQDB/DBStream.h>
-#include <EEDB/Assembly.h>
-#include <EEDB/Chrom.h>
-#include <EEDB/Metadata.h>
-#include <EEDB/Symbol.h>
-#include <EEDB/MetadataSet.h>
-#include <EEDB/Datatype.h>
-#include <EEDB/FeatureSource.h>
-#include <EEDB/Experiment.h>
-#include <EEDB/Feature.h>
-#include <EEDB/User.h>
-#include <EEDB/Collaboration.h>
-#include <EEDB/Peer.h>
-#include <EEDB/SPStream.h>
-#include <EEDB/SPStreams/Dummy.h>
-#include <EEDB/SPStreams/SourceStream.h>
-#include <EEDB/SPStreams/BAMDB.h>
-#include <EEDB/SPStreams/MultiMergeStream.h>
-#include <EEDB/SPStreams/FederatedSourceStream.h>
-#include <EEDB/SPStreams/FeatureEmitter.h>
-#include <EEDB/SPStreams/TemplateCluster.h>
-#include <EEDB/SPStreams/OSCFileDB.h>
-#include <EEDB/SPStreams/Paraclu.h>
-#include <EEDB/SPStreams/NeighborCutoff.h>
-#include <EEDB/SPStreams/CalcFeatureSignificance.h>
-#include <EEDB/SPStreams/RemoteServerStream.h>
-#include <EEDB/SPStreams/MannWhitneyRanksum.h>
-#include <EEDB/SPStreams/OverlapMerge.h>
-
-#include <EEDB/Tools/OSCFileParser.h>
-#include <EEDB/Tools/LSArchiveImport.h>
-#include <EEDB/WebServices/RegionServer.h>
-#include <EEDB/WebServices/UploadServer.h>
-#include <EEDB/WebServices/UserSystem.h>
-
-#include <EEDB/ZDX/ZDXstream.h>
-#include <EEDB/ZDX/ZDXsegment.h>
-
+#include <EEDB/WebServices/MetaSearch.h>
 #include <EEDB/JobQueue/UploadFile.h>
 
 #include <math.h>
@@ -136,7 +99,7 @@ int main(int argc, char *argv[]) {
   if(argc==1) { usage(); }
 
   _webservice = new EEDB::WebServices::MetaSearch();
-  _webservice->parse_config_file("/etc/zenbu/zenbudev_config.xml");
+  _webservice->parse_config_file("/etc/zenbu/zenbu.conf");
   _webservice->init_service_request();
 
   //get_cmdline_user();
@@ -144,7 +107,9 @@ int main(int argc, char *argv[]) {
   //  printf("\nERROR: unable to read your ~/.zenbu/id_hmac file to identify your login identify. Please create file according to documentation.\nhttps://zenbu-wiki.gsc.riken.jp/zenbu/wiki/index.php/Data_loading#Bulk_command-line_upload_of_datafiles\n\n");
   //  usage();
   //}
-
+  
+  _parameters["collaboration_uuid"] = "public";
+  
   for(int argi=1; argi<argc; argi++) {
     if(argv[argi][0] != '-') { continue; }
     string arg = argv[argi];
@@ -159,24 +124,32 @@ int main(int argc, char *argv[]) {
     if(arg == "-debug")         { _parameters["debug"] = "true"; }
     if(arg == "-mode")          { _parameters["mode"] = argvals[0]; }
     if(arg == "-i")             { _parameters["mode"] = "load_genome"; }
-    if(arg == "-registry")      { _parameters["registry_url"] = argvals[0]; }
+    if(arg == "-registry")      { _parameters["registry_url"] = argvals[0]; _parameters["collaboration_uuid"].clear(); }
+    if(arg == "-collaboration") { _parameters["collaboration_uuid"] = argvals[0]; }
+    if(arg == "-assembly")      { _parameters["genome_assembly"] = argvals[0]; _parameters["mode"] = "load_genome"; }
+    if(arg == "-asm")           { _parameters["genome_assembly"] = argvals[0]; _parameters["mode"] = "load_genome"; }
     if(arg == "-skip_seq")      { _parameters["skip_seq"] = "true"; }
+    if(arg == "-skipseq")       { _parameters["skip_seq"] = "true"; }
     if(arg == "-skip_entrez")   { _parameters["skip_entrez"] = "true"; }
-    if(arg == "-search")        { 
+    if(arg == "-skipentrez")    { _parameters["skip_entrez"] = "true"; }
+    if(arg == "-entrezID") { 
+      _parameters["entrezID"] = argvals[0]; 
+      _parameters["skip_seq"] = "true";
+    }
+    if(arg == "-search") { 
       _parameters["mode"] = "load_genome";
       _parameters["search"] = argvals[0];
     }
 
     if(arg == "-name_mode")     { _parameters["name_mode"] = argvals[0]; }
   }
-
   
   //execute the mode
   if(_parameters["mode"] == "load_genome") {
-    ncbi_genome_load(); 
+    ncbi_genome_load();
+    exit(1);
   }
-  
-  exit(1);
+  usage();
 }
 
 
@@ -186,12 +159,17 @@ int main(int argc, char *argv[]) {
 
 void usage() {
   printf("zenbu_ncbi_genome_load [options]\n");
-  printf("  -help                     : printf(this help\n");
-  printf("  -registry <url>           : DB URL registry instance\n");
-  printf("  -i                        : interactive interface\n");
+  printf("  -help                     : this help\n");
+  printf("  -i                        : interactive interface to search NCBI for genomes\n");
+  //printf("  -search <keywords>        : search for genomes via taxonID, keywords or accession numbers\n");
+  printf("  -assembly <name>          : update previously loaded NCBI genome (eg GRCh38.p13)\n");
+  printf("  -collaboration <uuid>     : collaboration for security sharing genome: default 'public'\n");
+  printf("  -registry <url>           : share genome directly into registry\n");
   printf("  -name_mode <value>        : ucsc, ncbi, or ensembl naming convention\n");
-  printf("  -skip_seq                 : don't load the genome sequence\n");
-  printf("  -skip_entrez              : don't load the NCBI entrez gene annoataions\n");
+  printf("  -skipseq                  : don't load the genome sequence\n");
+  printf("  -skipentrez               : don't load the NCBI entrez gene annoataions\n");
+  printf("  -entrezID <id>            : synchronize specific entrez gene\n");
+
   exit(1);
 }
 
@@ -208,7 +186,7 @@ void ncbi_genome_load() {
 
   printf("\n====== ncbi_genome_load == \n");
   gettimeofday(&starttime, NULL);
-  printf("name_mode [%s]\n", _parameters["name_mode"].c_str());
+  //printf("name_mode [%s]\n", _parameters["name_mode"].c_str());
 
   //EEDB::WebServices::UserSystem*   webservice = new EEDB::WebServices::UserSystem();
   //EEDB::WebServices::RegionServer* regionserver = new EEDB::WebServices::RegionServer();
@@ -233,7 +211,9 @@ void ncbi_genome_load() {
   uploader->set_parameter("genome_name_mode", _parameters["name_mode"]);
   uploader->set_parameter("skip_seq", _parameters["skip_seq"]);
   uploader->set_parameter("skip_entrez", _parameters["skip_entrez"]);
+  uploader->set_parameter("entrezID", _parameters["entrezID"]);
   uploader->set_parameter("registry_url", _parameters["registry_url"]);
+  uploader->set_parameter("collaboration_uuid", _parameters["collaboration_uuid"]);
 
   EEDB::Peer*  peer = NULL;
   //EEDB::Peer*  peer = uploader->load_genome_from_NCBI(ncbi_acc);
@@ -247,25 +227,37 @@ void ncbi_genome_load() {
 
   //MQDB::Database *gdb = new MQDB::Database("mysql://zenbu_admin:zenbu_admin@fantom46.gsc.riken.jp:3306/zenbu_genome_9544_GCF_000772875_2_Mmul_801_rheMac8");
 
-  vector<EEDB::Assembly*> assembly_array;
-  printf("enter genome search> ");
-  char buffer[1024];
-  if(fgets(buffer, 1024 , stdin) != NULL) {
-    char* p1 = index(buffer, '\n');
-    if(p1 != NULL) { *p1 = '\0'; }
-    vector<EEDB::Assembly*> assembly_array = EEDB::Assembly::fetch_from_NCBI_by_search(buffer);
-    for(int j=0; j<assembly_array.size(); j++) {
-      printf("%s\n", assembly_array[j]->xml().c_str());
-      //if(assembly_array[j]->ucsc_name().empty()) { continue; }
-      printf("load this genome? ");
-      if((fgets(buffer, 1024 , stdin) != NULL) && (buffer[0] == 'y')) {
-        //assembly_array[j]->store(gdb);
-        //assembly_array[j]->taxon()->store(gdb);
-        peer = uploader->load_genome_from_NCBI(assembly_array[j]->ncbi_assembly_accession());
+  if(_parameters.find("genome_assembly") != _parameters.end()) {
+    fprintf(stderr, "try to find previously loaded genome : [%s]\n", _parameters["genome_assembly"].c_str());
+    EEDB::Assembly *assembly = _webservice->find_assembly(_parameters["genome_assembly"]);
+    if(assembly) {
+      fprintf(stderr,"%s\n", assembly->xml().c_str());
+      sleep(1);
+      peer = uploader->load_genome_from_NCBI(assembly->ncbi_assembly_accession());
+    } else {
+      printf("unable to find previously loaded assembly:[%s]\n", _parameters["genome_assembly"].c_str());
+    }
+  } else {
+    vector<EEDB::Assembly*> assembly_array;
+    printf("enter genome search> ");
+    char buffer[1024];
+    if(fgets(buffer, 1024 , stdin) != NULL) {
+      char* p1 = index(buffer, '\n');
+      if(p1 != NULL) { *p1 = '\0'; }
+      vector<EEDB::Assembly*> assembly_array = EEDB::Assembly::fetch_from_NCBI_by_search(buffer);
+      for(int j=0; j<assembly_array.size(); j++) {
+        printf("%s\n", assembly_array[j]->xml().c_str());
+        //if(assembly_array[j]->ucsc_name().empty()) { continue; }
+        printf("load this genome? ");
+        if((fgets(buffer, 1024 , stdin) != NULL) && (buffer[0] == 'y')) {
+          //assembly_array[j]->store(gdb);
+          //assembly_array[j]->taxon()->store(gdb);
+          peer = uploader->load_genome_from_NCBI(assembly_array[j]->ncbi_assembly_accession());
+        }
       }
     }
+    //printf("%d assemblies returned\n", assembly_array.size());
   }
-  //printf("%d assemblies returned\n", assembly_array.size());
 
   //peer = uploader->load_genome_from_NCBI("canFam3");
   //peer = uploader->load_genome_from_NCBI("rn6");

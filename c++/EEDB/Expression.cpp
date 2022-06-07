@@ -1,4 +1,4 @@
-/* $Id: Expression.cpp,v 1.117 2013/04/08 05:47:52 severin Exp $ */
+/* $Id: Expression.cpp,v 1.118 2017/04/24 08:27:58 severin Exp $ */
 
 /***
 NAME - EEDB::Expression
@@ -219,9 +219,10 @@ string EEDB::Expression::display_desc() {
   if(experiment()) {
     str += _experiment->display_name() +"["+ _experiment->db_id() +"]";
   }
-
-  snprintf(buffer, 2040, " : [%s | %1.7f value | %1.5f sigerr]", _datatype->type().c_str(), _value, _sig_error);
-  str += buffer;       
+  if(_datatype) {
+    snprintf(buffer, 2040, " : [%s | %1.7f value | %1.5f sigerr]", _datatype->type().c_str(), _value, _sig_error);
+    str += buffer;       
+  }
   return str;
 }
 
@@ -488,39 +489,56 @@ void  EEDB::Expression::init_from_row_map(map<string, dynadata> &row_map) {
 }
 
 
-
-/*****************
-
-sub store {
-  my $self = shift;
-  my $db   = shift;
+bool EEDB::Expression::store(EEDB::Feature* feature) {
+  if(feature==NULL) { return false; }
+ 
+  MQDB::Database *db = feature->database();
+  if(!db) { return false; }
   
-  if($db) { $self->database($db); }
-  my $dbh = $self->database->get_connection;  
-  my $sql = "INSERT ignore INTO expression ".
-             "(experiment_id, feature_id, type, value, sig_error) ".
-             "VALUES(?,?,?,?,?)";
-  my $sth = $dbh->prepare($sql);
-  $sth->execute($self->experiment->id,
-                $self->feature->id,
-                $self->type,
-                $self->value,
-                $self->sig_error
-                );  
-  my $dbID = $dbh->last_insert_id(undef, undef, qw(expression expression_id));
-  $sth->finish;
-  if(!$dbID) {
-    $dbID = $self->fetch_col_value(
-         $db,
-         "select expression_id from expression where experiment_id=? and feature_id=?",
-         $self->experiment->id,
-         $self->feature->id);
-    
-  }
-  $self->primary_id($dbID);
+  long   expid = -1;
+  long   fid   = -1;
+  string dtype;
 
-  return $self;
+  if(feature)      { fid = feature->primary_id(); }
+  if(experiment()) { expid = experiment()->primary_id(); }
+  if(_datatype)    { dtype = _datatype->type(); }
+
+  db->do_sql("INSERT ignore INTO expression (experiment_id, feature_id, value, sig_error, datatype_id) \
+              SELECT ?,?,?,?, datatype_id FROM expression_datatype WHERE datatype =?", "ddffs",
+              expid, fid, _value, _sig_error, dtype.c_str());
+
+  if(db->last_insert_id() < 0) { return false; }
+  
+  _primary_db_id = db->last_insert_id();
+  database(db);
+  _peer_uuid = NULL;
+  _db_id.clear();
+
+  return true;
 }
 
-*/
+bool EEDB::Expression::store(MQDB::Database *db) {
+  if(db==NULL) { return false; }
+  
+  long   expid = -1;
+  long   fid   = -1;
+  string dtype;
+
+  if(feature())    { fid = feature()->primary_id(); }
+  if(experiment()) { expid = experiment()->primary_id(); }
+  if(_datatype)    { dtype = _datatype->type(); }
+
+  db->do_sql("INSERT ignore INTO expression (experiment_id, feature_id, value, sig_error, datatype_id) \
+              SELECT ?,?,?,?, datatype_id FROM expression_datatype WHERE datatype =?", "ddffs",
+              expid, fid, _value, _sig_error, dtype.c_str());
+
+  if(db->last_insert_id() < 0) { return false; }
+  
+  _primary_db_id = db->last_insert_id();
+  database(db);
+  _peer_uuid = NULL;
+  _db_id.clear();
+
+  return true;
+}
 

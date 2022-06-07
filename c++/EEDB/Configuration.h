@@ -1,4 +1,4 @@
-/* $Id: Configuration.h,v 1.19 2014/07/08 05:45:06 severin Exp $ */
+/* $Id: Configuration.h,v 1.21 2018/03/20 02:38:22 severin Exp $ */
 
 /***
 
@@ -85,6 +85,7 @@ class Configuration : public MQDB::MappedQuery {
     //get atribute
     EEDB::User*          owner();
     string               uuid();
+    string               fixed_id();
     string               config_type();
     string               display_name();
     string               description();
@@ -126,7 +127,11 @@ class Configuration : public MQDB::MappedQuery {
     bool check_exists_db(Database *db);
     bool store(MQDB::Database *db);
     bool delete_from_db();
-    
+  
+    bool check_fixed_id_editor(string fixed_id, EEDB::User* user, string &status, string &msg); 
+    bool assign_to_fixed_id(string fixed_id, EEDB::User* user);
+    vector<EEDB::Configuration*> fixed_id_history();
+
     bool store_metadata();
     bool update_metadata();
     bool check_by_filter_logic(string filter_logic);
@@ -138,6 +143,7 @@ class Configuration : public MQDB::MappedQuery {
   
   protected:
     string                _uuid;
+    string                _fixed_id;
     string                _config_type;
     EEDB::MetadataSet*    _metadataset;
     EEDB::User*           _owner;
@@ -149,13 +155,17 @@ class Configuration : public MQDB::MappedQuery {
     time_t                _create_date;
     bool                  _mdata_loaded, _symbols_loaded;
   
+    vector<EEDB::Configuration*> _fixed_id_history;
+    bool                         _load_fixed_id_history();
+
   //internal API used for callback functions, should not be considered open API
   public:
     void   _xml(string &xml_buffer);
     void   _simple_xml(string &xml_buffer);
     void   _xml_start(string &xml_buffer);
     void   _xml_end(string &xml_buffer);
-    
+    void   _mdata_xml(string &xml_buffer, map<string,bool> tags);
+
 };
 
 };   //namespace

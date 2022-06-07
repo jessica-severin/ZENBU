@@ -95,6 +95,14 @@ int main(int argc, char *argv[]) {
     if(arg == "-single_tagmap") { _parameters["singletagmap_expression"] = "true"; }
     if(arg == "-GeNAS")         { _parameters["GeNAS"] = "true"; } //not implemented yet
     if(arg == "-LSA")           { _parameters["LSA"] = "true"; } //not implemented yet
+
+    if(arg == "-fsrc1")          { _parameters["featuresource1"] = argval; }
+    if(arg == "-fsrc2")          { _parameters["featuresource2"] = argval; }
+    if(arg == "-featuresource1") { _parameters["featuresource1"] = argval; }
+    if(arg == "-featuresource2") { _parameters["featuresource2"] = argval; }
+
+    if(arg == "-owner")          { _parameters["owner_identity"] = argval; }
+
   
     /*
      
@@ -162,6 +170,21 @@ int main(int argc, char *argv[]) {
     //  }
     //}
   }
+
+  if(_parameters.find("display_name") == _parameters.end()) {    
+    string name = _parameters["input_file"];
+    size_t p2 = name.rfind("/");
+    if(p2!=string::npos) { 
+      string t_name = name.substr(p2+1);
+      name = t_name;
+    }
+    _parameters["display_name"] = name;
+  }
+
+  if(_parameters.find("description") == _parameters.end()) {    
+    _parameters["description"] = _parameters["display_name"];
+  }
+
   
   build_oscdb();
   
@@ -186,8 +209,11 @@ void usage() {
   printf("  -score_express <exptype>  : eedb:score column is mapped to expression of type <exptype>\n");
   printf("  -display_name <name>      : nice display name for FeatureSource and Experiments\n");
   printf("  -description <text>       : nice description for FeatureSourced and Experiments\n");
+  printf("  -owner <email>            : set upload owner_identity via email\n");
   printf("  -LSA                      : enable RIKEN OSC LSArchive synchronization\n");
   printf("  -GeNAS                    : GeNAS production file automation prequery\n");
+  printf("  -featuresource1 <dbid>    : zenbu ID for edge.featuresource1\n");
+  printf("  -featuresource2 <dbid>    : zenbu ID for edge.featuresource2\n");
   printf("zenbu_create_OSCFileDB.pl v%s\n", EEDB::WebServices::WebBase::zenbu_version);
   
   exit(1);  
@@ -211,12 +237,20 @@ void build_oscdb() {
     oscdb->set_parameter((*it).first, (*it).second);
   }
 
+  //oscdb->set_parameter("owner_identity", "jessica.severin@gmail.com");
+
   //oscdb->set_parameter("build_dir","/tmp/");
   //oscdb->set_parameter("deploy_dir", _user_profile->user_directory());
   //oscdb->set_parameter("deploy_dir", _user_profile->user_directory());
 
+  fprintf(stderr, "inputfile [%s]\n", input_file.c_str());
   string oscpath = oscdb->create_db_for_file(input_file);
   printf("oscdb url : %s\n", oscpath.c_str());
+
+  if(!oscdb->error_message().empty()) { 
+    printf("\nERROR with loading\n%s\n\n", oscdb->error_message().c_str()); 
+  }
+
   
   /*
   if($osclsa) { synchronize_with_OSC_LSArchive($eeDB); }

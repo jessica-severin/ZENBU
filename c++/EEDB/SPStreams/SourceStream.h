@@ -1,5 +1,5 @@
 
-/* $Id: SourceStream.h,v 1.29 2014/11/25 09:35:46 severin Exp $ */
+/* $Id: SourceStream.h,v 1.32 2020/03/02 08:27:06 severin Exp $ */
 
 /***
 
@@ -125,6 +125,9 @@ class SourceStream : public EEDB::SPStream {
     void               _reset_stream_node();
     bool               _stream_by_named_region(string assembly_name, string chrom_name, long int start, long int end);
     void               _stream_chromosomes(string assembly_name, string chrom_name);
+    void               _stream_all_features();
+    bool               _fetch_features(map<string, EEDB::Feature*> &fid_hash);
+    void               _stream_edges(map<string, EEDB::Feature*> fid_hash, string filter_logic);
 
     void               _xml(string &xml_buffer);
 

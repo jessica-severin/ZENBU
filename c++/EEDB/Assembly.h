@@ -1,4 +1,4 @@
-/* $Id: Assembly.h,v 1.28 2016/11/11 09:08:38 severin Exp $ */
+/* $Id: Assembly.h,v 1.29 2018/08/13 03:43:29 severin Exp $ */
 
 /****
 NAME - EEDB::Assembly
@@ -186,6 +186,7 @@ class Assembly : public EEDB::Taxon {
     void   _simple_xml(string &xml_buffer);
     void   _xml(string &xml_buffer);
     void   _mdata_xml(string &xml_buffer, map<string,bool> tags);
+    void   _load_metadata();
     string _display_desc();
 };
 

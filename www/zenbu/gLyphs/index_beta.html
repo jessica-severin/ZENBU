@@ -24,6 +24,7 @@
   <!-- new split version --> 
   <script language="Javascript" type="text/javascript" src="../jscript/zenbu_colorspace.js"></script>
   <script language="Javascript" type="text/javascript" src="../jscript/zenbu_datasource_interface.js"></script>
+  <script language="Javascript" type="text/javascript" src="../jscript/zenbu_configuration_interface.js"></script>
   <script language="Javascript" type="text/javascript" src="../jscript/zenbu_feature_info.js"></script>
 
   <script language="Javascript" type="text/javascript" src="../jscript/zenbu_glyphsTrack.js"></script>
@@ -51,7 +52,7 @@
         url_base = url_base.substring(0,p1);
         console.log("url_base "+ url_base);
       }
-      var new_url = url_base +"index.html"+url_params;
+      var new_url = url_base +"index_stable.html"+url_params;
       console.log("new_url "+ new_url);
       if(window.top) { window.top.location= new_url; }
       else { window.location= new_url; }
@@ -71,7 +72,7 @@
 <tr>
 <td rowspan="2" width="50px" nowrap valign="top">
 <img height="60px" src="../images/zenbu_logo_small.png"></img>
-<br><span style="font-style:italic; font-weight:bold; color:orange;">beta</span>
+<br><span style="font-style:italic; font-size:14px; font-weight:bold; color:orange; margin-right:5px; ">3.0</span><input style="font-size:10px;" type="button" class="slimbutton" value="revert v2.11" onClick="glyphsSwitchStable()"></input>
 </td>
 <td valign="bottom"><div id="top_menu" style="clear:both; white-space:nowrap; margin:0px; padding:0px;">
   <a href="../">ZENBU</a>
@@ -129,7 +130,7 @@
   <tr class="small">
     <td nowrap="nowrap"><div align="left"><a href="http://www.ims.riken.jp/english/">RIKEN Center for Integrative Medical Sciences (IMS)</a></div></td>
     <td><div align="center">ZENBU <span id="zenbuVersionSpan"></span></div></td>
-    <td><div align="right">Copyright 2009-2018 RIKEN, Japan. All rights reserved.</div></td>
+    <td><div align="right">Copyright 2009-2020 RIKEN, Japan. All rights reserved.</div></td>
   </tr>
 </table>
 <!--                                     -->

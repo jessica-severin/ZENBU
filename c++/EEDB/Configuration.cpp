@@ -1,4 +1,4 @@
-/*  $Id: Configuration.cpp,v 1.52 2016/04/19 06:35:17 severin Exp $ */
+/*  $Id: Configuration.cpp,v 1.58 2021/10/07 04:08:29 severin Exp $ */
 
 /***
 NAME - EEDB::Configuration
@@ -80,6 +80,9 @@ void _eedb_configuration_xml_func(MQDB::DBObject *obj, string &xml_buffer) {
 void _eedb_configuration_simple_xml_func(MQDB::DBObject *obj, string &xml_buffer) { 
   ((EEDB::Configuration*)obj)->_simple_xml(xml_buffer);
 }
+void _eedb_configuration_mdata_xml_func(MQDB::DBObject *obj, string &xml_buffer, map<string,bool> tags) {
+  ((EEDB::Configuration*)obj)->_mdata_xml(xml_buffer, tags);
+}
 
 
 void EEDB::Configuration::init() {
@@ -88,6 +91,7 @@ void EEDB::Configuration::init() {
   _funcptr_delete            = _eedb_configuration_delete_func;
   _funcptr_xml               = _eedb_configuration_xml_func;
   _funcptr_simple_xml        = _eedb_configuration_simple_xml_func;
+  _funcptr_mdata_xml         = _eedb_configuration_mdata_xml_func;
 
   _metadataset      = NULL;
   _owner            = NULL;
@@ -111,6 +115,7 @@ void EEDB::Configuration::init() {
 void EEDB::Configuration::_xml_start(string &xml_buffer) {
   xml_buffer += "<configuration ";
   xml_buffer += "uuid=\"" + _uuid + "\" ";
+  if(!_fixed_id.empty()) { xml_buffer += "fixed_id=\"" + _fixed_id + "\" ";}
   xml_buffer += "type=\"" + _config_type + "\" ";
   xml_buffer += "create_date=\"" + create_date_string() + "\" ";  
   xml_buffer += "last_access=\"" + last_access_date_string() + "\" ";  
@@ -119,13 +124,13 @@ void EEDB::Configuration::_xml_start(string &xml_buffer) {
   snprintf(buffer, 1000, "access_count=\"%ld\"", _access_count);
   xml_buffer += buffer;
   
-  xml_buffer += ">";
+  xml_buffer += ">\n";
 
   if(owner()) { owner()->simple_xml(xml_buffer); }
 
   if(collaboration()) { collaboration()->simple_xml(xml_buffer); }
   else {
-    xml_buffer.append("<collaboration name=\"private\" uuid=\"private\" />");
+    xml_buffer.append("<collaboration name=\"private\" uuid=\"private\" />\n");
   }
 }
 
@@ -162,6 +167,30 @@ void EEDB::Configuration::_xml(string &xml_buffer) {
   EEDB::MetadataSet *mdset = metadataset();
   if(mdset!=NULL) { mdset->xml_nokeywords(xml_buffer); }
 
+  /*
+  if(_load_fixed_id_history()) {
+    xml_buffer += "<fixed_id_history>";
+    for(unsigned j=0; j<_fixed_id_history.size(); j++) {
+      EEDB::Configuration* hist_config = _fixed_id_history[j];
+      if(!hist_config) { continue; }
+      hist_config->_xml_start(xml_buffer);
+      hist_config->_xml_end(xml_buffer);
+    }
+    xml_buffer += "</fixed_id_history>";
+  }
+  */
+
+  _xml_end(xml_buffer);
+}
+
+
+void EEDB::Configuration::_mdata_xml(string &xml_buffer, map<string,bool> mdtags) {
+  _xml_start(xml_buffer);
+  vector<EEDB::Metadata*> mdlist = metadataset()->all_metadata_with_tags(mdtags);
+  vector<EEDB::Metadata*>::iterator it1;
+  for(it1=mdlist.begin(); it1!=mdlist.end(); it1++) {
+    (*it1)->xml(xml_buffer);
+  }
   _xml_end(xml_buffer);
 }
 
@@ -253,6 +282,7 @@ EEDB::Configuration::Configuration(void *xml_node) {
 //
 ////////////////////////////////////////////////////
 
+string  EEDB::Configuration::fixed_id() { return _fixed_id; }
 string  EEDB::Configuration::uuid() { return _uuid; }
 void    EEDB::Configuration::uuid(string value) { _uuid = value; }
 
@@ -263,11 +293,13 @@ void    EEDB::Configuration::config_type(string value) {
   if(value == "eeDB_gLyph_track_configs") { _config_type = "TRACK"; }
   if(value == "ZENBU_script_configs")     { _config_type = "SCRIPT"; }
   if(value == "eeDB_gLyphs_autoconfigs")  { _config_type = "AUTOSAVE"; }
+  if(value == "ZENBU_reports_page_configs") { _config_type = "REPORT"; }
 
   if(value == "VIEW")     { _config_type = "VIEW"; }
   if(value == "TRACK")    { _config_type = "TRACK"; }
   if(value == "SCRIPT")   { _config_type = "SCRIPT"; }
   if(value == "AUTOSAVE") { _config_type = "AUTOSAVE"; }
+  if(value == "REPORT")   { _config_type = "REPORT"; }
 }
 
 long  EEDB::Configuration::access_count() { return _access_count; }
@@ -501,6 +533,7 @@ void  EEDB::Configuration::init_from_row_map(map<string, dynadata> &row_map) {
   _owner_user_id     = row_map["user_id"].i_int;
   _collaboration_id  = row_map["collaboration_id"].i_int;
   _uuid              = row_map["uuid"].i_string;
+  _fixed_id          = row_map["fixed_id"].i_string;
   _config_type       = row_map["config_type"].i_string;
   _access_count      = row_map["access_count"].i_int;
   
@@ -535,8 +568,8 @@ vector<DBObject*> EEDB::Configuration::fetch_all(MQDB::Database *db) {
 
 
 EEDB::Configuration*  EEDB::Configuration::fetch_by_uuid(MQDB::Database *db, string uuid) {
-  const char *sql = "SELECT * FROM configuration WHERE uuid=?";
-  return (EEDB::Configuration*) MQDB::fetch_single(EEDB::Configuration::create, db, sql, "s", uuid.c_str());
+  const char *sql = "SELECT * FROM configuration WHERE uuid=? or fixed_id=?";
+  return (EEDB::Configuration*) MQDB::fetch_single(EEDB::Configuration::create, db, sql, "ss", uuid.c_str(), uuid.c_str());
 }
 
 
@@ -544,6 +577,23 @@ EEDB::Configuration*  EEDB::Configuration::fetch_by_uuid(MQDB::Database *db, str
   long user_id = -1;
   if(user) { user_id = user->primary_id(); }
   
+  //some alternate faster queries
+  //first one returns multiple rows showing how user has access to the config, join with collaboration_id
+  //SELECT * FROM configuration,
+  //    (select collaboration_id, "OWNER" from collaboration WHERE owner_user_id=4
+  //     UNION select collaboration_id, member_status from collaboration_2_user where user_id=4 and member_status in("MEMBER", "ADMIN", "OWNER")
+  //     UNION select collaboration_id, uuid from collaboration where uuid in ("public", "curated")
+  //     UNION select collaboration_id, "PUBLIC" from collaboration where open_to_public="y")t1
+  //WHERE configuration.uuid ="b1zZI1gUFZ6mHX6-4Gvxr" AND (configuration.user_id =4 OR config_type="AUTOSAVE"
+  //   OR configuration.collaboration_id = t1.collaboration_id);
+  //
+  //maybe this is more correct for multiple status checkingf
+  //select * from configuration LEFT JOIN (select collaboration_id, 'OWNER' from collaboration where owner_user_id=4 UNION select collaboration_id, member_status from collaboration_2_user where user_id=4 and member_status in('MEMBER', 'ADMIN', 'OWNER') UNION select collaboration_id, uuid from collaboration where uuid in ('public', 'curated') UNION select collaboration_id, 'PUBLIC' from collaboration where open_to_public='y')t1 using(collaboration_id) where (configuration.user_id =4 or config_type='AUTOSAVE' ) AND configuration.uuid="3VHf9dRcKVev28UWu_EZPC";
+
+  //next one returns queried single if the user has access
+  //select * from configuration where uuid ="b1zZI1gUFZ6mHX6-4Gvxr" and (configuration.user_id =4 or  config_type="AUTOSAVE" or collaboration_id in (select collaboration_id from collaboration where owner_user_id=4 UNION select collaboration_id from collaboration_2_user where user_id=4 and member_status in("MEMBER", "ADMIN", "OWNER") UNION select collaboration_id from collaboration where uuid in ("public", "curated") UNION select collaboration_id from collaboration where open_to_public="y"));
+
+  /*  old query which was taking 2seconds
   const char *sql = "SELECT * from \
                      (SELECT configuration.* from configuration JOIN collaboration USING(collaboration_id ) \
                         JOIN collaboration_2_user USING(collaboration_id ) WHERE collaboration_2_user.user_id =? \
@@ -553,6 +603,16 @@ EEDB::Configuration*  EEDB::Configuration::fetch_by_uuid(MQDB::Database *db, str
                      )t WHERE uuid=?";
   return (EEDB::Configuration*) MQDB::fetch_single(EEDB::Configuration::create, db, sql, 
                                                    "dds", user_id, user_id, uuid.c_str());
+  */
+
+  const char *sql = "SELECT * FROM configuration WHERE (uuid=? OR fixed_id=?) AND (configuration.user_id=? OR config_type='AUTOSAVE' \
+     OR configuration.collaboration_id in ( \
+             SELECT collaboration_id FROM collaboration WHERE owner_user_id=? \
+       UNION SELECT collaboration_id FROM collaboration_2_user WHERE user_id=? AND member_status in('MEMBER', 'ADMIN', 'OWNER') \
+       UNION SELECT collaboration_id FROM collaboration WHERE uuid in ('public', 'curated') \
+       UNION SELECT collaboration_id FROM collaboration WHERE open_to_public='y'))";
+  return (EEDB::Configuration*) MQDB::fetch_single(EEDB::Configuration::create, db, sql, "ssddd", uuid.c_str(), uuid.c_str(), user_id, user_id, user_id);
+
 }
 
 
@@ -686,7 +746,9 @@ vector<DBObject*> EEDB::Configuration::fetch_by_metadata_search(MQDB::Database *
     
   //if filter is empty fetch all features
   if(filter_logic.empty()) {
-    return EEDB::Configuration::fetch_all_by_type(db, config_type, user);
+    vector<DBObject*> t_results = EEDB::Configuration::fetch_all_by_type(db, config_type, user);
+    fprintf(stderr, "Configuration::fetch_by_metadata_search -- no filter -- found %ld results\n", t_results.size());
+    return t_results;
   }
 
   //now extract critical keywords, pre-stream potential features
@@ -758,6 +820,13 @@ bool EEDB::Configuration::store(MQDB::Database *db) {
   //now do the symbols and metadata  
   store_metadata();
   
+  //refetch primary data to get times
+  const char *sql = "SELECT * FROM configuration WHERE configuration_id=?";
+  void  *stmt = db->prepare_fetch_sql(sql, "d", _primary_db_id);
+  map<string, dynadata>   row_map;
+  db->fetch_next_row_map(stmt, row_map);
+  if(!row_map.empty()) { init_from_row_map(row_map); }
+  db->finalize_stmt(stmt);
   return true;
 }
 
@@ -835,6 +904,181 @@ bool EEDB::Configuration::delete_from_db() {
   db->do_sql("DELETE FROM configuration_2_symbol   WHERE configuration_id=?", "d", primary_id());
   db->do_sql("DELETE FROM configuration WHERE configuration_id=?", "d", primary_id());
   
+  return true;
+}
+
+
+bool EEDB::Configuration::check_fixed_id_editor(string fixed_id, EEDB::User* user, string &status, string &msg) {
+  status = "";
+  msg = "";
+  if(fixed_id.empty())   { status = "invalid"; msg = "no_fixed_id"; return false; }
+  if(!user)              { status = "invalid"; msg = "no_user"; return false;}
+  
+  MQDB::Database *db = user->database();
+  if(!db) { status = "invalid"; msg = "no_database"; return false; }
+  
+  //implement the security checks here
+  //maybe the logic should do almost everything from configuration_fixed_editors but will also check configuration.config_type
+    //check config_type (same as this config)
+    //check if this is the first use of fixed_id
+    //check editor_status for this fixed_id--user_id pair
+
+  char buffer[2048];
+  bzero(buffer,2048);
+  
+  //check config_type
+  dynadata value_config_type = db->fetch_col_value("SELECT config_type FROM configuration WHERE fixed_id=?", "s", fixed_id.c_str());
+  if((value_config_type.type == MQDB::STRING) && (value_config_type.i_string != config_type())) {
+    status = "different_config_type";
+    sprintf(buffer, "fixed_id [%s] exists but is different config_type[%s] to this config[%s]",
+            fixed_id.c_str(), value_config_type.i_string.c_str(), config_type().c_str());
+    fprintf(stderr, "%s\n", buffer);
+    msg += buffer;
+    return false;
+  }
+
+  dynadata config_owner_id = db->fetch_col_value("SELECT user_id FROM configuration WHERE fixed_id=?", "s", fixed_id.c_str());
+
+  //check if exists and if owner was set
+  dynadata value_owner_id = db->fetch_col_value("SELECT user_id FROM configuration_fixed_editors WHERE editor_status='OWNER' AND fixed_id=?", "s", fixed_id.c_str());
+  if((config_owner_id.type == MQDB::INT) && (value_owner_id.type == MQDB::UNDEF)) {
+    db->do_sql("INSERT INTO configuration_fixed_editors (fixed_id, user_id, editor_status) values(?, ?, 'OWNER')", "sd", fixed_id.c_str(), config_owner_id.i_int);
+    sprintf(buffer, "fixed_id [%s] exists but need to create fixed_editor.OWNER. ", fixed_id.c_str());
+    fprintf(stderr, "%s\n", buffer);
+    msg += buffer;
+  }
+
+  value_owner_id = db->fetch_col_value("SELECT user_id FROM configuration_fixed_editors WHERE editor_status='OWNER' AND fixed_id=?", "s", fixed_id.c_str());
+  if(value_owner_id.type == MQDB::UNDEF) {
+    status = "new_fixed_id";
+    sprintf(buffer, "fixed_id [%s] does not exist and has NO OWNER\n", fixed_id.c_str());
+    //if(create_new) { insert OWNER,user_id }
+    fprintf(stderr, "%s\n", buffer);
+    msg += buffer;
+    return true;
+  }
+  
+  //check if user is owner
+  if((value_owner_id.i_int>0) && (value_owner_id.i_int == user->primary_id())) {
+    //user is owner of this fixed_id
+    status = "fixed_id_owner";
+    sprintf(buffer, "fixed_id [%s] matches OWNER [%s]\n", fixed_id.c_str(), user->email_identity().c_str());
+    fprintf(stderr, "%s\n", buffer);
+    msg += buffer;
+    return true;
+  }
+
+  //check the editor_mode and then editor_status
+  string editor_mode = "OWNER_ONLY";
+  dynadata value = db->fetch_col_value("SELECT editor_mode FROM configuration_fixed WHERE fixed_id=?", "s", fixed_id.c_str());
+  if((value.type == MQDB::STRING) && (!value.i_string.empty())) { editor_mode = value.i_string; }
+  
+  if(editor_mode == "OWNER_ONLY") {
+    status = "invalid";
+    sprintf(buffer, "fixed_id [%s] editor_mode is OWNER_ONLY and [%s] is not owner\n", fixed_id.c_str(), user->email_identity().c_str());
+    fprintf(stderr, "%s\n", buffer);
+    msg += buffer;
+    return false;
+  }
+  
+  if(editor_mode == "COLLABORATORS") {
+    //check if user is one of the collaborators in the shared collaboration
+    if(!collaboration()) {
+      status = "invalid";
+      sprintf(buffer, "fixed_id [%s] editor_mode is COLLABORATORS but there is no collaboration\n", fixed_id.c_str());
+      fprintf(stderr, "%s\n", buffer);
+      msg += buffer;
+      return false;
+    }
+
+    collaboration()->member_status("OWNER"); //so that the load_members works
+    string member_status = collaboration()->member_status(user);
+    collaboration()->member_status("not_member"); //reset
+
+    if(member_status == "not_member") {
+      status = "invalid";
+      sprintf(buffer, "fixed_id [%s] editor_mode is COLLABORATORS and [%s] is not in collaboration\n", fixed_id.c_str(), user->email_identity().c_str());
+      fprintf(stderr, "%s\n", buffer);
+      msg += buffer;
+      return false;
+    } else {
+      status = "fixed_id_editor";
+      sprintf(buffer, "fixed_id [%s] user [%s] is a COLLABORATION EDITOR\n", fixed_id.c_str(), user->email_identity().c_str());
+      fprintf(stderr, "%s\n", buffer);
+      msg += buffer;
+      return true;
+    }
+  }
+  
+  if(editor_mode == "USER_LIST") {
+    //check if user is one of the editors
+    dynadata value = db->fetch_col_value("SELECT editor_status FROM configuration_fixed_editors WHERE user_id=? AND fixed_id=?", "ds", user->primary_id(), fixed_id.c_str());
+    if((value.type == MQDB::STRING) && (value.i_string == "EDITOR")) {
+      status = "fixed_id_editor";
+      sprintf(buffer, "fixed_id [%s] user [%s] is an EDITOR\n", fixed_id.c_str(), user->email_identity().c_str());
+      fprintf(stderr, "%s\n", buffer);
+      msg += buffer;
+      return true;
+    }
+  }
+  
+  status = "invalid";
+  msg = "can not edit";
+  return false;
+}
+
+
+bool EEDB::Configuration::assign_to_fixed_id(string fixed_id, EEDB::User* user) {
+  _fixed_id.clear();
+  if(database() == NULL) { return false; }
+  if(primary_id() == -1) { return false; }
+  if(fixed_id.empty())   { return false; }
+  if(!user)              { return false;}
+  MQDB::Database *db = database();
+
+  //do the security checks here
+  string check_msg, check_status;
+  if(!check_fixed_id_editor(fixed_id, user, check_status, check_msg)) { return false; }
+  
+  //first unset fixed_id from previous configuration
+  db->do_sql("UPDATE configuration SET fixed_id=NULL WHERE config_type=? and fixed_id=?", "ss", _config_type.c_str(), fixed_id.c_str());
+  //then assign to this configuration
+  db->do_sql("UPDATE configuration SET fixed_id=? WHERE configuration_id=?", "sd", fixed_id.c_str(), primary_id());
+
+  db->do_sql("INSERT INTO configuration_fixed_history SET fixed_id=?, configuration_id=?", "sd", fixed_id.c_str(), primary_id());
+  
+  //check that it was set
+  dynadata value = db->fetch_col_value("SELECT configuration_id FROM configuration WHERE fixed_id=?", "s", fixed_id.c_str());
+  if(value.type != MQDB::INT) { return false; }
+  if(value.i_int != primary_id()) { return false; }
+  _fixed_id = fixed_id;
+
+  check_fixed_id_editor(fixed_id, user, check_status, check_msg); //sets the fixed_editor.OWNER id needed
+  
+  return true;
+}
+
+
+vector<EEDB::Configuration*>  EEDB::Configuration::fixed_id_history() {
+  _load_fixed_id_history();
+  return _fixed_id_history;
+}
+
+bool EEDB::Configuration::_load_fixed_id_history() {  
+  if(database() == NULL) { return false; }
+  if(primary_id() == -1) { return false; }
+  if(_fixed_id.empty())  { return false; }
+  
+  MQDB::Database *db = database();
+  const char *sql = "SELECT * FROM configuration_fixed_history JOIN configuration USING(configuration_id) \
+                     WHERE configuration_fixed_history.fixed_id=? ORDER BY create_date desc";
+  vector<MQDB::DBObject*> t_results = MQDB::fetch_multiple(EEDB::Configuration::create, db, sql, "s", _fixed_id.c_str());
+
+  _fixed_id_history.clear();
+  for(unsigned j=0; j<t_results.size(); j++) {
+    EEDB::Configuration* config = (EEDB::Configuration*)t_results[j];
+    _fixed_id_history.push_back(config);
+  }
   return true;
 }
 

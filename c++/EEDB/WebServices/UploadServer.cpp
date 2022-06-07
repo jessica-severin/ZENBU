@@ -1,4 +1,4 @@
-/* $Id: UploadServer.cpp,v 1.51 2016/09/16 03:23:20 severin Exp $ */
+/* $Id: UploadServer.cpp,v 1.57 2022/04/08 02:03:18 severin Exp $ */
 
 /***
 
@@ -56,8 +56,10 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <string>
 #include <stdarg.h>
 #include <sys/types.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/time.h>
+#include <sys/mman.h>
 //#include <yaml.h>
 #include <openssl/hmac.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost
@@ -165,8 +167,10 @@ bool EEDB::WebServices::UploadServer::execute_request() {
     prepare_file_upload();
   } else if(_parameters["mode"] == string("queuestatus")) {
     show_queue_status();
-  //} else if(_parameters["mode"] == string("runqueue")) {
-  //  execute_job_from_queue();
+  } else if(_parameters["mode"] == string("clear_failed_jobs")) {
+    clear_failed_jobs();
+  } else if(_parameters["mode"] == string("clear_blocked_jobs")) {
+    clear_blocked_jobs();
   } else if(_parameters["mode"] == string("delete")) {
     delete_uploaded_database();
   } else if(_parameters["mode"] == string("redirect")) {
@@ -340,6 +344,11 @@ void EEDB::WebServices::UploadServer::process_xml_parameters() {
   if((node = root_node->first_node("singletagmap_expression")) != NULL) { _parameters["singletagmap_expression"] = node->value(); }
   if((node = root_node->first_node("collaboration_uuid")) != NULL) { _parameters["collaboration_uuid"] = node->value(); }
   if((node = root_node->first_node("check_duplicates")) != NULL) { _parameters["check_duplicates"] = node->value(); }
+  if((node = root_node->first_node("build_feature_name_index")) != NULL) { _parameters["build_feature_name_index"] = node->value(); }
+
+  if((node = root_node->first_node("featuresource1")) != NULL) { _parameters["featuresource1"] = node->value(); }
+  if((node = root_node->first_node("featuresource2")) != NULL) { _parameters["featuresource2"] = node->value(); }
+  if((node = root_node->first_node("strict_edge_linking")) != NULL) { _parameters["strict_edge_linking"] = node->value(); }
 
   for(node=root_node->first_node("upload_file"); node; node=node->next_sibling("upload_file")) {
     string inpath = node->value();
@@ -869,7 +878,7 @@ void  EEDB::WebServices::UploadServer::show_queue_status() {
 
 void  EEDB::WebServices::UploadServer::redirect_to_mydata() {
   printf("Content-type: text/html\r\n");
-  printf("Set-Cookie: %s=%s; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
+  printf("Set-Cookie: %s=%s; SameSite=Lax; Path=/\r\n", _session_name.c_str(), _session_data["id"].c_str());
   printf("Location: %s/user/#section=uploads\r\n", _web_url.c_str());
   printf("\r\n");
 
@@ -882,6 +891,83 @@ void  EEDB::WebServices::UploadServer::redirect_to_mydata() {
     print $cgi->redirect(-uri=> ($WEB_URL."/user/#section=mydata"));
   }
   */
+}
+
+
+void  EEDB::WebServices::UploadServer::clear_failed_jobs() {
+  printf("Content-type: text/xml\r\n\r\n");
+  /*
+   if($self->{'session'}) {
+   my $cookie = $cgi->cookie($SESSION_NAME => $self->{'session'}->{'id'});
+   print $cgi->header(-cookie=>$cookie, -type => "text/xml", -charset=> "UTF8");
+   } else {
+   print $cgi->header(-type => "text/xml", -charset=> "UTF8");
+   }  
+   */
+  //printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
+  printf("<upload_queue>\n");
+  printf("<clear_failed_jobs>true</clear_failed_jobs>\n");
+  
+  if(_user_profile) { 
+    printf("%s", _user_profile->simple_xml().c_str()); 
+    
+    vector<DBObject*> jobs = EEDB::JobQueue::Job::fetch_all_by_user(_user_profile);
+    for(unsigned int i=0; i<jobs.size(); i++) {
+      EEDB::JobQueue::Job *job = (EEDB::JobQueue::Job*)jobs[i];
+      if(job->status() != "FAILED") { continue; }
+      if(_parameters["format_mode"] == "simplexml") {
+        printf("%s", job->simple_xml().c_str());
+      } else { 
+        printf("%s", job->xml().c_str()); 
+      }
+    }
+    
+    const char* sql ="update job set starttime=0 where status='FAILED' and (UNIX_TIMESTAMP()-UNIX_TIMESTAMP(starttime))/(24*60*60)<=1.0 and user_id=?";
+    _userDB->do_sql(sql, "d", _user_profile->primary_id());
+
+  }
+  
+  struct timeval       endtime, time_diff;
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &_starttime, &time_diff);
+  double   runtime  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+  printf("<process_summary processtime_sec=\"%1.6f\" />\n", runtime);
+  printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
+  printf("</upload_queue>\n");
+}
+
+
+void  EEDB::WebServices::UploadServer::clear_blocked_jobs() {
+  printf("Content-type: text/xml\r\n\r\n");
+  printf("<upload_queue>\n");
+  printf("<clear_blocked_jobs>true</clear_blocked_jobs>\n");
+  
+  if(_user_profile) { 
+    printf("%s", _user_profile->simple_xml().c_str()); 
+    
+    vector<DBObject*> jobs = EEDB::JobQueue::Job::fetch_all_by_user(_user_profile);
+    for(unsigned int i=0; i<jobs.size(); i++) {
+      EEDB::JobQueue::Job *job = (EEDB::JobQueue::Job*)jobs[i];
+      if(job->status() != "BLOCKED") { continue; }
+      if(_parameters["format_mode"] == "simplexml") {
+        printf("%s", job->simple_xml().c_str());
+      } else { 
+        printf("%s", job->xml().c_str()); 
+      }
+    }
+    
+    //const char* sql ="delete from job where status='BLOCKED' and (UNIX_TIMESTAMP()-UNIX_TIMESTAMP(created))/(24*60*60)>=1.0 and user_id=?";
+    const char* sql ="delete from job where status='BLOCKED' and user_id=?";
+    _userDB->do_sql(sql, "d", _user_profile->primary_id());
+  }
+  
+  struct timeval       endtime, time_diff;
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &_starttime, &time_diff);
+  double   runtime  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
+  printf("<process_summary processtime_sec=\"%1.6f\" />\n", runtime);
+  printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
+  printf("</upload_queue>\n");
 }
 
 
@@ -1095,43 +1181,45 @@ void  EEDB::WebServices::UploadServer::receive_file_data() {
   _safe_upload_filename = getenv("HTTP_X_ZENBU_UPLOAD");
   //fprintf(stderr, "safename [%s]\n", _safe_upload_filename.c_str());
   
-  EEDB::SPStreams::RemoteServerStream::set_current_user(NULL);  
-  string signature;
-  if(getenv("HTTP_X_ZENBU_MAGIC")) { signature = getenv("HTTP_X_ZENBU_MAGIC"); }
-  string email;
-  if(getenv("HTTP_X_ZENBU_USER_EMAIL")) { email = getenv("HTTP_X_ZENBU_USER_EMAIL"); }
-  //fprintf(stderr, "signature[%s]\n", signature.c_str());
-  //fprintf(stderr, "user email[%s]\n", email.c_str());
-  
-  EEDB::User *user1 = EEDB::User::fetch_by_email(_userDB, email);
-  if(!user1) { 
-    _parameters["upload_error"] = "no user profile";
-    return show_upload_status();
+  if(!_user_profile) {
+    EEDB::SPStreams::RemoteServerStream::set_current_user(NULL);  
+    string signature;
+    if(getenv("HTTP_X_ZENBU_MAGIC")) { signature = getenv("HTTP_X_ZENBU_MAGIC"); }
+    string email;
+    if(getenv("HTTP_X_ZENBU_USER_EMAIL")) { email = getenv("HTTP_X_ZENBU_USER_EMAIL"); }
+    //fprintf(stderr, "signature[%s]\n", signature.c_str());
+    //fprintf(stderr, "user email[%s]\n", email.c_str());
+    
+    EEDB::User *user1 = EEDB::User::fetch_by_email(_userDB, email);
+    if(!user1) { 
+      _parameters["upload_error"] = "no user profile";
+      return show_upload_status();
+    }
+    string key = user1->hmac_secretkey();
+    
+    unsigned int md_len;
+    unsigned char* result = HMAC(EVP_sha256(), 
+                                (const unsigned char*)key.c_str(), key.length(), 
+                                (const unsigned char*)_safe_upload_filename.c_str(), _safe_upload_filename.length(), NULL, &md_len);
+    static char res_hexstring[64]; //expect 32 so this is safe
+    bzero(res_hexstring, 64);
+    for(unsigned i = 0; i < md_len; i++) {
+      sprintf(&(res_hexstring[i * 2]), "%02x", result[i]);
+    }
+    //fprintf(stderr, "hmac [%s]\n", res_hexstring);
+    
+    if(signature != res_hexstring) {
+      user1->release();
+      //fprintf(stderr, "ZENBU upload hmac authorization error: signatures did not match\n");
+      _parameters["upload_error"] = "upload hmac authorization error: signatures did not match";
+      return show_upload_status();
+    }
+    
+    //AUTHENTICATED
+    _user_profile = user1;
+    EEDB::SPStreams::RemoteServerStream::set_current_user(_user_profile);
+    fprintf(stderr, "ZENBU upload hmac authenticated %s [%s]", _user_profile->email_identity().c_str(), _safe_upload_filename.c_str());
   }
-  string key = user1->hmac_secretkey();
-  
-  unsigned int md_len;
-  unsigned char* result = HMAC(EVP_sha256(), 
-                               (const unsigned char*)key.c_str(), key.length(), 
-                               (const unsigned char*)_safe_upload_filename.c_str(), _safe_upload_filename.length(), NULL, &md_len);
-  static char res_hexstring[64]; //expect 32 so this is safe
-  bzero(res_hexstring, 64);
-  for(unsigned i = 0; i < md_len; i++) {
-    sprintf(&(res_hexstring[i * 2]), "%02x", result[i]);
-  }
-  //fprintf(stderr, "hmac [%s]\n", res_hexstring);
-  
-  if(signature != res_hexstring) {
-    user1->release();
-    //fprintf(stderr, "ZENBU upload hmac authorization error: signatures did not match\n");
-    _parameters["upload_error"] = "upload hmac authorization error: signatures did not match";
-    return show_upload_status();
-  }
-  
-  //AUTHENTICATED
-  _user_profile = user1;
-  EEDB::SPStreams::RemoteServerStream::set_current_user(_user_profile);
-  fprintf(stderr, "ZENBU upload hmac authenticated %s [%s]", _user_profile->email_identity().c_str(), _safe_upload_filename.c_str());
   
   //
   //write post content to safe-filename
@@ -1299,6 +1387,10 @@ string  EEDB::WebServices::UploadServer::write_upload_xmlinfo(string orig_filena
   if(_parameters.find("bedscore_expression") != _parameters.end()) { fprintf(xmlfp,"    <score_as_expression>%s</score_as_expression>\n", _parameters["datatype"].c_str()); }
   if(_parameters.find("singletagmap_expression") != _parameters.end()) { fprintf(xmlfp,"    <singletagmap_expression>%s</singletagmap_expression>\n", _parameters["singletagmap_expression"].c_str()); }
   if(_parameters.find("collaboration_uuid") != _parameters.end()) { fprintf(xmlfp,"    <collaboration_uuid>%s</collaboration_uuid>\n", _parameters["collaboration_uuid"].c_str()); }
+
+  if(_parameters.find("featuresource1") != _parameters.end()) { fprintf(xmlfp,"    <featuresource1>%s</featuresource1>\n", _parameters["featuresource1"].c_str()); }
+  if(_parameters.find("featuresource2") != _parameters.end()) { fprintf(xmlfp,"    <featuresource2>%s</featuresource2>\n", _parameters["featuresource2"].c_str()); }
+  if(_parameters.find("strict_edge_linking") != _parameters.end()) { fprintf(xmlfp,"    <strict_edge_linking>%s</strict_edge_linking>\n", _parameters["strict_edge_linking"].c_str()); }
 
   fprintf(xmlfp, "  </parameters>\n");
   fprintf(xmlfp, "</oscfile>\n");

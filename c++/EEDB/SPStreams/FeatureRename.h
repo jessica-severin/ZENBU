@@ -1,4 +1,4 @@
-/* $Id: FeatureRename.h,v 1.2 2015/06/04 03:47:51 severin Exp $ */
+/* $Id: FeatureRename.h,v 1.3 2017/10/24 07:18:49 severin Exp $ */
 
 /***
 
@@ -80,14 +80,16 @@ class FeatureRename : public EEDB::SPStream {
     string             _prefix;
     bool               _source_name;
     bool               _location_name;
-  
+    string             _mdkey_format;
+
+    string             _nameFromMetadataKeys(EEDB::Feature *feature);
 
   //used for callback functions, should not be considered open API
   public:
     MQDB::DBObject*    _next_in_stream();
     void               _reset_stream_node();
     void               _xml(string &xml_buffer);
-    
+
 };
 
 };   //namespace SPStreams

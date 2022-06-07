@@ -1,4 +1,4 @@
-/* $Id: TrackCacheBuilder.cpp,v 1.223 2015/02/17 11:42:31 severin Exp $ */
+/* $Id: TrackCacheBuilder.cpp,v 1.224 2019/07/31 06:59:15 severin Exp $ */
 
 /***
 
@@ -56,6 +56,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <string>
 #include <stdarg.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include <sys/mman.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost
 #include <boost/algorithm/string.hpp>

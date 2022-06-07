@@ -1,4 +1,4 @@
-/* $Id: RegionServer.h,v 1.56 2015/02/05 05:58:21 severin Exp $ */
+/* $Id: RegionServer.h,v 1.57 2019/03/26 07:05:39 severin Exp $ */
 
 /***
 
@@ -83,6 +83,8 @@ namespace EEDB {
     TrackDef();        // constructor
     ~TrackDef();       // destructor
     void init();       // initialization method
+
+    string xml();
     
     string               name;
     string               track_uuid;

@@ -1,4 +1,4 @@
-/* $Id: zenbutools.cpp,v 1.20 2015/11/13 09:03:34 severin Exp $ */
+/* $Id: zenbutools.cpp,v 1.21 2019/07/31 07:03:48 severin Exp $ */
 
 /****
  
@@ -62,6 +62,8 @@
 #include <sys/time.h>
 #include <sys/dir.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include <pwd.h>
 #include <curl/curl.h>

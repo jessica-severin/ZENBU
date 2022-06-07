@@ -1,4 +1,4 @@
-/* $Id: MetaSearch.h,v 1.14 2016/05/13 08:57:36 severin Exp $ */
+/* $Id: MetaSearch.h,v 1.16 2018/03/11 00:52:29 severin Exp $ */
 
 /***
 
@@ -100,22 +100,22 @@ class MetaSearch : public WebBase {
     void    export_expression_tsv();
     void    show_expression_xml();
     void    search_feature();
-    void    show_all_sources();
-    void    show_feature_sources();
-    void    show_edge_sources();
-    void    show_experiments();
+    void    show_datasources();
     void    show_expression_datatypes();
-    void    show_feature_list();
+    void    show_features();
     void    show_collaborations();
     void    show_source_metadata_stats();
     void    show_ranksum_stats();
-    
+    void    show_edges();
+  
   //internal variables and methods, should not be considered open API
   protected:
     map< string, map<string, bool> >   _global_source_counts;  //[class][uuid]=bool
     vector<EEDB::Feature*>             _ranksum_input;
     map<string, bool>                  _filter_mdkeys;
     map<string,bool>                   _desc_xml_tags;
+    map<string, EEDB::Feature*>        _feature_id_hash;  //for edge system
+
 
 };
 

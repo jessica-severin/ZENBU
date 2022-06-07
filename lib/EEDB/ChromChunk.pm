@@ -1,4 +1,4 @@
-# $Id: ChromChunk.pm,v 1.35 2010/02/01 01:45:19 severin Exp $
+# $Id: ChromChunk.pm,v 1.36 2022/04/28 01:25:28 severin Exp $
 =head1 NAME - EEDB::ChromChunk
 
 =head1 SYNOPSIS
@@ -295,7 +295,7 @@ sub store {
   }
   return undef unless($self->chrom_id);
     
-  my $sql = "INSERT ignore INTO chrom_chunk (chrom_id,chrom_start,chrom_end,chunk_len) VALUES(?,?,?,?)";
+  my $sql = "INSERT or ignore INTO chrom_chunk (chrom_id,chrom_start,chrom_end,chunk_len) VALUES(?,?,?,?)";
   $self->database->execute_sql($sql, $self->chrom_id, $self->chrom_start, $self->chrom_end, $self->seq_length);
 
   $sql = "select chrom_chunk_id from chrom_chunk where chrom_id=? and chrom_start=? and chrom_end=?";
@@ -329,7 +329,7 @@ sub store_seq {
   return unless(defined($self->{'_sequence'}));
 
   my $dbh = $self->database->get_connection;  
-  my $sql = "INSERT ignore INTO chrom_chunk_seq (chrom_chunk_id, sequence) VALUES(?,?)";
+  my $sql = "INSERT or ignore INTO chrom_chunk_seq (chrom_chunk_id, sequence) VALUES(?,?)";
   my $sth = $dbh->prepare($sql);
   $sth->execute($self->primary_id, $self->sequence->seq);
   $sth->finish;

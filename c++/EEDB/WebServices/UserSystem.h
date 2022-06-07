@@ -1,4 +1,4 @@
-/* $Id: UserSystem.h,v 1.27 2016/10/05 08:52:58 severin Exp $ */
+/* $Id: UserSystem.h,v 1.28 2021/01/22 06:02:24 severin Exp $ */
 
 /***
 
@@ -106,6 +106,7 @@ class UserSystem : public WebBase {
     void                   collaboration_remove_user();
     void                   collaboration_make_admin_user();
     void                   collaboration_revoke_admin_user();
+    void                   collaboration_make_public(bool value);
     void                   invite_user_to_collaboration();
     void                   accept_collaboration_invitation();
     void                   share_uploaded_database();

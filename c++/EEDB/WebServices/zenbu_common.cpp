@@ -1,4 +1,4 @@
-/* $Id: zenbu_common.cpp,v 1.1 2016/02/01 07:01:02 severin Exp $ */
+/* $Id: zenbu_common.cpp,v 1.3 2022/04/08 08:55:42 severin Exp $ */
 
 /***
 
@@ -64,13 +64,14 @@ The rest of the documentation details each of the object methods. Internal metho
 
 using namespace std;
 
+string     _send_email_method = "SMTP";
 string     _smtp_server_url;
 string     _smtp_server_user;
 string     _smtp_server_passwd;
 string     _smtp_from;
 
 
-void  send_email(string email, string subject, string message) {   
+void  send_email_smtp(string email, string subject, string message) {   
   CURL *curl;
   CURLcode res;
   struct curl_slist *recipients = NULL;
@@ -91,7 +92,9 @@ void  send_email(string email, string subject, string message) {
    * of using CURLUSESSL_TRY here, because if TLS upgrade fails, the transfer
    * will continue anyway - see the security discussion in the libcurl
    * tutorial for more details. */ 
-  curl_easy_setopt(curl, CURLOPT_USE_SSL, (long)CURLUSESSL_TRY);
+  if(_smtp_server_url.find("smtps:") !=std::string::npos) {
+    curl_easy_setopt(curl, CURLOPT_USE_SSL, (long)CURLUSESSL_TRY);
+  }
   
   /* If your server doesn't have a valid certificate, then you can disable
    * part of the Transport Layer Security protection by setting the
@@ -174,3 +177,11 @@ void  send_email(string email, string subject, string message) {
 }
 
 
+void  send_email(string email, string subject, string message) {   
+  if(_send_email_method=="SMTP") {
+    return send_email_smtp(email, subject, message);
+  } else {
+    //fall back to SMTP if unknown method
+    return send_email_smtp(email, subject, message);
+  }
+}

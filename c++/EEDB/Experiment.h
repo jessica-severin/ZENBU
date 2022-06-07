@@ -1,4 +1,4 @@
-/* $Id: Experiment.h,v 1.30 2016/05/13 08:51:58 severin Exp $ */
+/* $Id: Experiment.h,v 1.31 2018/12/05 00:35:20 severin Exp $ */
 
 /***
 
@@ -172,6 +172,7 @@ class Experiment : public EEDB::DataSource {
     void   _xml_start(string &xml_buffer);
     void   _xml_end(string &xml_buffer);
     void   _mdata_xml(string &xml_buffer, map<string,bool> mdtags);
+    EEDB::DataSource*   _copy(EEDB::DataSource* copy);
 
   
 };

@@ -1,4 +1,4 @@
-/* $Id: EdgeSource.h,v 1.14 2013/04/08 05:47:52 severin Exp $ */
+/* $Id: EdgeSource.h,v 1.18 2017/10/12 07:58:15 severin Exp $ */
 
 /***
 
@@ -58,6 +58,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <MQDB/Database.h>
 #include <MQDB/DBObject.h>
 #include <MQDB/DBCache.h>
+#include <EEDB/Peer.h>
 #include <EEDB/DataSource.h>
 #include <EEDB/MetadataSet.h>
 
@@ -72,24 +73,35 @@ class EdgeSource : public EEDB::DataSource {
     static const char*  class_name;
 
   public:
-    EdgeSource();             // constructor
-   ~EdgeSource();             // destructor
-    void init();              // initialization method
+    EdgeSource();               // constructor
+    EdgeSource(void *xml_node); // constructor using a rapidxml node
+   ~EdgeSource();               // destructor
+    void init();                // initialization method
 
     //get atribute
-    string             category();
-    string             classification();
-    time_t             create_date();
-    string             create_date_string();
+    EEDB::FeatureSource*    feature_source1();
+    EEDB::FeatureSource*    feature_source2();
+    string                  feature_source1_dbid();
+    string                  feature_source2_dbid();
+    string                  category();
+    string                  classification();
 
-    long int           edge_count();
-    long int           get_edge_count();
+    string                  feature_source1_uuid();
+    string                  feature_source2_uuid();
+    EEDB::Peer*             feature_source1_peer();
+    EEDB::Peer*             feature_source2_peer();
 
-
+    long int                edge_count();
+    long int                get_edge_count();
+  
     //set atribute
     void      category(string value);
     void      classification(string value);
-    void      create_date(time_t value);
+    void      feature_source1(EEDB::FeatureSource* fsrc);
+    void      feature_source2(EEDB::FeatureSource* fsrc);
+    void      feature_source1_dbid(string id);
+    void      feature_source2_dbid(string id);
+    void      edge_count(long value);
 
 
     //display and export
@@ -99,6 +111,10 @@ class EdgeSource : public EEDB::DataSource {
 
     bool check_exists_db(Database *db);
     bool store(MQDB::Database *db);
+
+    bool store_metadata();
+    bool update_metadata();
+    void parse_metadata_into_attributes();
 
     //
     // static member function each subclass must implement this code
@@ -113,46 +129,24 @@ class EdgeSource : public EEDB::DataSource {
     }
     void init_from_row_map(map<string, dynadata> &row_map);
 
-
-    //
     // static member functions for object retrieval from database
-    //
-
-    static EdgeSource*
-    fetch_by_id(MQDB::Database *db, long int id) {
-      EdgeSource* obj = (EdgeSource*) MQDB::DBCache::check_cache(db, id, "EdgeSource");
-      if(obj!=NULL) { obj->retain(); return obj; }
-      
-      const char *sql = "SELECT * FROM edge_source WHERE edge_source_id=?";
-      obj = (EEDB::EdgeSource*) MQDB::fetch_single(EEDB::EdgeSource::create, db, sql, "d", id);
-      
-      MQDB::DBCache::add_to_cache(obj);
-      return obj;
-    }
-
-    static vector<DBObject*>
-    fetch_all(MQDB::Database *db) {
-      const char *sql = "SELECT * FROM edge_source";
-      return MQDB::fetch_multiple(EEDB::EdgeSource::create, db, sql, "");
-    }
-
-    static EdgeSource*
-    fetch_by_name(MQDB::Database *db, string name) {
-      const char *sql = "SELECT * FROM edge_source WHERE name=?";
-      return (EEDB::EdgeSource*) MQDB::fetch_single(EEDB::EdgeSource::create, db, sql, "s", name.c_str());
-    }
- 
-    static vector<DBObject*>
-    fetch_all_by_category(MQDB::Database *db, string category) {
-      const char *sql = "SELECT * FROM edge_source WHERE category=?";
-      return MQDB::fetch_multiple(EEDB::EdgeSource::create, db, sql, "s", category.c_str());
-    }
+    static EEDB::EdgeSource*       fetch_by_id(MQDB::Database *db, long int id);
+    static vector<DBObject*>       fetch_all(MQDB::Database *db);
+    static EEDB::EdgeSource*       fetch_by_name(MQDB::Database *db, string name);
+    static vector<DBObject*>       fetch_all_by_category(MQDB::Database *db, string category);
 
   protected:
-    string             _category;
-    string             _classification;
-    time_t             _create_date;
-    long int           _edge_count;
+    string                 _category;
+    string                 _classification;
+    long int               _edge_count;
+    EEDB::FeatureSource*   _feature_source1;
+    EEDB::FeatureSource*   _feature_source2;
+    string                 _feature_source1_dbid;
+    string                 _feature_source2_dbid;
+  private:
+    EEDB::Peer*            _feature_source1_peer;
+    EEDB::Peer*            _feature_source2_peer;
+
 
   //internal API used for callback functions, should not be considered open API
   public:
@@ -162,6 +156,7 @@ class EdgeSource : public EEDB::DataSource {
     void     _simple_xml(string &xml_buffer);
     void     _xml_start(string &xml_buffer);
     void     _xml_end(string &xml_buffer);
+    void     _mdata_xml(string &xml_buffer, map<string,bool> tags);
 
 };
 

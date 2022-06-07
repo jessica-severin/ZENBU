@@ -1,5 +1,5 @@
 
-/* $Id: OSCFileDB.h,v 1.50 2016/06/20 06:35:15 severin Exp $ */
+/* $Id: OSCFileDB.h,v 1.56 2020/03/02 08:49:26 severin Exp $ */
 
 /***
 
@@ -126,6 +126,7 @@ class OSCFileDB : public EEDB::SPStreams::SourceStream {
 
     int                         _ridx_fd;
     int                         _cidx_fd;
+    int                         _efidx_fd;
     int                         _data_fd;
     char*                       _data_buffer;
     char*                       _data_line_ptr;
@@ -162,12 +163,16 @@ class OSCFileDB : public EEDB::SPStreams::SourceStream {
     bool               _region_index_sqlite(string assembly_name, string chrom_name, long int start, long int end);
     bool               _region_index_cidx(string assembly_name, string chrom_name, long int start, long int end);
     void               _copy_self_to_deploy_dir();
+    bool               _create_edge_osc_filedb();
+    bool               _build_edge_indexes();
+    map<string, vector<EEDB::Feature*> > _load_edgelink_feature_hash(EEDB::FeatureSource* fsrc, string link_key);
 
   public:  //public for now for development
     bool               _seek_to_datarow(long int obj_id);
     long long int      _get_datarow_offset(long int obj_id);
     bool               _prepare_next_line();
     void               test_stream();
+    bool               _seek_to_edge_min_feature_id(long int min_f1id, long int min_f2id);
 
 
   //internal API used for callback functions, should not be considered open API
@@ -183,7 +188,11 @@ class OSCFileDB : public EEDB::SPStreams::SourceStream {
     void               _reload_stream_data_sources();
     MQDB::DBObject*    _fetch_object_by_id(string fid);
     EEDB::Feature*     _fetch_feature_by_id(long int feature_id);
+    EEDB::Edge*        _fetch_edge_by_id(long int edge_id);
     bool               _stream_by_named_region(string assembly_name, string chrom_name, long int start, long int end);
+    void               _stream_all_features();
+    bool               _fetch_features(map<string, EEDB::Feature*> &fid_hash);
+    void               _stream_edges(map<string, EEDB::Feature*> fid_hash, string filter_logic);
 
 };
 

@@ -1,4 +1,4 @@
-/* $Id: Expression.h,v 1.24 2014/02/10 04:41:28 severin Exp $ */
+/* $Id: Expression.h,v 1.25 2017/04/24 08:27:58 severin Exp $ */
 
 /***
 
@@ -143,6 +143,7 @@ class Expression : public MQDB::MappedQuery {
     string bed_description(string format);
 
 
+    bool store(EEDB::Feature *feature);
     bool store(MQDB::Database *db);
 
     //

@@ -1,4 +1,4 @@
-/* $Id: FeatureSource.h,v 1.31 2016/05/13 08:52:32 severin Exp $ */
+/* $Id: FeatureSource.h,v 1.32 2018/12/05 00:34:23 severin Exp $ */
 
 /***
 
@@ -169,6 +169,7 @@ class FeatureSource : public EEDB::DataSource {
     void     _xml_start(string &xml_buffer);
     void     _xml_end(string &xml_buffer);
     void     _mdata_xml(string &xml_buffer, map<string,bool> tags);
+    EEDB::DataSource*   _copy(EEDB::DataSource* copy);
 
 };
 

@@ -91,10 +91,14 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <ios>
 #include <string>
 
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_io.hpp>
+
 #include <boost/date_time.hpp>
 namespace bt = boost::posix_time;
 
 #include <MQDB/Database.h>
+
 
 using namespace std;
 using namespace MQDB;
@@ -209,6 +213,10 @@ class MysqlStmt {
           if(result_bind[i].buffer != NULL) {
             free(result_bind[i].buffer);
           }
+          if(result_bind[i].length != NULL) {
+            free(result_bind[i].length);
+          }
+
         }
         free(result_bind); 
       }
@@ -251,7 +259,7 @@ class MysqlStmt {
         result_bind[i].buffer_type = MYSQL_TYPE_NULL;
         result_bind[i].buffer      = NULL;
         result_bind[i].is_null     = &(result_is_null[i]);
-        result_bind[i].length      = 0;
+        result_bind[i].length      = NULL;
 
         switch (fields[i].type) {
           case MYSQL_TYPE_TINY:
@@ -320,20 +328,20 @@ class MysqlStmt {
           case MYSQL_TYPE_STRING:
             result_bind[i].buffer_type   = fields[i].type;
             result_bind[i].buffer_length = 1024;
-            result_bind[i].buffer        = (void*)malloc(1024);
-            bzero(result_bind[i].buffer, 1024);
+            result_bind[i].buffer        = (void*)calloc(1024,1);
+            result_bind[i].length        = (long unsigned int*)(calloc(sizeof(long unsigned int), 1));
             break;
-          case MYSQL_TYPE_VAR_STRING:
+          case MYSQL_TYPE_VAR_STRING: //longtext is 4GB, mediumtext is 16MB. use 64MB as compromise
             result_bind[i].buffer_type   = fields[i].type;
-            result_bind[i].buffer_length = 2*1024*1024;
-            result_bind[i].buffer        = (void*)malloc(2*1024*1024 +2);
-            bzero(result_bind[i].buffer, 2*1024*1024 +2);
+            result_bind[i].buffer_length = 64*1024*1024; //max 64MB
+            result_bind[i].buffer        = (void*)calloc(64*1024*1024 +2, 1);
+            result_bind[i].length        = (long unsigned int*)(calloc(sizeof(long unsigned int), 1));
            break;
-          case MYSQL_TYPE_BLOB:
+          case MYSQL_TYPE_BLOB:  //medium blob is 16MB max, LONGBLOB is 4GB
             result_bind[i].buffer_type   = fields[i].type;
-            result_bind[i].buffer_length = 2*1024*1024;
-            result_bind[i].buffer        = (void*)malloc(2*1024*1024 +2);
-            bzero(result_bind[i].buffer, 2*1024*1024 +2);
+            result_bind[i].buffer_length = 64*1024*1024;
+            result_bind[i].buffer        = (void*)calloc(64*1024*1024 +2, 1);
+            result_bind[i].length        = (long unsigned int*)(calloc(sizeof(long unsigned int), 1));
             break;
           case MYSQL_TYPE_SET:
             break;
@@ -1345,7 +1353,7 @@ void* MQDB::Database::mysql_prepare_fetch_sql(const char* sql, const char* fmt, 
   }
 
   if(mysql_stmt_prepare(ppStmt, sql, strlen(sql)) != 0) {
-    fprintf(stderr, "Failed to prepare mysql statement [%s] Error: %s\n", sql, mysql_stmt_error(ppStmt));
+    fprintf(stderr, "Failed to prepare mysql statement [%s] db[%s] Error: %s\n", sql, url().c_str(), mysql_stmt_error(ppStmt));
     mysql_stmt_close(ppStmt);
     return NULL;
   }
@@ -1364,7 +1372,6 @@ void* MQDB::Database::mysql_prepare_fetch_sql(const char* sql, const char* fmt, 
 
     va_copy(ap2, ap);
     while(param_idx < bind_cnt) {
-      switch(fmt[param_idx]) {
         char         t_char;
         char*        s;
         long int     d;
@@ -1375,6 +1382,7 @@ void* MQDB::Database::mysql_prepare_fetch_sql(const char* sql, const char* fmt, 
         
         mysql_bind[param_idx].buffer = NULL;
       
+      switch(fmt[param_idx]) {
         case 's':                       //string
           s = va_arg(ap2, char *);
           mysql_buffer[param_idx].i_string = s;
@@ -1498,6 +1506,10 @@ bool MQDB::Database::mysql_fetch_next_row_map(void* in_stmt,  map<string, dynada
 
     if(!(*(stmt->result_bind[i].is_null))) {
       MYSQL_TIME  *rtn_time = (MYSQL_TIME*)stmt->result_bind[i].buffer;
+
+      long unsigned int buf_length = 0;
+      if(stmt->result_bind[i].length != NULL) { buf_length = *(stmt->result_bind[i].length); }
+
       switch (stmt->result_bind[i].buffer_type) {
         case MYSQL_TYPE_TINY:
           value.type = MQDB::CHAR;
@@ -1551,17 +1563,17 @@ bool MQDB::Database::mysql_fetch_next_row_map(void* in_stmt,  map<string, dynada
         case MYSQL_TYPE_STRING:
           value.type = MQDB::STRING;
           value.i_string = (char*)stmt->result_bind[i].buffer;
-          bzero(stmt->result_bind[i].buffer, 1024);
+          bzero(stmt->result_bind[i].buffer, buf_length+1);
           break;
         case MYSQL_TYPE_VAR_STRING:
           value.type = MQDB::STRING;
           value.i_string = (char*)stmt->result_bind[i].buffer;
-          bzero(stmt->result_bind[i].buffer, 1024);
-         break;
+          bzero(stmt->result_bind[i].buffer, buf_length+1);
+          break;
         case MYSQL_TYPE_BLOB:
           value.type = MQDB::STRING;
           value.i_string = (char*)stmt->result_bind[i].buffer;
-          bzero(stmt->result_bind[i].buffer, 2*1024*1024 +2);
+          bzero(stmt->result_bind[i].buffer, buf_length+1);
           break;
         case MYSQL_TYPE_NULL:
           value.type = MQDB::UNDEF;
@@ -1619,6 +1631,10 @@ bool MQDB::Database::mysql_fetch_next_row_vector(void* in_stmt,  vector<dynadata
 
     if(!(*(stmt->result_bind[i].is_null))) {
       MYSQL_TIME  *rtn_time = (MYSQL_TIME*)stmt->result_bind[i].buffer;
+
+      long unsigned int buf_length = 0;
+      if(stmt->result_bind[i].length != NULL) { buf_length = *(stmt->result_bind[i].length); }
+
       switch (stmt->result_bind[i].buffer_type) {
         case MYSQL_TYPE_TINY:
           value.type = MQDB::CHAR;
@@ -1672,17 +1688,17 @@ bool MQDB::Database::mysql_fetch_next_row_vector(void* in_stmt,  vector<dynadata
         case MYSQL_TYPE_STRING:
           value.type = MQDB::STRING;
           value.i_string = (char*)stmt->result_bind[i].buffer;
-          bzero(stmt->result_bind[i].buffer, 1024);
+          bzero(stmt->result_bind[i].buffer, buf_length+1);
           break;
         case MYSQL_TYPE_VAR_STRING:
           value.type = MQDB::STRING;
           value.i_string = (char*)stmt->result_bind[i].buffer;
-          bzero(stmt->result_bind[i].buffer, 1024);
+          bzero(stmt->result_bind[i].buffer, buf_length+1);
          break;
         case MYSQL_TYPE_BLOB:
           value.type = MQDB::STRING;
           value.i_string = (char*)stmt->result_bind[i].buffer;
-          bzero(stmt->result_bind[i].buffer, 2*1024*1024 +2);
+          bzero(stmt->result_bind[i].buffer, buf_length+1);
           break;
         case MYSQL_TYPE_NULL:
           value.type = MQDB::UNDEF;
@@ -1810,6 +1826,8 @@ string MQDB::uuid_hexstring() {
 
   string hexstring = str;
   //printf("%s\n", hexstring.c_str());
+  //string hexstring = boost::uuids::to_string(u);
+
   return hexstring;
 }
 
