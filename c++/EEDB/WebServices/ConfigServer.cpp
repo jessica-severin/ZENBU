@@ -1,4 +1,4 @@
-/* $Id: ConfigServer.cpp,v 1.131 2020/10/02 11:27:20 severin Exp $ */
+/* $Id: ConfigServer.cpp,v 1.132 2022/07/15 11:35:50 severin Exp $ */
 
 /***
 
@@ -777,14 +777,14 @@ void EEDB::WebServices::ConfigServer::search_configs() {
       filter_count++;
       
       if(_parameters["format_mode"] == "minxml") {
-        printf("<configuration uuid=\"%s\" fixed_id=\"%s\" type=\"%s\" access_count=\"%d\" create_date=\"%s\">", 
+        printf("<configuration uuid=\"%s\" fixed_id=\"%s\" type=\"%s\" access_count=\"%ld\" create_date=\"%s\">", 
                config->uuid().c_str(), config->fixed_id().c_str(), config->config_type().c_str(), config->access_count(), config->create_date_string().c_str());
         if(config->collaboration()) { printf("%s", config->collaboration()->min_xml().c_str()); }
         else { printf("<collaboration name=\"private\" uuid=\"private\" />"); }
         printf("</configuration>\n");
       }
       else if(_parameters["format_mode"] == "descxml") {
-        printf("<configuration uuid=\"%s\" fixed_id=\"%s\" type=\"%s\" access_count=\"%d\" create_date=\"%s\">\n",    
+        printf("<configuration uuid=\"%s\" fixed_id=\"%s\" type=\"%s\" access_count=\"%ld\" create_date=\"%s\">\n",    
                config->uuid().c_str(), config->fixed_id().c_str(), config->config_type().c_str(), config->access_count(), config->create_date_string().c_str());
         printf("<mdata type=\"eedb:display_name\">%s</mdata>\n", html_escape(config->display_name()).c_str());
         printf("<mdata type=\"description\">%s</mdata>\n", html_escape(config->description()).c_str());
@@ -869,11 +869,11 @@ void EEDB::WebServices::ConfigServer::show_config_list() {
     filter_count++;
     
     if(_parameters["format_mode"] == "minxml") {
-      printf("<configuration uuid=\"%s\" type=\"%s\" access_count=\"%d\" create_date=\"%s\" />\n", 
+      printf("<configuration uuid=\"%s\" type=\"%s\" access_count=\"%ld\" create_date=\"%s\" />\n", 
              config->uuid().c_str(), config->config_type().c_str(), config->access_count(), config->create_date_string().c_str());
     }
     else if(_parameters["format_mode"] == "descxml") {
-      printf("<configuration uuid=\"%s\" type=\"%s\" access_count=\"%d\" create_date=\"%s\">\n",    
+      printf("<configuration uuid=\"%s\" type=\"%s\" access_count=\"%ld\" create_date=\"%s\">\n",    
              config->uuid().c_str(), config->config_type().c_str(), config->access_count(), config->create_date_string().c_str());
       printf("<mdata type=\"eedb:display_name\">%s</mdata>\n", html_escape(config->display_name()).c_str());
       printf("<mdata type=\"description\">%s</mdata>\n", html_escape(config->description()).c_str());
@@ -1675,7 +1675,7 @@ void  EEDB::WebServices::ConfigServer::_register_reports_config() {
   //send result back
   printf("<configXML uuid=\"%s\" ", uuid.c_str());
   if(!fixed_id.empty()) { printf("fixed_id=\"%s\" ", fixed_id.c_str()); }
-  printf("/>\n", uuid.c_str());
+  printf("/>\n");
   
   printf("%s\n", config->xml().c_str());
 }
