@@ -1,4 +1,4 @@
-/* $Id: DBObject.cpp,v 1.45 2016/05/13 08:50:31 severin Exp $ */
+/* $Id: DBObject.cpp,v 1.46 2022/07/08 02:39:27 severin Exp $ */
 
 /***
 NAME
@@ -295,6 +295,7 @@ const char* MQDB::DBObject::root_uuid() {
 
 string MQDB::DBObject::db_id() {
   if(!_db_id.empty()) { return _db_id; }
+  if(_primary_db_id == -1) { return ""; }
 
   if(peer_uuid() != NULL) {
     _db_id = peer_uuid();
