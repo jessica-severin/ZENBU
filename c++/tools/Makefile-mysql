@@ -1,12 +1,12 @@
 MAKE=make
 CC=gcc
 CPP=g++
-CFLAGS   = -Wall -Wno-unused-result -O3 -I./ -I../ -I/usr/local/include -I/usr/include/mariadb/ -I/usr/local/mysql/include -I/usr/include/mysql -I/usr/local/boost/ \
+CFLAGS   = -Wall -Wno-unused-result -O3 -I./ -I../ -I/usr/local/include -I/usr/local/mysql/include -I/usr/include/mysql -I/usr/local/boost/ \
            -I../rapidxml-1.13/ -I../samtools-1.5/ -I../samtools-1.5/htslib-1.5
-CPPFLAGS = -Wno-unused-result -O3 -I./ -I../ -I/usr/local/include -I/usr/include/mariadb/ -I/usr/local/mysql/include -I/usr/include/mysql -I/usr/local/boost/ \
+CPPFLAGS = -Wno-unused-result -O3 -I./ -I../ -I/usr/local/include -I/usr/local/mysql/include -I/usr/include/mysql -I/usr/local/boost/ \
            -I../rapidxml-1.13/ -I../samtools-1.5/ -I../samtools-1.5/htslib-1.5
 LIBFLAGS = -L../EEDB -L../MQDB -L../ZDX -L../lz4 -L../samtools-1.5 -L../samtools-1.5/htslib-1.5 -L../curl-7.59.0/lib -L/usr/lib64/mysql -L/usr/local/lib -L/usr/local/mysql/lib
-LIBS = -lm -leedb -lmqdb -lzdx -llz4 -lmariadb -lfcgi -lsqlite3 -lz -lhts -lbam -lcurl -lssl -lcrypto -lpthread -llzma -lbz2
+LIBS = -lm -leedb -lmqdb -lzdx -llz4 -lmysqlclient -lfcgi -lsqlite3 -lz -lhts -lbam -lcurl -lssl -lcrypto -lpthread -llzma -lbz2
 SRCS_C = 
 SRCS   = $(SRCS_C)
 OBJS   = $(SRCS_C:.cpp=.o)

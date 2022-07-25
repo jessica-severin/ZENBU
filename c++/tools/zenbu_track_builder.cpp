@@ -1,4 +1,4 @@
-/* $Id: zenbu_track_builder.cpp,v 1.75 2018/12/13 07:33:43 severin Exp $ */
+/* $Id: zenbu_track_builder.cpp,v 1.76 2022/07/08 03:21:43 severin Exp $ */
 
 /****
  
@@ -1303,7 +1303,7 @@ void show_claims() {
       } else {
         printf("\t -- host matches");
         //check PID against ps aux
-        sprintf(strbuf, "ps aux | grep zenbu_track_builder | grep -v grep | grep %ld | wc -l", zseg->builder_pid());
+        sprintf(strbuf, "ps aux | grep zenbu_track_builder | grep -v grep | grep %d | wc -l", zseg->builder_pid());
         string str3 = exec_result(strbuf);
         long builders = strtol(str3.c_str(), NULL, 10);
         if(builders >= 1) { printf("\t -- running"); }
