@@ -133,6 +133,11 @@ string MQDB::dynadata::to_string() {
       value = t_buf;
       break;
 
+    case INT64:
+      sprintf(t_buf,"%lld",i_int64);
+      value = t_buf;
+      break;
+
     case FLOAT:
       sprintf(t_buf,"%g",i_float);
       value = t_buf;
@@ -166,6 +171,7 @@ string MQDB::dynadata::display_desc() {
   value = "dynadata(";
   switch(type) {
     case INT:       value +="INT"; break;
+    case INT64:     value +="INT64"; break;
     case FLOAT:     value +="FLOAT"; break;
     case DOUBLE:    value +="DOUBLE"; break;
     case STRING:    value +="STRING"; break;
@@ -255,7 +261,7 @@ class MysqlStmt {
 
       //fprintf(stderr, "mysql stmt has [%d] fields\n", num_fields);
       for(int i = 0; i < num_fields; i++) {
-        //fprintf(stderr,"  [%d] : %s\n", i, fields[i].name);
+        //fprintf(stderr,"  [%d] : %s  type:%d\n", i, fields[i].name, fields[i].type);
         result_bind[i].buffer_type = MYSQL_TYPE_NULL;
         result_bind[i].buffer      = NULL;
         result_bind[i].is_null     = &(result_is_null[i]);
@@ -288,8 +294,12 @@ class MysqlStmt {
             bzero(result_bind[i].buffer, sizeof(long long));
             break;
           case MYSQL_TYPE_DECIMAL:
-            break;
           case MYSQL_TYPE_NEWDECIMAL:
+            //DECIMAL and NEWDECIMAL returns string version of numerical value, bind as a string but I will convert to double 
+            result_bind[i].buffer_type   = fields[i].type;
+            result_bind[i].buffer_length = 1024;
+            result_bind[i].buffer        = (void*)calloc(1024,1);
+            result_bind[i].length        = (long unsigned int*)(calloc(sizeof(long unsigned int), 1));
             break;
           case MYSQL_TYPE_FLOAT:
             result_bind[i].buffer_type = fields[i].type;
@@ -338,9 +348,17 @@ class MysqlStmt {
             result_bind[i].length        = (long unsigned int*)(calloc(sizeof(long unsigned int), 1));
            break;
           case MYSQL_TYPE_BLOB:  //medium blob is 16MB max, LONGBLOB is 4GB
+          case MYSQL_TYPE_TINY_BLOB:  //249
+          case MYSQL_TYPE_MEDIUM_BLOB:  //250
             result_bind[i].buffer_type   = fields[i].type;
-            result_bind[i].buffer_length = 64*1024*1024;
+            result_bind[i].buffer_length = 64*1024*1024;  //64MB for extra space
             result_bind[i].buffer        = (void*)calloc(64*1024*1024 +2, 1);
+            result_bind[i].length        = (long unsigned int*)(calloc(sizeof(long unsigned int), 1));
+            break;
+          case MYSQL_TYPE_LONG_BLOB:  //#251 LONGBLOB is max 4GB, but buffer_length is int (2GB) so use INT_MAX
+            result_bind[i].buffer_type   = fields[i].type;
+            result_bind[i].buffer_length = INT_MAX-2;
+            result_bind[i].buffer        = (void*)calloc(INT_MAX, 1);
             result_bind[i].length        = (long unsigned int*)(calloc(sizeof(long unsigned int), 1));
             break;
           case MYSQL_TYPE_SET:
@@ -809,11 +827,12 @@ string MQDB::Database::alias(string name) {
 
 void* MQDB::Database::prepare_fetch_sql(const char* sql) {
   if(!get_connection()) { return NULL; }
+  va_list    ap;  //empty
   if(_driver == "sqlite") {
-    return sqlite_prepare_fetch_sql(sql, "", NULL);
+    return sqlite_prepare_fetch_sql(sql, "", ap);
   }
   if(_driver == "mysql") {
-    return mysql_prepare_fetch_sql(sql, "", NULL);
+    return mysql_prepare_fetch_sql(sql, "", ap);
   }
   return NULL;
 }
@@ -900,11 +919,12 @@ void MQDB::Database::finalize_stmt(void* stmt) {
 
 void MQDB::Database::do_sql(const char* sql) {
   if(!get_connection()) { return; }
+  va_list    ap;  //empty
   if(_driver == "sqlite") {
     sqlite_do_sql(sql);
   }
   if(_driver == "mysql") {
-    mysql_do_sql(sql, "", NULL);
+    mysql_do_sql(sql, "", ap);
   }
 }
 
@@ -937,13 +957,14 @@ void MQDB::Database::do_sql(const char* sql, const char* fmt, ...) {
 
 dynadata MQDB::Database::fetch_col_value(const char* sql) {
   dynadata   value;
+  va_list    ap; //empty
 
   if(!get_connection()) { return value; }
   if(_driver == "sqlite") {
-    value= sqlite_fetch_col_value(sql, "", NULL);
+    value= sqlite_fetch_col_value(sql, "", ap);
   }
   if(_driver == "mysql") {
-    value= mysql_fetch_col_value(sql, "", NULL);
+    value= mysql_fetch_col_value(sql, "", ap);
   }
   return value;
 }
@@ -984,15 +1005,14 @@ void* MQDB::Database::sqlite_prepare_fetch_sql(const char* sql, const char* fmt,
   sqlite3_prepare_v2((sqlite3*)_dbc, sql, -1, &ppStmt, &pzTail);
   if(ppStmt == NULL) { return NULL; }
     
-  if(ap != NULL) {
-    va_copy(ap2, ap);
-    while(*fmt) {
-      switch(*fmt++) {
-        char* s;
-        int d;
-        char c;
-        double t_double;
+  va_copy(ap2, ap);
+  while(*fmt) {
+    char* s;
+    int d;
+    char c;
+    double t_double;
       
+    switch(*fmt++) {
         case 's':                       //string
           s = va_arg(ap2, char *);
           sqlite3_bind_text(ppStmt, param_idx, s, -1, SQLITE_STATIC);
@@ -1025,11 +1045,10 @@ void* MQDB::Database::sqlite_prepare_fetch_sql(const char* sql, const char* fmt,
           int sqlite3_bind_value(sqlite3_stmt*, int, const sqlite3_value*);
           int sqlite3_bind_zeroblob(sqlite3_stmt*, int, int n);
           */
-      }
-      param_idx++;
-    }
-    va_end(ap2);
-  }
+    } //switch
+    param_idx++;
+  } //while
+  va_end(ap2);
 
   return (void*)ppStmt;
 }
@@ -1146,7 +1165,6 @@ void MQDB::Database::sqlite_do_sql(const char* sql, const char* fmt, va_list ap)
   sqlite3_stmt *ppStmt;    /* OUT: Statement handle */
   const char   *pzTail;    /* OUT: Pointer to unused portion of zSql */
   int          param_idx=1;
-  int          rtn;
 
   if(sql == NULL) { return; }
   
@@ -1160,15 +1178,14 @@ void MQDB::Database::sqlite_do_sql(const char* sql, const char* fmt, va_list ap)
   sqlite3_prepare_v2((sqlite3*)_dbc, t_sql.c_str(), -1, &ppStmt, &pzTail);
   if(ppStmt == NULL) { return; }
     
-  if(ap != NULL) {
-    va_copy(ap2, ap);
-    while(*fmt) {
-      switch(*fmt++) {
-        char* s;
-        int d;
-        char c;
-        double t_double;
+  va_copy(ap2, ap);
+  while(*fmt) {
+    char* s;
+    int d;
+    char c;
+    double t_double;
  
+    switch(*fmt++) {
         case 's':                       //string
           s = va_arg(ap2, char *);
           sqlite3_bind_text(ppStmt, param_idx, s, -1, SQLITE_STATIC);
@@ -1202,13 +1219,13 @@ void MQDB::Database::sqlite_do_sql(const char* sql, const char* fmt, va_list ap)
           int sqlite3_bind_value(sqlite3_stmt*, int, const sqlite3_value*);
           int sqlite3_bind_zeroblob(sqlite3_stmt*, int, int n);
           */
-      }
-      param_idx++;
-    }
-    va_end(ap2);
-  }
+    } //switch
+    param_idx++;
+  } //while
+  va_end(ap2);
 
-  rtn = sqlite3_step(ppStmt);
+
+  sqlite3_step(ppStmt);
   sqlite3_finalize(ppStmt);
 
   long int tmp_id = sqlite3_last_insert_rowid((sqlite3*)_dbc);
@@ -1249,15 +1266,14 @@ dynadata MQDB::Database::sqlite_fetch_col_value(const char* sql, const char* fmt
   sqlite3_prepare_v2((sqlite3*)_dbc, sql, -1, &ppStmt, &pzTail);
   if(ppStmt == NULL) { return value; }
     
-  if(ap != NULL) {
-    va_copy(ap2, ap);
-    while(*fmt) {
-      switch(*fmt++) {
-        char* s;
-        int d;
-        char c;
-        double t_double;
+  va_copy(ap2, ap);
+  while(*fmt) {
+    char* s;
+    int d;
+    char c;
+    double t_double;
       
+    switch(*fmt++) {
         case 's':                       //string
           s = va_arg(ap2, char *);
           sqlite3_bind_text(ppStmt, param_idx, s, -1, SQLITE_STATIC);
@@ -1291,12 +1307,10 @@ dynadata MQDB::Database::sqlite_fetch_col_value(const char* sql, const char* fmt
           int sqlite3_bind_value(sqlite3_stmt*, int, const sqlite3_value*);
           int sqlite3_bind_zeroblob(sqlite3_stmt*, int, int n);
           */
-      }
-      param_idx++;
-    }
-    va_end(ap2);
-  }
-
+    } //switch
+    param_idx++;
+  } //while loop
+  va_end(ap2);
   
   rtn = sqlite3_step(ppStmt);
   if(rtn==SQLITE_ROW || rtn==SQLITE_OK) {
@@ -1362,7 +1376,7 @@ void* MQDB::Database::mysql_prepare_fetch_sql(const char* sql, const char* fmt, 
   stmt = new MQDB::MysqlStmt(ppStmt);
 
   // if option params, bind them 
-  if(fmt!=NULL && ap!=NULL) {
+  if(fmt!=NULL) {
     int         bind_cnt = strlen(fmt);
     MYSQL_BIND  mysql_bind[bind_cnt];
     dynadata    mysql_buffer[bind_cnt];
@@ -1372,15 +1386,15 @@ void* MQDB::Database::mysql_prepare_fetch_sql(const char* sql, const char* fmt, 
 
     va_copy(ap2, ap);
     while(param_idx < bind_cnt) {
-        char         t_char;
-        char*        s;
-        long int     d;
-        double       t_double;
-        time_t       t_time;
-        struct tm*   t_tm;
-        MYSQL_TIME*  mysql_time;
+      char         t_char;
+      char*        s;
+      long int     d;
+      double       t_double;
+      time_t       t_time;
+      struct tm*   t_tm;
+      MYSQL_TIME*  mysql_time;
         
-        mysql_bind[param_idx].buffer = NULL;
+      mysql_bind[param_idx].buffer = NULL;
       
       switch(fmt[param_idx]) {
         case 's':                       //string
@@ -1487,14 +1501,15 @@ bool MQDB::Database::mysql_fetch_next_row_map(void* in_stmt,  map<string, dynada
 
   MYSQL_STMT *ppStmt = stmt->ppStmt;
 
-  //printf("mysql_fetch_next_row_map\n");
+  //fprintf(stderr, "mysql_fetch_next_row_map\n");
   
   if(mysql_stmt_fetch(ppStmt)) { 
+    //fprintf(stderr, "mysql_stmt_fetch failed\n");
     //maybe problem or finished
     delete stmt;
     return false; 
   }
-  //printf("after mysql_stmt_fetch\n");
+  //fprintf(stderr, "after mysql_stmt_fetch\n");
       
   for(int i=0; i<stmt->num_fields; i++) {
     dynadata value;
@@ -1571,6 +1586,9 @@ bool MQDB::Database::mysql_fetch_next_row_map(void* in_stmt,  map<string, dynada
           bzero(stmt->result_bind[i].buffer, buf_length+1);
           break;
         case MYSQL_TYPE_BLOB:
+        case MYSQL_TYPE_TINY_BLOB:  //249
+        case MYSQL_TYPE_MEDIUM_BLOB:  //250
+        case MYSQL_TYPE_LONG_BLOB:  //#251 LONGBLOB is max 4GB, but buffer_length is int (2GB) so using INT_MAX
           value.type = MQDB::STRING;
           value.i_string = (char*)stmt->result_bind[i].buffer;
           bzero(stmt->result_bind[i].buffer, buf_length+1);
@@ -1578,12 +1596,15 @@ bool MQDB::Database::mysql_fetch_next_row_map(void* in_stmt,  map<string, dynada
         case MYSQL_TYPE_NULL:
           value.type = MQDB::UNDEF;
           break;
+        case MYSQL_TYPE_DECIMAL:
+        case MYSQL_TYPE_NEWDECIMAL:
+          //bind as string version of numerical, convert into double
+          value.type = MQDB::DOUBLE;
+          value.i_double = strtod((char*)stmt->result_bind[i].buffer, NULL);
+          bzero(stmt->result_bind[i].buffer, buf_length+1);
+          break;
         /*
         case MYSQL_TYPE_BIT:
-          break;
-        case MYSQL_TYPE_DECIMAL:
-          break;
-        case MYSQL_TYPE_NEWDECIMAL:
           break;
         case MYSQL_TYPE_SET:
           break;
@@ -1696,6 +1717,9 @@ bool MQDB::Database::mysql_fetch_next_row_vector(void* in_stmt,  vector<dynadata
           bzero(stmt->result_bind[i].buffer, buf_length+1);
          break;
         case MYSQL_TYPE_BLOB:
+        case MYSQL_TYPE_TINY_BLOB:  //249
+        case MYSQL_TYPE_MEDIUM_BLOB:  //250
+        case MYSQL_TYPE_LONG_BLOB:  //#251 LONGBLOB is max 4GB, but buffer_length is int (2GB) so using INT_MAX
           value.type = MQDB::STRING;
           value.i_string = (char*)stmt->result_bind[i].buffer;
           bzero(stmt->result_bind[i].buffer, buf_length+1);
@@ -1703,12 +1727,15 @@ bool MQDB::Database::mysql_fetch_next_row_vector(void* in_stmt,  vector<dynadata
         case MYSQL_TYPE_NULL:
           value.type = MQDB::UNDEF;
           break;
+        case MYSQL_TYPE_DECIMAL:
+        case MYSQL_TYPE_NEWDECIMAL:
+          //bind as string version of numerical, convert into double
+          value.type = MQDB::DOUBLE;
+          value.i_double = strtod((char*)stmt->result_bind[i].buffer, NULL);
+          bzero(stmt->result_bind[i].buffer, buf_length+1);
+          break;
         /*
         case MYSQL_TYPE_BIT:
-          break;
-        case MYSQL_TYPE_DECIMAL:
-          break;
-        case MYSQL_TYPE_NEWDECIMAL:
           break;
         case MYSQL_TYPE_SET:
           break;
