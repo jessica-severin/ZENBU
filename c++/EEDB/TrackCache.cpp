@@ -1,4 +1,4 @@
-/*  $Id: TrackCache.cpp,v 1.82 2016/08/11 06:17:38 severin Exp $ */
+/*  $Id: TrackCache.cpp,v 1.83 2022/07/15 11:31:30 severin Exp $ */
 
 /*******
 
@@ -169,10 +169,13 @@ string  EEDB::TrackCache::track_configxml() {
 
 string EEDB::TrackCache::_display_desc() {
   char buffer[2048];
-  snprintf(buffer, 2040, "TrackCache(db %ld ) %s", 
-    _primary_db_id, 
+  snprintf(buffer, 2040, "TrackCache(db %ld) %s  hits:%ld  %1.3f%% complete   seg build:%1.3f   last_access:%s", 
+    _primary_db_id, _track_hashkey.c_str(), _hit_count, _percent_complete, _seg_buildtime,
     last_access_date_string().c_str());
-  return buffer;
+
+  string desc = buffer;
+  if(_broken) { desc += "\tbroken"; }
+  return desc;
 }
 
 
