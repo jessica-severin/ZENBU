@@ -1,4 +1,4 @@
-/* $Id: WebBase.cpp,v 1.229 2021/06/29 01:56:16 severin Exp $ */
+/* $Id: WebBase.cpp,v 1.230 2022/07/08 10:02:38 severin Exp $ */
 
 /***
 
@@ -258,6 +258,10 @@ void EEDB::WebServices::WebBase::set_user_profile(EEDB::User* user) {
   _user_profile = user;
   EEDB::SPStreams::RemoteServerStream::set_current_user(_user_profile);
   EEDB::SPStreams::CachePoint::set_current_user(_user_profile);
+}
+
+void EEDB::WebServices::WebBase::set_collaboration_filter(string value) {
+  _collaboration_filter = value;
 }
 
 void EEDB::WebServices::WebBase::init_service_request() {
@@ -1307,7 +1311,7 @@ EEDB::SPStreams::FederatedSourceStream*  EEDB::WebServices::WebBase::source_stre
   }
 
   if(_user_profile) { 
-    if(_collaboration_filter=="all" || _collaboration_filter=="private") {
+    if(_collaboration_filter=="all" || _collaboration_filter=="private" || _collaboration_filter=="secured") {
       if(_user_profile->user_registry()) {
         fstream->add_seed_peer(_user_profile->user_registry());
       }
@@ -1319,7 +1323,7 @@ EEDB::SPStreams::FederatedSourceStream*  EEDB::WebServices::WebBase::source_stre
       collaborations = _user_profile->member_collaborations();
       for(it2 = collaborations.begin(); it2 != collaborations.end(); it2++) {
         EEDB::Collaboration *collab = (EEDB::Collaboration*)(*it2);
-        if(_collaboration_filter=="all" || (collab->group_uuid() == _collaboration_filter)) {
+        if(_collaboration_filter=="all" || _collaboration_filter=="secured" || (collab->group_uuid() == _collaboration_filter)) {
           fstream->add_seed_peer(collab->group_registry());
         }
       }
