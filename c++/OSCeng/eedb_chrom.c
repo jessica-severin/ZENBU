@@ -34,7 +34,7 @@ void eedb_chrom_parse_obj(void* self) {
         ((eedb_chrom_t*)self)->chrom_id = strtol(ptr, NULL, 10); 
         break;
       case 2: //chrom_name
-        strncpy(((eedb_chrom_t*)self)->chrom_name, ptr, 64);
+        strncpy(((eedb_chrom_t*)self)->chrom_name, ptr, 63);
         break;
       case 3: //assembly_id
         ((eedb_chrom_t*)self)->assembly_id = strtol(ptr, NULL, 10); 
@@ -43,10 +43,10 @@ void eedb_chrom_parse_obj(void* self) {
         ((eedb_chrom_t*)self)->chrom_length = strtol(ptr, NULL, 10); 
         break;
       case 5: //chrom_type
-        strncpy(((eedb_chrom_t*)self)->chrom_type, ptr, 64);
+        strncpy(((eedb_chrom_t*)self)->chrom_type, ptr, 63);
         break;
       case 6: //description
-        strncpy(((eedb_chrom_t*)self)->description, ptr, 256);
+        strncpy(((eedb_chrom_t*)self)->description, ptr, 255);
         break;
       default: break;
     }

@@ -50,10 +50,10 @@ void eedb_feature_parse_obj(void* self) {
         ((eedb_feature_t*)self)->strand = *ptr;
         break;
       case 7: //primary_name
-        strncpy(((eedb_feature_t*)self)->primary_name, ptr, 64);
+        strncpy(((eedb_feature_t*)self)->primary_name, ptr, 63);
         break;
       case 8: //last_update
-        strncpy(((eedb_feature_t*)self)->last_update, ptr, 32);
+        strncpy(((eedb_feature_t*)self)->last_update, ptr, 31);
         break;
       default: break;
     }
