@@ -135,7 +135,8 @@ function zenbuTableElement_elementEvent(mode, value, value2) {
     //console.log("new page size:"+this.table_page_size+" old index="+table_page_index+"  new page="+this.table_page);
     //this.content_height = Math.floor((this.table_page_size * 16.4) + 65);  //For DrawTable
     var line_height = 16.4;
-    if(this.font_size) { line_height = this.font_size + 3; }
+    if(this.font_size) { line_height = this.font_size + 4.4; }
+    if(this.grid_lines) { line_height += 1; }
     this.content_height = Math.floor((this.table_page_size * line_height) + 65);  //For DrawTable
   }
   if(mode == "page") {  
@@ -370,8 +371,8 @@ function zenbuTableElement_draw() {
     //console.log("current index "+this.table_page_index+", current page "+page);
     //need to round this index to the page boundary
     var line_height = 16.4;  //old offset was 72
-    if(this.font_size) { line_height = this.font_size + 3; }
-    if(this.grid_lines) { line_height += 2; }
+    if(this.font_size) { line_height = this.font_size + 4.4; }
+    if(this.grid_lines) { line_height += 1; }
     this.table_page_size = Math.round((this.content_height -67) / line_height);
     if(this.table_page_size < 5) { this.table_page_size = 5; }
     this.table_page = Math.floor(table_page_index / this.table_page_size) + 1;
