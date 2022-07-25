@@ -1,8 +1,8 @@
 CC=gcc
 CPP=g++
-CFLAGS   = -Wall -O3 -I./ -I../ -I/usr/include/mariadb/ -I/usr/include/mysql -I/usr/local/mysql/include -I/usr/local/include -I/usr/local/boost/ \
+CFLAGS   = -Wall -Wno-unused-but-set-variable -Wno-unused-result -O3 -I./ -I../ -I/usr/include/mariadb/ -I/usr/include/mysql -I/usr/local/mysql/include -I/usr/local/include -I/usr/local/boost/ \
            -I../rapidxml-1.13/ -I../samtools-1.5/ -I../samtools-1.5/htslib-1.5/
-CPPFLAGS = -Wall -O3 -I./ -I../ -I/usr/include/mariadb/ -I/usr/include/mysql -I/usr/local/mysql/include -I/usr/local/include -I/usr/local/boost/ \
+CPPFLAGS = -Wall -Wno-unused-but-set-variable -Wno-unused-result -O3 -I./ -I../ -I/usr/include/mariadb/ -I/usr/include/mysql -I/usr/local/mysql/include -I/usr/local/include -I/usr/local/boost/ \
            -I../rapidxml-1.13/ -I../samtools-1.5/ -I../samtools-1.5/htslib-1.5/
 
 LIBS = -lm -lsqlite3 -lz

@@ -1,4 +1,4 @@
-/*  $Id: TrackRequest.cpp,v 1.40 2015/02/02 10:42:03 severin Exp $ */
+/*  $Id: TrackRequest.cpp,v 1.41 2022/07/15 11:40:35 severin Exp $ */
 
 /*******
 
@@ -163,17 +163,11 @@ string  EEDB::TrackRequest::track_hashkey() {
 
 string EEDB::TrackRequest::_display_desc() {
   char buffer[2048];
-  snprintf(buffer, 2040, "TrackRequest(db %ld ) %s", 
-    _primary_db_id, 
-    request_date_string().c_str());
-  /*
-  long                  user_id() { return _user_id; }
-  string                assembly_name() { return _assembly_name; }
-  string                chrom_name() { return _chrom_name; }
-  long                  chrom_start() { return _chrom_start; }
-  long                  chrom_end() { return _chrom_end; }
-*/
-  
+  snprintf(buffer, 2040, "TrackRequest(db %ld) unbuilt:%ld  num_segs:%ld   %s::%s::%ld-%ld  view: %s   requested:%s userID:%ld", 
+    _primary_db_id, _unbuilt, _num_segs, 
+    _assembly_name.c_str(), _chrom_name.c_str(), _chrom_start, _chrom_end, _view_uuid.c_str(),
+    request_date_string().c_str(), _user_id);
+  //if(!_track_name.empty()) { xml_buffer += "<track_name>"+html_escape(_track_name)+"</track_name>"; }
   return buffer;
 }
 
@@ -296,9 +290,15 @@ EEDB::TrackRequest*  EEDB::TrackRequest::fetch_best(EEDB::TrackCache *tc) {
 
   EEDB::TrackRequest * request = NULL;
   
+  /*
   const char *sql = "SELECT track_request.*, unbuilt/((TIME_TO_SEC(TIMEDIFF(NOW(), request_time))/60/60)+1) metric \
                      FROM track_request \
                      WHERE unbuilt>0 and start!=-1 and track_cache_id=? ORDER BY metric limit 1";
+  */
+  const char *sql = "SELECT track_request.* from track_request join \
+                     (select track_request_id, unbuilt/((TIME_TO_SEC(TIMEDIFF(NOW(), request_time))/60/60)+1) metric FROM track_request \
+                      WHERE unbuilt>0 and start!=-1 and track_cache_id=? ORDER BY metric limit 1)t1 using(track_request_id)";
+
   request = (EEDB::TrackRequest*)MQDB::fetch_single(EEDB::TrackRequest::create, db, sql, "d", tc->primary_id());
   if(request) { 
     request->_track_cache = tc;

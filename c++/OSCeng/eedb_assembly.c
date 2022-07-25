@@ -37,13 +37,13 @@ void eedb_assembly_parse_obj(void* self) {
         ((eedb_assembly_t*)self)->taxon_id = strtol(ptr, NULL, 10); 
         break;
       case 3: //ncbi_version
-        strncpy(((eedb_assembly_t*)self)->ncbi_version, ptr, 32);
+        strncpy(((eedb_assembly_t*)self)->ncbi_version, ptr, 31);
         break;
       case 4: //ucsc_name
-        strncpy(((eedb_assembly_t*)self)->ucsc_name, ptr, 32);
+        strncpy(((eedb_assembly_t*)self)->ucsc_name, ptr, 31);
         break;
       case 5: //release_date
-        strncpy(((eedb_assembly_t*)self)->release_date, ptr, 64);
+        strncpy(((eedb_assembly_t*)self)->release_date, ptr, 31);
         break;
       default: break;
     }

@@ -7,10 +7,10 @@ OBJS = eedb_obj.o eedb_feature.o eedb_chrom.o eedb_assembly.o eeDBeng_lib.o
 all:	eeDBeng
 
 eeDBeng: $(OBJS) eeDBeng_test.o
-	gcc $(CFLAGS) $(LIBS) $(OBJS) eeDBeng_test.o -o eeDBeng
+	gcc $(CFLAGS) $(LIBS) $(OBJS) eeDBeng_test.o -o eeDBeng -lm
 
 eeSeqEng: $(OBJS) eeSeqEng_test.o
-	gcc $(CFLAGS) $(LIBS) $(OBJS) eeSeqEng_test.o -o eeSeqEng
+	g++ $(CFLAGS) $(LIBS) $(OBJS) eeSeqEng_test.o -o eeSeqEng -lm
 
 $(OBJS) : eeSeqEng.h
 

@@ -1,6 +1,6 @@
 CC=gcc 
 CFLAGS=-Wall -O3 -I./ -I/usr/local/include -L/usr/local/lib
-LIBS=-lm -lz
+LIBS=-lm -lz -lm
 TESTS = test.o
 OBJS = oscdb.o 
 

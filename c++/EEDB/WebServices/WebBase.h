@@ -1,4 +1,4 @@
-/* $Id: WebBase.h,v 1.65 2017/11/22 08:03:45 severin Exp $ */
+/* $Id: WebBase.h,v 1.66 2022/07/08 10:02:38 severin Exp $ */
 
 /***
 
@@ -143,6 +143,7 @@ class WebBase : public MQDB::DBObject {
     void set_post_data(string value);  
     void set_parameter(string tag, string value);
     void set_user_profile(EEDB::User* user);
+    void set_collaboration_filter(string value);
   
     bool   check_overload(double load_limit);
 
