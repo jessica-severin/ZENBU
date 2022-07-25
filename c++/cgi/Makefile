@@ -1,13 +1,13 @@
 MAKE=make
 CC=gcc
 CPP=g++
-CFLAGS   = -Wall -O3 -I./ -I../ -I/usr/local/include -I/usr/local/mysql/include -I/usr/include/mysql -I/usr/local/boost/ \
+CFLAGS   = -Wall -O3 -I./ -I../ -I/usr/local/include -I/usr/include/mariadb/ -I/usr/local/mysql/include -I/usr/include/mysql -I/usr/local/boost/ \
            -I../rapidxml-1.13/ -I../samtools-1.5/ -I../samtools-1.5/htslib-1.5/     
-CPPFLAGS = -O3 -I./ -I../ -I/usr/local/include -I/usr/local/mysql/include -I/usr/include/mysql -I/usr/local/boost/ \
+CPPFLAGS = -O3 -I./ -I../ -I/usr/local/include -I/usr/include/mariadb/ -I/usr/local/mysql/include -I/usr/include/mysql -I/usr/local/boost/ \
            -I../rapidxml-1.13/ -I../samtools-1.5/ -I../samtools-1.5/htslib-1.5/
 
 LIBFLAGS = -L../EEDB -L../MQDB -L../ZDX -L../lz4 -L../samtools-1.5 -L../samtools-1.5/htslib-1.5 -L/usr/lib64/mysql -L/usr/local/lib -L/usr/local/mysql/lib 
-LIBS = -lm -leedb -lmqdb -lzdx -llz4 -lmysqlclient -lfcgi -lsqlite3 -lz -lbam -lhts -lcurl -lssl -lcrypto -lpthread -llzma -lbz2
+LIBS = -lm -leedb -lmqdb -lzdx -llz4 -lmariadb -lfcgi -lsqlite3 -lz -lbam -lhts -lcurl -lssl -lcrypto -lpthread -llzma -lbz2
 SRCS_C = eedb_search.cpp eedb_region.cpp eedb_config_server.cpp eedb_upload.cpp
 SRCS   = $(SRCS_C)
 OBJS   = $(SRCS_C:.cpp=.o)
