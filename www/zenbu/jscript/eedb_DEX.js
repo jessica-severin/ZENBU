@@ -805,8 +805,9 @@ function dexShowDataSources() {
   //paging interface
   var div2 = contents_table_div.appendChild(new Element('div'));
   var span1 = div2.appendChild(new Element('span'));
-  var msg = sources_array.length + " filtered ";
-  msg += contents.datasources.total_count + " total data sources";
+  //var msg = sources_array.length + " filtered ";
+  //msg += contents.datasources.filtered_count + " total data sources";
+  var msg = sources_array.length + " data sources";
   span1.innerHTML = msg;
 
   var selectAllSpan = div2.appendChild(new Element('a'));
@@ -962,8 +963,9 @@ function dexShowDataSources() {
 
   var div2 = contents_table_div.appendChild(new Element('div'));
   var span1 = div2.appendChild(new Element('span'));
-  var msg = sources_array.length + " filtered ";
-  msg += contents.datasources.total_count + " total data sources";
+  //var msg = sources_array.length + " filtered ";
+  //msg += contents.datasources.total_count + " total data sources";
+  var msg = sources_array.length + " data sources";
   span1.innerHTML = msg;
 
   var span3 = div2.appendChild(new Element('a'));
@@ -1810,8 +1812,8 @@ function dexShowTracks() {
   //paging interface
   var div2 = contents_table_div.appendChild(new Element('div'));
   var span1 = div2.appendChild(new Element('span'));
-  var msg = tracks_array.length + " filtered ";
-  msg += contents.tracks.total_count + " total tracks";
+  var msg = tracks_array.length + " tracks";
+  //msg += contents.tracks.total_count + " total tracks";
   span1.innerHTML = msg;
 
   var pagingSpan = dexPagingInterface();
@@ -1839,8 +1841,8 @@ function dexShowTracks() {
   //bottom paging interface
   var div2 = contents_table_div.appendChild(new Element('div'));
   var span1 = div2.appendChild(new Element('span'));
-  var msg = tracks_array.length + " filtered ";
-  msg += contents.tracks.total_count + " total tracks";
+  var msg = tracks_array.length + " tracks";
+  //msg += contents.tracks.total_count + " total tracks";
   span1.innerHTML = msg;
 
   var pagingSpan = dexPagingInterface();
@@ -2124,8 +2126,8 @@ function dexShowViews() {
   //paging interface
   var div2 = contents_table_div.appendChild(new Element('div'));
   var span1 = div2.appendChild(new Element('span'));
-  var msg = views_array.length + " filtered ";
-  msg += contents.configs.total_count + " total configs";
+  var msg = views_array.length + " genome views";
+  //msg += contents.configs.total_count + " total configs";
   span1.innerHTML = msg;
 
   var pagingSpan = dexPagingInterface();
@@ -2147,8 +2149,8 @@ function dexShowViews() {
   //bottom paging interface
   var div2 = contents_table_div.appendChild(new Element('div'));
   var span1 = div2.appendChild(new Element('span'));
-  var msg = views_array.length + " filtered ";
-  msg += contents.configs.total_count + " total configs";
+  var msg = views_array.length + " genome views";
+  //msg += contents.configs.total_count + " total configs";
   span1.innerHTML = msg;
 
   var pagingSpan = dexPagingInterface();
@@ -2402,8 +2404,8 @@ function dexShowReports() {
   //paging interface
   var div2 = contents_table_div.appendChild(new Element('div'));
   var span1 = div2.appendChild(new Element('span'));
-  var msg = reports_array.length + " filtered ";
-  msg += contents.configs.total_count + " total configs";
+  var msg = reports_array.length + " report pages";
+  //msg += contents.configs.total_count + " total configs";
   span1.innerHTML = msg;
   
   var pagingSpan = dexPagingInterface();
@@ -2425,8 +2427,8 @@ function dexShowReports() {
   //bottom paging interface
   var div2 = contents_table_div.appendChild(new Element('div'));
   var span1 = div2.appendChild(new Element('span'));
-  var msg = reports_array.length + " filtered ";
-  msg += contents.configs.total_count + " total configs";
+  var msg = reports_array.length + " report pages";
+  //msg += contents.configs.total_count + " total configs";
   span1.innerHTML = msg;
   
   var pagingSpan = dexPagingInterface();
@@ -2667,8 +2669,8 @@ function dexShowScripts() {
   //paging interface
   var div2 = contents_table_div.appendChild(new Element('div'));
   var span1 = div2.appendChild(new Element('span'));
-  var msg = scripts_array.length + " filtered ";
-  msg += contents.scripts.total_count + " total scripts";
+  var msg = scripts_array.length + " scripts";
+  //msg += contents.scripts.total_count + " total scripts";
   span1.innerHTML = msg;
 
   var pagingSpan = dexPagingInterface();
@@ -2690,8 +2692,8 @@ function dexShowScripts() {
   //bottom paging interface
   var div2 = contents_table_div.appendChild(new Element('div'));
   var span1 = div2.appendChild(new Element('span'));
-  var msg = scripts_array.length + " filtered ";
-  msg += contents.scripts.total_count + " total scripts";
+  var msg = scripts_array.length + " scripts";
+  //msg += contents.scripts.total_count + " total scripts";
   span1.innerHTML = msg;
 
   var pagingSpan = dexPagingInterface();
