@@ -1,4 +1,4 @@
-/* $Id: WebBase.cpp,v 1.230 2022/07/08 10:02:38 severin Exp $ */
+/* $Id: WebBase.cpp,v 1.231 2022/08/05 06:16:41 severin Exp $ */
 
 /***
 
@@ -2100,6 +2100,7 @@ void EEDB::WebServices::WebBase::show_system_load() {
   printf("<current_timestamp>%ld</current_timestamp>", _starttime.tv_sec);  
   printf("<web_url>%s</web_url>\n",_web_url.c_str());
   printf("<web_uuid>%s</web_uuid>\n",_web_uuid.c_str());
+
     
   //printf("<proc_load>%1.4f</proc_load>\n",proc_load);
   //printf("<cpu_count>%ld</cpu_count>\n",proc_count);
@@ -2114,33 +2115,39 @@ void EEDB::WebServices::WebBase::show_system_load() {
 
   
   if(_userDB) {
+    printf("<user_db>%s</user_db>\n",_userDB->url().c_str());
     printf("<track_access_stats>\n");
     vector<dynadata>   row_vector;
-    const char *sql = "SELECT FROM_UNIXTIME(timeseg) timeseg, count(*) request_count, count(distinct user_id) user_count \
-                       FROM (select *, round(UNIX_TIMESTAMP(access_time)/60/60/24)*60*60*24 timeseg \
-                             FROM track_cache_history where (UNIX_TIMESTAMP() - UNIX_TIMESTAMP(access_time)) <60*60*24*31)t \
-                       GROUP BY timeseg";
+
+    //yearly 
+    printf("<yearly>");
+    const char* sql = "SELECT timeseg, count(*) request_count, count(distinct user_id) user_count   FROM (select *, DATE_FORMAT(access_time, '%Y') timeseg FROM track_cache_history )t GROUP BY timeseg ORDER BY timeseg desc";
     void *stmt = _userDB->prepare_fetch_sql(sql, "");
     while(_userDB->fetch_next_row_vector(stmt, row_vector)) {
-      string time_str;
-      time_t t_update = row_vector[0].i_timestamp;
-      char *ct_value = ctime(&t_update);
-      if(ct_value != NULL) {
-        int len = strlen(ct_value);
-        if(len>0) {
-          ct_value[len-1] = '\0';
-          time_str = ct_value;
-        }
-      }
-
       printf("<access_stats date=\"%s\" count=\"%lld\" user_count=\"%lld\"></access_stats>\n",
-             time_str.c_str(), row_vector[1].i_int64, row_vector[2].i_int64);
-      //printf("<req_stats>\n");
-      //for(unsigned j=0; j<row_vector.size(); j++) {
-      //  printf("<data name=\"%s\" type=\"%ld\" />\n", row_vector[j].colname.c_str(), (long)(row_vector[j].type));
-      //}
-      //printf("</req_stats>\n");
+             row_vector[0].i_string.c_str(), row_vector[1].i_int64, row_vector[2].i_int64);
     }
+    printf("</yearly>");
+
+    //month loop
+    printf("<monthly range='1 year'>");
+    sql = "SELECT timeseg, count(*) request_count, count(distinct user_id) user_count FROM (select *, DATE_FORMAT(access_time, '%Y-%m %M') timeseg FROM track_cache_history where YEAR(access_time) >= YEAR(NOW())-1 )t GROUP BY timeseg ORDER BY timeseg desc";
+    stmt = _userDB->prepare_fetch_sql(sql, "");
+    while(_userDB->fetch_next_row_vector(stmt, row_vector)) {
+      printf("<access_stats date=\"%s\" count=\"%lld\" user_count=\"%lld\"></access_stats>\n",
+             row_vector[0].i_string.c_str(), row_vector[1].i_int64, row_vector[2].i_int64);
+    }
+    printf("</monthly>");
+
+    printf("<daily range='14 days'>");
+    sql = "SELECT timeseg, count(*) request_count, count(distinct user_id) user_count FROM (select *, DATE_FORMAT(access_time, '%Y-%m-%d %W') timeseg FROM track_cache_history where DATEDIFF(NOW(), access_time) <14)t  GROUP BY timeseg ORDER BY timeseg desc";
+    stmt = _userDB->prepare_fetch_sql(sql, "");
+    while(_userDB->fetch_next_row_vector(stmt, row_vector)) {
+      printf("<access_stats date=\"%s\" count=\"%lld\" user_count=\"%lld\"></access_stats>\n",
+              row_vector[0].i_string.c_str(), row_vector[1].i_int64, row_vector[2].i_int64);
+    }
+    printf("</daily>");    
+
     printf("</track_access_stats>\n");
   }
   
