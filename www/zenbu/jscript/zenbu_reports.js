@@ -9590,7 +9590,7 @@ function reportElementBuildSourcesInterface(reportElement) {
         dsi1.allowChangeDatasourceMode = true;
         dsi1.source_ids = reportElement.source_ids;
         dsi1.enableResultFilter = true;
-        dsi1.enableScripting = true;
+        dsi1.enableScripting = false; //TODO: disabled for now, but eventually should add this in even if limited
         dsi1.allowMultipleSelect = true;
         dsi1.query_edge_search_depth = reportElement.query_edge_search_depth;
         dsi1.datasource_mode = datasource_mode;
