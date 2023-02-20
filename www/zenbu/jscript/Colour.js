@@ -112,7 +112,7 @@ function Colour(){
     var rgb = this.getIntegerRGB();
 
     // return the CSS integer RGBA colour value
-    return 'rgb(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + rgb.a + ')';
+    return 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + rgb.a + ')';
 
   };
 
