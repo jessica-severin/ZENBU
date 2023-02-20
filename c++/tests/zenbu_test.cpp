@@ -228,7 +228,7 @@ int main() {
   //test_edge_oscfile_read3(); exit(0);
   //test_multimode_feature_edge_oscfile_build(); exit(0);
 
-  get_all_data(); exit(0);
+//  get_all_data(); exit(0);
 
   //test_dumbell_to_edge(); exit(0);
 
@@ -258,7 +258,7 @@ int main() {
 
   //test_fetch_features(); exit(0);
 
-  test_site_finder2(); exit(0);
+  //test_site_finder2(); exit(0);
   //test_site_finder(); exit(0);
 
   //zdx_patch_assembly(); exit(0);
@@ -272,7 +272,7 @@ int main() {
   //check_view_collaboration_security_sharing(); exit(0);
 
   //region_server_test8(); exit(0);
-  region_server_test_overlapmerge(); exit(0);
+  //region_server_test_overlapmerge(); exit(0);
 
   //migrate_f5_sRNA_data(); exit(0);
 
@@ -282,16 +282,16 @@ int main() {
 
   //migrate_f5_mdata(); exit(0);
 
-  merge_f5zenbu_users(); exit(0);
+  //merge_f5zenbu_users(); exit(0);
 
-  migrate_f5zenbu_public(); exit(0);
+  //migrate_f5zenbu_public(); exit(0);
 
-  test_mann_whitney(); exit(0);
+  //test_mann_whitney(); exit(0);
   
   //test_region(seedpeers); exit(0);
   //test_oscdb_feature_mdata_index();
   //test_proc_memory(); exit(0);
-  region_server_test8b(); exit(0);
+  //region_server_test8b(); exit(0);
   
   //test_collab_convert(); exit(0);
   //test_validation_email(); exit(0);
@@ -344,15 +344,27 @@ int main() {
   //db = new MQDB::Database("mysql://read:read@@localhost:3306/eedb_vbox_registry");
   //db = new MQDB::Database("sqlite:///Users/severin/data/oscdb/Mouse_Embryonic_Stem_Cell_RNAseq_exonic_signal.oscdb/oscdb.sqlite");
   //db = new MQDB::Database("mysql://read:read@@osc-mysql.gsc.riken.jp:3306/eeDB_fantom3");
-  db = new MQDB::Database("mysql://read:read@@osc-mysql.gsc.riken.jp:3306/eeDB_core");
+  //db = new MQDB::Database("mysql://read:read@@osc-mysql.gsc.riken.jp:3306/eeDB_core");
   //db = new MQDB::Database("sqlite:///Users/severin/data/oscdb/Mouse_Embryonic_Stem_Cell_RNAseq_exonic_signal.oscdb/oscdb.sqlite");
   //db = new MQDB::Database("sqlite:///Users/severin/data2/oscdbs/Mouse_Embryonic_Stem_Cell_RNAseq_exonic_signal.oscdb/oscdb.sqlite");
   //db = new MQDB::Database("sqlite:///disk2/zenbu/users/TuX8Mgpw3xGkRSW1iEZYiQ/hg19_refGene_20100202_0yjAfr.oscdb/oscdb.sqlite");
   //db = new MQDB::Database("sqlite:///Volumes/HD-HSU2/data/oscdbs/Mouse_Embryonic_Stem_Cell_RNAseq_exonic_signal.oscdb/oscdb.sqlite");
+  //db = new MQDB::Database("mysql://read:read@zenbu2.gsc.riken.jp:3306/zenbu_GRCh38_human_core");
+  db = new MQDB::Database("mysql://read:read@zenbu2.gsc.riken.jp:3308/eedb_zenbu_users");
 
   db->uuid("9bc1e9f8-8a31-11df-a042-080027935aac");
   printf("%s\n", db->xml().c_str());
-  if(db->get_connection()) { printf("looks good!\n"); }
+  if(db->get_connection()) { printf("connection looks good!\n"); }
+
+  //value = db->fetch_col_value("select taxon_id from assembly where ucsc_name='hg18';");
+  value = db->fetch_col_value("SELECT unbuilt/((TIME_TO_SEC(TIMEDIFF(NOW(), request_time))/60/60)+1) metric FROM track_request WHERE unbuilt>0 and start!=-1  ORDER BY metric limit 1;");
+  //value = db->fetch_col_value( "SELECT (min(chrom_chunk_id)+max(chrom_chunk_id))/2 FROM chrom_chunk WHERE chrom_id=11"); 
+  //value = db->fetch_col_value( "SELECT min(chrom_chunk_id) FROM chrom_chunk WHERE chrom_id=11"); 
+  //value = db->fetch_col_value( "SELECT chrom_id FROM chrom_chunk join chrom_chunk_seq using(chrom_chunk_id) WHERE chrom_chunk_id=2561"); 
+  //value = db->fetch_col_value( "SELECT sequence FROM chrom_chunk_seq WHERE chrom_chunk_id=2561"); 
+  //value = db->fetch_col_value( "SELECT substr(sequence, 1000, 2000) FROM chrom_chunk_seq WHERE chrom_chunk_id=2561"); 
+  printf("fetch_col_value dyndata %s\n", value.display_desc().c_str());
+  exit(1);
 
   //test_oscdb(); exit(1);
 
@@ -372,7 +384,7 @@ int main() {
   //test_oscdb5(seedpeers);
 
   //test_region2(seedpeers); exit(0);
-  test_region(seedpeers); exit(0);
+  //test_region(seedpeers); exit(0);
   //test_metadata2(db);
   //test_feature_save(seedpeers);
   //test_symbol_save(seedpeers);
@@ -7409,14 +7421,14 @@ bool test_demux_single_cell2() {
   //
   // testing the new DemultiplexSource module for CellID and single-cell 10x type data
   //
-  fprintf(stderr, "\n======= test_demux_single_cell\n");
+  fprintf(stderr, "\n======= test_demux_single_cell2\n");
 
-  struct timeval                        starttime,endtime,difftime;
+  struct timeval                        totalstart,starttime,endtime,difftime;
   double                                last_update = 0.0;
   EEDB::SPStream                        *stream = NULL;
   EEDB::WebServices::RegionServer       *webservice = new EEDB::WebServices::RegionServer();
   
-  printf("\n== test_site_finder \n");
+  gettimeofday(&totalstart, NULL);
   webservice->parse_config_file("/etc/zenbu/zenbu.conf");
   webservice->init_service_request();
 
@@ -7426,45 +7438,125 @@ bool test_demux_single_cell2() {
   webservice->set_user_profile(user);
 
   webservice->set_parameter("nocache", "true");
-  webservice->set_parameter("trackcache", "ff8ad915ad40335bcee4f23f802df2f7cb18291f27b25785cbec9c48cb16463");
-  webservice->set_parameter("mode", "sources");
+  webservice->set_parameter("format", "fullxml");
+  //webservice->set_parameter("mode", "sources");
+  webservice->set_parameter("mode", "region");
+  webservice->set_parameter("display_width", "1551");
+  webservice->set_parameter("exptype", "tagcount");
+  webservice->set_parameter("source_outmode", "full_feature");
+
+  //webservice->set_parameter("trackcache", "ff8ad915ad40335bcee4f23f802df2f7cb18291f27b25785cbec9c48cb16463");
+  webservice->set_parameter("source_ids", "C2E0BBAD-4F1B-45A9-8F2A-EDD36454F131::2:::Experiment,7011BBAD-2C15-4964-9F89-EACDBE5C866A::2:::Experiment,9CE2F6D5-9CE2-45C4-862A-52778462C43F::2:::Experiment,A9C20997-06E2-45A5-994A-72E35CF4B5D1::2:::Experiment,BC3F51AE-217A-42EA-BC1B-59643EA6B831::2:::Experiment,E3BF41E4-39A3-4C3E-ACB8-B8A6D6F9FCA1::2:::Experiment,EA3A68E9-8E49-4A0D-9820-B33DB9250C1D::2:::Experiment,FBDD0ADC-3275-494E-8898-0D70B1381072::2:::Experiment");
+
+   /*
+   <source name="TFHS000062" platform="TFHS000062:0:1:H2C2CDRXY:1" id="C2E0BBAD-4F1B-45A9-8F2A-EDD36454F131::2:::Experiment" />
+   <source name="TFHS000031" platform="TFHS000031:0:1:HV5G7DRXX:1" id="7011BBAD-2C15-4964-9F89-EACDBE5C866A::2:::Experiment" />
+   <source name="TFHS000060" platform="TFHS000060:0:1:H2C2CDRXY:1" id="9CE2F6D5-9CE2-45C4-862A-52778462C43F::2:::Experiment" />
+   <source name="TFHS000059" platform="TFHS000059:0:1:H2C2CDRXY:1" id="A9C20997-06E2-45A5-994A-72E35CF4B5D1::2:::Experiment" />
+   <source name="TFHS000030" platform="TFHS000030:0:1:HV5G7DRXX:1" id="BC3F51AE-217A-42EA-BC1B-59643EA6B831::2:::Experiment" />
+   <source name="TFHS000061" platform="TFHS000061:0:1:H2C2CDRXY:1" id="E3BF41E4-39A3-4C3E-ACB8-B8A6D6F9FCA1::2:::Experiment" />
+   <source name="TFHS000032" platform="TFHS000032:0:1:HV5G7DRXX:1" id="EA3A68E9-8E49-4A0D-9820-B33DB9250C1D::2:::Experiment" />
+   <source name="TFHS000029" platform="TFHS000029:0:1:HV5G7DRXX:1" id="FBDD0ADC-3275-494E-8898-0D70B1381072::2:::Experiment" />
+   */
+
   webservice->postprocess_parameters();
   
-  EEDB::Assembly *asmb1 = webservice->find_assembly("mm10");
-  printf("%s\n", asmb1->xml().c_str());
+  //EEDB::Assembly *asmb1 = webservice->find_assembly("mm10");
+  EEDB::Assembly *asmb1 = webservice->find_assembly("hg38");
+  //printf("%s\n", asmb1->xml().c_str());
 
-  EEDB::Assembly *asmb2 = EEDB::Assembly::cache_get_assembly("mm10");
+  //EEDB::Assembly *asmb2 = EEDB::Assembly::cache_get_assembly("mm10");
+  EEDB::Assembly *asmb2 = EEDB::Assembly::cache_get_assembly("hg38");
   if(!asmb2) { fprintf(stderr, "unable to get assembly from cache\n"); }
-  else { printf("%s\n", asmb2->xml().c_str()); }
-
+  //else { printf("%s\n", asmb2->xml().c_str()); }
 
   stream = webservice->region_stream();
+
+/*
+<datastream name="cell_mdata" output="full_feature">
+	<source id="059B2BEC-AF3D-4317-B6AB-4236B99F0258::1:::FeatureSource"/>
+</datastream>
+<spstream module="DemultiplexSource">
+	<source_mode>experiment</source_mode>
+	<demux_mdkeys>CB</demux_mdkeys>
+	<full_demux>false</full_demux>
+	<demux_source_mdkey>sam:sample</demux_source_mdkey>
+	<side_linking_mdkey>cell_barcode</side_linking_mdkey>
+	<side_stream>
+		<spstream module="Proxy" name="cell_mdata"/>
+	</side_stream>
+</spstream>
+*/
+  EEDB::SPStreams::FederatedSourceStream *cellMD_stream = webservice->secured_federated_source_stream();
+  cellMD_stream->add_source_id_filter("059B2BEC-AF3D-4317-B6AB-4236B99F0258::1:::FeatureSource");
+  cellMD_stream->set_sourcestream_output("full_feature");
 
   EEDB::SPStreams::DemultiplexSource *demux = new EEDB::SPStreams::DemultiplexSource();
   demux->set_demux_source_mode("experiment");
   demux->add_demux_mdata_keys("CB");
+  demux->enable_full_demux(true);
+  demux->set_demux_source_mdkey("sam:sample");
+  demux->set_side_linking_mdkey("cell_barcode");
+  demux->side_stream(cellMD_stream);
+  demux->skip_unlinked(true);
   demux->source_stream(stream);
-//  stream = demux;
+  stream = demux;
+
+
+  EEDB::SPStreams::FeatureEmitter *emitter = new EEDB::SPStreams::FeatureEmitter;
+  emitter->fixed_grid(true);
+  emitter->both_strands(true);
+  //emitter->overlap(0);
+  emitter->width(115);
+
+  EEDB::SPStreams::TemplateCluster *cluster = new EEDB::SPStreams::TemplateCluster;
+  cluster->side_stream(emitter);
+  cluster->source_stream(stream);
+  cluster->ignore_strand(false);
+  //cluster->skip_empty_templates(true);
+  cluster->overlap_mode("height");
+  cluster->expression_mode(EEDB::CL_SUM);
+  cluster->overlap_check_subfeatures(true);
+  //cluster->overlap_distance(0);
+  //cluster->prescan_distance(100000);
+  stream = cluster;
 
   stream->stream_clear();
   printf("%s\n", stream->xml().c_str());
 
   long count=0;
+  long subsource_count =0;
   gettimeofday(&starttime, NULL);
   
+  printf("===== pre-stream sources to load full_demux\n");
+  count=0;
+  subsource_count =0;
+  stream->stream_data_sources("");
+  while(EEDB::DataSource *source = (EEDB::DataSource*)stream->next_in_stream()) {
+    //printf("%s", source->xml().c_str());
+    count++;
+    vector<EEDB::DataSource*> subsrcs = source->subsources();
+    subsource_count += subsrcs.size();
+    //count += subsrcs.size();
+  }
+  printf("  %ld sources\n", count);
+  printf("  %ld sub_sources\n", subsource_count);
+
   //phase2 open-end read test
   printf("== read features\n");
 
   gettimeofday(&starttime, NULL);
   count=0;
   stream->stream_clear();
-  stream->stream_by_named_region("mm10","chr8", 120128000,120133284);
-  printf("region hg19::chr19:50161252-50170707\n");
+  //stream->stream_by_named_region("mm10","chr8", 120128000,120133284);
+  //printf("region hg19::chr19:50161252-50170707\n");
+  stream->stream_by_named_region("hg38", "chr1", 198609341,198787103);
+  printf("region : hg38::chr1:198609341-198787103");
   
   while(EEDB::Feature *feature = (EEDB::Feature*)stream->next_in_stream()) { 
     if(!feature) { continue; }
     
-    printf("%s", feature->xml().c_str());
+    //printf("%s", feature->xml().c_str());
     count++;    
     
     //if(count%5000 == 0) {
@@ -7472,31 +7564,41 @@ bool test_demux_single_cell2() {
     timersub(&endtime, &starttime, &difftime);
     double runtime = (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0;
     //if(count%5000 == 0) {
-    if(runtime > last_update + 2.0) {
+    if(runtime > last_update + 1) {
       //printf("%ld in %1.6f sec \n", count, (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
       printf("%1.3f obj/sec [%ld obj]\n", count / runtime, count);
       last_update = runtime;
+      //printf("%s", feature->xml().c_str());
     }
     feature->release();
   }
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  double runtime = (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0;
+  printf("final: %ld features in %1.3f seconds / %1.3f obj/sec\n", count, runtime, count / runtime);
 
   printf("\n============= stream sources and peers last\n");
   map<string, EEDB::Peer*>    t_peers;
   count=0;
+  subsource_count =0;
   stream->stream_data_sources("");
   while(EEDB::DataSource *source = (EEDB::DataSource*)stream->next_in_stream()) {
-    printf("%s", source->xml().c_str());
+    //printf("%s", source->xml().c_str());
     count++;
+    vector<EEDB::DataSource*> subsrcs = source->subsources();
+    subsource_count += subsrcs.size();
+    //count += subsrcs.size();
     string uuid = source->peer_uuid();
     EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
     if(peer) { t_peers[uuid] = peer; }
   }
   printf("%ld sources\n", count);
+  printf("%ld sub_sources\n", subsource_count);
   
   count=0;
   map<string, EEDB::Peer*>::iterator  it2;
   for(it2 = t_peers.begin(); it2 != t_peers.end(); it2++) {
-    printf("%s\n", (*it2).second->xml().c_str());
+    printf("   %s\n", (*it2).second->xml().c_str());
     count++;
   }  
   printf("%ld peers\n", count);
@@ -7505,6 +7607,10 @@ bool test_demux_single_cell2() {
   timersub(&endtime, &starttime, &difftime);
   printf("%1.3f obj/sec [%ld obj in %1.6f sec]\n", count /((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0),
                                                    count , ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &totalstart, &difftime);
+  runtime = (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0;
+  printf("total runtime %1.3f sec\n", runtime);
   return true;
 }
 
@@ -8377,8 +8483,9 @@ void get_all_data() {
     EEDB::User *user2 = (EEDB::User*)(*u1);;
     if(!user2) { continue; }
     if(user2->email_identity().empty()) { continue; }
+    //if(user2->email_identity() != "michiel.dehoon@riken.jp") { continue; }
     user_count++;
-    fprintf(stderr, "\nuser %4ld :: [%s]\t%s\n", user_count, user2->uuid().c_str(), user2->email_identity().c_str());
+    fprintf(stderr, "\nuser %4ld :: [%s]\t%s\n", user2->primary_id(), user2->uuid().c_str(), user2->email_identity().c_str());
 
     if(!user2->user_registry()) { fprintf(stderr, "  problem with registry\n"); continue; }
     MQDB::Database* ureg = user2->user_registry()->peer_database();
