@@ -30,8 +30,8 @@
 // * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-var eedbWebRoot="/zenbudev";
-var zenbuVersion="3.0.1 dev";
+var eedbWebRoot="/zenbu";
+var zenbuVersion="3.1.0";
 
 //gLyphs
 var eedbDefaultAssembly = "hg38";
