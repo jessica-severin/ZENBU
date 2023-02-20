@@ -470,6 +470,9 @@ function eedbShowLogin() {
     signin_span.innerHTML ="Sign in";
     signin_span.setAttribute("onclick", "eedbLoginAction('login');return false");
   }
+  
+  if(current_user && current_user.no_password) { zenbuResetPasswordPanel(); }
+
   return user;
 }
 
@@ -520,6 +523,7 @@ function eedbGetCurrentUser() {
   if(xmlDoc==null)  return null;
   var userXML = xmlDoc.getElementsByTagName("eedb_user")[0];
   current_user = eedbParseUserXML(userXML);
+
   return current_user;
 }
 
@@ -565,8 +569,11 @@ function eedbParseUserXML(userXML) {
 
     user.no_password = false;
     var no_pass = userXML.getElementsByTagName("no_password");
-    if(no_pass && (no_pass.length>0)) { user.no_password = true; }
-
+    if(no_pass && (no_pass.length>0)) { 
+      user.no_password = true; 
+      console.log("user: "+ user.email +" has no password");
+    }
+    
     return  user;
   }
   return null;
@@ -685,7 +692,7 @@ function zenbuUserLoginPanel() {
   div2.setAttribute("style", "text-align:center; border:1px;");
 
   var button = div2.appendChild(document.createElement('button'));
-  button.setAttribute("style", "font-size:14px; padding: 1px 4px; align:center; width:150px; margin-left:5px; margin-right:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.setAttribute("style", "font-size:14px; padding: 1px 4px; align:center; width:150px; margin-left:5px; margin-right:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
   button.setAttribute("type", "button");
   button.setAttribute("onMouseOver", "this.style.background='#CCCCCC';");
   button.setAttribute("onMouseOut", "this.style.background='#EEEEEE';");
@@ -709,7 +716,7 @@ function zenbuUserLoginPanel() {
   span2.setAttribute("style", "font-size:12px; font-weight:bold;");
   span2.innerHTML = "New user?";
   var button = div2.appendChild(document.createElement('button'));
-  button.setAttribute("style", "font-size:12px; padding: 1px 4px; align:center; width:150px; margin-left:15px; margin-right:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.setAttribute("style", "font-size:12px; padding: 1px 4px; align:center; width:150px; margin-left:15px; margin-right:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
   button.setAttribute("type", "button");
   button.setAttribute("onclick", "zenbuNewUserCreatePanel();");
   button.setAttribute("onMouseOver", "this.style.background='#CCCCCC';");
@@ -750,7 +757,7 @@ function zenbuUserLoginPanel() {
   cellA = divCell.appendChild(document.createElement('a'));
   cellA.setAttribute("href", eedbLoginCGI+"?user_query=me.yahoo.com");
   cellButton = cellA.appendChild(document.createElement('button'));
-  cellButton.setAttribute("style", "padding: 1px 4px; margin:1px 5px; align:center; width:100px; height:35px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  cellButton.setAttribute("style", "padding: 1px 4px; margin:1px 5px; align:center; width:100px; height:35px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
   cellButton.setAttribute("onMouseOver", "this.style.background='#CCCCCC';");
   cellButton.setAttribute("onMouseOut", "this.style.background='#EEEEEE';");
   cellImg = cellButton.appendChild(document.createElement('img'));
@@ -762,7 +769,7 @@ function zenbuUserLoginPanel() {
   cellA = divCell.appendChild(document.createElement('a'));
   cellA.setAttribute("href", eedbLoginCGI+"?user_query=yahoo.co.jp");
   cellButton = cellA.appendChild(document.createElement('button'));
-  cellButton.setAttribute("style", "padding: 1px 4px; margin:1px 5px; align:center; width:100px; height:35px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  cellButton.setAttribute("style", "padding: 1px 4px; margin:1px 5px; align:center; width:100px; height:35px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
   cellButton.setAttribute("onMouseOver", "this.style.background='#CCCCCC';");
   cellButton.setAttribute("onMouseOut", "this.style.background='#EEEEEE';");
   cellImg = cellButton.appendChild(document.createElement('img'));
@@ -787,7 +794,7 @@ function zenbuUserLoginPanel() {
   cellA = divCell.appendChild(document.createElement('a'));
   cellA.setAttribute("href", eedbLoginCGI+"?user_query=pip.verisignlabs.com");
   cellButton = cellA.appendChild(document.createElement('button'));
-  cellButton.setAttribute("style", "padding: 1px 4px; margin:1px 5px; align:center; width:100px; height:35px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  cellButton.setAttribute("style", "padding: 1px 4px; margin:1px 5px; align:center; width:100px; height:35px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
   cellButton.setAttribute("onMouseOver", "this.style.background='#CCCCCC';");
   cellButton.setAttribute("onMouseOut", "this.style.background='#EEEEEE';");
   cellImg = cellButton.appendChild(document.createElement('img'));
@@ -837,6 +844,12 @@ function zenbuUserLoginPanel() {
   span1.innerHTML = "Notice: ";
   span1 = div4.appendChild(document.createElement('span'));
   span1.innerHTML = "<a href='https://www.myopenid.com/'>myopenid</a> shut down their services on February 1st 2014. Google has also shutdown their OpenID service in March of 2015.<br>For all previous myopenID users, please either create a new account or contact [jessica.severin{at}riken.jp] to help with converting your old account.";
+
+  if(current_error) {
+    div1 = login_panel.appendChild(document.createElement('div'));
+    div1.setAttribute("style", "margin-top:15px; font-weight:bold; font-size:12px; color:#CC1010;");
+    div1.innerHTML = current_error.message;
+  }
 }
 
 
@@ -983,7 +996,7 @@ function zenbuForgotPasswordPanel() {
     input1.setAttribute("disabled", "true");
   } else {
     var button = div1.appendChild(document.createElement('button'));
-    button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:15px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+    button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:15px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
     button.setAttribute("type", "button");
     button.setAttribute("onclick", "zenbuSubmitForgotPassword();");
     button.innerHTML ="send reset password email";
@@ -999,7 +1012,7 @@ function zenbuForgotPasswordPanel() {
     div1 = login_panel.appendChild(document.createElement('div'));
     div1.setAttribute("style", "margin-top:15px; font-size:12px;");
     //div1.innerHTML = "validation email sent to your email address. Please click the link sent in the email to activate your account and set your password.";
-    div1.innerHTML = "validation email sent to your email address. <br>Please enter the <b>validation code</b> sent in the email to activate your account and set your password.";
+    div1.innerHTML = "validation email sent to your email address. <br> Please click the link sent in the email or enter the <b>validation code</b> sent in the email to activate your account and set your password.";
 
     div1 = login_panel.appendChild(document.createElement('div'));
     var label1 = div1.appendChild(document.createElement('label'));
@@ -1012,7 +1025,7 @@ function zenbuForgotPasswordPanel() {
     input1.setAttribute("size", "40");
   
     var button = div1.appendChild(document.createElement('button'));
-    button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:15px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+    button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:15px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
     button.setAttribute("type", "button");
     button.setAttribute("onclick", "zenbuSendEmailValidationCheck();");
     button.innerHTML ="validate";
@@ -1145,6 +1158,200 @@ function zenbuSendEmailValidationCheck(email, valid_code) {
   location.reload();
 }
 
+//----------------------------------------------
+
+function zenbuResetPasswordPanel() {
+  var main_div = document.getElementById("eedb_login_div");
+  if(!main_div) { return; }
+  if(!current_user) { return; }
+  if(!current_user.email) { return; }
+  
+  var reset_panel = document.getElementById("zenbu_reset_password_panel");
+  if(!reset_panel) {
+    reset_panel = main_div.appendChild(document.createElement('div'));
+    reset_panel.id = "zenbu_reset_password_panel";
+    reset_panel.setAttribute('style', "position:absolute; background-color:#e0f0ec; text-align:left; "+
+                          "border:inset; border-width:3px; padding: 3px 7px 3px 7px; "+
+                          "z-index:1; top:180px; width:520px;"+
+                          "left:" + ((winW/2)-260) +"px; "
+                          );
+  }
+
+  var tdiv, tspan, tinput, ta;
+  reset_panel.innerHTML = "";
+
+  // title
+  var tdiv = reset_panel.appendChild(document.createElement('div'));
+  tdiv.setAttribute('style', "font-size:14px; font-weight:bold; margin-top:5px; ");
+  var tspan = tdiv.appendChild(document.createElement('span'));
+  tspan.innerHTML = "ZENBU : change password";
+
+  // close button
+  var a1 = tdiv.appendChild(document.createElement('a'));
+  a1.setAttribute("target", "top");
+  a1.setAttribute("href", "./#section=uploads");
+  //a1.setAttribute("onclick", "eedbUserCloseNewUploadPanel();return false");
+  //a1.setAttribute("onclick", "document.getElementById('eedb_user_altdiv').innerHTML=''; location.reload(); return false");
+  var img1 = a1.appendChild(document.createElement('img'));
+  img1.setAttribute("src", eedbWebRoot+"/images/close_icon16px.png");
+  img1.setAttribute("style", "float: right;");
+  img1.setAttribute("width", "16");  img1.setAttribute("height", "16");
+  img1.setAttribute("alt","close");
+
+  var div1, form, label1, input1, text1, span1;
+
+  var table1 = reset_panel.appendChild(document.createElement('table'));
+  table1.setAttribute("style", "font-weight:normal; color:black;");
+
+  tr1 = table1.appendChild(document.createElement('tr'));
+  td1 = tr1.appendChild(document.createElement('td'));
+  td1.innerHTML = "email identity:";
+  td1 = tr1.appendChild(document.createElement('td'));
+  td1.setAttribute("style", "font-weight:bold; color:black;");
+  if(current_user.email) { td1.innerHTML = current_user.email; }
+
+  tr1 = table1.appendChild(document.createElement('tr'));
+  td1 = tr1.appendChild(document.createElement('td'));
+  td1.setAttribute("style", "font-weight:normal; color:black;");
+  td1.innerHTML = "new password: ";
+  td2 = tr1.appendChild(document.createElement('td'));
+  input1 = td2.appendChild(document.createElement('input'));
+  input1.id  = "zenbu_user_reset_password_new1";
+  input1.setAttribute("type", "password");
+  input1.setAttribute("size", "40");
+  input1.setAttribute("onkeyup", "zenbuResetPasswordCheck();");
+  td2 = tr1.appendChild(document.createElement('td'));
+  div2 = td2.appendChild(document.createElement('div'));
+  div2.id = "zenbu_user_reset_password_strength"; 
+  div2.setAttribute("style", "width:130px; font-size:12px; padding: 1px 10px; border-radius: 0px; border: solid 1px #000000; background:#FF0000; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  div2.innerHTML ="too short &#9734;&#9734;&#9734;&#9734;&#9734;";
+ 
+  tr1 = table1.appendChild(document.createElement('tr'));
+  td1 = tr1.appendChild(document.createElement('td'));
+  td1.setAttribute("style", "font-weight:normal; color:black;");
+  td1.innerHTML = "retype password: ";
+  td2 = tr1.appendChild(document.createElement('td'));
+  input1 = td2.appendChild(document.createElement('input'));
+  input1.id  = "zenbu_user_reset_password_new2";
+  input1.setAttribute("type", "password");
+  input1.setAttribute("size", "40");
+  input1.setAttribute("onkeyup", "zenbuResetPasswordCheck();");
+  td2 = tr1.appendChild(document.createElement('td'));
+  div2 = td2.appendChild(document.createElement('div'));
+  div2.id = "zenbu_user_reset_password_match"; 
+  div2.innerHTML ="";
+
+  div1 = reset_panel.appendChild(document.createElement('div'));
+  button = div1.appendChild(document.createElement('button'));
+  button.id  = "zenbu_user_reset_password_button";
+  button.setAttribute("style", "width:300px; font-size:12px; padding: 1px 4px; margin:10px 0px 15px 100px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+  button.setAttribute("type", "button");
+  button.setAttribute("disabled", "disabled");
+  button.setAttribute("onclick", "zenbuResetPasswordSubmit();");
+  button.innerHTML ="set password";
+
+  if(current_error) { 
+    div1 = reset_panel.appendChild(document.createElement('div'));
+    div1.setAttribute("style", "font-weight:bold; color:#B22222;");
+    div1.innerHTML = current_error.message;
+  }
+}
+
+
+function zenbuResetPasswordCheck() {
+  current_error = {};
+    
+  var input1 = document.getElementById("zenbu_user_reset_password_new1");
+  var input2 = document.getElementById("zenbu_user_reset_password_new2");
+  if(!input1 || !input2) { zenbuResetPasswordPanel(); return; }
+
+  var strengthDiv = document.getElementById("zenbu_user_reset_password_strength");
+  var matchDiv = document.getElementById("zenbu_user_reset_password_match");
+  matchDiv.innerHTML = "";
+
+  var button = document.getElementById("zenbu_user_reset_password_button");
+  button.setAttribute("disabled", "disabled");
+
+  var pass1 = input1.value;
+  var pass2 = input2.value;
+  
+  if(pass1.length < 3) {
+    strengthDiv.style.background = "#FF0000";
+    strengthDiv.innerHTML = "too short &#9734;&#9734;&#9734;&#9734;&#9734;";
+    return;
+  }
+  if(pass1!=pass2) { matchDiv.innerHTML = "does not match"; }
+
+  var score = scorePassword(pass1);
+  //strengthDiv.innerHTML = score + " ";
+  strengthDiv.innerHTML = "";
+  if((pass1==pass2) && (score>=20)) { button.removeAttribute("disabled"); }
+
+  if(score > 80) {
+    strengthDiv.style.background = "green";
+    strengthDiv.innerHTML += "very strong &#9733;&#9733;&#9733;&#9733;&#9733;";
+  }
+  if(score<=80 && score>60) {
+    strengthDiv.style.background = "#AAFF55";
+    strengthDiv.innerHTML += "strong &#9733;&#9733;&#9733;&#9733;&#9734;";
+  }
+  if(score<=60 && score>=40) {
+    strengthDiv.style.background = "#FFFF66";
+    strengthDiv.innerHTML += "ok &#9733;&#9733;&#9733;&#9734;&#9734;";
+  }
+  if(score<40 && score>=20) {
+    strengthDiv.style.background = "#FF6600";
+    strengthDiv.innerHTML += "weak &#9733;&#9733;&#9734;&#9734;&#9734;";
+  }
+  if(score<20) {
+    strengthDiv.style.background = "#FF7777";
+    strengthDiv.innerHTML += "very weak &#9733;&#9734;&#9734;&#9734;&#9734;";
+  }
+}
+
+
+function zenbuResetPasswordSubmit() {
+  current_error = {};
+  var input1 = document.getElementById("zenbu_user_reset_password_new1");
+  var input2 = document.getElementById("zenbu_user_reset_password_new2");
+  if(!input1 || !input2) { zenbuResetPasswordPanel(); return; }
+
+  var pass1 = input1.value;
+  var pass2 = input2.value;
+  
+  var paramXML = "<zenbu_query>\n";
+  paramXML += "<mode>reset_password</mode>\n";
+  paramXML += "<newpass1>"+ pass1 +"</newpass1>";
+  paramXML += "<newpass2>"+ pass2 +"</newpass2>";
+  paramXML += "</zenbu_query>\n";
+
+  var xhr=GetXmlHttpObject();
+  xhr.open("POST", eedbUserCGI, false);
+  xhr.setRequestHeader("Content-Type", "application/xml; charset=UTF-8;");
+  xhr.send(paramXML);
+    
+  current_error.message = "problem reseting password, please try again";
+  if(xhr.readyState!=4) { return zenbuResetPasswordPanel(); }
+  if(xhr.responseXML == null) { return zenbuResetPasswordPanel(); }
+  var xmlDoc=xhr.responseXML.documentElement;
+  if(xmlDoc==null) { return zenbuResetPasswordPanel(); } 
+  var errorXML = xmlDoc.getElementsByTagName("ERROR");
+  if(errorXML.length>0) {
+    var msg = errorXML[0].firstChild.nodeValue;
+    if(msg == "email_exists") {
+      current_error.message = "that email is already registered, please login or pick a different email";
+    } else {
+      current_error.message = msg;
+    }
+    return zenbuResetPasswordPanel();
+  }
+
+  //OK
+  //current_error.message = "";
+  current_error = null;
+  eedbShowLogin();
+}
+
 
 //----------------------------------------------
 
@@ -1262,6 +1469,9 @@ function zenbuSubmitPasswordLogin() {
   var password_input    = document.getElementById("user_login_panel_password");
   if(!password_input) { zenbuUserLoginPanel(); return; }
 
+  var login_div = document.getElementById("eedb_login_div");
+  var login_panel = document.getElementById("zenbu_login_panel");
+
   var email  = email_input.value;
   var passwd = password_input.value;
 
@@ -1276,6 +1486,22 @@ function zenbuSubmitPasswordLogin() {
   xhr.setRequestHeader("Content-Type", "application/xml; charset=UTF-8;");
   xhr.send(paramXML);
 
+  if(xhr.readyState!=4) return;
+  if(xhr.responseXML == null) return;
+  var xmlDoc=xhr.responseXML.documentElement;
+  if(xmlDoc==null)  return;
+  var failureXML = xmlDoc.getElementsByTagName("login_failure");
+  if(failureXML.length>0) {
+    var msg = failureXML[0].firstChild.nodeValue;
+    current_error = new Object;
+    current_error.message = msg;
+    //force refresh with error by removing old panel and rebuild
+    if(login_div && login_panel) { login_div.removeChild(login_panel); }
+    zenbuUserLoginPanel(); 
+    return; 
+  }
+
+  //login valid
   location.reload();
 }
 
