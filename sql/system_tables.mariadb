@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS `user` (
   `hmac_secretkey` text NOT NULL default '',
   PRIMARY KEY  (`user_id`),
   UNIQUE KEY `uuid_unq` (`user_uuid`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=Aria DEFAULT CHARSET=utf8;
 
 --
 -- Table structure for table `user_2_metadata`
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS `user_2_metadata` (
   UNIQUE KEY `user_metadata_unq` USING BTREE (`user_id`,`metadata_id`),
   KEY `user_id` (`user_id`),
   KEY `metadata_id` (`metadata_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=Aria DEFAULT CHARSET=utf8;
 
 --
 -- Table structure for table `user_2_symbol`
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS `user_2_symbol` (
   UNIQUE KEY `user_symbol_unq` (`user_id`,`symbol_id`),
   KEY `user_id` (`user_id`),
   KEY `symbol_id` (`symbol_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=Aria DEFAULT CHARSET=utf8;
 
 
 CREATE TABLE IF NOT EXISTS `user_authentication` (
@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS `collaboration` (
   PRIMARY KEY  (`collaboration_id`),
   UNIQUE KEY `uniq_uuid` USING BTREE (`uuid`),
   KEY `openid_idx` (`owner_openid`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=Aria DEFAULT CHARSET=utf8;
 
 --
 -- Table structure for table `collaboration_2_metadata`
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS `collaboration_2_metadata` (
   UNIQUE KEY `collab_metadata_unq` USING BTREE (`collaboration_id`,`metadata_id`),
   KEY `metadata_id` (`metadata_id`),
   KEY `collaboration_id` USING BTREE (`collaboration_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=Aria DEFAULT CHARSET=utf8;
 
 --
 -- Table structure for table `collaboration_2_symbol`
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS `collaboration_2_symbol` (
   UNIQUE KEY `collab_symbol_unq` USING BTREE (`collaboration_id`,`symbol_id`),
   KEY `symbol_id` (`symbol_id`),
   KEY `collaboration_id` USING BTREE (`collaboration_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=Aria DEFAULT CHARSET=utf8;
 
 --
 -- Table structure for table `collaboration_2_user`
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS `collaboration_2_user` (
   `user_id` int(11) NOT NULL default '0',
   `member_status` enum('REQUEST','MEMBER','ADMIN','REJECTED','INACTIVE','INVITED') NOT NULL default 'REQUEST',
   PRIMARY KEY  (`collaboration_id`,`user_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=Aria DEFAULT CHARSET=utf8;
 
 --
 -- Table structure for table `collaboration_2_configuration`
@@ -125,7 +125,7 @@ CREATE TABLE IF NOT EXISTS `collaboration_2_configuration` (
   PRIMARY KEY  (`collaboration_id`,`configuration_id`),
   KEY `collaboration_id` (`collaboration_id`),
   KEY `configuration_id` (`configuration_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=Aria DEFAULT CHARSET=utf8;
 
 --
 -- Table structure for table `sessions`
@@ -133,11 +133,11 @@ CREATE TABLE IF NOT EXISTS `collaboration_2_configuration` (
 
 CREATE TABLE IF NOT EXISTS `sessions` (
   `id` varchar(64) NOT NULL default '',
-  `create_time` datetime NOT NULL,
+  `create_time` datetime NOT NULL default CURRENT_TIMESTAMP,
   `last_access` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
   `a_session` text default '',
   PRIMARY KEY  (`id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=Aria DEFAULT CHARSET=utf8;
 
 
 
@@ -159,7 +159,7 @@ CREATE TABLE IF NOT EXISTS `region_cache` (
   
   PRIMARY KEY  (`region_cache_id`),
   UNIQUE KEY `region_cache_unq` (`uuid`,`assembly`, chrom, start, end)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=Aria DEFAULT CHARSET=utf8;
 
 
 CREATE TABLE IF NOT EXISTS `region_cache_2_metadata` (
@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS `region_cache_2_metadata` (
   UNIQUE KEY `regioncache_metadata_unq` USING BTREE (`region_cache_id`,`metadata_id`),
   KEY `region_cache_id` (`region_cache_id`),
   KEY `metadata_id` (`metadata_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=Aria DEFAULT CHARSET=utf8;
 
 
 CREATE TABLE IF NOT EXISTS `region_cache_history` (
@@ -178,7 +178,7 @@ CREATE TABLE IF NOT EXISTS `region_cache_history` (
 
   KEY `region_cache_id` (`region_cache_id`),
   KEY `user_id` (`user_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=Aria DEFAULT CHARSET=utf8;
 
 
 --
@@ -198,7 +198,7 @@ CREATE TABLE IF NOT EXISTS `track_cache` (
 
   PRIMARY KEY  (`track_cache_id`),
   UNIQUE KEY `hashkey` (`hashkey`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=Aria DEFAULT CHARSET=utf8;
 
 
 CREATE TABLE IF NOT EXISTS `track_cache_2_metadata` (
@@ -208,7 +208,7 @@ CREATE TABLE IF NOT EXISTS `track_cache_2_metadata` (
   UNIQUE KEY `trackcache_metadata_unq` (`track_cache_id`,`metadata_id`),
   KEY `track_cache_id` (`track_cache_id`),
   KEY `metadata_id` (`metadata_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=Aria DEFAULT CHARSET=utf8;
 
 
 CREATE TABLE IF NOT EXISTS `track_cache_history` (
@@ -223,7 +223,7 @@ CREATE TABLE IF NOT EXISTS `track_cache_history` (
   `access_time` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
   KEY `track_cache_id` (`track_cache_id`),
   KEY `user_id` (`user_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=Aria DEFAULT CHARSET=utf8;
 
 
 CREATE TABLE IF NOT EXISTS `track_request` (
@@ -244,7 +244,7 @@ CREATE TABLE IF NOT EXISTS `track_request` (
   PRIMARY KEY  (`track_request_id`),
   KEY `track_cache_id` (`track_cache_id`),
   KEY `user_id` (`user_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=Aria DEFAULT CHARSET=utf8;
 
 
 --
@@ -262,7 +262,7 @@ CREATE TABLE IF NOT EXISTS `track_builder` (
   `died` datetime default NULL,
   `cause_of_death` enum('','NO_WORK','JOB_LIMIT','LIFESPAN','FATALITY') NOT NULL default '',
   PRIMARY KEY  (`track_builder_id`)
-) ENGINE=MyISAM AUTO_INCREMENT=2 DEFAULT CHARSET=latin1;
+) ENGINE=Aria AUTO_INCREMENT=2 DEFAULT CHARSET=latin1;
 
 
 --
@@ -283,7 +283,7 @@ CREATE TABLE IF NOT EXISTS `configuration` (
   KEY `config_type` (`config_type`),
   UNIQUE KEY `uniq_uuid` (`uuid`),
   UNIQUE KEY `fixed_id` (`fixed_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
+) ENGINE=Aria DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 
 CREATE TABLE IF NOT EXISTS `configuration_2_metadata` (
@@ -291,14 +291,14 @@ CREATE TABLE IF NOT EXISTS `configuration_2_metadata` (
   `metadata_id` int(11) default NULL,
   KEY `configuration_id` (`configuration_id`),
   KEY `metadata_id` (`metadata_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
+) ENGINE=Aria DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 CREATE TABLE IF NOT EXISTS `configuration_2_symbol` (
   `configuration_id` int(11) default NULL,
   `symbol_id` int(11) default NULL,
   KEY `configuration_id` (`configuration_id`),
   KEY `symbol_id` (`symbol_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
+) ENGINE=Aria DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 CREATE TABLE IF NOT EXISTS `configuration_fixed_editors` (
   `fixed_id` varchar(128) NOT NULL,
@@ -393,14 +393,14 @@ CREATE TABLE IF NOT EXISTS job (
   INDEX claim_analysis_status  (job_claim, analysis_id, status),
   INDEX analysis_status        (analysis_id, status),
   INDEX worker_id              (worker_id)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
+) ENGINE=Aria DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 CREATE TABLE IF NOT EXISTS job_2_metadata (
   job_id int(11) default NULL,
   metadata_id int(11) default NULL,
   KEY job_id (job_id),
   KEY metadata_id USING BTREE (metadata_id)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
+) ENGINE=Aria DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
