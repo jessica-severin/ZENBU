@@ -102,6 +102,7 @@ function ZenbuGlyphsTrack(glyphsGB, trackID) {
   this.exprbin_binsize = "";
   this.createMode  = "single";
   this.whole_chrom_scale  = false;
+  this.hide_spanning = false;
   this.xyplot_fill = false;
   this.show_hoverinfo = true;
   this.interaction_style = "diamond";
@@ -2996,6 +2997,7 @@ function gLyphsDrawFeatureTrack(glyphTrack) {
   if(glyphStyle == "medium-arrow") { levelHeight=6; }
   if(glyphStyle == "thin-arrow") { levelHeight=4; }
   if(glyphStyle == "exon") { levelHeight=6; }
+  if(glyphStyle == "box") { levelHeight=9; }
   if(glyphStyle == "thick-box") { levelHeight=6; }
   if(glyphStyle == "probesetloc") { levelHeight=7; }
   if(glyphStyle == "thin") { levelHeight=3; }
@@ -3304,7 +3306,7 @@ function gLyphsDrawFeature(glyphTrack, feature, glyphStyle) {
   //if(glyphStyle == "arrow") { glyph = gLyphsDrawArrow(xpos, strand); }
   if(glyphStyle == "cytoband") { glyph = gLyphsDrawCytoBand(glyphTrack, xfs, xfe, feature); } 
   if(glyphStyle == "box") { glyph = gLyphsDrawBox(glyphTrack, xfs, xfe, strand); } 
-  if(glyphStyle == "subfeature") { glyph = gLyphsDrawBox(glyphTrack, xfs, xfe, strand); } 
+  if(glyphStyle == "subfeature") { glyph = gLyphsDrawExon(glyphTrack, xfs, xfe, strand); } 
   if(glyphStyle == "intron") { glyph = gLyphsDrawIntron(glyphTrack, xfs, xfe, strand); } 
   if(glyphStyle == "exon") { glyph = gLyphsDrawExon(glyphTrack, xfs, xfe, strand); } 
   if(glyphStyle == "thick-box") { glyph = gLyphsDrawExon(glyphTrack, xfs, xfe, strand); } 
@@ -4089,9 +4091,13 @@ function gLyphsTrack_render_arc(glyphTrack) {
     var feature = obj_array[i];
     if(!feature) { continue; }
     
-    if(glyphTrack.max_interaction>0) {
-      var dist =  feature.end - feature.start+1; 
-      if(dist>glyphTrack.max_interaction) { continue; }
+    if(glyphTrack.hide_spanning) {
+      if((feature.start < region_start) && (feature.end > region_end)) { 
+        feature.xfs = -1;
+        feature.xfe = -1;
+        feature.xfm = -1;
+        continue;
+      }
     }
     
     var xfs = dwidth*(feature.start-region_start)/(region_end-region_start); 
@@ -4191,6 +4197,12 @@ function gLyphsTrack_render_arc(glyphTrack) {
         }
       }
     }
+  }
+  
+  if(obj_array.length==0) {
+    //remove expressLine2 so it doesn't draw the center-line
+    glyphTrack.strandless = true;
+    glyphTrack.expressLine2 = null;
   }
 }
 
@@ -5943,7 +5955,7 @@ function gLyphsDrawBox(glyphTrack, start, end, strand) {
   if(end > glyphTrack.glyphsGB.display_width) { end = glyphTrack.glyphsGB.display_width; }
   var g2 = document.createElementNS(svgNS,'g');
   var block = document.createElementNS(svgNS,'polygon');
-  block.setAttributeNS(null, 'points', start+' 12.5,' +end+' 12.5,' +end+' 16.5,' +start+' 16.5');
+  block.setAttributeNS(null, 'points', start+' 10,' +end+' 10,' +end+' 17,' +start+' 17');
   if(strand == '')  { g2.setAttributeNS(null, 'style', 'fill: dimgray;'); }
   if(strand == '+') { g2.setAttributeNS(null, 'style', 'fill: green;'); }
   if(strand == '-') { g2.setAttributeNS(null, 'style', 'fill: purple;'); }
@@ -8365,6 +8377,7 @@ function glyphsGenerateTrackDOM(glyphTrack) {
   if(glyphTrack.exppanel_use_rgbcolor) { trackDOM.setAttribute("exppanel_use_rgbcolor", "true"); }
   if(glyphTrack.whole_chrom_scale) { trackDOM.setAttribute("whole_chrom_scale", "true"); }
   if(glyphTrack.xyplot_fill) { trackDOM.setAttribute("xyplot_fill", "true"); }
+  if(glyphTrack.hide_spanning) { trackDOM.setAttribute("hide_spanning", "true"); }
 
   //if(glyphTrack.expscaling) { trackDOM.setAttribute("expscaling", glyphTrack.expscaling); }
   //if(glyphTrack.strandless) { trackDOM.setAttribute("strandless", glyphTrack.strandless); }
@@ -8562,6 +8575,7 @@ function gLyphsCreateTrackFromTrackDOM(trackDOM, glyphsGB) {
   if(trackDOM.getAttribute("revStrandColor")) { glyphTrack.revStrandColor = trackDOM.getAttribute("revStrandColor"); }
   if(trackDOM.getAttribute("colorspace")) { glyphTrack.colorspace = trackDOM.getAttribute("colorspace"); }
   if(trackDOM.getAttribute("whole_chrom_scale") == "true") { glyphTrack.whole_chrom_scale = true; }
+  if(trackDOM.getAttribute("hide_spanning") == "true") { glyphTrack.hide_spanning = true; }
   if(trackDOM.getAttribute("xyplot_fill") == "true") { glyphTrack.xyplot_fill = true; }
   if(trackDOM.getAttribute("hide_zero") == "true") { glyphTrack.hide_zero = true; }
   if(trackDOM.getAttribute("hide_deactive_exps") == "true") { glyphTrack.hide_deactive_exps = true; }
@@ -9813,6 +9827,7 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
   if(param == "overlap_mode") {  newconfig.overlap_mode = value; }
   if(param == "binning") {  newconfig.binning = value; }
   if(param == "whole_chrom_scale") {  newconfig.whole_chrom_scale = value; }
+  if(param == "hide_spanning") {  newconfig.hide_spanning = value; }
   if(param == "xyplot_fill") {  newconfig.xyplot_fill = value; }
   if(param == "experiment_merge") {  newconfig.experiment_merge = value; }
   if(param == "title") {  
@@ -10229,6 +10244,7 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
       if(newconfig.overlap_mode !== undefined) { glyphTrack.overlap_mode = newconfig.overlap_mode; }
       if(newconfig.binning !== undefined) { glyphTrack.binning = newconfig.binning; }
       if(newconfig.whole_chrom_scale !== undefined) { glyphTrack.whole_chrom_scale = newconfig.whole_chrom_scale; }
+      if(newconfig.hide_spanning !== undefined) { glyphTrack.hide_spanning = newconfig.hide_spanning; }
       if(newconfig.xyplot_fill !== undefined) { glyphTrack.xyplot_fill = newconfig.xyplot_fill; }
       if(newconfig.experiment_merge !== undefined) { glyphTrack.experiment_merge = newconfig.experiment_merge; }
       if(newconfig.title !== undefined) { glyphTrack.title = newconfig.title; }
@@ -10344,6 +10360,7 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
       if(newconfig.overlap_mode !== undefined) { glyphTrack.overlap_mode = newconfig.overlap_mode; needReload=1; }
       if(newconfig.binning !== undefined) { glyphTrack.binning = newconfig.binning; needReload=1; }
       if(newconfig.whole_chrom_scale !== undefined) { glyphTrack.whole_chrom_scale = newconfig.whole_chrom_scale; needReload=1; }
+      if(newconfig.hide_spanning !== undefined) { glyphTrack.hide_spanning = newconfig.hide_spanning; needReload=1; }
       if(newconfig.interaction_style !== undefined) { glyphTrack.interaction_style = newconfig.interaction_style; }
       if(newconfig.interaction_grid !== undefined) { glyphTrack.interaction_grid = newconfig.interaction_grid; }
       if(newconfig.interaction_flip !== undefined) { glyphTrack.interaction_flip = newconfig.interaction_flip; }
@@ -11403,6 +11420,7 @@ function createGlyphstyleSelect(glyphTrack) {
   var zeroexpCheck = document.getElementById(trackID + "_glyphselect_hidezeroexps_check");
   var expressOptDiv  = document.getElementById(trackID + "_extendedExpressOptions");
   var expressOpts2  = document.getElementById(trackID + "_expressOptions2");
+  var arcOpts  = document.getElementById(trackID + "_arcOptions");
   var configOpts3   = document.getElementById(trackID + "_configOptions3");
   var dtypeSelect    = document.getElementById(trackID + "_glyphselect_datatype");
   var strandColorDiv = document.getElementById(trackID + "_glyphselect_strand_colors");  
@@ -11477,6 +11495,25 @@ function createGlyphstyleSelect(glyphTrack) {
     var span1 = fillOpt.appendChild(document.createElement('span'));
     span1.innerHTML = "height fill";
 
+    //--------------
+    arcOpts = expressOptDiv.appendChild(document.createElement('span'));
+    arcOpts.id = trackID + "_arcOptions";
+    arcOpts.setAttribute('style', "display:inline-block");
+
+    //----- hide spanning arcs which start before and end after the visible region
+    tspan = arcOpts.appendChild(document.createElement('span'));
+    var skipSpanCheck = tspan.appendChild(document.createElement('input'));
+    skipSpanCheck.style = "margin: 1px 2px 1px 10px;";
+    skipSpanCheck.type = "checkbox";
+    if(glyphTrack.hide_spanning) { skipSpanCheck.setAttribute('checked', "checked"); }
+    skipSpanCheck.setAttribute("onclick", "reconfigTrackParam(\""+ trackID+"\", 'hide_spanning', this.checked);");
+    var span1 = tspan.appendChild(document.createElement('span'));
+    span1.innerHTML = "hide spanning";
+    var msg = "hide arcs which start before and end after the visible region";
+    tspan.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\""+msg+"\",190);");
+    tspan.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
+
+    
     //--------------
     expressOpts2 = expressOptDiv.appendChild(document.createElement('div'));
     expressOpts2.id = trackID + "_expressOptions2";
@@ -11711,6 +11748,7 @@ function createGlyphstyleSelect(glyphTrack) {
   }
 
   //if(glyphStyle == "signal-histogram" || glyphStyle == "xyplot" || glyphStyle == "split-signal") {
+  arcOpts.style.display  = "none";
   if(glyphStyle == "signal-histogram" || glyphStyle == "split-signal") {
     expressOptDiv.style.display = "block";
     //strandlessOpt.style.display  = "inline";
@@ -11738,6 +11776,7 @@ function createGlyphstyleSelect(glyphTrack) {
     //strandlessOpt.style.display  = "inline";
     fillOpt.style.display  = "none";
     expressOpts2.style.display  = "none";
+    arcOpts.style.display  = "inline-block";
     colorModeDiv.style.display  = "block";
     featSortModeSpan.style.display = "none";
   } else if(glyphStyle == "interaction-map") {
@@ -13483,14 +13522,15 @@ function gLyphsTrackSelectFeature(glyphTrack, feature) {
   
   //clear previous selections
   //if(!feature && glyphTrack.selected_feature) { console.log("gLyphsTrackSelectFeature clear selected_feature"); }
-  if(glyphTrack.glyphsGB) { glyphTrack.glyphsGB.selected_feature = null;}
-  glyphTrack.selected_feature = null;
+  //if(glyphTrack.glyphsGB) { glyphTrack.glyphsGB.selected_feature = null;}
+  //glyphTrack.selected_feature = null;
   glyphTrack.search_select_filter = "";
   for(var i=0; i<glyphTrack.feature_array.length; i++) {
     var tf = glyphTrack.feature_array[i];
     if(tf) { tf.search_selected = false; }
   }
   if(!feature) {
+    glyphTrack.selected_feature = null;
     zenbuDisplayFeatureInfo(); //clears panel
     return; 
   }

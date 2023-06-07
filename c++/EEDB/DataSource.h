@@ -1,4 +1,4 @@
-/* $Id: DataSource.h,v 1.25 2018/12/05 00:33:15 severin Exp $ */
+/* $Id: DataSource.h,v 1.27 2023/05/29 04:16:48 severin Exp $ */
 
 /***
 
@@ -82,7 +82,23 @@ class DataSource : public MQDB::MappedQuery {
     string    name()         { return _name; }
     string    display_name();
     string    description();
+    string    assembly_name();
     string    owner_identity();
+    string    platform();
+    string    treatment();
+    string    cell_line();
+    string    cell_type();
+    string    tissue();
+    string    biosample();
+    string    series_name();
+    double    series_point();
+    
+    //set attributes
+    void  platform(string value)     { _platform = value; }
+    void  series_name(string value)  { _series_name = value; }
+    void  series_point(double value) { _series_point = value; }
+
+
     string    demux_key()    { return _demux_key; }
     bool      is_active()    { return _is_active; }
     bool      is_visible()   { return _is_visible; }
@@ -159,6 +175,15 @@ class DataSource : public MQDB::MappedQuery {
 
     string            _xml_cache;
     string            _simple_xml_cache;
+    
+    string    _platform;
+    string    _series_name;
+    double    _series_point;
+    string    _treatment;
+    string    _cell_line;
+    string    _cell_type;
+    string    _tissue;
+    string    _biosample;
 
     map<string, Datatype*>  _datatypes;
     bool                    _load_datatype_from_metadata();

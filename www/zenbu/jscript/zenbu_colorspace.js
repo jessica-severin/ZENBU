@@ -59,7 +59,11 @@ function zenbuColorSpaceInterface(uniqID) {
     zenbuCSI.label = "color:";
     zenbuCSI.colorspace = "fire1";
     zenbuCSI.single_color = "#0000FF";
+    zenbuCSI.category_dtype = undefined;
     zenbuCSI.enableScaling = true;
+    zenbuCSI.showLogScale = true;
+    zenbuCSI.showInvert = true;
+    zenbuCSI.showZeroCenter = true;
     zenbuCSI.min_signal = "auto";
     zenbuCSI.max_signal = "auto";
     zenbuCSI.signalRangeMin = undefined;
@@ -139,6 +143,7 @@ function zenbuColorSpaceInterfaceUpdate(uniqID) {
   var colordepth = "";
   var colorprefix = colorspace;
   if(colorspace == "single-color") { colorcat = "single-color"; }
+  if(colorspace == "category-colors") { colorcat = "category-colors"; }
   if(colorspace.match(/_bp_/)) {
     var colorSpc = zenbuColorSpaces[colorspace];
     if(colorSpc) {
@@ -164,6 +169,7 @@ function zenbuColorSpaceInterfaceUpdate(uniqID) {
   //select.style.fontSize = "10px";
   select.setAttributeNS(null, "onchange", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'colorspace_category', this.value);");
   var ccats = ["single-color", "brewer-sequential", "brewer-diverging", "brewer-qualitative", "zenbu-spectrum"];
+  if(zenbuCSI.category_dtype) { ccats.push("category-colors"); }
   for(var i=0; i<ccats.length; i++) {
     var ccat = ccats[i];
     var option = select.appendChild(document.createElement('option'));
@@ -185,7 +191,54 @@ function zenbuColorSpaceInterfaceUpdate(uniqID) {
     zenbuCSI.color_picker = new jscolor.color(colorInput);
     return;
   }
-  
+
+  if(colorcat == "category-colors") {
+    var catColorDiv = div1.appendChild(document.createElement('div'));
+    if(!zenbuCSI.category_dtype || !zenbuCSI.category_dtype.categories) {
+      catColorDiv.style = "margin-left:10px;";
+      catColorDiv.innerHTML = "please select category to edit category-colors";
+      return;
+    }
+      
+    var categories = zenbuCSI.category_dtype.categories;
+    var category_array = [];
+    for(var ctg in categories) { 
+      var ctg_obj = categories[ctg];
+      category_array.push(ctg_obj);
+    }
+    //sort?
+
+    var table1 = catColorDiv.appendChild(document.createElement('table'));
+    for(var ctg_idx=0; ctg_idx<category_array.length; ctg_idx++){
+      var ctg_obj = category_array[ctg_idx];
+      if(!ctg_obj) { continue; }
+      
+      var tr1 = table1.appendChild(document.createElement('tr'));
+
+      //var rowdiv = catColorDiv.appendChild(document.createElement('div'));
+      var td1 = tr1.appendChild(document.createElement('td'));
+      var span1 = td1.appendChild(document.createElement('span'));
+      span1.style = "margin-left:10px; font-size:10px; font-style:italic;";
+      span1.innerHTML = ctg_obj.ctg;
+      
+      var fixed_color = this.default_node_color;
+      if(this.newconfig && this.newconfig.default_node_color != undefined) { fixed_color = this.newconfig.default_node_color; }
+      if(!ctg_obj.color) { ctg_obj.color = fixed_color; }
+
+      var td2 = tr1.appendChild(document.createElement('td'));
+      td2.style = "padding-left:10px";
+
+      var colorInput = td2.appendChild(document.createElement('input'));
+      colorInput.setAttribute('value', ctg_obj.color);
+      colorInput.setAttribute('size', "7");
+      colorInput.setAttribute("onchange", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id +"\", 'ctg_color', this.value, '"+  ctg_obj.ctg +"');");
+      if(ctg_obj.fixed_color_picker) { ctg_obj.fixed_color_picker.hidePicker(); } //hide old picker
+      ctg_obj.fixed_color_picker = new jscolor.color(colorInput);
+      td2.appendChild(colorInput);
+    }
+    return;
+  }
+
   //second the actual colorspace name
   var cdepths_hash = {};
   var cdepths = [];
@@ -232,33 +285,39 @@ function zenbuColorSpaceInterfaceUpdate(uniqID) {
   var div1b = zenbuCSI.appendChild(document.createElement('div'));
   div1b.style.marginLeft = "5px";
 
-  var span2 = div1b.appendChild(document.createElement('span'));
-  var logCheck = span2.appendChild(document.createElement('input'));
-  logCheck.setAttribute('style', "margin: 0px 1px 0px 5px;");
-  logCheck.setAttribute('type', "checkbox");
-  if(logscale) { logCheck.setAttribute('checked', "checked"); }
-  logCheck.setAttribute("onclick", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'logscale', this.checked);");
-  var span1 = span2.appendChild(document.createElement('span'));
-  span1.innerHTML = "log scale";
+  if(zenbuCSI.showLogScale) {
+    var span2 = div1b.appendChild(document.createElement('span'));
+    var logCheck = span2.appendChild(document.createElement('input'));
+    logCheck.setAttribute('style', "margin: 0px 1px 0px 5px;");
+    logCheck.setAttribute('type', "checkbox");
+    if(logscale) { logCheck.setAttribute('checked', "checked"); }
+    logCheck.setAttribute("onclick", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'logscale', this.checked);");
+    var span1 = span2.appendChild(document.createElement('span'));
+    span1.innerHTML = "log scale";
+  }
   
-  var span2 = div1b.appendChild(document.createElement('span'));
-  var invertCheck = span2.appendChild(document.createElement('input'));
-  invertCheck.setAttribute('style', "margin: 0px 1px 0px 7px;");
-  invertCheck.setAttribute('type', "checkbox");
-  if(invert) { invertCheck.setAttribute('checked', "checked"); }
-  invertCheck.setAttribute("onclick", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'invert', this.checked);");
-  var span1 = span2.appendChild(document.createElement('span'));
-  span1.innerHTML = "invert";
-
-  var span3 = div1b.appendChild(document.createElement('span'));
-  var invertCheck = span3.appendChild(document.createElement('input'));
-  invertCheck.setAttribute('style', "margin: 0px 1px 0px 7px;");
-  invertCheck.setAttribute('type', "checkbox");
-  if(zero_center) { invertCheck.setAttribute('checked', "checked"); }
-  invertCheck.setAttribute("onclick", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'zero_center', this.checked);");
-  var span1 = span3.appendChild(document.createElement('span'));
-  span1.innerHTML = "zero-center";
-
+  if(zenbuCSI.showInvert) {
+    var span2 = div1b.appendChild(document.createElement('span'));
+    var invertCheck = span2.appendChild(document.createElement('input'));
+    invertCheck.setAttribute('style', "margin: 0px 1px 0px 7px;");
+    invertCheck.setAttribute('type', "checkbox");
+    if(invert) { invertCheck.setAttribute('checked', "checked"); }
+    invertCheck.setAttribute("onclick", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'invert', this.checked);");
+    var span1 = span2.appendChild(document.createElement('span'));
+    span1.innerHTML = "invert";
+  }
+  
+  if(zenbuCSI.showZeroCenter) {
+    var span3 = div1b.appendChild(document.createElement('span'));
+    var invertCheck = span3.appendChild(document.createElement('input'));
+    invertCheck.setAttribute('style', "margin: 0px 1px 0px 7px;");
+    invertCheck.setAttribute('type', "checkbox");
+    if(zero_center) { invertCheck.setAttribute('checked', "checked"); }
+    invertCheck.setAttribute("onclick", "zenbuColorSpaceInterfaceReconfigParam(\""+ zenbuCSI.id+"\", 'zero_center', this.checked);");
+    var span1 = span3.appendChild(document.createElement('span'));
+    span1.innerHTML = "zero-center";
+  }
+  
   var single_color = zenbuCSI.single_color;
   if(zenbuCSI.newconfig && zenbuCSI.newconfig.single_color != undefined) { single_color = zenbuCSI.newconfig.single_color; }
   zenbuColorSpaceSetUserColor(single_color);
@@ -367,6 +426,15 @@ function zenbuColorSpaceInterfaceReconfigParam(uniqID, param, value, altvalue) {
     if(value) { newconfig.zero_center=1; }
     else { newconfig.zero_center = 0; }
   }
+  
+  if(param == "ctg_color") { //set category value specific color
+    if(!value) { value = "#0000A0"; }
+    if(value.charAt(0) != "#") { value = "#"+value; }
+    if(zenbuCSI.category_dtype && zenbuCSI.category_dtype.categories) {
+      zenbuCSI.category_dtype.categories[altvalue].color = value;
+      newconfig.category_colors_changed = true;
+    }
+  }
 
   if(param == "colorspace") {  
     newconfig.colorspace = value;
@@ -424,6 +492,9 @@ function zenbuColorSpaceInterfaceReconfigParam(uniqID, param, value, altvalue) {
     if(value == "zenbu-spectrum") { 
       newconfig.colorspace = "fire1";
     }
+    if(value == "category-colors") { 
+      newconfig.colorspace = "category-colors";
+    }
     var colorspec = zenbuColorSpaces[newconfig.colorspace];
     if(colorspec) { newconfig.colorspace_discrete = colorspec.discrete; }
   }
@@ -472,6 +543,7 @@ function zenbuInitColorSpaces() {
     "RdYlGn":  {3: ['rgb(252,141,89)', 'rgb(255,255,191)', 'rgb(145,207,96)'], 4: ['rgb(215,25,28)', 'rgb(253,174,97)', 'rgb(166,217,106)', 'rgb(26,150,65)'], 5: ['rgb(215,25,28)', 'rgb(253,174,97)', 'rgb(255,255,191)', 'rgb(166,217,106)', 'rgb(26,150,65)'], 6: ['rgb(215,48,39)', 'rgb(252,141,89)', 'rgb(254,224,139)', 'rgb(217,239,139)', 'rgb(145,207,96)', 'rgb(26,152,80)'], 7: ['rgb(215,48,39)', 'rgb(252,141,89)', 'rgb(254,224,139)', 'rgb(255,255,191)', 'rgb(217,239,139)', 'rgb(145,207,96)', 'rgb(26,152,80)'], 8: ['rgb(215,48,39)', 'rgb(244,109,67)', 'rgb(253,174,97)', 'rgb(254,224,139)', 'rgb(217,239,139)', 'rgb(166,217,106)', 'rgb(102,189,99)', 'rgb(26,152,80)'], 9: ['rgb(215,48,39)', 'rgb(244,109,67)', 'rgb(253,174,97)', 'rgb(254,224,139)', 'rgb(255,255,191)', 'rgb(217,239,139)', 'rgb(166,217,106)', 'rgb(102,189,99)', 'rgb(26,152,80)'], 10: ['rgb(165,0,38)', 'rgb(215,48,39)', 'rgb(244,109,67)', 'rgb(253,174,97)', 'rgb(254,224,139)', 'rgb(217,239,139)', 'rgb(166,217,106)', 'rgb(102,189,99)', 'rgb(26,152,80)', 'rgb(0,104,55)'], 11: ['rgb(165,0,38)', 'rgb(215,48,39)', 'rgb(244,109,67)', 'rgb(253,174,97)', 'rgb(254,224,139)', 'rgb(255,255,191)', 'rgb(217,239,139)', 'rgb(166,217,106)', 'rgb(102,189,99)', 'rgb(26,152,80)', 'rgb(0,104,55)'], 'type': 'div'} ,
     "RdBu":  {3: ['rgb(239,138,98)', 'rgb(247,247,247)', 'rgb(103,169,207)'], 4: ['rgb(202,0,32)', 'rgb(244,165,130)', 'rgb(146,197,222)', 'rgb(5,113,176)'], 5: ['rgb(202,0,32)', 'rgb(244,165,130)', 'rgb(247,247,247)', 'rgb(146,197,222)', 'rgb(5,113,176)'], 6: ['rgb(178,24,43)', 'rgb(239,138,98)', 'rgb(253,219,199)', 'rgb(209,229,240)', 'rgb(103,169,207)', 'rgb(33,102,172)'], 7: ['rgb(178,24,43)', 'rgb(239,138,98)', 'rgb(253,219,199)', 'rgb(247,247,247)', 'rgb(209,229,240)', 'rgb(103,169,207)', 'rgb(33,102,172)'], 8: ['rgb(178,24,43)', 'rgb(214,96,77)', 'rgb(244,165,130)', 'rgb(253,219,199)', 'rgb(209,229,240)', 'rgb(146,197,222)', 'rgb(67,147,195)', 'rgb(33,102,172)'], 9: ['rgb(178,24,43)', 'rgb(214,96,77)', 'rgb(244,165,130)', 'rgb(253,219,199)', 'rgb(247,247,247)', 'rgb(209,229,240)', 'rgb(146,197,222)', 'rgb(67,147,195)', 'rgb(33,102,172)'], 10: ['rgb(103,0,31)', 'rgb(178,24,43)', 'rgb(214,96,77)', 'rgb(244,165,130)', 'rgb(253,219,199)', 'rgb(209,229,240)', 'rgb(146,197,222)', 'rgb(67,147,195)', 'rgb(33,102,172)', 'rgb(5,48,97)'], 11: ['rgb(103,0,31)', 'rgb(178,24,43)', 'rgb(214,96,77)', 'rgb(244,165,130)', 'rgb(253,219,199)', 'rgb(247,247,247)', 'rgb(209,229,240)', 'rgb(146,197,222)', 'rgb(67,147,195)', 'rgb(33,102,172)', 'rgb(5,48,97)'], 'type': 'div'} ,
     "PiYG":  {3: ['rgb(233,163,201)', 'rgb(247,247,247)', 'rgb(161,215,106)'], 4: ['rgb(208,28,139)', 'rgb(241,182,218)', 'rgb(184,225,134)', 'rgb(77,172,38)'], 5: ['rgb(208,28,139)', 'rgb(241,182,218)', 'rgb(247,247,247)', 'rgb(184,225,134)', 'rgb(77,172,38)'], 6: ['rgb(197,27,125)', 'rgb(233,163,201)', 'rgb(253,224,239)', 'rgb(230,245,208)', 'rgb(161,215,106)', 'rgb(77,146,33)'], 7: ['rgb(197,27,125)', 'rgb(233,163,201)', 'rgb(253,224,239)', 'rgb(247,247,247)', 'rgb(230,245,208)', 'rgb(161,215,106)', 'rgb(77,146,33)'], 8: ['rgb(197,27,125)', 'rgb(222,119,174)', 'rgb(241,182,218)', 'rgb(253,224,239)', 'rgb(230,245,208)', 'rgb(184,225,134)', 'rgb(127,188,65)', 'rgb(77,146,33)'], 9: ['rgb(197,27,125)', 'rgb(222,119,174)', 'rgb(241,182,218)', 'rgb(253,224,239)', 'rgb(247,247,247)', 'rgb(230,245,208)', 'rgb(184,225,134)', 'rgb(127,188,65)', 'rgb(77,146,33)'], 10: ['rgb(142,1,82)', 'rgb(197,27,125)', 'rgb(222,119,174)', 'rgb(241,182,218)', 'rgb(253,224,239)', 'rgb(230,245,208)', 'rgb(184,225,134)', 'rgb(127,188,65)', 'rgb(77,146,33)', 'rgb(39,100,25)'], 11: ['rgb(142,1,82)', 'rgb(197,27,125)', 'rgb(222,119,174)', 'rgb(241,182,218)', 'rgb(253,224,239)', 'rgb(247,247,247)', 'rgb(230,245,208)', 'rgb(184,225,134)', 'rgb(127,188,65)', 'rgb(77,146,33)', 'rgb(39,100,25)'], 'type': 'div'} ,
+    "PiBu":  {3: ['rgb(233,163,201)', 'rgb(247,247,247)', 'rgb(145,191,219)'], 4: ['rgb(208,28,139)', 'rgb(241,182,218)', 'rgb(171,217,233)', 'rgb(44,123,182)'], 5: ['rgb(208,28,139)', 'rgb(241,182,218)', 'rgb(247,247,247)', 'rgb(171,217,233)', 'rgb(44,123,182)'], 6: ['rgb(197,27,125)', 'rgb(233,163,201)', 'rgb(253,224,239)', 'rgb(224,243,248)', 'rgb(145,191,219)', 'rgb(69,117,180)'], 7: ['rgb(197,27,125)', 'rgb(233,163,201)', 'rgb(253,224,239)', 'rgb(247,247,247)', 'rgb(224,243,248)', 'rgb(145,191,219)', 'rgb(69,117,180)'], 8: ['rgb(197,27,125)', 'rgb(222,119,174)', 'rgb(241,182,218)', 'rgb(253,224,239)', 'rgb(224,243,248)', 'rgb(171,217,233)', 'rgb(116,173,209)', 'rgb(69,117,180)'], 9: ['rgb(197,27,125)', 'rgb(222,119,174)', 'rgb(241,182,218)', 'rgb(253,224,239)', 'rgb(247,247,247)', 'rgb(224,243,248)', 'rgb(171,217,233)', 'rgb(116,173,209)', 'rgb(69,117,180)'], 10: ['rgb(142,1,82)', 'rgb(197,27,125)', 'rgb(222,119,174)', 'rgb(241,182,218)', 'rgb(253,224,239)', 'rgb(224,243,248)', 'rgb(171,217,233)', 'rgb(116,173,209)', 'rgb(69,117,180)', 'rgb(49,54,149)'], 11: ['rgb(142,1,82)', 'rgb(197,27,125)', 'rgb(222,119,174)', 'rgb(241,182,218)', 'rgb(253,224,239)', 'rgb(247,247,247)', 'rgb(224,243,248)', 'rgb(171,217,233)', 'rgb(116,173,209)', 'rgb(69,117,180)', 'rgb(49,54,149)'], 'type': 'div'} ,
     "PRGn":  {3: ['rgb(175,141,195)', 'rgb(247,247,247)', 'rgb(127,191,123)'], 4: ['rgb(123,50,148)', 'rgb(194,165,207)', 'rgb(166,219,160)', 'rgb(0,136,55)'], 5: ['rgb(123,50,148)', 'rgb(194,165,207)', 'rgb(247,247,247)', 'rgb(166,219,160)', 'rgb(0,136,55)'], 6: ['rgb(118,42,131)', 'rgb(175,141,195)', 'rgb(231,212,232)', 'rgb(217,240,211)', 'rgb(127,191,123)', 'rgb(27,120,55)'], 7: ['rgb(118,42,131)', 'rgb(175,141,195)', 'rgb(231,212,232)', 'rgb(247,247,247)', 'rgb(217,240,211)', 'rgb(127,191,123)', 'rgb(27,120,55)'], 8: ['rgb(118,42,131)', 'rgb(153,112,171)', 'rgb(194,165,207)', 'rgb(231,212,232)', 'rgb(217,240,211)', 'rgb(166,219,160)', 'rgb(90,174,97)', 'rgb(27,120,55)'], 9: ['rgb(118,42,131)', 'rgb(153,112,171)', 'rgb(194,165,207)', 'rgb(231,212,232)', 'rgb(247,247,247)', 'rgb(217,240,211)', 'rgb(166,219,160)', 'rgb(90,174,97)', 'rgb(27,120,55)'], 10: ['rgb(64,0,75)', 'rgb(118,42,131)', 'rgb(153,112,171)', 'rgb(194,165,207)', 'rgb(231,212,232)', 'rgb(217,240,211)', 'rgb(166,219,160)', 'rgb(90,174,97)', 'rgb(27,120,55)', 'rgb(0,68,27)'], 11: ['rgb(64,0,75)', 'rgb(118,42,131)', 'rgb(153,112,171)', 'rgb(194,165,207)', 'rgb(231,212,232)', 'rgb(247,247,247)', 'rgb(217,240,211)', 'rgb(166,219,160)', 'rgb(90,174,97)', 'rgb(27,120,55)', 'rgb(0,68,27)'], 'type': 'div'} ,
     "RdYlBu":  {3: ['rgb(252,141,89)', 'rgb(255,255,191)', 'rgb(145,191,219)'], 4: ['rgb(215,25,28)', 'rgb(253,174,97)', 'rgb(171,217,233)', 'rgb(44,123,182)'], 5: ['rgb(215,25,28)', 'rgb(253,174,97)', 'rgb(255,255,191)', 'rgb(171,217,233)', 'rgb(44,123,182)'], 6: ['rgb(215,48,39)', 'rgb(252,141,89)', 'rgb(254,224,144)', 'rgb(224,243,248)', 'rgb(145,191,219)', 'rgb(69,117,180)'], 7: ['rgb(215,48,39)', 'rgb(252,141,89)', 'rgb(254,224,144)', 'rgb(255,255,191)', 'rgb(224,243,248)', 'rgb(145,191,219)', 'rgb(69,117,180)'], 8: ['rgb(215,48,39)', 'rgb(244,109,67)', 'rgb(253,174,97)', 'rgb(254,224,144)', 'rgb(224,243,248)', 'rgb(171,217,233)', 'rgb(116,173,209)', 'rgb(69,117,180)'], 9: ['rgb(215,48,39)', 'rgb(244,109,67)', 'rgb(253,174,97)', 'rgb(254,224,144)', 'rgb(255,255,191)', 'rgb(224,243,248)', 'rgb(171,217,233)', 'rgb(116,173,209)', 'rgb(69,117,180)'], 10: ['rgb(165,0,38)', 'rgb(215,48,39)', 'rgb(244,109,67)', 'rgb(253,174,97)', 'rgb(254,224,144)', 'rgb(224,243,248)', 'rgb(171,217,233)', 'rgb(116,173,209)', 'rgb(69,117,180)', 'rgb(49,54,149)'], 11: ['rgb(165,0,38)', 'rgb(215,48,39)', 'rgb(244,109,67)', 'rgb(253,174,97)', 'rgb(254,224,144)', 'rgb(255,255,191)', 'rgb(224,243,248)', 'rgb(171,217,233)', 'rgb(116,173,209)', 'rgb(69,117,180)', 'rgb(49,54,149)'], 'type': 'div'} ,
     "BrBG":  {3: ['rgb(216,179,101)', 'rgb(245,245,245)', 'rgb(90,180,172)'], 4: ['rgb(166,97,26)', 'rgb(223,194,125)', 'rgb(128,205,193)', 'rgb(1,133,113)'], 5: ['rgb(166,97,26)', 'rgb(223,194,125)', 'rgb(245,245,245)', 'rgb(128,205,193)', 'rgb(1,133,113)'], 6: ['rgb(140,81,10)', 'rgb(216,179,101)', 'rgb(246,232,195)', 'rgb(199,234,229)', 'rgb(90,180,172)', 'rgb(1,102,94)'], 7: ['rgb(140,81,10)', 'rgb(216,179,101)', 'rgb(246,232,195)', 'rgb(245,245,245)', 'rgb(199,234,229)', 'rgb(90,180,172)', 'rgb(1,102,94)'], 8: ['rgb(140,81,10)', 'rgb(191,129,45)', 'rgb(223,194,125)', 'rgb(246,232,195)', 'rgb(199,234,229)', 'rgb(128,205,193)', 'rgb(53,151,143)', 'rgb(1,102,94)'], 9: ['rgb(140,81,10)', 'rgb(191,129,45)', 'rgb(223,194,125)', 'rgb(246,232,195)', 'rgb(245,245,245)', 'rgb(199,234,229)', 'rgb(128,205,193)', 'rgb(53,151,143)', 'rgb(1,102,94)'], 10: ['rgb(84,48,5)', 'rgb(140,81,10)', 'rgb(191,129,45)', 'rgb(223,194,125)', 'rgb(246,232,195)', 'rgb(199,234,229)', 'rgb(128,205,193)', 'rgb(53,151,143)', 'rgb(1,102,94)', 'rgb(0,60,48)'], 11: ['rgb(84,48,5)', 'rgb(140,81,10)', 'rgb(191,129,45)', 'rgb(223,194,125)', 'rgb(246,232,195)', 'rgb(245,245,245)', 'rgb(199,234,229)', 'rgb(128,205,193)', 'rgb(53,151,143)', 'rgb(1,102,94)', 'rgb(0,60,48)'], 'type': 'div'} ,
@@ -545,6 +617,17 @@ function zenbuInitColorSpaces() {
   tcolor.log = false;
   tcolor.colors = new Array();
   tcolor.colors.push(new RGBColour(0, 0, 255)); //#0000FF
+  zenbuColorSpaces[tcolor.name] = tcolor;
+
+  // category-colors
+  var tcolor = new Object();
+  tcolor.name = "category-colors";
+  tcolor.discrete = true;
+  tcolor.colorcat = "category-colors";
+  tcolor.bpdepth = "";
+  tcolor.log = false;
+  tcolor.colors = new Array();
+  tcolor.colors.push(new RGBColour(240, 240, 240)); //gray
   zenbuColorSpaces[tcolor.name] = tcolor;
 
   // sense-color
@@ -811,7 +894,7 @@ function zenbuInitColorSpaces() {
 }
 
 
-function zenbuScoreColorSpace(colorname, score, discrete, logscale, invert, zero_center) {
+function zenbuScoreColorSpace(colorname, score, discrete, logscale, invert, zero_center, alpha) {
   //score is from 0.0 to 1.0
   // function returns an RGBColour object
   if(zero_center && (score < -1.0)) { score = -1.0; }
@@ -819,30 +902,31 @@ function zenbuScoreColorSpace(colorname, score, discrete, logscale, invert, zero
   if(score > 1.0) { score = 1.0; }
   if(!zero_center && invert) { score = 1.0 - score; }
   if(zero_center && invert) { score = 0.0 - score; }
-  if(!colorname) { return new RGBColour(0, 0, 0); }
+  if(!alpha || isNaN(alpha)) { alpha = 1.0; }
+  if(!colorname) { return new RGBColour(0, 0, 0, alpha); }
 
   var colorSpc = zenbuColorSpaces[colorname];
   if(!colorSpc && (colorname.charAt(0) == "#")) {
     //special code for single-color colorname
-    var color = new RGBColour(0, 0, 0); //black in case there is parsing error
+    var color = new RGBColour(0, 0, 0, alpha); //black in case there is parsing error
     var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})(.*)$/i.exec(colorname);
     if(result) {
       var r = parseInt(result[1], 16);
       var g = parseInt(result[2], 16);
       var b = parseInt(result[3], 16);
-      color = new RGBColour(r,g,b);
+      color = new RGBColour(r,g,b, alpha);
       if(result[4] != " spectrum") { return color; }
       else {
         colorSpc = zenbuColorSpaces["user-color"];
         colorSpc.colors = new Array();
-        colorSpc.colors.push(new RGBColour(240, 240, 240)); //gray
+        colorSpc.colors.push(new RGBColour(240, 240, 240, alpha)); //gray
         colorSpc.colors.push(color);        
       }
     }    
     //console.log("zenbuScoreColorSpace single-color["+colorname+"] -> ["+(color.getCSSHexadecimalRGB())+"]");
     //return color;
   }
-  if(!colorSpc) { return new RGBColour(0, 0, 0); } //return black if name error
+  if(!colorSpc) { return new RGBColour(0, 0, 0, alpha); } //return black if name error
   
   //document.getElementById("message").innerHTML= "colorspace: " + colorSpc.colors.length;
   if(colorSpc.log) { logscale = true; }
@@ -857,7 +941,7 @@ function zenbuScoreColorSpace(colorname, score, discrete, logscale, invert, zero
     var idx = Math.floor(ci);
     if(idx == colorSpc.colors.length) { idx = colorSpc.colors.length - 1; }
     var color1 = colorSpc.colors[idx];
-    if(!color1) { return new RGBColour(0, 0, 0); }
+    if(!color1) { return new RGBColour(0, 0, 0, alpha); }
     return color1
   }
   
@@ -871,7 +955,7 @@ function zenbuScoreColorSpace(colorname, score, discrete, logscale, invert, zero
   var color1 = colorSpc.colors[idx];
   var color2 = colorSpc.colors[idx+1];
   if(!color1) { 
-    color1 = new RGBColour(0, 0, 0); 
+    color1 = new RGBColour(0, 0, 0, alpha); 
     color1.zcr = score;
     return color1;
   }
@@ -889,7 +973,7 @@ function zenbuScoreColorSpace(colorname, score, discrete, logscale, invert, zero
   var g  = c1.g + cr * (c2.g - c1.g);
   var b  = c1.b + cr * (c2.b - c1.b);
   
-  var color = new RGBColour(r, g, b);
+  var color = new RGBColour(r, g, b, alpha);
   color.zcr = score;
   return color;
 }

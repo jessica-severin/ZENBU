@@ -93,6 +93,7 @@ function ZenbuHeatmapElement(elementID) {
 
   //internal methods
   this.drawHeatmap        = zenbuHeatmapElement_drawHeatmap;
+  this.calcHierarchicalClustering = zenbuHeatmapElement_calcHierarchicalClustering;
 
   return this;
 }
@@ -456,10 +457,91 @@ function zenbuHeatmapElement_postprocess() {
     cell_obj.signal = cell_value;
   }
   console.log(this.elementID+" heatmap_matrix min:"+this.matrix_signal_min+":  max:"+this.matrix_signal_max);
+
+  if(this.row_sort_method=="hierarchical clustering") {
+    this.calcHierarchicalClustering("row");
+  }
+  if(this.col_sort_method=="hierarchical clustering") {
+    this.calcHierarchicalClustering("col");
+  }
+
   
   var endtime = new Date();
   var runtime = (endtime.getTime() - starttime.getTime());
   console.log("zenbuHeatmapElement_postprocess "+this.elementID+" "+(runtime)+"msec");
+}
+
+
+function zenbuHeatmapElement_calcHierarchicalClustering(mode) {
+  //console.log("calcHierarchicalClustering mode:%s\n", mode);
+  if(!this.heatmap_matrix) { return; }
+  if(!this.col_ctg_array || !this.row_ctg_array) { return; }
+  if(this.row_ctg_array.length==0 || this.col_ctg_array.length==0) { return; }
+
+  //using https://github.com/greenelab/hclust toolkit to perform the hierarchical clustering
+
+  var array1 = this.row_ctg_array;
+  var array2 = this.col_ctg_array;
+  if(mode=="col") {
+    array1 = this.col_ctg_array;
+    array2 = this.row_ctg_array;
+  }
+
+  //generate datastructure for hclust
+  var hclust_dataset = [];
+  for(var idx1=0; idx1<array1.length; idx1++) {
+    var row_ctg_obj = null;
+    var col_ctg_obj = null;
+
+    var ctg_obj1 = array1[idx1];
+    if(mode=="row") { row_ctg_obj = ctg_obj1; } else { col_ctg_obj = ctg_obj1; }
+    
+    clust_row = {
+      sample: ctg_obj1.ctg,
+      ctg_obj: ctg_obj1,
+      values: []
+    }
+    hclust_dataset.push(clust_row);
+
+    for(var idx2=0; idx2<array2.length; idx2++) {
+      var ctg_obj2 = array2[idx2];
+      if(mode=="row") { col_ctg_obj = ctg_obj2; } else { row_ctg_obj = ctg_obj2; }
+
+      var cell_key = row_ctg_obj.ctg +"_"+ col_ctg_obj.ctg;
+      var cell_obj = this.heatmap_matrix[cell_key];
+      
+      var signal = 0.0;
+      if(cell_obj != undefined && !isNaN(cell_obj.signal)) { 
+        signal = cell_obj.signal;
+      }
+      clust_row.values.push(signal);
+    }
+  }
+  
+  //perform clustering with hclust
+  const cluster_results = clusterData({
+      data: hclust_dataset,
+      key: 'values',
+      onProgress: null
+    });
+
+  //transform order to be in terms of sample name/id for debugging
+  //const orderB = cluster_results.order
+  //  .map((index) => hclust_dataset[index])
+  //  .map((node) => node.sample);
+  //console.log('hierarchical order of samples:', orderB);
+
+  //transform returning order as row_ctg_array or col_ctg_array depending on mode
+  if(mode=="row") {
+    this.row_ctg_array = cluster_results.order
+    .map((index) => hclust_dataset[index])
+    .map((node) => node.ctg_obj);
+  }
+  if(mode=="col") {
+    this.col_ctg_array = cluster_results.order
+    .map((index) => hclust_dataset[index])
+    .map((node) => node.ctg_obj);
+  }  
 }
 
 
@@ -680,7 +762,7 @@ function zenbuHeatmapElement_configSubpanel() {
   select.className = "dropdown";
   select.style.fontSize = "10px";
   select.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'col_sort_method', this.value);");
-  var methods = ["alphabetical", "ascending", "decending"];
+  var methods = ["alphabetical", "hierarchical clustering", "ascending", "decending"];
   for(var i=0; i<methods.length; i++) {
     var val1 = methods[i];
     var option = select.appendChild(document.createElement('option'));
@@ -688,8 +770,8 @@ function zenbuHeatmapElement_configSubpanel() {
     if(val1 == col_sort_method) { option.setAttribute("selected", "selected"); }
     option.innerHTML = val1;
   }
-
-  if(col_sort_method!="alphabetical" && datasourceElement.dtype_columns) {
+  
+  if(!(col_sort_method=="alphabetical" || col_sort_method=="hierarchical clustering") && datasourceElement.dtype_columns) {
     var col_rank_datatype = this.col_rank_datatype;
     if(this.newconfig && this.newconfig.col_rank_datatype != undefined) { col_rank_datatype = this.newconfig.col_rank_datatype; }
     var col_rank_merge_method = this.col_rank_merge_method;
@@ -748,7 +830,7 @@ function zenbuHeatmapElement_configSubpanel() {
   select.className = "dropdown";
   select.style.fontSize = "10px";
   select.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'row_sort_method', this.value);");
-  var methods = ["alphabetical", "ascending", "decending"];
+  var methods = ["alphabetical", "hierarchical clustering", "ascending", "decending"];
   for(var i=0; i<methods.length; i++) {
     var val1 = methods[i];
     var option = select.appendChild(document.createElement('option'));
@@ -757,7 +839,7 @@ function zenbuHeatmapElement_configSubpanel() {
     option.innerHTML = val1;
   }
 
-  if(row_sort_method!="alphabetical" && datasourceElement.dtype_columns) {
+  if(!(row_sort_method=="alphabetical" || row_sort_method=="hierarchical clustering") && datasourceElement.dtype_columns) {
     var row_rank_datatype = this.row_rank_datatype;
     if(this.newconfig && this.newconfig.row_rank_datatype != undefined) { row_rank_datatype = this.newconfig.row_rank_datatype; }
     var row_rank_merge_method = this.row_rank_merge_method;

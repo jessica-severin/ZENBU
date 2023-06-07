@@ -1,4 +1,4 @@
-/* $Id: Experiment.h,v 1.31 2018/12/05 00:35:20 severin Exp $ */
+/* $Id: Experiment.h,v 1.32 2023/05/29 04:16:48 severin Exp $ */
 
 /***
 
@@ -80,14 +80,14 @@ class Experiment : public EEDB::DataSource {
     bool operator==(EEDB::Experiment* b);
 
     //set atribute
-    void      platform(string value);
-    void      series_name(string value);
-    void      series_point(double value);
+    //void      platform(string value);
+    //void      series_name(string value);
+    //void      series_point(double value);
 
     //get atribute
-    string    platform();
-    string    series_name();
-    double    series_point();
+    //string    platform();
+    //string    series_name();
+    //double    series_point();
 
     map<string, Datatype*> expression_datatypes();
 
@@ -157,9 +157,9 @@ class Experiment : public EEDB::DataSource {
     static bool sort_func (EEDB::Experiment *a, EEDB::Experiment *b);  //to be used by STL sort() calls
 
   protected:
-    string             _platform;
-    string             _series_name;
-    double             _series_point;
+//     string             _platform;
+//     string             _series_name;
+//     double             _series_point;
 
     bool               _load_datatype_from_db();
 

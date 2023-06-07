@@ -154,8 +154,10 @@ function zenbuTableElement_elementEvent(mode, value, value2) {
   if(mode == "column_sort") {
     if(this.sort_col == value) {
       this.sort_reverse = !this.sort_reverse;
+    } else {
+      this.sort_col = value;
+      this.sort_reverse = false;
     }
-    this.sort_col = value;
     reportsPostprocessElement(this.elementID);
   }
 }
@@ -429,8 +431,13 @@ function zenbuTableElement_draw() {
     if(this.grid_lines) { th.style.borderLeft = "1px solid gray"; }
     //th.setAttribute("onmousedown", "reportElementTableEvent(\""+this.elementID+"\", 'sort', '"+dtype_col.datatype+"');");
     //th.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'column_sort', '"+dtype_col.datatype+"');");
-    th.setAttribute("onmousedown", "if(event.button==2 || event.altKey) { reportElementColumnsInterface(\""+this.elementID+ "\"); } else { reportElementEvent(\""+ this.elementID +"\", 'column_sort', '"+dtype_col.datatype+"'); }");
+    th.setAttribute("onmousedown", "if(event.ctrl || event.altKey) { reportElementColumnsInterface(\""+this.elementID+ "\"); } else { reportElementEvent(\""+ this.elementID +"\", 'column_sort', '"+dtype_col.datatype+"'); }");
     th.innerHTML = dtype_col.title;
+    if(this.sort_col == dtype_col.datatype) {
+      //if(this.sort_reverse) { th.innerHTML += "&#11167;"; } else { th.innerHTML += "&#11165;"; } //dart arrow
+      if(this.sort_reverse) { th.innerHTML += "&#9660;"; } else { th.innerHTML += "&#9650;"; } //triangle
+    }
+
     //th.setAttribute("ondblclick", "reportElementColumnsInterface((\""+this.elementID+"\");");
     //th.setAttribute("ondblclick", "reportsGeneralWarn('yep I can capture double-click, I will use this for column rename'); return false");
     //TODO: need to use the column_sort event and check for right-click or dblclick before sorting

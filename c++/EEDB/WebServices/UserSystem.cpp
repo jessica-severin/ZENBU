@@ -1,4 +1,4 @@
-/* $Id: UserSystem.cpp,v 1.125 2022/04/08 02:03:18 severin Exp $ */
+/* $Id: UserSystem.cpp,v 1.126 2023/02/17 07:21:27 severin Exp $ */
 
 /***
 
@@ -562,6 +562,10 @@ void EEDB::WebServices::UserSystem::password_login() {
   printf("\r\n");
   printf("<\?xml version=\"1.0\" encoding=\"UTF-8\"\?>\n");
   printf("<user>\n");
+
+  if(!_user_profile) {
+    printf("<login_failure>login failure: invalid email or password</login_failure>\n");
+  }
   
   if(!_session_data["id"].empty()) {
     printf("<session>");

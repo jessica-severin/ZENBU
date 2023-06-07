@@ -1711,8 +1711,8 @@ function eedbParseDataSourceXML(sourceXML, source) {
   source.id           = sourceXML.getAttribute("id");
   source.name         = sourceXML.getAttribute("name");
   source.category     = sourceXML.getAttribute("category");
-  source.platform     = sourceXML.getAttribute("platform");
-  source.series_point = sourceXML.getAttribute("series_point");
+  source.platform     = "";
+  source.series_point = "";
   source.feature_count = 0;
   source.edge_count    = 0;
   source.platform     = '';
@@ -1722,6 +1722,10 @@ function eedbParseDataSourceXML(sourceXML, source) {
   source.ev_terms     = '';
   source.biosample    = '';
   source.treatment    = "";
+
+  if(sourceXML.getAttribute("platform")) { source.platform = sourceXML.getAttribute("platform"); }
+  if(sourceXML.getAttribute("series_name")) { source.series_name = sourceXML.getAttribute("series_name"); }
+  if(sourceXML.getAttribute("series_point")) { source.series_point = sourceXML.getAttribute("series_point"); }
 
   if(sourceXML.getAttribute("import_date")) {
     source.import_date  = sourceXML.getAttribute("import_date");
@@ -1741,10 +1745,8 @@ function eedbParseDataSourceXML(sourceXML, source) {
   if(sourceXML.getAttribute("edge_count")) {
     source.edge_count  = parseInt(sourceXML.getAttribute("edge_count"));
   }
-  source.platform     = '';
   source.assembly     = '';
   source.description  = "";
-  source.series_name  = "";
   source.ev_terms     = '';
   source.biosample    = '';
   source.treatment    = "";
@@ -1839,6 +1841,7 @@ function eedbParseExperimentData(xmlExperiment, experiment) {
   if(xmlExperiment.getAttribute("id")) { experiment.id = xmlExperiment.getAttribute("id"); }
   if(xmlExperiment.getAttribute("name")) { experiment.name = xmlExperiment.getAttribute("name"); }
   if(xmlExperiment.getAttribute("platform")) { experiment.platform = xmlExperiment.getAttribute("platform"); }
+  if(xmlExperiment.getAttribute("series_name")) { experiment.series_name = xmlExperiment.getAttribute("series_name"); }
   if(xmlExperiment.getAttribute("series_point")) { experiment.series_point = xmlExperiment.getAttribute("series_point"); }
   if(xmlExperiment.getAttribute("demux_key")) { experiment.demux_key = xmlExperiment.getAttribute("demux_key"); }
 
@@ -2004,11 +2007,13 @@ function eedbParseMetadata(eedbXML, eedbObject) {
       if(tag == "osc:LSArchive_sample_tissue_type") { eedbObject.tissue += value+" "; }
       if(tag == "eedb:cell_line") { eedbObject.cell_line = value; }
       if(tag == "cell_line") { eedbObject.cell_line = value; }
+      if(tag == "osc:LSArchive_sample_cell_line") { eedbObject.cell_line = value; }
       if(tag == "cell_type") { eedbObject.cell_type = value; }
       if(tag == "osc:LSArchive_sample_cell_type") { eedbObject.cell_type = value; }
       if(tag == "species_name") { eedbObject.species_name = value; }
       if(tag == "osc:LSArchive_sample_organism") { eedbObject.species_name = value; }
       if(tag == "series_name") { eedbObject.series_name = value; }
+      if(tag == "eedb:platform" && !eedbObject.platform) { eedbObject.platform = value; }
       if(tag == "eedb:series_name") { eedbObject.series_name = value; }
       if(tag == "eedb:series_point") { eedbObject.series_point = value; }
       if(tag == "experimental_condition") { eedbObject.treatment += value+" "; }
@@ -2119,6 +2124,7 @@ function check_by_filter_logic(eedbObject, filter) {
   
   // '(' blocking
   if(filter.charAt(0) == '(') {
+    //console.log(" filter[%s] start with (\n", filter);
     var cnt=1;
     p1=1;
     while(p1<filter.length && cnt>0) {
@@ -2126,9 +2132,12 @@ function check_by_filter_logic(eedbObject, filter) {
       if(filter.charAt(p1) == ')') { cnt--; }
       if(cnt>0) { p1++; }
     }
-    phrase1.clear();
-    phrase2.clear();
-    if(cnt==0) { phrase1 = filter.substring(1, p1-1); }
+    phrase1 = "";
+    phrase2 = "";
+    if(cnt==0) { 
+      phrase1 = filter.substring(1, p1); 
+      //console.log(" filter found matching ) p1=[%s], phrase1[%s]\n", filter.charAt(p1), phrase1);
+    }
     else { phrase1 = filter.substring(1); }
     
     if(p1<filter.length) { p1++; } //move past the ')'
@@ -2141,18 +2150,24 @@ function check_by_filter_logic(eedbObject, filter) {
     }
     
     phrase2 = filter.substring(p1);
-    //console.log("  phrase2[%s]\n", phrase2);
+    //console.log("  filter phrase2[%s]\n", phrase2);
     p2 = phrase2.indexOf("or ");
     p3 = phrase2.indexOf("and ");
     if(p2==0) {
-      phrase2 = phrase2.substring(3);
-      if(check_by_filter_logic(eedbObject, phrase1) || check_by_filter_logic(eedbObject, phrase2)) { return true; }
+      //console.log("  filter phase2 starts with OR\n");
+      var phrase2b = phrase2.substring(3);
+      if(check_by_filter_logic(eedbObject, phrase1) || check_by_filter_logic(eedbObject, phrase2b)) { return true; }
       else { return false; }
     } 
     else if(p3==0) {
-      phrase2 = phrase2.substring(4);
-      if(check_by_filter_logic(eedbObject, phrase1) && check_by_filter_logic(eedbObject, phrase2)) { return true; }
-      else { return false; }
+      var phrase2b = phrase2.substring(4);
+      //console.log("  filter phrase1[%s] AND phrase2[%s]\n", phrase1, phrase2b);
+      //if(check_by_filter_logic(eedbObject, phrase1) && check_by_filter_logic(eedbObject, phrase2)) { return true; }
+      var rtn1 = check_by_filter_logic(eedbObject, phrase1);
+      var rtn2 = check_by_filter_logic(eedbObject, phrase2b);
+      //console.log(" filter phrase1 [%s] rtn=%s\n", phrase1, rtn1);
+      //console.log(" filter phrase2 [%s] rtn=%s\n", phrase2b, rtn2);
+      if(rtn1 && rtn2) { return true; } else { return false; }
     } else {
       if(check_by_filter_logic(eedbObject, phrase1) && check_by_filter_logic(eedbObject, phrase2)) { return true; }
       else { return false; }
@@ -2188,20 +2203,22 @@ function check_by_filter_logic(eedbObject, filter) {
   var key;
   p1 = filter.indexOf(":=");
   if(p1 != -1) { 
+    //console.log("filter[%s] has key:= logic\n", filter);
     key = filter.substring(0, p1);
-    if(p1+2 < filter.size()) {
+    //console.log(" filter key[%s]\n", key);
+    if(p1+2 < filter.length) {
       var val1 = filter.substring(p1+2);
       filter = val1;
     } else { filter = ""; }
-    //console.log("found key:=value logic [%s] := [%s]\n", key, filter);
-    if(find_metadata(key, filter)) { return true; }
+    //console.log(" filter key:=value logic [%s]:=[%s]\n", key, val1);
+    if(find_metadata(eedbObject, key, val1)) { return true; }
     else { return false; }
   }  
   //check for "key~=value" logic
   p1 = filter.indexOf("~=");
   if(p1 != -1) { 
     key = filter.substring(0, p1);
-    if(p1+2 < filter.size()) {
+    if(p1+2 < filter.length) {
       var val1 = filter.substring(p1+2);
       filter = val1;
     } else { filter = ""; }
@@ -2255,11 +2272,13 @@ function find_metadata(eedbObject, tag, value) {
   if(!eedbObject) { return null; }
   if(!eedbObject.mdata) { return null; }
   if((!tag || tag=="") && (!value || value=="")) { return null; }
-  value = value.toLowerCase();
+  if(tag) { tag = tag.toLowerCase(); }
+  if(value) { value = value.toLowerCase(); }
+  //console.log(" filter find_metadata tag[%s]:=value[%s]\n", tag, value);
 
   for(var tg1 in eedbObject.mdata) {
     var rtn = true;
-    if(tag && (tg1 != tag)) { rtn = false; }
+    if(tag && (tg1.toLowerCase() != tag)) { rtn = false; }
 
     var value_array = eedbObject.mdata[tg1];
     for(var idx1=0; idx1<value_array.length; idx1++) {
@@ -2288,6 +2307,7 @@ function has_metadata_like(eedbObject, tag, value) {
   
   if(!eedbObject) { return false; }
   if(!tag && !value) { return false; }
+  if(tag) { tag = tag.toLowerCase(); }
   if(value) { value = value.toLowerCase(); }
 
   //could consider to expand beyond mdata to 
@@ -2300,7 +2320,7 @@ function has_metadata_like(eedbObject, tag, value) {
   
   for(var tg1 in eedbObject.mdata) {
     var rtn = true;
-    if(tag && (tg1 != tag)) { rtn = false; }
+    if(tag && (tg1.toLowerCase() != tag)) { rtn = false; }
 
     if(value) {
       var value_array = eedbObject.mdata[tg1];

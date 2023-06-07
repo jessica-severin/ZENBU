@@ -78,6 +78,8 @@ function ZenbuCategoryElement(elementID) {
   this.drawChart        = zenbuCategoryElement_drawChart;
   //this.drawBarChart     = zenbuCategoryElement_drawBarChart;
 
+  this.customWidget     = zenbuCategoryElement_createCustomWidget;
+  
   return this;
 }
 
@@ -124,6 +126,72 @@ function zenbuCategoryElement_generateConfigDOM() {
 }
 
 
+function zenbuCategoryElement_createCustomWidget() {
+  if(this.radio_list) { return null; }
+
+  var all_selected = false;
+  var datasourceElement = this.datasource();
+  if(datasourceElement.datatypes && this.category_datatype) {
+    var dtype = datasourceElement.datatypes[this.category_datatype];
+    if(dtype) { all_selected = dtype.all_selected; }
+  }
+
+  var g1 = document.createElementNS(svgNS,'g');
+
+  g1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select_all'); return false");
+  if(all_selected) {
+    g1.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\"select none\",80);");
+  } else {
+    g1.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\"select all\",60);");
+  }
+  g1.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
+
+  var backg = g1.appendChild(document.createElementNS(svgNS,'rect'));
+  backg.setAttributeNS(null, 'x', '-2px');
+  backg.setAttributeNS(null, 'y', '-2px');
+  backg.setAttributeNS(null, 'width',  "18px");
+  backg.setAttributeNS(null, 'height', "18px");
+  backg.setAttributeNS(null, 'fill', 'rgb(255,255,255)'); //
+
+  var rect1 = g1.appendChild(document.createElementNS(svgNS,'rect'));
+  rect1.setAttributeNS(null, 'x', '3px');
+  rect1.setAttributeNS(null, 'y', '2px');
+  rect1.setAttributeNS(null, 'width',  '13px');
+  rect1.setAttributeNS(null, 'height', '13px');
+  rect1.setAttributeNS(null, "rx","3px");
+  rect1.setAttributeNS(null, "ry","3px");
+  rect1.setAttributeNS(null, "stroke", 'gray');
+  rect1.setAttributeNS(null, "stroke-width", '2');
+  rect1.setAttributeNS(null, 'fill', 'white');
+
+  var rect2 = g1.appendChild(document.createElementNS(svgNS,'rect'));
+  rect2.setAttributeNS(null, 'x', '0px');
+  rect2.setAttributeNS(null, 'y', '-1px');
+  rect2.setAttributeNS(null, 'width',  '13px');
+  rect2.setAttributeNS(null, 'height', '13px');
+  rect2.setAttributeNS(null, "rx","3px");
+  rect2.setAttributeNS(null, "ry","3px");
+  rect2.setAttributeNS(null, "stroke", 'gray');
+  rect2.setAttributeNS(null, "stroke-width", '2');
+  rect2.setAttributeNS(null, 'fill', 'white');
+  
+  var path = document.createElementNS(svgNS,'path');
+  path.setAttributeNS(null, "stroke", 'gray');
+  path.setAttributeNS(null, "stroke-width", '2');
+  path.setAttributeNS(null, 'fill', '#FFFFFF');
+  var points = "M2,5 L5,8 L11,2 ";
+  path.setAttributeNS(null, 'd', points);
+  g1.appendChild(path);
+
+  if(all_selected) {
+    rect2.setAttributeNS(null, 'fill', 'gray');
+    path.setAttributeNS(null, "stroke", 'white');
+    path.setAttributeNS(null, 'fill', 'gray');
+  }
+  
+  return g1;
+}
+
 //===============================================================
 //
 // event and parameters methods
@@ -136,6 +204,7 @@ function zenbuCategoryElement_elementEvent(mode, value, value2) {
   if(mode == "dtype-category-filter") {  
     //console.log("zenbuCategoryElement_elementEvent ["+this.elementID+"] "+mode+" "+value+" "+value2);
     var dtype = datasourceElement.datatypes[value];
+    dtype.all_selected = false;
     if(dtype && dtype.categories) { 
       if(this.radio_list) { 
         for(var ctg in dtype.categories) {
@@ -153,6 +222,23 @@ function zenbuCategoryElement_elementEvent(mode, value, value2) {
           dtype.filtered = true;
           break;          
         }
+      }
+      reportsPostprocessElement(datasourceElement.elementID);
+      if(this.elementID != datasourceElement.elementID) { 
+        reportsDrawElement(datasourceElement.elementID);
+      }
+      reportElementTriggerCascade(this, "filter_change");
+    }
+  }
+  
+  if(mode == "select_all") {  
+    var dtype = datasourceElement.datatypes[this.category_datatype];
+    if(dtype && dtype.categories) { 
+      //console.log("zenbuCategoryElement_elementEvent ["+this.elementID+"] "+mode+" "+value+" "+value2);
+      dtype.all_selected = !(dtype.all_selected);
+      dtype.filtered = dtype.all_selected;
+      for(var ctg in dtype.categories) {
+        dtype.categories[ctg].filtered = dtype.all_selected;
       }
       reportsPostprocessElement(datasourceElement.elementID);
       if(this.elementID != datasourceElement.elementID) { 
@@ -252,6 +338,7 @@ function zenbuCategoryElement_postprocess() {
     if(!ctgval) { return; }
     var categories = dtype_col.categories;
     if(!categories[ctgval]) { categories[ctgval] = {ctg:ctgval, count:0, hidden_count:0, value:null, filtered:false}; }
+    if(category_method == "create_only") { return; }
     if(!filter_valid) { categories[ctgval].hidden_count++; return; }
     categories[ctgval].count++;
     
@@ -275,6 +362,29 @@ function zenbuCategoryElement_postprocess() {
         break;
       default: 
         break;
+    }
+  };
+  
+  function create_category(dtype_col, object) {
+    if(!dtype_col) { return; }
+    if(!object) { return; }
+    
+    var datatype = dtype_col.datatype;
+    datatype = datatype.replace(/^f1\./, '');
+    datatype = datatype.replace(/^f2\./, '');
+
+    if(object.source && (datatype == "category")) {
+      update_category(dtype_col, object.source.category, false, "create_only");
+    } else if(object.source && (datatype == "source_name")) {
+      update_category(dtype_col, object.source.name, false, "create_only");
+    } else if(datatype == "location_string") {
+      update_category(dtype_col, object.chromloc, false, "create_only");
+    } else if(object.mdata && object.mdata[datatype]) {
+      var value_array = object.mdata[datatype];
+      for(var idx1=0; idx1<value_array.length; idx1++) {
+        val = value_array[idx1];
+        update_category(dtype_col, val, false, "create_only");
+      }
     }
   };
 
@@ -310,6 +420,9 @@ function zenbuCategoryElement_postprocess() {
       var t_feature = null;
       if(edge && (/^f1\./.test(selected_dtype.datatype))) { t_feature = edge.feature1;}
       if(edge && (/^f2\./.test(selected_dtype.datatype))) { t_feature = edge.feature2;}
+
+      create_category(selected_dtype, edge);
+      create_category(selected_dtype, t_feature);
 
       //specific logic rather than using object.filter_valid
       if(!reportElementEdgeCheckValidFilters(datasourceElement, edge)) { continue; }
@@ -388,6 +501,8 @@ function zenbuCategoryElement_postprocess() {
     for(j=0; j<datasourceElement.feature_array.length; j++) {
       var feature = datasourceElement.feature_array[j];
       if(!feature) { continue; }
+
+      create_category(selected_dtype, feature);
       
       //specific logic rather than using object.filter_valid
       if(!reportElementCheckValidSignalFilters(datasourceElement, feature)) { continue; }
@@ -963,14 +1078,15 @@ function zenbuCategoryElement_drawChart() {
     if(ctg_obj.count>max_cnt) { max_cnt=ctg_obj.count; }
     if(ctg_obj.hidden_count>max_cnt) { max_cnt=ctg_obj.hidden_count; }
     //console.log("category ["+ctg_obj.ctg+"] cnt="+ctg_obj.count);
+    //console.log("category chart ctg:"+ctg_obj.ctg+"  val:"+ctg_obj.count);
     ctg_array.push(ctg_obj);
   }
   switch(this.category_method) {
-    case "count": ctg_array.sort(category_count_sort_func); break;
-    case "mean":  ctg_array.sort(category_mean_sort_func); break;
-    default:      ctg_array.sort(category_value_sort_func); break;
+    case "count": ctg_array.sort(category_chart_count_sort_func); break;
+    case "mean":  ctg_array.sort(category_chart_mean_sort_func); break;
+    default:      ctg_array.sort(category_chart_value_sort_func); break;
   }
-  
+    
   var content_width = 100;
   var content_height = 100;
   if(this.content_width)  { content_width = this.content_width; }
@@ -1011,11 +1127,14 @@ function zenbuCategoryElement_drawChart() {
   for(var idx1=0; idx1<ctg_array.length; idx1++) {
     var ctg_obj = ctg_array[idx1];
     
-    if(this.hide_zero && !ctg_obj.filtered && (ctg_obj.count==0)) { continue; }
+    if(this.hide_zero && (ctg_obj.count==0) && (ctg_obj.hidden_count==0)) { continue; }
     
     this.chart_data.labels.push(ctg_obj.ctg);
+    var ctg_count = ctg_obj.count;
+    if(ctg_obj.count==0 && ctg_obj.hidden_count>0) { ctg_count = ctg_obj.hidden_count; }
+
     if(this.category_method=="count") {
-      this.chart_data.datasets[0].data.push(ctg_obj.count);
+      this.chart_data.datasets[0].data.push(ctg_count);
     } else if(this.category_method=="mean") {
       this.chart_data.datasets[0].data.push(ctg_obj.value/ctg_obj.count);
     } else {
@@ -1024,7 +1143,11 @@ function zenbuCategoryElement_drawChart() {
     
     //var color = zenbuIndexColorSpace("Set3_bp_12", idx1);  //Spectral_bp_11  Set2_bp_8  Set3_bp_11
     var color = zenbuIndexColorSpace(colorspace, idx1);  //Spectral_bp_11  Set2_bp_8  Set3_bp_11
-    this.chart_data.datasets[0].backgroundColor.push(color.getCSSHexadecimalRGB());
+    if(!ctg_obj.filtered && ctg_obj.count==0) {
+      var rgb = color.getRGB();
+      color = new RGBColour(rgb.r, rgb.g, rgb.b, 0.3);
+    }
+    this.chart_data.datasets[0].backgroundColor.push(color.getCSSIntegerRGBA());
   }
   
   var ctx = canvas.getContext('2d');
@@ -1045,7 +1168,8 @@ function zenbuCategoryElement_drawChart() {
                   title: {
                     display: false,
                     text: ''
-                  }
+                  },
+                  onClick: reportsCategoryChartClickEvent,
                 };
   if(this.display_type == "bar") {
     var ylabel = "count";
@@ -1105,6 +1229,34 @@ function zenbuCategoryElement_drawChart() {
 }
 
 
+function reportsCategoryChartClickEvent(event, eventItems) {
+  console.log("reportsCategoryChartClickEvent");
+  
+  var index = eventItems.datasetIndex;
+  var ci = this.chart;
+  if(!ci) { return; }
+  var data = ci.data;
+  var reportElement = current_report.elements[ci.elementID];
+  if(!reportElement) { return; }
+  //console.log("first gene " + data.datasets[0].data[0].gene_name);
+  
+  var datasourceElement = reportElement.datasource();
+  
+  var names = "";
+  console.log("reportsCategoryChartClickEvent ["+reportElement.elementID+"] datasource["+datasourceElement.elementID+"] eventItems.length: " + eventItems.length); //should be an array of active elements what ever that means
+  if(eventItems.length == 0 ) { return; }
+  
+  eventItems.forEach(function(item) {
+    //console.log("click item.datasetIndex: " + item._datasetIndex);
+    //console.log("click item.index: " + item._index);
+    var label = data.labels[item._index];
+    var value = data.datasets[item._datasetIndex].data[item._index];
+    console.log("ctg label["+label+"]   value:"+value);
+    reportElementEvent(reportElement.elementID, 'dtype-category-filter', reportElement.category_datatype, label);
+  });
+}
+
+
 //=================================================================================
 //
 // helper functions
@@ -1134,6 +1286,38 @@ function category_value_sort_func(a,b) {
 }
 
 function category_mean_sort_func(a,b) {
+  if(!a) { return 1; }
+  if(!b) { return -1; }
+  if(a.filtered && !b.filtered) { return -1; }
+  if(!a.filtered && b.filtered) { return 1; }
+  if(b.value/b.count > a.value/a.count) { return 1; }
+  if(b.value/b.count < a.value/a.count) { return -1; }
+  return 0;
+}
+
+function category_chart_count_sort_func(a,b) {
+  if(!a) { return 1; }
+  if(!b) { return -1; }
+  var a_count = a.count;
+  if(a_count==0) { a_count = a.hidden_count; }
+  var b_count = b.count;
+  if(b_count==0) { b_count = b.hidden_count; }  
+  if(b_count > a_count) { return 1; }
+  if(b_count < a_count) { return -1; }
+  return 0;
+}
+
+function category_chart_value_sort_func(a,b) {
+  if(!a) { return 1; }
+  if(!b) { return -1; }
+  if(a.filtered && !b.filtered) { return -1; }
+  if(!a.filtered && b.filtered) { return 1; }
+  if(b.value > a.value) { return 1; }
+  if(b.value < a.value) { return -1; }
+  return 0;
+}
+
+function category_chart_mean_sort_func(a,b) {
   if(!a) { return 1; }
   if(!b) { return -1; }
   if(a.filtered && !b.filtered) { return -1; }

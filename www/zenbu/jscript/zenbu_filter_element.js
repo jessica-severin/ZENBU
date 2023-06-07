@@ -1,4 +1,4 @@
-/* $Id: zenbu_filter_element.js,v 1.3 2021/01/19 09:07:10 severin Exp $ */
+/* $Id: zenbu_filter_element.js,v 1.5 2023/06/05 10:00:51 severin Exp $ */
 
 // ZENBU zenbu_filter_element.js
 //
@@ -55,8 +55,8 @@ function ZenbuFilterElement(elementID) {
   this.widget_filter = false;
   this.widget_columns = false;
   this.signal_datatype = "";
-  this.filter_abs = false;
-  this.hide_zero = true;
+  this.dtype_filterbars = new Object; //hash to hold the filterbars for the active filters;
+
   
   //methods
   this.initFromConfigDOM  = zenbuFilterElement_initFromConfigDOM;  //pass a ConfigDOM object
@@ -149,7 +149,6 @@ function zenbuFilterElement_reconfigureParam(param, value, altvalue) {
   
   //category
   if(param == "signal_datatype") { this.newconfig.signal_datatype = value; }
-  if(param == "filter_abs")    { this.newconfig.filter_abs = value; }
   
   if(param == "accept-reconfig") {
     if(this.newconfig.signal_datatype !== undefined) { 
@@ -163,7 +162,6 @@ function zenbuFilterElement_reconfigureParam(param, value, altvalue) {
       }    
       this.signal_datatype = this.newconfig.signal_datatype;
     }
-    if(this.newconfig.filter_abs !== undefined) { this.filter_abs = this.newconfig.filter_abs; }
     if(this.newconfig.description !== undefined) { this.description = this.newconfig.description; }
     reportsPostprocessElement(this.elementID);
   }
@@ -201,7 +199,7 @@ function zenbuFilterElement_postprocess() {
   var columns = datasourceElement.dtype_columns;
   
   var signal_datatype = this.signal_datatype;
-  if(this.newconfig && this.newconfig.signal_datatype != undefined) { signal_datatype = this.newconfig.signal_datatype; }
+  //if(this.newconfig && this.newconfig.signal_datatype != undefined) { signal_datatype = this.newconfig.signal_datatype; }
   
   var selected_dtype = null;
   for(var i=0; i<columns.length; i++) {
@@ -216,21 +214,7 @@ function zenbuFilterElement_postprocess() {
   this.selected_dtype = selected_dtype;
   //this.title_prefix = "Filter: "+selected_dtype.title;
   this.title_prefix = selected_dtype.title;
-  
-  if(this.selected_dtype && (this.selected_dtype.filter_abs != this.filter_abs)) {
-    console.log("filter_abs was changed so need to reset min/max");
-    this.selected_dtype.filter_abs = this.filter_abs;
-    if(this.filter_abs) {
-      this.selected_dtype.filter_min = 0.0;
-      this.selected_dtype.filter_max = "max";
-    } else {
-      this.selected_dtype.filter_min = "min"; 
-      this.selected_dtype.filter_max = "max";
-    }
-  }
 
-  //Do I need to do anything here?
-  
   var endtime = new Date();
   var runtime = (endtime.getTime() - starttime.getTime());
   //console.log("zenbuFilterElement_postprocess "+this.elementID+" "+(runtime)+"msec");
@@ -247,8 +231,6 @@ function zenbuFilterElement_configSubpanel() {
   
   var signal_datatype = this.signal_datatype;
   if(this.newconfig && this.newconfig.signal_datatype != undefined) { signal_datatype = this.newconfig.signal_datatype; }  
-  var filter_abs = this.filter_abs;
-  if(this.newconfig && this.newconfig.filter_abs != undefined) { filter_abs = this.newconfig.filter_abs; }
   var description = this.description;
   if(this.newconfig && this.newconfig.description != undefined) { description = this.newconfig.description; }
 
@@ -305,14 +287,15 @@ function zenbuFilterElement_configSubpanel() {
     }
   }
   
-  tdiv2 = configdiv.appendChild(document.createElement("div"));
+  //tdiv2 = configdiv.appendChild(document.createElement("div"));
   tcheck = tdiv2.appendChild(document.createElement('input'));
   tcheck.setAttribute('style', "margin: 0px 1px 0px 15px; vertical-align: middle; ");
   tcheck.setAttribute('type', "checkbox");
-  if(filter_abs) { tcheck.setAttribute('checked', "checked"); }
-  tcheck.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'filter_abs', this.value);");
-
-  //tcheck.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'dtype-filter-abs', \""+selected_dtype.datatype+"\"); return false");
+  //tcheck.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'filter_abs', this.value);");
+  if(selected_dtype) {
+    if(selected_dtype.filter_abs) { tcheck.setAttribute('checked', "checked"); }
+    tcheck.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'dtype-filter-abs', \""+selected_dtype.datatype+"\"); return false");
+  }
   tspan2 = tdiv2.appendChild(document.createElement('span'));
   tspan2.setAttribute("style", "margin-bottom:3px;");
   tspan2.innerHTML = "absolute value";
@@ -348,7 +331,7 @@ function zenbuFilterElement_configSubpanel() {
 //=================================================================================
 
 function zenbuFilterElement_draw() {
-  console.log("zenbuFilterElement_draw "+this.elementID);
+  //console.log("zenbuFilterElement_draw "+this.elementID);
   if(this.loading) { return; }
   //console.log("filtersubpanel "+this.elementID+"]");
     
@@ -359,6 +342,8 @@ function zenbuFilterElement_draw() {
   var main_div = this.main_div;
   if(!main_div) { return; }
   var mainRect = main_div.getBoundingClientRect();
+  
+  var panelID = this.main_div_id + "_filter_subpanel"; //for hyjacking reportElementFilterHoverValue()
 
   var columns = datasourceElement.dtype_columns;  
 
@@ -373,12 +358,11 @@ function zenbuFilterElement_draw() {
   }
   if(!selected_dtype) { return; }
   if((selected_dtype.col_type != "weight") && (selected_dtype.col_type != "signal")) { return; }  //maybe "expression" or "signal"
-  if(!selected_dtype.filtered) { return; }
 
   //contents
   var tdiv, tdiv2, tspan1, tspan2, tinput, tradio, ttable, ttr, ttd, button, tcheck, tspan, ta;
   
-  console.log("draw "+this.elementID+" selected_dtype: "+selected_dtype.datatype);
+  console.log("zenbuFilterElement_draw "+this.elementID+" selected_dtype: "+selected_dtype.datatype);
     
   //----
   if(this.description) {
@@ -393,7 +377,18 @@ function zenbuFilterElement_draw() {
   //tdiv2.setAttribute('style', "border-bottom: solid 1px gray; margin: 0px 0px 0px 15px;");
   tdiv2.setAttribute('style', "margin: 2px 0px 2px 0px;");
   
-  var inputWidth = (mainRect.width - 105) / 2;
+  if(!selected_dtype.filtered) {
+    button = tdiv2.appendChild(document.createElement("input"));
+    button.type = "button";
+    button.className = "medbutton";
+    button.value = "re-activate filter";
+    button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+    button.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'dtype-filter-add', \""+selected_dtype.datatype+"\"); return false");
+    return;
+  }
+    
+  var inputWidth = (mainRect.width - 128) / 2;
+  if(selected_dtype.filter_abs) { inputWidth -= 30; }
   if(inputWidth<20) { inputWidth=20; }
   
   var minSpan = tdiv2.appendChild(document.createElement('span'));
@@ -401,6 +396,8 @@ function zenbuFilterElement_draw() {
     
   var tspan = minSpan.appendChild(document.createElement('span'));
   tspan.innerHTML = "min: ";
+  if(selected_dtype.filter_abs) { tspan.innerHTML = "min abs(): "; }
+
   var input = minSpan.appendChild(document.createElement('input'));
   input.className = "sliminput";
   input.setAttribute('type', "text");
@@ -418,6 +415,7 @@ function zenbuFilterElement_draw() {
   var tspan = maxSpan.appendChild(document.createElement('span'));
   tspan.setAttribute('style', "margin-left:5px;");
   tspan.innerHTML = "max: ";
+  if(selected_dtype.filter_abs) { tspan.innerHTML = "max abs(): "; }
   var input = maxSpan.appendChild(document.createElement('input'));
   input.className = "sliminput";  
   input.setAttribute('type', "text");
@@ -427,6 +425,14 @@ function zenbuFilterElement_draw() {
   if(selected_dtype.filter_max=="max") { input.setAttribute('value', "max"); }
   else { input.setAttribute('value', selected_dtype.filter_max.toPrecision(6)); }
   input.setAttribute("onchange", "reportElementEvent(\""+datasourceElement.elementID+"\", 'dtype-filter-max', \""+selected_dtype.datatype+"\", this.value); return false");
+  
+  var img = tdiv2.appendChild(document.createElement("img"));
+  img.setAttribute('style', "margin: 0px 0px 4px 5px; vertical-align:bottom;");
+  //img.src = "https://fantom.gsc.riken.jp/zenbu/images/close_icon16px_gray.png";
+  img.src = "/zenbu/images/close_icon16px_gray.png";
+  img.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  img.setAttribute("onmouseover", "eedbMessageTooltip(\"deactivate filter\",100);");
+  img.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'dtype-filter-remove', \""+selected_dtype.datatype+"\"); return false");
   
   //display double range bar info-graphic
   var bar_width = mainRect.width-25;
@@ -438,10 +444,12 @@ function zenbuFilterElement_draw() {
   tspan2.setAttribute('style', "display:inline-block; position:relative; background-color:lightgray; border-radius:7px; height:14px; font-size:8px;");
   tspan2.style.width = bar_width+"px";
   //mouseover-hover display of the numerical value
-  tspan2.setAttribute("onmousemove", "reportElementFilterHoverValue(\""+datasourceElement.elementID+"\", \""+selected_dtype.datatype+"\");");
-  tspan2.setAttribute("onmousedown", "reportElementFilterHoverValue(\""+datasourceElement.elementID+"\", \""+selected_dtype.datatype+"\", 'start');");
-  tspan2.setAttribute("onmouseup", "reportElementFilterHoverValue(\""+datasourceElement.elementID+"\", \""+selected_dtype.datatype+"\", 'end');");
+  tspan2.setAttribute("onmousemove", "reportElementFilterHoverValue(\""+this.elementID+"\", \""+selected_dtype.datatype+"\");");
+  tspan2.setAttribute("onmousedown", "reportElementFilterHoverValue(\""+this.elementID+"\", \""+selected_dtype.datatype+"\", 'start');");
+  tspan2.setAttribute("onmouseup", "reportElementFilterHoverValue(\""+this.elementID+"\", \""+selected_dtype.datatype+"\", 'end');");
   tspan2.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+
+  tspan2.id = panelID+"_filter_bar_"+dtype_col.datatype;
 
   var max_val = selected_dtype.max_val;
   if(selected_dtype.filter_abs && (Math.abs(selected_dtype.min_val)>max_val)) {
@@ -490,6 +498,7 @@ function zenbuFilterElement_draw() {
   filterBar.bar1 = bar1;
   filterBar.bar2 = null;
   filterBar.clip1 = clip1;
+  filterBar.bar_width = bar_width;
   
   if(selected_dtype.filter_abs) {
     //add a gray "mask" in the center
@@ -507,5 +516,6 @@ function zenbuFilterElement_draw() {
     filterBar.bar2 = bar2;
   }
   
+  this.dtype_filterbars[selected_dtype.datatype] = filterBar; //to work with reportElementFilterHoverValue and reportElementFilterbarUpdate
 }
 

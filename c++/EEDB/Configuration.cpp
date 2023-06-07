@@ -1,4 +1,4 @@
-/*  $Id: Configuration.cpp,v 1.58 2021/10/07 04:08:29 severin Exp $ */
+/*  $Id: Configuration.cpp,v 1.59 2023/05/12 01:58:03 severin Exp $ */
 
 /***
 NAME - EEDB::Configuration
@@ -307,17 +307,25 @@ void  EEDB::Configuration::access_count(long value) { _access_count = value; }
 
 string  EEDB::Configuration::display_name() { 
   EEDB::Metadata *md;
-  if((md = metadataset()->find_metadata("eedb:display_name", ""))) { return md->data(); }
-  if((md = metadataset()->find_metadata("configname", ""))) { return md->data(); }
-  if((md = metadataset()->find_metadata("title", ""))) { return md->data(); }
-  if((md = metadataset()->find_metadata("script_name", ""))) { return md->data(); }
-  if((md = metadataset()->find_metadata("name", ""))) { return md->data(); }
+  if((md = metadataset()->find_metadata("eedb:display_name", ""))) { return trim_whitespace(md->data()); }
+  if((md = metadataset()->find_metadata("configname", ""))) { return trim_whitespace(md->data()); }
+  if((md = metadataset()->find_metadata("title", ""))) { return trim_whitespace(md->data()); }
+  if((md = metadataset()->find_metadata("script_name", ""))) { return trim_whitespace(md->data()); }
+  if((md = metadataset()->find_metadata("name", ""))) { return trim_whitespace(md->data()); }
   return "";
 }
 
 string  EEDB::Configuration::description() { 
   EEDB::Metadata *md;
-  if((md = metadataset()->find_metadata("description", ""))) { return md->data(); }
+  if((md = metadataset()->find_metadata("description", ""))) { return trim_whitespace(md->data()); }
+  return "";
+}
+
+string  EEDB::Configuration::assembly_name() { 
+  EEDB::Metadata *md;
+  if((md = metadataset()->find_metadata("eedb:assembly_name", ""))) { return md->data(); }
+  if((md = metadataset()->find_metadata("assembly_name", ""))) { return md->data(); }
+  if((md = metadataset()->find_metadata("genome_assembly", ""))) { return md->data(); }
   return "";
 }
 

@@ -1,4 +1,4 @@
-/* $Id: zenbu_genomewide_element.js,v 1.28 2022/04/21 07:33:36 severin Exp $ */
+/* $Id: zenbu_genomewide_element.js,v 1.29 2023/04/28 06:31:44 severin Exp $ */
 
 // ZENBU
 //
@@ -268,12 +268,12 @@ function zenbuGenomeWideElement_elementEvent(mode, value, value2) {
           if(point1) {
             point1.setAttributeNS(null, 'r', "7");
             point1.setAttributeNS(null, 'fill', "rgba(255,0,225,0.7)");
-            this.manhattan_render.appendChild(point1); //moves to the end of render list
+            if(this.manhattan_render) { this.manhattan_render.appendChild(point1); } //moves to the end of render list
           }
           if(point2) {
             point2.setAttributeNS(null, 'r', "7");
             point2.setAttributeNS(null, 'fill', "rgba(255,0,225,0.7)");
-            this.manhattan_render.appendChild(point2); //moves to the end of render list
+            if(this.manhattan_render) { this.manhattan_render.appendChild(point2); } //moves to the end of render list
           }
           this.selected_point_edge = edge;
         } //if edge.id match

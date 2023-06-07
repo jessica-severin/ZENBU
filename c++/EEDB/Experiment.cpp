@@ -1,4 +1,4 @@
-/*  $Id: Experiment.cpp,v 1.120 2021/06/25 04:24:51 severin Exp $ */
+/*  $Id: Experiment.cpp,v 1.122 2023/05/30 05:58:18 severin Exp $ */
 
 /***
 NAME - EEDB::Experiment
@@ -517,13 +517,13 @@ sub new_from_xmltree {
 //
 ////////////////////////////////////////////////////
 
-string    EEDB::Experiment::platform() { return _platform; }
-string    EEDB::Experiment::series_name() { return _series_name; }
-double    EEDB::Experiment::series_point() { return _series_point; }
-
-void  EEDB::Experiment::platform(string value)     { _platform = value; }
-void  EEDB::Experiment::series_name(string value)  { _series_name = value; }
-void  EEDB::Experiment::series_point(double value) { _series_point = value; }
+// string    EEDB::Experiment::platform() { return _platform; }
+// string    EEDB::Experiment::series_name() { return _series_name; }
+// double    EEDB::Experiment::series_point() { return _series_point; }
+// 
+// void  EEDB::Experiment::platform(string value)     { _platform = value; }
+// void  EEDB::Experiment::series_name(string value)  { _series_name = value; }
+// void  EEDB::Experiment::series_point(double value) { _series_point = value; }
 
 
 void  EEDB::Experiment::_load_metadata() {
@@ -583,6 +583,9 @@ void  EEDB::Experiment::init_from_row_map(map<string, dynadata> &row_map) {
   }
   if(row_map["owner_identity"].type == MQDB::STRING) {
     _owner_identity = row_map["owner_identity"].i_string;
+  }
+  if(row_map["create_date"].type == MQDB::TIMESTAMP) {
+    _create_date = row_map["create_date"].i_timestamp;
   }
 
   if(row_map["is_active"].i_string == string("y"))  { _is_active=true;} else { _is_active=false; }

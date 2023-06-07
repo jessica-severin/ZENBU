@@ -1,4 +1,4 @@
-/* $Id: Metadata.h,v 1.33 2018/12/05 00:43:41 severin Exp $ */
+/* $Id: Metadata.h,v 1.34 2023/05/12 01:53:54 severin Exp $ */
 
 /***
 
@@ -60,6 +60,8 @@ The rest of the documentation details each of the object methods. Internal metho
 
 using namespace std;
 using namespace MQDB;
+
+string trim_whitespace(string value);
 
 namespace EEDB {
 

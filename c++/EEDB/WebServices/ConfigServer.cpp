@@ -1,4 +1,4 @@
-/* $Id: ConfigServer.cpp,v 1.132 2022/07/15 11:35:50 severin Exp $ */
+/* $Id: ConfigServer.cpp,v 1.133 2023/05/12 02:23:36 severin Exp $ */
 
 /***
 
@@ -587,13 +587,63 @@ void EEDB::WebServices::ConfigServer::show_user_last_config() {
 bool _config_name_asc_sort_func (EEDB::Configuration *a, EEDB::Configuration *b) { 
   if(a == NULL) { return true; }
   if(b == NULL) { return false; }
+  if(a->display_name() == "") { return false; }
+  if((a->display_name() != "") && (b->display_name() == "")) { return true; }
   return (boost::to_upper_copy(a->display_name()) < boost::to_upper_copy(b->display_name()));
 }
 bool _config_name_desc_sort_func (EEDB::Configuration *a, EEDB::Configuration *b) { 
   if(a == NULL) { return true; }
   if(b == NULL) { return false; }
+  if(a->display_name() == "") { return false; }
+  if((a->display_name() != "") && (b->display_name() == "")) { return true; }
   return (boost::to_upper_copy(a->display_name()) > boost::to_upper_copy(b->display_name()));
 }
+
+bool _config_description_asc_sort_func (EEDB::Configuration *a, EEDB::Configuration *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->description() == "") { return false; }
+  if((a->description() != "") && (b->description() == "")) { return true; }
+  return (boost::to_upper_copy(a->description()) < boost::to_upper_copy(b->description()));
+}
+bool _config_description_desc_sort_func (EEDB::Configuration *a, EEDB::Configuration *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->description() == "") { return false; }
+  if((a->description() != "") && (b->description() == "")) { return true; }
+  return (boost::to_upper_copy(a->description()) > boost::to_upper_copy(b->description()));
+}
+
+bool _config_fixedID_asc_sort_func (EEDB::Configuration *a, EEDB::Configuration *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->fixed_id() == "") { return false; }
+  if((a->fixed_id() != "") && (b->fixed_id() == "")) { return true; }
+  return (boost::to_upper_copy(a->fixed_id()) < boost::to_upper_copy(b->fixed_id()));
+}
+bool _config_fixedID_desc_sort_func (EEDB::Configuration *a, EEDB::Configuration *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->fixed_id() == "") { return false; }
+  if((a->fixed_id() != "") && (b->fixed_id() == "")) { return true; }
+  return (boost::to_upper_copy(a->fixed_id()) > boost::to_upper_copy(b->fixed_id()));
+}
+
+bool _config_genome_asc_sort_func (EEDB::Configuration *a, EEDB::Configuration *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->assembly_name() == "") { return false; }
+  if((a->assembly_name() != "") && (b->assembly_name() == "")) { return true; }
+  return (boost::to_upper_copy(a->assembly_name()) < boost::to_upper_copy(b->assembly_name()));
+}
+bool _config_genome_desc_sort_func (EEDB::Configuration *a, EEDB::Configuration *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->assembly_name() == "") { return false; }
+  if((a->assembly_name() != "") && (b->assembly_name() == "")) { return true; }
+  return (boost::to_upper_copy(a->assembly_name()) > boost::to_upper_copy(b->assembly_name()));
+}
+
 bool _config_createdate_asc_sort_func (EEDB::Configuration *a, EEDB::Configuration *b) { 
   if(a == NULL) { return true; }
   if(b == NULL) { return false; }
@@ -604,6 +654,7 @@ bool _config_createdate_desc_sort_func (EEDB::Configuration *a, EEDB::Configurat
   if(b == NULL) { return false; }
   return (a->create_date() > b->create_date()); 
 }
+
 bool _config_access_asc_sort_func (EEDB::Configuration *a, EEDB::Configuration *b) { 
   if(a == NULL) { return true; }
   if(b == NULL) { return false; }
@@ -743,6 +794,27 @@ void EEDB::WebServices::ConfigServer::search_configs() {
       sort(configs.begin(), configs.end(), _config_name_desc_sort_func);
     } else {
       sort(configs.begin(), configs.end(), _config_name_asc_sort_func);
+    }
+  }
+  if(_parameters["sort"] == "description") {
+    if(_parameters["sort_order"] == "desc") {
+      sort(configs.begin(), configs.end(), _config_description_desc_sort_func);
+    } else {
+      sort(configs.begin(), configs.end(), _config_description_asc_sort_func);
+    }
+  }
+  if(_parameters["sort"] == "fixed_id") {
+    if(_parameters["sort_order"] == "desc") {
+      sort(configs.begin(), configs.end(), _config_fixedID_desc_sort_func);
+    } else {
+      sort(configs.begin(), configs.end(), _config_fixedID_asc_sort_func);
+    }
+  }
+  if(_parameters["sort"] == "genome") {
+    if(_parameters["sort_order"] == "desc") {
+      sort(configs.begin(), configs.end(), _config_genome_desc_sort_func);
+    } else {
+      sort(configs.begin(), configs.end(), _config_genome_asc_sort_func);
     }
   }
   if(_parameters["sort"] == "create_date") {

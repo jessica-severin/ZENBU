@@ -1,4 +1,4 @@
-/* $Id: DemultiplexSource.h,v 1.4 2022/02/02 11:01:31 severin Exp $ */
+/* $Id: DemultiplexSource.h,v 1.5 2023/01/13 06:55:23 severin Exp $ */
 
 /***
 
@@ -79,6 +79,11 @@ class DemultiplexSource : public EEDB::SPStreams::MergeStreams {
 
     void   set_demux_source_mode(string mode);
     void   add_demux_mdata_keys(string mdkeys);  //comma/space/tab separated list of keys
+    void   enable_full_demux(bool value);
+    void   set_side_linking_mdkey(string value);
+    void   set_demux_source_mdkey(string value);
+    void   skip_unlinked(bool value);
+
     
   private:
     enum { FEATURESOURCE, EXPERIMENT }  _demux_source_mode;
@@ -86,9 +91,12 @@ class DemultiplexSource : public EEDB::SPStreams::MergeStreams {
     string                              _side_linking_mdkey;
     string                              _demux_source_mdkey;
     bool                                _enable_full_demux;
+    bool                                _skip_unlinked;
     
     map<string, EEDB::DataSource*>      _subsource_hash;     //to track newly generated subsources  
     map<string, EEDB::MetadataSet*>     _linking_mdata_hash; //linking mdata value -> full mdset to transfer  
+    map<string, EEDB::DataSource*>      _full_demux_hash;     //to track sources which have already been full_demuxed  
+
 
     bool   _demux_source_for_feature(EEDB::Feature *feature);
     void   _preload_side_stream_linking_mdata_hash();

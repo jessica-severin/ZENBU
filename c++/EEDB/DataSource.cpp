@@ -1,4 +1,4 @@
-/* $Id: DataSource.cpp,v 1.30 2020/01/23 07:13:59 severin Exp $ */
+/* $Id: DataSource.cpp,v 1.32 2023/05/29 04:16:48 severin Exp $ */
 
 /***
 
@@ -113,6 +113,8 @@ void EEDB::DataSource::init() {
   _is_visible       = true;
   _metadata_loaded  = false;
   _create_date      = 0;
+  
+  _series_point     = 0.0;
 }
 
 EEDB::DataSource* EEDB::DataSource::copy() {
@@ -333,6 +335,8 @@ void EEDB::DataSource::clear_xml_caches() {
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+
+
 string EEDB::DataSource::display_name() { 
   load_metadata();
   if(_display_name.empty() and !_name.empty()) { return _name; }
@@ -343,6 +347,158 @@ string EEDB::DataSource::description() {
   load_metadata();
   return _description;
 }
+
+string  EEDB::DataSource::assembly_name() { 
+  EEDB::Metadata *md;
+  if((md = metadataset()->find_metadata("eedb:assembly_name", ""))) { return md->data(); }
+  if((md = metadataset()->find_metadata("assembly_name", ""))) { return md->data(); }
+  if((md = metadataset()->find_metadata("genome_assembly", ""))) { return md->data(); }
+  return "";
+}
+
+string  EEDB::DataSource::platform() {
+  load_metadata();
+  if(_platform!="") { return _platform; }
+  EEDB::Metadata *md;
+  if((md = metadataset()->find_metadata("eedb:platform", ""))) { _platform = trim_whitespace(md->data()); }
+  if((md = metadataset()->find_metadata("enc:assay", ""))) { _platform =  trim_whitespace(md->data()); }
+  return _platform;
+}
+
+string  EEDB::DataSource::cell_line() { 
+  load_metadata();
+  if(_cell_line !="") { return _cell_line; }
+  vector<EEDB::Metadata*> _mdata_list = _metadataset.metadata_list();
+  for(unsigned int i=0; i<_mdata_list.size(); i++) {
+    EEDB::Metadata *md = _mdata_list[i];
+    if(md->data().find("UNDEFINED")!=std::string::npos) { continue; }
+    if(md->type() == "cell_line") { _cell_line = trim_whitespace(md->data()); }
+    if(md->type() == "eedb:cell_line") { _cell_line = trim_whitespace(md->data()); }
+    if(md->type() == "osc:LSArchive_sample_cell_line") { _cell_line = trim_whitespace(md->data()); }
+  }  
+  return _cell_line;
+  // EEDB::Metadata *md;
+  // if((md = metadataset()->find_metadata("cell_line", ""))) { return trim_whitespace(md->data()); }
+  // if((md = metadataset()->find_metadata("eedb:cell_line", ""))) { return trim_whitespace(md->data()); }
+  // return "";
+}
+
+string  EEDB::DataSource::cell_type() { 
+  load_metadata();
+  if(_cell_type !="") { return _cell_type; }
+  vector<EEDB::Metadata*> _mdata_list = _metadataset.metadata_list();
+  for(unsigned int i=0; i<_mdata_list.size(); i++) {
+    EEDB::Metadata *md = _mdata_list[i];
+    if(md->data().find("UNDEFINED")!=std::string::npos) { continue; }
+    if(md->data().find("CELL MIXTURE")!=std::string::npos) { continue; }
+    if(md->type() == "cell_type") { _cell_type = trim_whitespace(md->data()); }
+    if(md->type() == "eedb:cell_type") { _cell_type = trim_whitespace(md->data()); }
+    //if(md->type() == "sample_cell_type") { _cell_type = trim_whitespace(md->data()); }
+    if(md->type() == "osc:LSArchive_sample_cell_type") { _cell_type = trim_whitespace(md->data()); }
+  }  
+  return _cell_type;
+  // EEDB::Metadata *md;
+  // if((md = metadataset()->find_metadata("cell_type", ""))) { return trim_whitespace(md->data()); }
+  // if((md = metadataset()->find_metadata("eedb:cell_type", ""))) { return trim_whitespace(md->data()); }
+  // if((md = metadataset()->find_metadata("osc:LSArchive_sample_cell_type", ""))) { return trim_whitespace(md->data()); }
+  return "";
+}
+
+string  EEDB::DataSource::tissue() { 
+  load_metadata();
+  if(_tissue !="") { return _tissue; }
+  vector<EEDB::Metadata*> _mdata_list = _metadataset.metadata_list();
+  for(unsigned int i=0; i<_mdata_list.size(); i++) {
+    EEDB::Metadata *md = _mdata_list[i];
+    if(md->data().find("UNDEFINED")!=std::string::npos) { continue; }
+    if(md->type() == "tissue") { _tissue = trim_whitespace(md->data()); }
+    if(md->type() == "tissue_type") { _tissue = trim_whitespace(md->data()); }
+    //if(md->type() == "sample_tissue_type") { _tissue = trim_whitespace(md->data()); }
+    if(md->type() == "osc:LSArchive_sample_tissue_type") { _tissue = trim_whitespace(md->data()); }
+  }  
+  return _tissue;
+  //   EEDB::Metadata *md;
+  //   string tissue;
+  //   if((md = metadataset()->find_metadata("osc:LSArchive_sample_tissue_type", ""))) { tissue+= md->data()+" "; }
+  //   if((md = metadataset()->find_metadata("tissue", ""))) { tissue += md->data()+" "; }
+  //   if((md = metadataset()->find_metadata("tissue_type", ""))) { tissue += md->data()+" "; }
+  //   return trim_whitespace(tissue);
+}
+
+string  EEDB::DataSource::biosample() { 
+  load_metadata();
+  if(_biosample!="") { return _biosample; }
+  _biosample = "";
+  EEDB::Metadata *md;
+
+  if(cell_line()!="") { _biosample += cell_line() + " "; }
+  if(cell_type()!="") { _biosample += cell_type() + " "; }
+  if(tissue()!="") { _biosample += tissue() + " "; }
+
+  if((md = metadataset()->find_metadata("enc:biosample", ""))) { _biosample += md->data()+" "; }
+  if((md = metadataset()->find_metadata("enc:biosampleSynonyms", ""))) { _biosample += md->data()+" "; }
+  
+  _biosample = trim_whitespace(_biosample);
+  //metadataset()->remove_metadata_like("eedb:biosample", ""); //for debugging
+  if(!metadataset()->find_metadata("eedb:biosample", "")) { metadataset()->add_tag_data("eedb:biosample", _biosample); } //for debugging
+  return _biosample;
+}
+
+string  EEDB::DataSource::series_name() { 
+  load_metadata();
+  if(_series_name!="") { return _series_name; }
+  EEDB::Metadata *md;
+  if((md = metadataset()->find_metadata("eedb:series_name", ""))) { return trim_whitespace(md->data()); }
+  if((md = metadataset()->find_metadata("series_name", ""))) { return trim_whitespace(md->data()); }
+  return "";
+}
+
+string  EEDB::DataSource::treatment() { 
+  load_metadata();
+  if(_treatment!="") { return _treatment; }
+  
+  map<string,bool> treatments;
+  vector<EEDB::Metadata*> _mdata_list = _metadataset.metadata_list();
+  for(unsigned int i=0; i<_mdata_list.size(); i++) {
+    EEDB::Metadata *md = _mdata_list[i];
+    if(md->data().find("UNDEFINED")!=std::string::npos) { continue; }
+    if(md->type() == "experimental_condition") { treatments[trim_whitespace(md->data())]=true; }
+    if(md->type() == "eedb:treatment") { treatments[trim_whitespace(md->data())] = true; }
+    if(md->type() == "osc:LSArchive_sample_experiment_condition") { treatments[trim_whitespace(md->data())] = true;; }
+    if(md->type() == "enc:biosampleTreatments") { treatments[trim_whitespace(md->data())] = true; }
+  }  
+
+  for(auto it = treatments.begin(); it != treatments.end(); it++) {
+    if(it != treatments.begin()) { _treatment += " "; }
+    _treatment += it->first;
+  }
+  _treatment = trim_whitespace(_treatment);
+
+//   EEDB::Metadata *md;
+//   _treatment="";
+//   if((md = metadataset()->find_metadata("experimental_condition", ""))) { _treatment += md->data()+" "; }
+//   if((md = metadataset()->find_metadata("eedb:treatment", ""))) { _treatment += md->data()+" "; }
+//   if((md = metadataset()->find_metadata("osc:LSArchive_sample_experiment_condition", ""))) { _treatment+= md->data()+" "; }
+//   if((md = metadataset()->find_metadata("enc:biosampleTreatments", ""))) { _treatment+= md->data()+" "; }
+// 
+   string sname = series_name();
+   if(_treatment=="" && sname!="") { _treatment = sname; }  
+
+  //for debugging
+  metadataset()->remove_metadata_like("eedb:composite_treatment", ""); 
+  if(!metadataset()->find_metadata("eedb:composite_treatment", "")) { metadataset()->add_tag_data("eedb:composite_treatment", _treatment); }
+
+  return _treatment;
+}
+
+double  EEDB::DataSource::series_point() {
+  load_metadata();
+  if(_series_point != 0.0) { return _series_point; }
+  EEDB::Metadata *md;
+  if((md = metadataset()->find_metadata("eedb:series_point", ""))) { return strtod(md->data().c_str(), NULL); }
+  return 0.0;
+}
+
 
 void  EEDB::DataSource::load_metadata() {
   //trigger lazy load of metadata

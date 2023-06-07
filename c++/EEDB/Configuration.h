@@ -1,4 +1,4 @@
-/* $Id: Configuration.h,v 1.21 2018/03/20 02:38:22 severin Exp $ */
+/* $Id: Configuration.h,v 1.22 2023/05/12 01:58:03 severin Exp $ */
 
 /***
 
@@ -89,6 +89,7 @@ class Configuration : public MQDB::MappedQuery {
     string               config_type();
     string               display_name();
     string               description();
+    string               assembly_name();
     string               configXML();
     long                 access_count();
     time_t               create_date() { return _create_date; }

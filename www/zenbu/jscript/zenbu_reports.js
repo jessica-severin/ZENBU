@@ -5367,6 +5367,8 @@ function reportElementInit(reportElement) {
   
   reportElement.filterSubpanel = reportElement_filterSubpanel;
   reportElement.datasource     = reportElement_datasourceElement;
+  reportElement.customWidget   = function() { return null; };
+
 
   //type specific initialization parameters
   if(reportElement.element_type == "treelist") {
@@ -6935,7 +6937,8 @@ function reportElementCascadeEvent(reportElement, mode, value, value2) {
     reportsPostprocessElement(elementID);
   }
   if(mode == "dtype-filter-add") {
-    var dtype = reportElement.datatypes[reportElement.dtype_filter_select];
+    if(!value) { value = reportElement.dtype_filter_select; }
+    var dtype = reportElement.datatypes[value];
     if(dtype) { dtype.filtered = true; }
     reportsPostprocessElement(elementID);
   }
@@ -7830,6 +7833,13 @@ function reportElementDrawTitlebar(reportElement) {
     header_g.appendChild(searchwidget);
   }
   
+  var customwidget = reportElement.customWidget();
+  if(customwidget) {
+    widget_pos -= 20;
+    customwidget.setAttributeNS(null, 'transform', "translate("+ widget_pos +",3)");
+    header_g.appendChild(customwidget);
+  }
+
   titleBar.setAttributeNS(null, 'width',  (widget_pos-5)+"px");
   
 }
@@ -8905,6 +8915,7 @@ function reportElement_filterSubpanel() {
     filterBar.bar1 = bar1;
     filterBar.bar2 = null;
     filterBar.clip1 = clip1;
+    filterBar.bar_width = bar_width;
     
     if(dtype_col.filter_abs) {
       //add a gray "mask" in the center
@@ -9324,19 +9335,21 @@ function reportElementFilterHoverValue(elementID, dtype, setvalue) {
   var min_val = dtype_col.min_val;
   if(dtype_col.filter_abs) { min_val = 0.0; }
 
-  var posPerc = xpos / barRect.width;
+  var relPerc = xpos / barRect.width;
   if(dtype_col.filter_abs) {
     var t_width = barRect.width / 2.0;
-    posPerc = Math.abs(xpos-t_width) / t_width;
+    relPerc = (xpos-t_width) / t_width;
   }
-  var relValue = (max_val - min_val) * posPerc + min_val;
-  //console.log("xpos: "+xpos+ "  perc:"+posPerc+ " relValue:"+relValue+" autoset:"+dtype_col.autoSet);    
+  var relValue = (max_val - min_val) * Math.abs(relPerc) + min_val;
+  var dispValue = relValue;
+  if(relPerc < 0) { dispValue = -dispValue; }
+  //console.log("xpos: "+xpos+ "  perc:"+relPerc+ " relValue:"+relValue+" autoset:"+dtype_col.autoSet);    
     
   toolTipWidth=100;
   var tdiv = document.createElement('div');
   tdiv.setAttribute("style", "text-align:center; font-size:10px; font-family:arial,helvetica,sans-serif; width:100px; z-index:100; padding: 1px 5px; margin: 3px 2px; box-sizing: border-box; border: 1px solid gray; border-radius: 4px; background-color:rgb(245,245,250);");
-  tdiv.innerHTML = relValue.toPrecision(6);
-
+  tdiv.innerHTML = dispValue.toPrecision(6);
+  
   var tooltip = document.getElementById("toolTipLayer");
   tooltip.innerHTML = "";
   tooltip.appendChild(tdiv);
@@ -9389,6 +9402,7 @@ function reportElementFilterbarUpdate(dtype_col, filterBar) {
 
   //display double range bar info-graphic
   var bar_width = 300;
+  if(filterBar.bar_width) { bar_width = filterBar.bar_width; }
 
   var max_val = dtype_col.max_val;
   if(dtype_col.filter_abs && (Math.abs(dtype_col.min_val)>max_val)) {
@@ -9590,7 +9604,7 @@ function reportElementBuildSourcesInterface(reportElement) {
         dsi1.allowChangeDatasourceMode = true;
         dsi1.source_ids = reportElement.source_ids;
         dsi1.enableResultFilter = true;
-        dsi1.enableScripting = true;
+        dsi1.enableScripting = false; //TODO: disabled for now, but eventually should add this in even if limited
         dsi1.allowMultipleSelect = true;
         dsi1.query_edge_search_depth = reportElement.query_edge_search_depth;
         dsi1.datasource_mode = datasource_mode;

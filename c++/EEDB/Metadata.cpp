@@ -1,4 +1,4 @@
-/* $Id: Metadata.cpp,v 1.97 2018/08/13 03:44:03 severin Exp $ */
+/* $Id: Metadata.cpp,v 1.98 2023/05/12 01:53:54 severin Exp $ */
 
 /***
 NAME - EEDB::Metadata
@@ -85,6 +85,24 @@ void _eedb_metadata_simple_xml_func(MQDB::DBObject *obj, string &xml_buffer) {
 }
 string _eedb_metadata_display_desc_func(MQDB::DBObject *obj) { 
   return ((EEDB::Metadata*)obj)->_display_desc();
+}
+
+string trim_whitespace(string value) {
+  //trim leading whitespace 
+  size_t p1=0;
+  while(p1<value.length() and (value.at(p1)==' ' or value.at(p1)=='\t' or value.at(p1)=='\n')) {
+    p1++;
+  }
+  if(p1>0) { value = value.substr(p1); }
+  
+  //trim trailing whitespace
+  // p1=value.length()-1;
+  // while(p1>=0 and (value.at(p1)==' ' or value.at(p1)=='\t' or value.at(p1)=='\n')) {
+  //   p1--;
+  // }
+  // if(p1>=0) { value = value.substr(0,p1+1); }
+  
+  return value;
 }
 
 

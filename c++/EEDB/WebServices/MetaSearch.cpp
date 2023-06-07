@@ -1,4 +1,4 @@
-/* $Id: MetaSearch.cpp,v 1.100 2020/10/02 10:41:22 severin Exp $ */
+/* $Id: MetaSearch.cpp,v 1.102 2023/05/29 04:18:07 severin Exp $ */
 
 /***
 
@@ -302,6 +302,8 @@ void EEDB::WebServices::MetaSearch::process_xml_parameters() {
   if((node = root_node->first_node("mdkey_list")) != NULL) { _parameters["mdkey_list"] = node->value(); }
   if((node = root_node->first_node("md_show_ids")) != NULL) { _parameters["md_show_ids"] = node->value(); }
   if((node = root_node->first_node("sourcetype")) != NULL) { _parameters["sourcetype"] = node->value(); }
+  if((node = root_node->first_node("sort")) != NULL) { _parameters["sort"] = node->value(); }
+  if((node = root_node->first_node("sort_order")) != NULL) { _parameters["sort_order"] = node->value(); }
 
   if((node = root_node->first_node("expfilter")) != NULL) { _parameters["filter"] = node->value(); }
   if((node = root_node->first_node("filter")) != NULL) { _parameters["filter"] = node->value(); }
@@ -889,6 +891,138 @@ void EEDB::WebServices::MetaSearch::search_feature() {
   printf("</results>\n");    
 }
 
+//=================================================
+//
+// show_datasources
+
+bool _source_name_asc_sort_func (EEDB::DataSource *a, EEDB::DataSource *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->display_name() == "") { return false; }
+  if((a->display_name() != "") && (b->display_name() == "")) { return true; }
+  return (boost::to_upper_copy(a->display_name()) < boost::to_upper_copy(b->display_name()));
+}
+bool _source_name_desc_sort_func (EEDB::DataSource *a, EEDB::DataSource *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->display_name() == "") { return false; }
+  if((a->display_name() != "") && (b->display_name() == "")) { return true; }
+  return (boost::to_upper_copy(a->display_name()) > boost::to_upper_copy(b->display_name()));
+}
+bool _source_description_asc_sort_func (EEDB::DataSource *a, EEDB::DataSource *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->description() == "") { return false; }
+  if((a->description() != "") && (b->description() == "")) { return true; }
+  return (boost::to_upper_copy(a->description()) < boost::to_upper_copy(b->description()));
+}
+bool _source_description_desc_sort_func (EEDB::DataSource *a, EEDB::DataSource *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->description() == "") { return false; }
+  if((a->description() != "") && (b->description() == "")) { return true; }
+  return (boost::to_upper_copy(a->description()) > boost::to_upper_copy(b->description()));
+}
+
+bool _source_platform_asc_sort_func (EEDB::DataSource *a, EEDB::DataSource *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->platform() == "") { return false; }
+  if((a->platform() != "") && (b->platform() == "")) { return true; }
+  return (boost::to_upper_copy(a->platform()) < boost::to_upper_copy(b->platform()));
+}
+bool _source_platform_desc_sort_func (EEDB::DataSource *a, EEDB::DataSource *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->platform() == "") { return false; }
+  if((a->platform() != "") && (b->platform() == "")) { return true; }
+  return (boost::to_upper_copy(a->platform()) > boost::to_upper_copy(b->platform()));
+}
+
+bool _source_biosample_asc_sort_func (EEDB::DataSource *a, EEDB::DataSource *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->biosample() == "") { return false; }
+  if((a->biosample() != "") && (b->biosample() == "")) { return true; }
+  return (boost::to_upper_copy(a->biosample()) < boost::to_upper_copy(b->biosample()));
+}
+bool _source_biosample_desc_sort_func (EEDB::DataSource *a, EEDB::DataSource *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->biosample() == "") { return false; }
+  if((a->biosample() != "") && (b->biosample() == "")) { return true; }
+  return (boost::to_upper_copy(a->biosample()) > boost::to_upper_copy(b->biosample()));
+}
+
+bool _source_treatment_asc_sort_func (EEDB::DataSource *a, EEDB::DataSource *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->treatment() == "") { return false; }
+  if((a->treatment() != "") && (b->treatment() == "")) { return true; }
+  return (boost::to_upper_copy(a->treatment()) < boost::to_upper_copy(b->treatment()));
+}
+bool _source_treatment_desc_sort_func (EEDB::DataSource *a, EEDB::DataSource *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->treatment() == "") { return false; }
+  if((a->treatment() != "") && (b->treatment() == "")) { return true; }
+  return (boost::to_upper_copy(a->treatment()) > boost::to_upper_copy(b->treatment()));
+}
+bool _source_series_point_asc_sort_func (EEDB::DataSource *a, EEDB::DataSource *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->series_point() == 0.0) { return false; }
+  if((a->series_point() != 0.0) && (b->series_point() == 0.0)) { return true; }
+  return (a->series_point() < b->series_point());   
+}
+bool _source_series_point_desc_sort_func (EEDB::DataSource *a, EEDB::DataSource *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->series_point() == 0.0) { return false; }
+  if((a->series_point() != 0.0) && (b->series_point() == 0.0)) { return true; }
+  return (a->series_point() > b->series_point()); 
+}
+
+bool _source_genome_asc_sort_func (EEDB::DataSource *a, EEDB::DataSource *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->assembly_name() == "") { return false; }
+  if((a->assembly_name() != "") && (b->assembly_name() == "")) { return true; }
+  return (boost::to_upper_copy(a->assembly_name()) < boost::to_upper_copy(b->assembly_name()));
+}
+bool _source_genome_desc_sort_func (EEDB::DataSource *a, EEDB::DataSource *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  if(a->assembly_name() == "") { return false; }
+  if((a->assembly_name() != "") && (b->assembly_name() == "")) { return true; }
+  return (boost::to_upper_copy(a->assembly_name()) > boost::to_upper_copy(b->assembly_name()));
+}
+bool _source_createdate_asc_sort_func (EEDB::DataSource *a, EEDB::DataSource *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  return (a->create_date() < b->create_date());   
+}
+bool _source_createdate_desc_sort_func (EEDB::DataSource *a, EEDB::DataSource *b) { 
+  if(a == NULL) { return true; }
+  if(b == NULL) { return false; }
+  return (a->create_date() > b->create_date()); 
+}
+
+bool _feature_source_sort_func (EEDB::FeatureSource *a, EEDB::FeatureSource *b) { 
+  //OLD default sort function, but I will keep here just in case
+  // < function
+  if(a == NULL) { return false; }  //real < NULL 
+  if(b == NULL) { return true; }  //a not NULL, but b is NULL
+
+  if(!(a->category().empty()) and b->category().empty()) { return true; }
+  if(a->category().empty() and !(b->category().empty())) { return false; }
+
+  if(a->category() < b->category()) { return true; }
+  if(a->category() > b->category()) { return false; }
+
+  if(a->name() < b->name()) { return true; }
+  return false;
+}
 
 
 void EEDB::WebServices::MetaSearch::show_datasources() {  
@@ -1034,8 +1168,70 @@ void EEDB::WebServices::MetaSearch::show_datasources() {
   total_count += _global_source_counts["EdgeSource"].size();
   total_count += _global_source_counts["Assembly"].size();
 
-  printf("<result_count method=\"sources\" total=\"%ld\" filtered=\"%ld\" peers=\"%ld\"/>\n", 
-      total_count, t_sources.size(), t_peers.size());
+  printf("<result_count method=\"sources\" total=\"%ld\" filtered=\"%ld\" peers=\"%ld\"/>\n", total_count, t_sources.size(), t_peers.size());
+  
+  if(_parameters.find("sort") != _parameters.end()) {
+    printf("<sort method=\"%s\" order=\"%s\"/>\n", _parameters["sort"].c_str(), _parameters["sort_order"].c_str());
+  }
+  
+  //server-side sorting of t_sources here
+  if(_parameters["sort"] == "name") {
+    if(_parameters["sort_order"] == "desc") {
+      sort(t_sources.begin(), t_sources.end(), _source_name_desc_sort_func);
+    } else {
+      sort(t_sources.begin(), t_sources.end(), _source_name_asc_sort_func);
+    }
+  }
+  if(_parameters["sort"] == "description") {
+    if(_parameters["sort_order"] == "desc") {
+      sort(t_sources.begin(), t_sources.end(), _source_description_desc_sort_func);
+    } else {
+      sort(t_sources.begin(), t_sources.end(), _source_description_asc_sort_func);
+    }
+  }
+  if(_parameters["sort"] == "treatment") {
+    if(_parameters["sort_order"] == "desc") {
+      sort(t_sources.begin(), t_sources.end(), _source_treatment_desc_sort_func);
+    } else {
+      sort(t_sources.begin(), t_sources.end(), _source_treatment_asc_sort_func);
+    }
+  }
+  if(_parameters["sort"] == "platform") {
+    if(_parameters["sort_order"] == "desc") {
+      sort(t_sources.begin(), t_sources.end(), _source_platform_desc_sort_func);
+    } else {
+      sort(t_sources.begin(), t_sources.end(), _source_platform_asc_sort_func);
+    }
+  }
+  if(_parameters["sort"] == "biosample") {
+    if(_parameters["sort_order"] == "desc") {
+      sort(t_sources.begin(), t_sources.end(), _source_biosample_desc_sort_func);
+    } else {
+      sort(t_sources.begin(), t_sources.end(), _source_biosample_asc_sort_func);
+    }
+  }
+  if(_parameters["sort"] == "series_point") {
+    if(_parameters["sort_order"] == "desc") {
+      sort(t_sources.begin(), t_sources.end(), _source_series_point_desc_sort_func);
+    } else {
+      sort(t_sources.begin(), t_sources.end(), _source_series_point_asc_sort_func);
+    }
+  }
+  if(_parameters["sort"] == "genome") {
+    if(_parameters["sort_order"] == "desc") {
+      sort(t_sources.begin(), t_sources.end(), _source_genome_desc_sort_func);
+    } else {
+      sort(t_sources.begin(), t_sources.end(), _source_genome_asc_sort_func);
+    }
+  }
+  if(_parameters["sort"] == "create_date") {
+    if(_parameters["sort_order"] == "desc") {
+      sort(t_sources.begin(), t_sources.end(), _source_createdate_desc_sort_func);
+    } else {
+      sort(t_sources.begin(), t_sources.end(), _source_createdate_asc_sort_func);
+    }
+  }
+  
 
   for(unsigned int i=0; i< t_sources.size(); i++) {
     EEDB::DataSource *source = t_sources[i];
@@ -1091,22 +1287,6 @@ void EEDB::WebServices::MetaSearch::show_datasources() {
   printf("<process_summary processtime_sec=\"%1.6f\" />\n", runtime);
   printf("<fastcgi invocation=\"%ld\" pid=\"%d\" />\n", _connection_count, getpid());
   printf("</sources>\n");    
-}
-
-
-bool _feature_source_sort_func (EEDB::FeatureSource *a, EEDB::FeatureSource *b) { 
-  // < function
-  if(a == NULL) { return false; }  //real < NULL 
-  if(b == NULL) { return true; }  //a not NULL, but b is NULL
-
-  if(!(a->category().empty()) and b->category().empty()) { return true; }
-  if(a->category().empty() and !(b->category().empty())) { return false; }
-
-  if(a->category() < b->category()) { return true; }
-  if(a->category() > b->category()) { return false; }
-
-  if(a->name() < b->name()) { return true; }
-  return false;
 }
 
 

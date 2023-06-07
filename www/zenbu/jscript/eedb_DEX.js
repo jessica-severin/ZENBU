@@ -50,6 +50,8 @@ function dexInitContents() {
   contents.page_size = 20;
   contents.num_pages = 0;
   contents.loading = false;
+  contents.sort_column = "created date";
+  contents.sort_descending = true;
   
   contents.collaboration_select = null;
 
@@ -132,6 +134,7 @@ function dexParseURL(urlConfig) {
         contents.mode = mode;
         rtnval = true;
       }
+      if(mode=="DataSources") { contents.sort_column="upload date"; }
     }
     if(tag0 == "datasource") {
       contents.filters.datasource = value1;
@@ -181,6 +184,27 @@ function dexHandleHistoryChange(newLocation, historyData) {
     dexShowContents();
   }
 }
+
+function sort_query_code() {
+  var sort_col = contents.sort_column;
+  if(sort_col=="upload date") { sort_col = "create_date"; }
+  if(sort_col=="create date") { sort_col = "create_date"; }
+  if(sort_col=="created date") { sort_col = "create_date"; }
+  if(sort_col=="accessed") { sort_col = "access"; }
+  if(sort_col=="fixedID") { sort_col = "fixed_id"; }
+  if(sort_col=="source name") { sort_col = "name"; }
+  if(sort_col=="cellline / tissue") { sort_col = "biosample"; }
+  if(sort_col=="time point") { sort_col = "series_point"; }
+  //'source name', 'platform', 'cellline / tissue', 'time point', 'treatment', 'upload date', 'source type'
+
+  //paramXML += "<sort>create_date</sort><sort_order>desc</sort_order>";
+  var paramXML = "<sort>"+sort_col+"</sort>";
+  if(contents.sort_descending) { paramXML += "<sort_order>desc</sort_order>";} 
+  else { paramXML += "<sort_order>ascending</sort_order>"; }
+
+  return paramXML;
+}
+
 
 //
 //---------------------------------------------------------------------------
@@ -550,6 +574,8 @@ function dexReloadDataSources() {
   contents.datasources.mdstats_array = new Array();
   dexShowSourceMdataStats();  //clear
 
+  contents.datasources.sources_array = new Array(); //clear
+
   //do not clear hash, but instead "hide" the unselected sources
   for(var uuid in contents.datasources.sources_hash) {
     var source = contents.datasources.sources_hash[uuid];
@@ -570,7 +596,7 @@ function dexReloadDataSources() {
   if(contents.filters.source_ids) {
     paramXML += "<source_ids>" + contents.filters.source_ids + "</source_ids>";
   }
-
+  paramXML += sort_query_code();  
   if((contents.filters.assembly != "") || (contents.filters.search != "")) {
     var filter = "";
     if(contents.filters.assembly != "") { filter = "(eedb:assembly_name:="+contents.filters.assembly + " or assembly_name:="+contents.filters.assembly+") "; }
@@ -581,7 +607,7 @@ function dexReloadDataSources() {
   paramXML += "</zenbu_query>\n";
 
   contentsXMLHttp.onreadystatechange=dexParseDataSourceSearch;
-  contentsXMLHttp.open("POST", eedbSearchFCGI, true);
+  contentsXMLHttp.open("POST", eedbSearchFCGI, true);  //should be eedbSearchFCGI but use eedbSearchCGI for development
   contentsXMLHttp.setRequestHeader("Content-Type", "application/xml; charset=UTF-8;");
   //contentsXMLHttp.setRequestHeader("Content-length", paramXML.length);
   //contentsXMLHttp.setRequestHeader("Connection", "close");
@@ -603,6 +629,8 @@ function dexParseDataSourceSearch() {
     contents_table_div.setStyle({color:'black', opacity:1.0}).update('Problem with webservice query!');
     return;
   } 
+  
+  contents.datasources.sources_array = new Array(); //clear
 
   contents.loading = false;
 
@@ -616,7 +644,33 @@ function dexParseDataSourceSearch() {
   var count1 = 0;
   var count2 = 0;
   var sources_hash = contents.datasources.sources_hash;
+  var sources_array = contents.datasources.sources_array;
+  
+  var sources_children = xmlDoc.childNodes;
+  for (var i = 0; i < sources_children.length; i++) {
+    var sourceDOM = sources_children[i];
+    if(!sourceDOM) { continue; }
+    if(!sourceDOM.tagName) { continue; }
+    count1++;
 
+    var srcid =  sourceDOM.getAttribute("id");
+    if(!srcid) { continue; }
+    var source = sources_hash[srcid];
+    if(!source) {
+      count2++
+      source = new Object;
+      if(sourceDOM.tagName == "assembly")      { eedbParseAssemblyData(sourceDOM, source); } 
+      if(sourceDOM.tagName == "featuresource") { eedbParseFeatureSourceData(sourceDOM, source); }
+      if(sourceDOM.tagName == "experiment")    { eedbParseExperimentData(sourceDOM, source); }
+      if(sourceDOM.tagName == "edgesource")    { eedbParseEdgeSourceXML(sourceDOM, source); }
+      sources_hash[srcid] = source;
+      source.selected = false;
+    }
+    source.visible = true;
+    sources_array.push(source);
+  }
+  
+  /*
   var xmlExperiments = xmlDoc.getElementsByTagName("experiment");
   for(i=0; i<xmlExperiments.length; i++) {
     count1++
@@ -680,6 +734,7 @@ function dexParseDataSourceSearch() {
     }
     source.visible = true;
   }
+  */
   //document.getElementById("message").innerHTML = "parsed "+count1+" sources into "+count2+" unique";
 
   //dexCreateAssemblySelect();
@@ -699,7 +754,7 @@ function dexLoadFullDataSourcesList(ids) {
   paramXML += "</zenbu_query>\n";
   
   var singleExperimentXMLHttp=GetXmlHttpObject();
-  singleExperimentXMLHttp.open("POST", eedbSearchFCGI, false);
+  singleExperimentXMLHttp.open("POST", eedbSearchFCGI, false); //should be eedbSearchFCGI but use eedbSearchCGI for development
   singleExperimentXMLHttp.setRequestHeader("Content-Type", "application/xml; charset=UTF-8;");
   singleExperimentXMLHttp.send(paramXML);
 
@@ -753,11 +808,14 @@ function dexLoadFullDataSourcesList(ids) {
 function dexFilteredDataSourcesArray() {
   var filters = contents.filters;
 
-  var sources_array = new Array();
-  var sources_hash = contents.datasources.sources_hash;
-
-  for(var srcid in sources_hash) {
-    var source = sources_hash[srcid];
+  var sources_array = contents.datasources.sources_array;
+  var filter_array = new Array;
+  
+  //for(var srcid in contents.datasources.sources_hash) {
+    //  var source = contents.datasources.sources_hash[srcid];
+  
+  for(var i=0; i<sources_array.length; i++) {
+    var source = sources_array[i];
     if(!source) { continue; }
     if(!source.visible) { continue; }
     if((filters.platform!="") && (filters.platform != source.platform)) { continue; }
@@ -768,9 +826,9 @@ function dexFilteredDataSourcesArray() {
     if((contents.filters.datasource=="edge_sources") && (source.classname!="EdgeSource")) { continue; }
     if((contents.filters.datasource=="assemblies") && (source.classname!="Assembly")) { continue; }
 
-    sources_array.push(source);
+    filter_array.push(source);
   }
-  return sources_array;
+  return filter_array;
 }
 
 
@@ -783,7 +841,7 @@ function dexShowDataSources() {
 
   var sources_array = dexFilteredDataSourcesArray();
   if(!sources_array) { return; }
-  sources_array.sort(dex_datasource_sort_func);
+  //sources_array.sort(dex_datasource_sort_func);
 
   var num_pages = Math.ceil(sources_array.length / contents.page_size);
   contents.datasources.filter_count = sources_array.length;
@@ -837,19 +895,42 @@ function dexShowDataSources() {
   var my_table = new Element('table');
   my_table.setAttribute("width", "100%");
   div1.appendChild(my_table);
-  var trhead = my_table.appendChild(new Element('thead')).appendChild(new Element('tr'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('row'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('select'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('source name'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('genome'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('description'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('platform'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('cellline / tissue'));
-  //trhead.appendChild(new Element('th', { 'class': 'listView' }).update('evoc terms'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('time point'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('treatment'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('upload date'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('source type'));
+  
+  // var trhead = my_table.appendChild(new Element('thead')).appendChild(new Element('tr'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('row'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('select'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('source name'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('genome'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('description'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('platform'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('cellline / tissue'));
+  // //trhead.appendChild(new Element('th', { 'class': 'listView' }).update('evoc terms'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('time point'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('treatment'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('upload date'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('source type'));
+
+  var columns = ['row', 'select', 'source name', 'genome', 'description', 'platform', 'cellline / tissue',
+    'time point', 'treatment', 'upload date', 'source type' ];
+  var thead = my_table.appendChild(document.createElement('thead'));
+  var tr = thead.appendChild(document.createElement('tr'));
+  for(var i=0; i<columns.length; i++) {
+    var col_name = columns[i];
+    if(!col_name) { continue; }
+    var th = tr.appendChild(document.createElement('th'));
+    th.setAttribute('nowrap', "nowrap");
+    //if(contents.grid_lines) { th.style.borderLeft = "1px solid gray"; }
+    th.innerHTML = col_name;
+    if(col_name == "row") { continue; }
+    if(col_name == "select") { continue; }
+    if(col_name == "source type") { continue; }
+    if(contents.sort_column == col_name) {
+      th.setAttribute('style', "color:green;");
+      //if(contents.sort_descending) { th.innerHTML += "&#11167;"; } else { th.innerHTML += "&#11165;"; } //dart arrow
+      if(contents.sort_descending) { th.innerHTML += "&#9660;"; } else { th.innerHTML += "&#9650;"; } //triangle
+    }
+    th.setAttribute("onmousedown", "dexReconfigContentsParam('column_sort', '"+col_name+"');");
+  }
 
   var load_ids="";
   var page_ids="";
@@ -1104,12 +1185,15 @@ function dexParseSourceMdataStats() {
       var mdvalue = new Object;
       mdvalue.value = valueXML.getAttribute("value");
       mdvalue.source_count = Math.floor(valueXML.getAttribute("source_count"));
+      mdvalue.source_ids = "";
 
       var datasources = valueXML.getElementsByTagName("datasource");
       for(k=0; k<datasources.length; k++) {
         var id1 = datasources[k].getAttribute("id");
         if(mdkey.source_ids) { mdkey.source_ids += ","; }
+        if(mdvalue.source_ids) { mdvalue.source_ids += ","; }
         mdkey.source_ids += id1;
+        mdvalue.source_ids += id1;
       }
       mdkey.value_array.push(mdvalue);
     }
@@ -1200,6 +1284,8 @@ function dexShowSourceMdataStats() {
     var a1 = td2.appendChild(document.createElement('a'));
     a1.setAttribute("target", "eeDB_source_view");
     a1.setAttribute("href", "./");
+    //var md_search = mdkey.key + "~=";
+    //a1.setAttribute("onclick", "dexSourceMdataParameter('refine_search', \""+md_search+"\"); return false;");
     a1.setAttribute("onclick", "dexSourceMdataParameter('sourceids', \""+mdkey.source_ids+"\"); return false;");
     a1.setAttribute("onmouseover", "eedbMessageTooltip('refine to "+ mdkey.source_count+" sources',120);");
     a1.setAttribute("onmouseout", "eedbClearSearchTooltip();");
@@ -1237,6 +1323,8 @@ function dexShowSourceMdataStats() {
       a2.setAttribute("style", "margin-left:5px;");
       a2.setAttribute("target", "eeDB_source_view");
       a2.setAttribute("href", "./");
+      //var md_search = mdkey.key + ":=" + mdvalue.value;
+      //a2.setAttribute("onclick", "dexSourceMdataParameter('refine_search', \""+md_search+"\"); return false;");
       a2.setAttribute("onclick", "dexSourceMdataParameter('sourceids', \""+mdvalue.source_ids+"\"); return false;");
       a2.setAttribute("onmouseover", "eedbMessageTooltip('refine to "+ mdvalue.source_count+" sources',120);");
       a2.setAttribute("onmouseout", "eedbClearSearchTooltip();");
@@ -1276,11 +1364,19 @@ function dexSourceMdataParameter(mode, value) {
     }
   }
   if(mode=="sourceids") {
-    //document.getElementById("message").innerHTML = "select source_ids ["+value+"]";
+    //console.log("dexSourceMdataParameter set source_ids [%s]\n", value);
     contents.filters.source_ids = value;
     contents.current_index = 0;
     dexSearchClear(true);
     return;
+  }
+  if(mode=="refine_search") {
+    var filter = "("+contents.filters.search + ") and ("+value+")";
+    contents.filters.search = filter;
+    var searchInput = document.getElementById("dex_main_search_input");
+    if(searchInput) { searchInput.value = contents.filters.search; }
+    contents.current_index = 0;
+    dexReloadContentsData();
   }
   if(mode=="fullload") {
     contents.datasources.mdstats_fullload = value;
@@ -1505,7 +1601,8 @@ function dexReloadTracksData() {
 
   var paramXML = "<zenbu_query>\n";
   paramXML += "<mode>search</mode><format>minxml</format><configtype>track</configtype>\n";
-  paramXML += "<sort>create_date</sort><sort_order>desc</sort_order>";
+  //paramXML += "<sort>create_date</sort><sort_order>desc</sort_order>";
+  paramXML += sort_query_code();  
   if((contents.filters.assembly != "") || (contents.filters.search != "")) {
     paramXML += "<filter>";
     if(contents.filters.assembly != "") { paramXML += contents.filters.assembly + " "; }
@@ -1646,11 +1743,11 @@ function dexParseTrackData(xmlConfig, track) {
 
 function dexFilteredTracksArray() {
   var filters = contents.filters;
-
-  var tracks_hash = contents.tracks.tracks_hash;
+    
+  var tracks_array = contents.tracks.tracks_array;
   var filter_array = new Array;
-  for(var uuid in tracks_hash) {
-    var track = tracks_hash[uuid];
+  for(var i=0; i<tracks_array.length; i++) {
+    var track = tracks_array[i];
     if(!track.visible) { continue; }
     //if((filters.platform!="") && (filters.platform != experiment.platform)) { continue; }
     //if(filters.hide_mapcount && (/mapcount/.test(experiment.name))) { continue; }
@@ -1685,16 +1782,37 @@ function dexShowTracks() {
   var my_table = new Element('table');
   my_table.setAttribute("width", "100%");
   div1.appendChild(my_table);
-  var trhead = my_table.appendChild(new Element('thead')).appendChild(new Element('tr'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('row'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('select'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('name'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('genome'));
-  //trhead.appendChild(new Element('th', { 'class': 'listView' }).update('author'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('description'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('create date'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('data sources'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('accessed'));
+
+  // var trhead = my_table.appendChild(new Element('thead')).appendChild(new Element('tr'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('row'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('select'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('name'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('genome'));
+  // //trhead.appendChild(new Element('th', { 'class': 'listView' }).update('author'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('description'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('create date'));
+  // //trhead.appendChild(new Element('th', { 'class': 'listView' }).update('data sources'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('accessed'));
+
+  var columns = ['row', 'select', 'name', 'genome', 'description', 'created date', 'accessed'];
+  var thead = my_table.appendChild(document.createElement('thead'));
+  var tr = thead.appendChild(document.createElement('tr'));
+  for(var i=0; i<columns.length; i++) {
+    var col_name = columns[i];
+    if(!col_name) { continue; }
+    var th = tr.appendChild(document.createElement('th'));
+    th.setAttribute('nowrap', "nowrap");
+    //if(contents.grid_lines) { th.style.borderLeft = "1px solid gray"; }
+    th.innerHTML = col_name;
+    if(col_name == "row") { continue; }
+    if(col_name == "select") { continue; }
+    if(contents.sort_column == col_name) {
+      th.setAttribute('style', "color:green;");
+      //if(contents.sort_descending) { th.innerHTML += "&#11167;"; } else { th.innerHTML += "&#11165;"; } //dart arrow
+      if(contents.sort_descending) { th.innerHTML += "&#9660;"; } else { th.innerHTML += "&#9650;"; } //triangle
+    }
+    th.setAttribute("onmousedown", "dexReconfigContentsParam('column_sort', '"+col_name+"');");
+  }
 
   var num_pages = Math.ceil(tracks_array.length / contents.page_size);
   contents.tracks.filter_count = tracks_array.length;
@@ -1769,6 +1887,7 @@ function dexShowTracks() {
     tdiv.setAttribute("style", "font-size:10px; color:rgb(94,115,153);");
     tdiv.innerHTML = track.create_date;
     
+    /*
     var src_info="";
     var fs_cnt=0;
     var exp_cnt=0;
@@ -1788,6 +1907,7 @@ function dexShowTracks() {
       src_info += exp_cnt+" exps."; 
     }
     tr.appendChild(new Element('td').update(encodehtml(src_info)));
+    */
     tr.appendChild(new Element('td').update(track.access_count));
   }
 
@@ -1801,7 +1921,7 @@ function dexShowTracks() {
     tr.appendChild(new Element('td'));
     tr.appendChild(new Element('td'));
     tr.appendChild(new Element('td'));
-    tr.appendChild(new Element('td'));
+    //tr.appendChild(new Element('td'));
   }
 
 
@@ -1876,10 +1996,19 @@ function dexReloadViewsData() {
 
   contentsXMLHttp=GetXmlHttpObject();
   contentsXMLHttp.onreadystatechange=dexPrepareViewsData;
+  
+  // var sort_col = contents.sort_column;
+  // if(sort_col=="created date") { sort_col = "create_date"; }
+  // if(sort_col=="accessed") { sort_col = "access"; }
+  // if(sort_col=="fixedID") { sort_col = "fixed_id"; }
 
   var paramXML = "<zenbu_query>\n";
   paramXML += "<mode>search</mode><format>minxml</format><configtype>view</configtype>\n";
-  paramXML += "<sort>create_date</sort><sort_order>desc</sort_order>";
+  //paramXML += "<sort>create_date</sort><sort_order>desc</sort_order>";
+  paramXML += sort_query_code();
+  // paramXML += "<sort>"+sort_col+"</sort>";
+  // if(contents.sort_descending) { paramXML += "<sort_order>desc</sort_order>";} 
+  // else { paramXML += "<sort_order>ascending</sort_order>"; }
   if((contents.filters.assembly != "") || (contents.filters.search != "")) {
     paramXML += "<filter>";
     if(contents.filters.assembly != "") { paramXML += contents.filters.assembly + " "; }
@@ -1998,15 +2127,36 @@ function dexShowViews() {
   var my_table = new Element('table');
   my_table.setAttribute("width", "100%");
   div1.appendChild(my_table);
-  var trhead = my_table.appendChild(new Element('thead')).appendChild(new Element('tr'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('row'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('name'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('genome'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('description'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('fixedID'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('create date'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('accessed'));
-  //trhead.appendChild(new Element('th', { 'class': 'listView' }).update('dex template'));
+  
+  // var trhead = my_table.appendChild(new Element('thead')).appendChild(new Element('tr'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('row'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('name'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('genome'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('description'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('fixedID'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('create date'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('accessed'));
+  // //trhead.appendChild(new Element('th', { 'class': 'listView' }).update('dex template'));
+  
+  var columns = ['row', 'name', 'genome', 'description', 'fixedID', 'created date', 'accessed'];
+  var thead = my_table.appendChild(document.createElement('thead'));
+  var tr = thead.appendChild(document.createElement('tr'));
+  for(var i=0; i<columns.length; i++) {
+    var col_name = columns[i];
+    if(!col_name) { continue; }
+    var th = tr.appendChild(document.createElement('th'));
+    th.setAttribute('nowrap', "nowrap");
+    //if(contents.grid_lines) { th.style.borderLeft = "1px solid gray"; }
+    th.innerHTML = col_name;
+    if(col_name == "row") { continue; }
+    if(contents.sort_column == col_name) {
+      th.setAttribute('style', "color:green;");
+      //if(contents.sort_descending) { th.innerHTML += "&#11167;"; } else { th.innerHTML += "&#11165;"; } //dart arrows
+      //if(contents.sort_descending) { th.innerHTML += " &#11015;"; } else { th.innerHTML += " &#11014;"; } //arrow
+      if(contents.sort_descending) { th.innerHTML += "&#9660;"; } else { th.innerHTML += "&#9650;"; } //triangle
+    }
+    th.setAttribute("onmousedown", "dexReconfigContentsParam('column_sort', '"+col_name+"');");
+  }
 
   var num_pages = Math.ceil(views_array.length / contents.page_size);
   contents.configs.filter_count = views_array.length;
@@ -2194,7 +2344,8 @@ function dexReloadReportsData() {
   
   var paramXML = "<zenbu_query>\n";
   paramXML += "<mode>search</mode><format>minxml</format><configtype>reports</configtype>\n"; //minxml
-  paramXML += "<sort>create_date</sort><sort_order>desc</sort_order>";
+  //paramXML += "<sort>create_date</sort><sort_order>desc</sort_order>";
+  paramXML += sort_query_code();
   if((contents.filters.assembly != "") || (contents.filters.search != "")) {
     paramXML += "<filter>";
     if(contents.filters.assembly != "") { paramXML += contents.filters.assembly + " "; }
@@ -2232,6 +2383,7 @@ function dexPrepareReportsData() {
     configs.total_count = xmlDoc.getElementsByTagName("result_count")[0].getAttribute("total") -0;
   }
   
+  configs.reports_array.clear();
   var xmlConfigs = xmlDoc.getElementsByTagName("configuration");
   for(i=0; i<xmlConfigs.length; i++) {
     var xmlConfig = xmlConfigs[i];
@@ -2245,13 +2397,10 @@ function dexPrepareReportsData() {
       configs.reports_hash[uuid] = config;
     }
     eedbParseConfigurationData(xmlConfig, config);
-  }
-  
-  configs.reports_array.clear();
-  for(var uuid in configs.reports_hash) {
-    var config = configs.reports_hash[uuid];
+
     configs.reports_array.push(config);
   }
+  
   if(configs.reports_array.length > configs.total_count) { configs.total_count = configs.reports_array.length; }
   
   dexShowCart();
@@ -2301,15 +2450,34 @@ function dexShowReports() {
   var my_table = new Element('table');
   my_table.setAttribute("width", "100%");
   div1.appendChild(my_table);
-  var trhead = my_table.appendChild(new Element('thead')).appendChild(new Element('tr'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('row'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('name'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('fixedID'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('description'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('create date'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('accessed'));
-  //trhead.appendChild(new Element('th', { 'class': 'listView' }).update('dex template'));
+  // var trhead = my_table.appendChild(new Element('thead')).appendChild(new Element('tr'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('row'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('name'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('fixedID'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('description'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('create date'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('accessed'));
+  // //trhead.appendChild(new Element('th', { 'class': 'listView' }).update('dex template'));
   
+  var columns = ['row', 'name', 'fixedID', 'description', 'created date', 'accessed'];
+  var thead = my_table.appendChild(document.createElement('thead'));
+  var tr = thead.appendChild(document.createElement('tr'));
+  for(var i=0; i<columns.length; i++) {
+    var col_name = columns[i];
+    if(!col_name) { continue; }
+    var th = tr.appendChild(document.createElement('th'));
+    th.setAttribute('nowrap', "nowrap");
+    //if(contents.grid_lines) { th.style.borderLeft = "1px solid gray"; }
+    th.innerHTML = col_name;
+    if(col_name == "row") { continue; }
+    if(contents.sort_column == col_name) {
+      th.setAttribute('style', "color:green;");
+      //if(contents.sort_descending) { th.innerHTML += "&#11167;"; } else { th.innerHTML += "&#11165;"; } //dart arrow
+      if(contents.sort_descending) { th.innerHTML += "&#9660;"; } else { th.innerHTML += "&#9650;"; } //triangle
+    }
+    th.setAttribute("onmousedown", "dexReconfigContentsParam('column_sort', '"+col_name+"');");
+  }
+
   var num_pages = Math.ceil(reports_array.length / contents.page_size);
   contents.configs.filter_count = reports_array.length;
   contents.num_pages = num_pages;
@@ -2462,16 +2630,34 @@ function dexReloadScriptsData() {
 
   contentsXMLHttp=GetXmlHttpObject();
   contentsXMLHttp.onreadystatechange=dexPrepareScriptsData;
-  var url = eedbConfigCGI+"?configtype=script;mode=search;format=minxml;sort=create_date;sort_order=desc";
+  
+  // var url = eedbConfigCGI+"?configtype=script;mode=search;format=minxml;sort=create_date;sort_order=desc";
+  // if((contents.filters.assembly != "") || (contents.filters.search != "")) {
+  //   url += ";filter=";
+  //   if(contents.filters.assembly != "") { url += " "+contents.filters.assembly; }
+  //   if(contents.filters.search != "") { url += " "+contents.filters.search; }
+  // }
+  // url += ";collab=" + current_collaboration.uuid;
+  // contentsXMLHttp.open("GET", url, true);
+  // contentsXMLHttp.send(null);
+  // dexPrepareScriptsData();
+  
+  var paramXML = "<zenbu_query>\n";
+  paramXML += "<mode>search</mode><format>minxml</format><configtype>script</configtype>\n"; //minxml
+  //paramXML += "<sort>create_date</sort><sort_order>desc</sort_order>";
+  paramXML += sort_query_code();
   if((contents.filters.assembly != "") || (contents.filters.search != "")) {
-    url += ";filter=";
-    if(contents.filters.assembly != "") { url += " "+contents.filters.assembly; }
-    if(contents.filters.search != "") { url += " "+contents.filters.search; }
+    paramXML += "<filter>";
+    if(contents.filters.assembly != "") { paramXML += contents.filters.assembly + " "; }
+    if(contents.filters.search != "") { paramXML += contents.filters.search; }
+    paramXML += "</filter>";
   }
-  url += ";collab=" + current_collaboration.uuid;
-  contentsXMLHttp.open("GET", url, true);
-  contentsXMLHttp.send(null);
-  dexPrepareScriptsData();
+  paramXML += "<collab>" + current_collaboration.uuid + "</collab>";
+  paramXML += "</zenbu_query>\n";
+  
+  contentsXMLHttp.open("POST", eedbConfigCGI, true);
+  contentsXMLHttp.setRequestHeader("Content-Type", "application/xml; charset=UTF-8;");
+  contentsXMLHttp.send(paramXML);
 }
 
 
@@ -2498,6 +2684,7 @@ function dexPrepareScriptsData() {
     if(total>0) { scripts.total_count = total; }
   }
 
+  scripts.scripts_array.clear();
   var xmlConfigs = xmlDoc.getElementsByTagName("configuration");
   for(i=0; i<xmlConfigs.length; i++) {
     var xmlConfig = xmlConfigs[i];
@@ -2511,13 +2698,9 @@ function dexPrepareScriptsData() {
       scripts.scripts_hash[uuid] = script;
     }
     eedbParseConfigurationData(xmlConfig, script);
-  }
-
-  scripts.scripts_array.clear();
-  for(var uuid in scripts.scripts_hash) {
-    var script = scripts.scripts_hash[uuid];
     scripts.scripts_array.push(script);
   }
+
   if(scripts.scripts_array.length > scripts.total_count) { scripts.total_count = scripts.scripts_array.length; }
 
   dexShowCart();
@@ -2564,13 +2747,33 @@ function dexShowScripts() {
   var my_table = new Element('table');
   my_table.setAttribute("width", "100%");
   div1.appendChild(my_table);
-  var trhead = my_table.appendChild(new Element('thead')).appendChild(new Element('tr'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('row'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('build track'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('name'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('description'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('create date'));
-  trhead.appendChild(new Element('th', { 'class': 'listView' }).update('accessed'));
+  // var trhead = my_table.appendChild(new Element('thead')).appendChild(new Element('tr'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('row'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('build track'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('name'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('description'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('create date'));
+  // trhead.appendChild(new Element('th', { 'class': 'listView' }).update('accessed'));
+
+  var columns = ['row', 'build track', 'name', 'description', 'created date', 'accessed'];
+  var thead = my_table.appendChild(document.createElement('thead'));
+  var tr = thead.appendChild(document.createElement('tr'));
+  for(var i=0; i<columns.length; i++) {
+    var col_name = columns[i];
+    if(!col_name) { continue; }
+    var th = tr.appendChild(document.createElement('th'));
+    th.setAttribute('nowrap', "nowrap");
+    //if(contents.grid_lines) { th.style.borderLeft = "1px solid gray"; }
+    th.innerHTML = col_name;
+    if(col_name == "row") { continue; }
+    if(col_name == "build track") { continue; }
+    if(contents.sort_column == col_name) {
+      th.setAttribute('style', "color:green;");
+      //if(contents.sort_descending) { th.innerHTML += "&#11167;"; } else { th.innerHTML += "&#11165;"; } //dart arrow
+      if(contents.sort_descending) { th.innerHTML += "&#9660;"; } else { th.innerHTML += "&#9650;"; } //triangle
+    }
+    th.setAttribute("onmousedown", "dexReconfigContentsParam('column_sort', '"+col_name+"');");
+  }
 
   var num_pages = Math.ceil(scripts_array.length / contents.page_size);
   contents.scripts.filter_count = scripts_array.length;
@@ -2803,6 +3006,16 @@ function dexPagingInterface() {
   tspan4.setAttribute('style', "margin-left: 4px; font-family:arial,helvetica,sans-serif; color:purple; text-decoration:underline;");
   tspan4.setAttribute("onclick", "dexReconfigContentsParam('next-page');return false");
   tspan4.innerHTML = "next page >>";
+
+  var span5 = pagingSpan.appendChild(new Element('span'));
+  span5.setAttribute('style', "margin-left: 10px;");
+  var tspan = span5.appendChild(new Element('span'));
+  tspan.innerHTML = "page#: ";
+  var input = span5.appendChild(document.createElement('input'));
+  input.setAttribute('size', "3");
+  input.setAttribute('type', "text");
+  input.setAttribute('value', page);
+  input.setAttribute("onchange", "dexReconfigContentsParam('page', this.value);return false;");
 
   return pagingSpan;
 }
@@ -3143,10 +3356,27 @@ function dexReconfigContentsParam(param, value) {
       contents.current_index = idx;
     }
   }
+  if(param == "column_sort") {
+    if(contents.sort_column == value) {
+      contents.sort_descending = !contents.sort_descending;
+    } else {
+      contents.sort_column = value;
+      contents.sort_descending = false;
+      if(value == "created date") { contents.sort_descending = true; }
+      if(value == "upload date") { contents.sort_descending = true; }
+      if(value == "accessed") { contents.sort_descending = true; }
+    }
+    dexReloadContentsData();  //TODO: once ready reload to sort server side
+  }
   if(param == "mode") {
     if(value == "Configs") { value = "Views"; }
 
-    if(contents.mode != value) { contents.current_index = 0; }
+    if(contents.mode != value) { 
+      contents.current_index = 0; 
+      contents.sort_column = "created date";
+      if(value=="DataSources") { contents.sort_column = "upload date"; }
+      contents.sort_descending = true;
+    }
     contents.mode = value;
 
     contents.filters.show_only_fixedIDs = false;

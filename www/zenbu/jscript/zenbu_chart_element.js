@@ -58,6 +58,7 @@ function ZenbuChartElement(elementID) {
 
   this.chart_color_mode = "default";
   this.fixed_color = "#0000A0";
+  this.transparency = 1.0;
   this.signal_colorspace = "fire1";
   this.signal_logscale = false;
   this.signal_invert = false;
@@ -75,6 +76,8 @@ function ZenbuChartElement(elementID) {
   this.separate_legend_groups = false;
 
   this.category_datatype = "";
+  this.category_selected_dtype = null;
+  this.category_colors = {};  //category_colors[datatype].categories[ctgval].color : all category_colors to make interface more user friendly
   this.boxplot_group_datatype = "";
   this.hide_zero = true;
   this.category_method = "count";
@@ -83,6 +86,7 @@ function ZenbuChartElement(elementID) {
 
   this.chart_data = null;
   this.chart = null;
+  this.chart_selection_dataset = null;
 
   this.symetric_axis = false;
   this.xaxis = { datatype: "", fixedscale:true, symetric: true, log:false, feature_name:"" };
@@ -110,6 +114,7 @@ function ZenbuChartElement(elementID) {
   this.configBubbleChart        = zenbuChartElement_configBubbleChart;
   this.configBarChart           = zenbuChartElement_configBarChart;
   this.configPlotly3D           = zenbuChartElement_configPlotly3D;
+  this.configTernary            = zenbuChartElement_configTernary;
   this.configBoxPlot            = zenbuChartElement_configBoxPlot;
   this.configLegendGroupMode    = zenbuChartElement_configLegendGroupMode;
   
@@ -155,7 +160,7 @@ function zenbuChartElement_initFromConfigDOM(elementDOM) {
   this.boxpointpos = 0.0;
 
   if(elementDOM.getAttribute("chart_type")) { this.display_type = elementDOM.getAttribute("chart_type"); }
-  if(elementDOM.getAttribute("display_type")) { this.display_type = elementDOM.getAttribute("display_type"); }
+  if(elementDOM.getAttribute("display_type")) { this.display_type = elementDOM.getAttribute("display_type"); }  //overrides chart_type if both set
   //if(elementDOM.getAttribute("layout_type")) { this.layout_type = elementDOM.getAttribute("layout_type"); }
   if(elementDOM.getAttribute("dual_feature_axis") == "1") { this.focus_feature_mode = "progressive"; }  //backward compat
   if(elementDOM.getAttribute("symetric_axis") == "1") { this.symetric_axis = true; }
@@ -164,7 +169,8 @@ function zenbuChartElement_initFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("category_datatype")) { this.category_datatype = elementDOM.getAttribute("category_datatype"); }
   if(elementDOM.getAttribute("boxplot_group_datatype")) { this.boxplot_group_datatype = elementDOM.getAttribute("boxplot_group_datatype"); }
   if(elementDOM.getAttribute("hide_zero") == "true") { this.hide_zero = true; }
-  if(elementDOM.getAttribute("colorspace"))        { this.colorspace = elementDOM.getAttribute("colorspace"); }
+  if(elementDOM.getAttribute("colorspace")) { this.colorspace = elementDOM.getAttribute("colorspace"); }
+  if(elementDOM.getAttribute("transparency")) { this.transparency = parseFloat(elementDOM.getAttribute("transparency")); }
   if(elementDOM.getAttribute("bar_orientation")) { this.bar_orientation = elementDOM.getAttribute("bar_orientation"); }
   if(elementDOM.getAttribute("bar_order")) { this.bar_order = elementDOM.getAttribute("bar_order"); }
   if(elementDOM.getAttribute("show_bar_labels")) { this.show_bar_labels = elementDOM.getAttribute("show_bar_labels"); }
@@ -207,11 +213,33 @@ function zenbuChartElement_initFromConfigDOM(elementDOM) {
     if(zaxisDOM.getAttribute("log") == "1") { this.zaxis.log = true; } else { this.zaxis.log = false; }
     if(zaxisDOM.getAttribute("invert") == "1") { this.zaxis.invert = true; } else { this.zaxis.invert = false; }
   }
-
+  
+  var catColorDOMs = elementDOM.getElementsByTagName("category_colors");
+  for(var i=0; i<catColorDOMs.length; i++) {
+    var catColorDOM = catColorDOMs[i];
+    if(!catColorDOM) { continue; }
+    var datatype = catColorDOM.getAttribute("datatype");    
+    this.category_colors[datatype] = { datatype:datatype, categories:{} };
+    var ctgDOMs = catColorDOM.getElementsByTagName("dtype_category");
+    for(var j=0; j<ctgDOMs.length; j++) {
+      var ctgDOM = ctgDOMs[j];
+      if(!ctgDOM) { continue; }
+      var ctgval = ctgDOM.getAttribute("ctg");
+      var ctg_obj = {ctg:ctgval, color:"", shape:"", size:"", label_inside:""}
+      if(ctgDOM.getAttribute("color")) { ctg_obj.color = ctgDOM.getAttribute("color"); }
+      this.category_colors[datatype].categories[ctgval] = ctg_obj;
+    }
+  }
+  
   if(this.display_type == "bar" || this.display_type == "line") {
     //backward compat colorspace
     if(this.colorspace.charAt(0) == "#") { this.fixed_color = this.colorspace; }
     if(this.chart_color_mode=="default") { this.chart_color_mode = "fixed_color"; }
+  }
+  
+  if(this.display_type == "bubble" || this.display_type == "scatter2D") {
+    //backward compat legend grouping, moved into chart_color_mode
+    if(this.legend_group_mode == "category_mdata") { this.chart_color_mode = "category_mdata"; }
   }
   
   return true;
@@ -220,8 +248,9 @@ function zenbuChartElement_initFromConfigDOM(elementDOM) {
 
 function zenbuChartElement_generateConfigDOM() {
   var elementDOM = reportsGenerateElementDOM(this);  //superclass method eventually
+  var doc = document.implementation.createDocument("", "", null);
   
-  if(this.chart_type) { elementDOM.setAttribute("chart_type", this.chart_type); }
+  //if(this.chart_type) { elementDOM.setAttribute("chart_type", this.chart_type); }  //legacy not used anymore
   if(this.display_type) { elementDOM.setAttribute("display_type", this.display_type); }
   if(this.focus_feature_mode) { elementDOM.setAttribute("focus_feature_mode", this.focus_feature_mode); }
   if(this.legend_group_mode) { elementDOM.setAttribute("legend_group_mode", this.legend_group_mode); }
@@ -231,6 +260,7 @@ function zenbuChartElement_generateConfigDOM() {
   if(this.boxplot_group_datatype) { elementDOM.setAttribute("boxplot_group_datatype", this.boxplot_group_datatype); }
   if(this.hide_zero) { elementDOM.setAttribute("hide_zero", "true"); }
   if(this.colorspace) { elementDOM.setAttribute("colorspace", this.colorspace); }
+  if(this.transparency != 1.0) { elementDOM.setAttribute("transparency", this.transparency); }
   if(this.bar_orientation) { elementDOM.setAttribute("bar_orientation", this.bar_orientation); }
   if(this.bar_order) { elementDOM.setAttribute("bar_order", this.bar_order); }
   if(this.show_bar_labels) { elementDOM.setAttribute("show_bar_labels", this.show_bar_labels); }
@@ -247,8 +277,23 @@ function zenbuChartElement_generateConfigDOM() {
   if(this.radius_signal_invert) { elementDOM.setAttribute("radius_signal_invert", this.radius_signal_invert); }
   if(this.radius_signal_min) { elementDOM.setAttribute("radius_signal_min", this.radius_signal_min); }
   if(this.radius_signal_max) { elementDOM.setAttribute("radius_signal_max", this.radius_signal_max); }
-
-  var xaxis = document.createElement("chart_xaxis");
+  
+  if(this.colorspace && this.colorspace == "category-colors" && this.category_selected_dtype) { 
+    for(dtype in this.category_colors) {
+      var dtype_obj = this.category_colors[dtype];
+      var catColorDOM = doc.createElement("category_colors");
+      catColorDOM.setAttribute("datatype", dtype);
+      for(var ctg in dtype_obj.categories) {
+        var ctg_obj = dtype_obj.categories[ctg];
+        var ctgDOM = doc.createElement("dtype_category");
+        ctgDOM.setAttribute("ctg", ctg_obj.ctg);
+        if(ctg_obj.color) { ctgDOM.setAttribute("color", ctg_obj.color); }
+        catColorDOM.appendChild(ctgDOM);
+      }
+      elementDOM.appendChild(catColorDOM);
+    }
+  }
+  var xaxis = doc.createElement("chart_xaxis");
   xaxis.setAttribute("datatype", this.xaxis.datatype);
   if(this.xaxis.fixedscale) { xaxis.setAttribute("fixedscale", 1); } else { xaxis.setAttribute("fixedscale", 0); }
   if(this.xaxis.symetric)   { xaxis.setAttribute("symetric", 1); }   else { xaxis.setAttribute("symetric", 0); }
@@ -256,7 +301,7 @@ function zenbuChartElement_generateConfigDOM() {
   if(this.xaxis.invert)     { xaxis.setAttribute("invert", 1); }     else { xaxis.setAttribute("invert", 0); }
   elementDOM.appendChild(xaxis);
   
-  var yaxis = document.createElement("chart_yaxis");
+  var yaxis = doc.createElement("chart_yaxis");
   yaxis.setAttribute("datatype", this.yaxis.datatype);
   if(this.yaxis.fixedscale) { yaxis.setAttribute("fixedscale", 1); } else { yaxis.setAttribute("fixedscale", 0); }
   if(this.yaxis.symetric)   { yaxis.setAttribute("symetric", 1); }   else { yaxis.setAttribute("symetric", 0); }
@@ -264,7 +309,7 @@ function zenbuChartElement_generateConfigDOM() {
   if(this.yaxis.invert)     { yaxis.setAttribute("invert", 1); }     else { yaxis.setAttribute("invert", 0); }
   elementDOM.appendChild(yaxis);
   
-  var zaxis = document.createElement("chart_zaxis");
+  var zaxis = doc.createElement("chart_zaxis");
   zaxis.setAttribute("datatype", this.zaxis.datatype);
   if(this.zaxis.fixedscale) { zaxis.setAttribute("fixedscale", 1); } else { zaxis.setAttribute("fixedscale", 0); }
   if(this.zaxis.symetric)   { zaxis.setAttribute("symetric", 1); }   else { zaxis.setAttribute("symetric", 0); }
@@ -285,18 +330,20 @@ function zenbuChartElement_generateConfigDOM() {
 
 function zenbuChartElement_elementEvent(mode, value, value2) {
   //var datasourceElement = this.datasource();
+  var old_x_datatype = this.xaxis.datatype;
+  var old_y_datatype = this.yaxis.datatype;
+  var old_z_datatype = this.zaxis.datatype;
   
   if(mode == "xaxis_datatype" && (value != this.xaxis.datatype)) {
-    var old_x_datatype = this.xaxis.datatype;
-    this.xaxis.datatype = value; 
+    this.xaxis.datatype = value;
     var dtype_col = this.datatypes[this.xaxis.datatype];
     if(dtype_col) {
       dtype_col.signal_active=true;
       dtype_col.signal_order = 0.5;
     }
     if(old_x_datatype != this.yaxis.datatype) {
-      var dtype_col = this.datatypes[old_x_datatype];
-      if(dtype_col) { dtype_col.signal_order = 2.5; }  //moves after #2 yaxis so yaxis remains same
+      var dtype_col2 = this.datatypes[old_x_datatype];
+      if(dtype_col2) { dtype_col2.signal_order = 2.5; }  //moves after #2 yaxis so yaxis remains same
     }
     this.dtype_columns.sort(signal_column_order_sort_func);
     this.chart=null; 
@@ -320,6 +367,20 @@ function zenbuChartElement_elementEvent(mode, value, value2) {
     reportElementToggleSubpanel(this.elementID, 'refresh');
   }
 
+  if(mode == "zaxis_datatype" && (value != this.zaxis.datatype)) { 
+    this.zaxis.datatype = value; 
+    var dtype_col = this.datatypes[this.zaxis.datatype];
+    if(dtype_col) {
+      dtype_col.signal_active=true;
+      if(dtype_col.signal_order <3) { dtype_col.signal_order=3.5; } //current xaxis or yaxis so push after current #3 to shift all down
+      else { dtype_col.signal_order = 2.5; } //moves after #2 spot
+    }
+    this.dtype_columns.sort(signal_column_order_sort_func);
+    this.chart=null; 
+    this.chart_data=null; 
+    reportsPostprocessElement(this.elementID);
+    reportElementToggleSubpanel(this.elementID, 'refresh');
+  }
   
 }
 
@@ -406,6 +467,14 @@ function zenbuChartElement_reconfigureParam(param, value, altvalue) {
     if(value.charAt(0) != "#") { value = "#"+value; }
     this.newconfig.fixed_color = value;
   }
+  if(param == "transparency") {
+    value = parseFloat(value); 
+    if(isNaN(value)) { value = 1.0; }
+    if(value < 0.0) { value = 0.0; }
+    if(value > 1.0) { value = 1.0; }
+    this.newconfig.transparency = value;
+    return true;
+  }
 
   if(param == "symetric_axis")    { this.newconfig.symetric_axis = value; }
   
@@ -451,6 +520,7 @@ function zenbuChartElement_reconfigureParam(param, value, altvalue) {
     if(this.newconfig.chart_color_mode !== undefined) { this.chart_color_mode = this.newconfig.chart_color_mode; reload=true; }
     if(this.newconfig.fixed_color !== undefined) { this.fixed_color = this.newconfig.fixed_color; reload=true; }
     if(this.newconfig.signal_datatype !== undefined) { this.signal_datatype = this.newconfig.signal_datatype; reload=true; }
+    if(this.newconfig.transparency !== undefined) { this.transparency = this.newconfig.transparency; reload=true; }
     
     if(this.newconfig.symetric_axis !== undefined) { this.symetric_axis = this.newconfig.symetric_axis; this.chart=null; }
 
@@ -473,6 +543,7 @@ function zenbuChartElement_reconfigureParam(param, value, altvalue) {
       if(CSI.newconfig.min_signal != undefined) { this.colorspace_min = CSI.newconfig.min_signal; reload=true; }
       if(CSI.newconfig.max_signal != undefined) { this.colorspace_max = CSI.newconfig.max_signal; reload=true; }
       if(CSI.newconfig.logscale != undefined)   { this.colorspace_logscale = CSI.newconfig.logscale; reload=true; }
+      if(CSI.newconfig.category_colors_changed==true) { reload=true; }
       console.log("accept-reconfig with colorspaceCSI color interface new colorspace:"+this.colorspace);
     }    
     if(this.signalCSI) {
@@ -591,7 +662,7 @@ function zenbuChartElement_postprocess() {
         if(feature) { this.feature_array.push(feature); }
       }
       var t1 = performance.now();
-      console.log("copy feature_array from datasourceElement("+(datasourceElement.feature_array.length)+") to this("+(this.feature_array.length)+") "+ (t1 - t0) + " msec.");
+      //console.log("copy feature_array from datasourceElement("+(datasourceElement.feature_array.length)+") to this("+(this.feature_array.length)+") "+ (t1 - t0) + " msec.");
     }
     if(datasourceElement.datasource_mode == "edge") {
       this.edge_array = new Array(); 
@@ -605,9 +676,10 @@ function zenbuChartElement_postprocess() {
     }
   }
 
-  this.category_selected_dtype = null;
   if(this.category_datatype && (this.legend_group_mode == "category_mdata" || this.chart_color_mode == "category_mdata")) {
     this.postprocessLegendCategory();
+  } else { 
+    this.category_selected_dtype = null;
   }
   
   if(this.display_type == "bubble" || this.display_type == "scatter2D") {
@@ -642,21 +714,21 @@ function zenbuChartElement_postprocessBubbleChart() {
   var t0 = performance.now();
 
   var datasourceElement = this.datasource();
-  console.log("zenbuChartElement_postprocessBubbleChart ["+this.elementID+"]");
+  //console.log("zenbuChartElement_postprocessBubbleChart ["+this.elementID+"]");
 
   //backward compatability hack for converting axis.datatype to signal_active
   if(!this.backward_compat_check_dataypes) {
     this.backward_compat_check_dataypes = true;
     var dtype_col = this.datatypes[this.xaxis.datatype];
     if(dtype_col && !dtype_col.signal_active) {
-      console.log("backcompat: bubble chart set x-axis ["+this.xaxis.datatype+"] to first signal_active");
+      //console.log("backcompat: bubble chart set x-axis ["+this.xaxis.datatype+"] to first signal_active");
       dtype_col.signal_active=true;
       dtype_col.user_modifiable=true;
       dtype_col.signal_order = 0.1;
     }
     var dtype_col = this.datatypes[this.yaxis.datatype];
     if(dtype_col && !dtype_col.signal_active) {
-      console.log("backcompat: bubble chart set y-axis ["+this.yaxis.datatype+"] to second signal_active");
+      //console.log("backcompat: bubble chart set y-axis ["+this.yaxis.datatype+"] to second signal_active");
       dtype_col.signal_active=true; 
       dtype_col.user_modifiable=true; 
       dtype_col.signal_order = 0.2;
@@ -675,25 +747,35 @@ function zenbuChartElement_postprocessBubbleChart() {
     if(!xaxis_dtype) { 
       xaxis_dtype = dtype_col;
       this.xaxis.datatype = dtype_col.datatype; //reset for other code usage, axis label....
-      console.log("first signal_active dtype_col["+dtype_col.datatype+"] - dominant for sorting");
+      //console.log("first signal_active dtype_col["+dtype_col.datatype+"] - dominant for sorting");
     } 
     else if(!yaxis_dtype) { 
       yaxis_dtype = dtype_col;
       this.yaxis.datatype = dtype_col.datatype; //reset for other code usage, axis label....
-      console.log("first signal_active dtype_col["+dtype_col.datatype+"] - dominant for sorting");
+      //console.log("first signal_active dtype_col["+dtype_col.datatype+"] - dominant for sorting");
     }
   }
   if(!xaxis_dtype || !yaxis_dtype) { 
-    console.log("no defined xaxis or yaxis ["+this.elementID+"]");
+    console.log("zenbuChartElement_postprocessBubbleChart: no defined xaxis or yaxis ["+this.elementID+"]");
     return; 
   }
   //if((signal_dtype.col_type != "signal") && (signal_dtype.col_type != "weight")) { return; } //might loosen this in the future
-  console.log(this.elementID + "x-axis_dtype type["+xaxis_dtype.datatype+"]  title["+xaxis_dtype.title+"]")
-  console.log(this.elementID + "y-axis_dtype type["+yaxis_dtype.datatype+"]  title["+yaxis_dtype.title+"]")
+  //console.log(this.elementID + "x-axis_dtype type["+xaxis_dtype.datatype+"]  title["+xaxis_dtype.title+"]")
+  //console.log(this.elementID + "y-axis_dtype type["+yaxis_dtype.datatype+"]  title["+yaxis_dtype.title+"]")
   
   //if((datasourceElement.datasource_mode=="edge") && (!this.x_feature || !this.y_feature)) { return; }
 
   //make the Chart.js bubble datasources
+  if(!this.chart_selection_dataset) {
+    this.chart_selection_dataset = new Object;
+    this.chart_selection_dataset.label = "selected";
+    this.chart_selection_dataset.active = false;
+    this.chart_selection_dataset.radius = 9;
+    this.chart_selection_dataset.backgroundColor = "rgba(255,0,225,0.1)"; //faint pink
+    this.chart_selection_dataset.hoverBackgroundColor = "rgba(255,0,225,0.1)";
+    this.chart_selection_dataset.data = new Array;
+  }
+  
   var both_data = new Object;
   var opposite_data = new Object;
   var featureX_data = new Object;
@@ -702,84 +784,107 @@ function zenbuChartElement_postprocessBubbleChart() {
   var category_data_hash = new Object; //hash of data-objs
 
   if(!this.chart_data) {
-    console.log("chart ["+this.elementID+"] rebuild chart_data");
+    console.log("zenbuChartElement_postprocessBubbleChart ["+this.elementID+"] rebuild chart_data");
     this.chart_data = new Object;
     this.chart_data.datasets = new Array;
 
+    this.chart_data.datasets.push(this.chart_selection_dataset);
+    
     //make the dataset categories
     both_data = new Object;
     both_data.zenbuid = "both";
     both_data.label = "both";
-    both_data.backgroundColor = "#F8A12A"; //FF0000
-    both_data.hoverBackgroundColor = "#F8A12A";
+    both_data.backgroundColor = "rgba(248,161,42,"+this.transparency+")"; //#F8A12A; //FF0000
+    both_data.hoverBackgroundColor = "rgba(248,161,42,"+this.transparency+")"; //#F8A12A
     //this.chart_data.datasets.push(both_data);
 
     opposite_data = new Object;
     opposite_data.zenbuid = "opposite";
     opposite_data.label = "opposite";
-    opposite_data.backgroundColor = "#E30004"; //800080
-    opposite_data.hoverBackgroundColor = "#E30004";
+    opposite_data.backgroundColor = "rgba(227,0,4,"+this.transparency+")"; //#E30004; //800080
+    opposite_data.hoverBackgroundColor = "rgba(227,0,4,"+this.transparency+")"; //#E30004;
     //this.chart_data.datasets.push(opposite_data);
 
     featureX_data = new Object;
     featureX_data.zenbuid = "featureX";
     featureX_data.label = "featureX";
-    featureX_data.backgroundColor = "#008000";
-    featureX_data.hoverBackgroundColor = "#008000";
+    featureX_data.backgroundColor = "rgba(0,128,0,"+this.transparency+")"; //#008000
+    featureX_data.hoverBackgroundColor = "rgba(0,128,0,"+this.transparency+")"; //#008000
     //featureX_data.hidden =  true;
     //this.chart_data.datasets.push(featureX_data);
 
     featureY_data = new Object;
     featureY_data.zenbuid = "featureY";
     featureY_data.label = "featureY";
-    featureY_data.backgroundColor = "#0000FF";
+    featureY_data.backgroundColor = "rgba(0,0,255,"+this.transparency+")"; //#0000FF
     //featureY_data.hidden = true;
-    featureY_data.hoverBackgroundColor = "#0000FF";
+    featureY_data.hoverBackgroundColor = "rgba(0,0,255,"+this.transparency+")"; //#0000FF
     //this.chart_data.datasets.push(featureY_data);
 
     neither_data = new Object;
     neither_data.zenbuid = "neither";
     neither_data.label = "filtered out";
-    neither_data.backgroundColor = "#808080";
-    neither_data.hoverBackgroundColor = "#808080";
+    neither_data.backgroundColor = "rgba(128,128,128,"+this.transparency+")";  //#808080
+    neither_data.hoverBackgroundColor = "rgba(128,128,128,"+this.transparency+")"; //#808080
     //neither_data.hidden = true;
     //this.chart_data.datasets.push(neither_data);
     
-    if((this.legend_group_mode == "category_mdata") && this.category_datatype && this.category_selected_dtype) {
+    if((this.chart_color_mode == "category_mdata") && this.category_datatype && this.category_selected_dtype) {
       var categories = this.category_selected_dtype.categories;
       var idx1=0;
       for(var ctg in categories) {
         var ctg_obj = categories[ctg];
         //{ctg:ctgval, count:0, value:null, filtered:false}; }
 
-        console.log("create category chart "+ctg_obj.ctg);
+        //console.log("create category chart "+ctg_obj.ctg);
         var color = zenbuIndexColorSpace(this.colorspace, idx1++);  //Spectral_bp_11  Set2_bp_8  Set3_bp_11
+        if(this.colorspace == "category-colors") {
+          var colorname = categories[ctg].color;
+          var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})(.*)$/i.exec(colorname);
+          if(result) {
+            var r = parseInt(result[1], 16);
+            var g = parseInt(result[2], 16);
+            var b = parseInt(result[3], 16);
+            color = new RGBColour(r,g,b);
+          }
+        }
+        
+        if(this.transparency < 1.0) {
+          var rgb = color.getRGB();
+          color = new RGBColour(rgb.r, rgb.g, rgb.b, this.transparency);
+        }
         
         dataset = new Object;
         dataset.zenbuid = "category";
         dataset.category = ctg_obj.ctg;
         dataset.label = ctg_obj.ctg;
-        dataset.backgroundColor = color.getCSSHexadecimalRGB();
-        dataset.hoverBackgroundColor = color.getCSSHexadecimalRGB();
+        dataset.backgroundColor = color.getCSSIntegerRGBA(); //getCSSIntegerRGBA(); getCSSHexadecimalRGB
+        dataset.hoverBackgroundColor = color.getCSSIntegerRGBA();
         //dataset.hidden = true;
   
         category_data_hash[ctg_obj.ctg] = dataset;
         this.chart_data.datasets.push(dataset);
       }
-      this.chart_data.datasets.push(neither_data);
+      if(this.show_filtered) { this.chart_data.datasets.push(neither_data); }
     }
     
     if(this.chart_color_mode == "fixed_color") {
-      both_data.backgroundColor = this.fixed_color; //"#F8A12A" //FF0000
-      both_data.hoverBackgroundColor = this.fixed_color; //"#F8A12A";
+      var t_fixed_color = this.fixed_color;
+      if(this.transparency < 1.0) {
+        var cl1 = new RGBColor(this.fixed_color);
+        var color = new RGBColour(cl1.r, cl1.g, cl1.b, this.transparency);
+        t_fixed_color = color.getCSSIntegerRGBA();
+      }
+      both_data.backgroundColor = t_fixed_color; //"#F8A12A" //FF0000
+      both_data.hoverBackgroundColor = t_fixed_color; //"#F8A12A";
     }
 
     //new logic for choosing which datasets to include into the chart_data
-    if(this.legend_group_mode == "focus_feature") {
+    if(this.chart_color_mode != "category_mdata") { // old legend_group_mode == "focus_feature"
       if(datasourceElement.datasource_mode=="feature") {
         this.chart_data.datasets.push(both_data);
         both_data.label = "active";
-        this.chart_data.datasets.push(neither_data);
+        if(this.show_filtered) { this.chart_data.datasets.push(neither_data); }
       }
       if(datasourceElement.datasource_mode=="edge") {
         if(this.focus_feature_mode=="progressive") {
@@ -790,7 +895,7 @@ function zenbuChartElement_postprocessBubbleChart() {
         if(this.focus_feature_mode=="progressive") {
           this.chart_data.datasets.push(featureY_data);
         }
-        this.chart_data.datasets.push(neither_data);
+        if(this.show_filtered) { this.chart_data.datasets.push(neither_data); }
       }
     }
     
@@ -832,7 +937,7 @@ function zenbuChartElement_postprocessBubbleChart() {
     var dt1 = datasourceElement.datatypes[this.signal_datatype];
     if(dt1) {
       signal_color_dtype = dt1;
-      console.log(this.elementID+" signal_color_dtype dtype["+signal_color_dtype.datatype+"]  auto-minval:"+signal_color_dtype.min_val+" auto-maxval:"+signal_color_dtype.max_val);
+      //console.log(this.elementID+" signal_color_dtype dtype["+signal_color_dtype.datatype+"]  auto-minval:"+signal_color_dtype.min_val+" auto-maxval:"+signal_color_dtype.max_val);
       signal_color_min = signal_color_dtype.min_val;
       signal_color_max = signal_color_dtype.max_val;
       if(this.signal_min != "auto") { signal_color_min = this.signal_min; }
@@ -841,14 +946,14 @@ function zenbuChartElement_postprocessBubbleChart() {
         if(signal_color_min!=0) { signal_color_min = Math.log10(signal_color_min); }
         if(signal_color_max!=0) { signal_color_max = Math.log10(signal_color_max); }
       }
-      console.log(this.elementID+" signal_color_dtype dtype["+signal_color_dtype.datatype+"]  minval:"+signal_color_min+" maxval:"+signal_color_max);
+      //console.log(this.elementID+" signal_color_dtype dtype["+signal_color_dtype.datatype+"]  minval:"+signal_color_min+" maxval:"+signal_color_max);
     }
   }
   
   var radius_dtype = null;
   var radius_min = this.radius_signal_min;
   var radius_max = this.radius_signal_max;
-  if(this.chart_color_mode == "signal" && this.radius_datatype) {
+  if(this.scatter_radius_mode == "signal" && this.radius_datatype) {
     // both_data.hoverRadius = 4;
     // opposite_data.hoverRadius = 4;
     // featureX_data.hoverRadius = 4;
@@ -857,7 +962,7 @@ function zenbuChartElement_postprocessBubbleChart() {
     var dt1 = datasourceElement.datatypes[this.radius_datatype];
     if(dt1) {
       radius_dtype = dt1;
-      console.log("radius_dtype dtype["+radius_dtype.datatype+"]  auto-minval:"+radius_dtype.min_val+" auto-maxval:"+radius_dtype.max_val);
+      //console.log("radius_dtype dtype["+radius_dtype.datatype+"]  auto-minval:"+radius_dtype.min_val+" auto-maxval:"+radius_dtype.max_val);
       radius_min = radius_dtype.min_val;
       radius_max = radius_dtype.max_val;
       if(this.radius_signal_min != "auto") { radius_min = parseFloat(this.radius_signal_min); }
@@ -866,7 +971,7 @@ function zenbuChartElement_postprocessBubbleChart() {
       //  if(radius_min!=0) { radius_min = Math.log10(radius_min); }
       //  if(radius_max!=0) { radius_max = Math.log10(radius_max); }
       //}
-      console.log("radius_dtype dtype["+radius_dtype.datatype+"]  min:"+radius_min+" max:"+radius_max);
+      //console.log("radius_dtype dtype["+radius_dtype.datatype+"]  min:"+radius_min+" max:"+radius_max);
     }
   }
   
@@ -886,8 +991,10 @@ function zenbuChartElement_postprocessBubbleChart() {
     this.xaxis.feature_name = this.x_feature.name;
     this.yaxis.feature_name = this.y_feature.name;
     if(this.x_feature.id == this.y_feature.id) {
-      featureX_data.backgroundColor = "#F8A12A";
-      featureX_data.hoverBackgroundColor = "#F8A12A";
+      featureX_data.backgroundColor = "rgba(248,161,42,"+this.transparency+")"; //#F8A12A
+      featureX_data.hoverBackgroundColor = "rgba(248,161,42,"+this.transparency+")"; //#F8A12A
+      //featureX_data.backgroundColor = "#F8A12A";
+      //featureX_data.hoverBackgroundColor = "#F8A12A";
     }
   }
 
@@ -919,6 +1026,7 @@ function zenbuChartElement_postprocessBubbleChart() {
       current_point.default_radius = this.fixed_radius; //to hold value for selection reset
       current_point.feature_id = feature.id;
       current_point.feature_idx = feat_idx;
+      current_point.filter_valid = feature.filter_valid;
       current_point.search_match = false;
       current_point.selected = false;
       current_point.color = ""; //default
@@ -977,8 +1085,10 @@ function zenbuChartElement_postprocessBubbleChart() {
           var color = zenbuScoreColorSpace(this.signal_colorspace, cs, 
                                           false, //leave discrete false
                                           false, //this.signal_logscale,
-                                          this.signal_invert);
-          current_point.color = color.getCSSHexadecimalRGB();
+                                          this.signal_invert, 
+                                          false, //zero_center
+                                          this.transparency);  
+          current_point.color = color.getCSSIntegerRGBA();  //getCSSHexadecimalRGB();
         }
       }
 
@@ -998,7 +1108,7 @@ function zenbuChartElement_postprocessBubbleChart() {
             cs = (c1 - cmin) / (cmax - cmin); //0..1
           }
           radius_signal = cs * (radius_max - radius_min) + radius_min;
-          current_point.default_radius = parseFloat(radius_signal);
+          current_point.default_radius = parseFloat(radius_signal.toPrecision(5));
         }
       }
       current_point.r = current_point.default_radius;
@@ -1009,17 +1119,17 @@ function zenbuChartElement_postprocessBubbleChart() {
       //add point to correct dataset based on filter_valid
       //if(feature.filter_valid) { both_data.data.push(current_point); }
       if(feature.filter_valid) { 
-        if(this.legend_group_mode == "focus_feature") { 
+        if(this.chart_color_mode == "category_mdata") {
+          ctg = zenbuChartElement_get_category(this.category_datatype, feature);
+          if(category_data_hash[ctg]) { category_data_hash[ctg].data.push(current_point); }
+          else { neither_data.data.push(current_point); }
+        }
+        else { // old legend_group_mode == "focus_feature"
           both_data.data.push(current_point);
           if(current_point.color) { 
             both_data.backgroundColor.push(current_point.color); 
             both_data.hoverBackgroundColor.push(current_point.color);             
           }
-        }
-        if(this.legend_group_mode == "category_mdata") {
-          ctg = zenbuChartElement_get_category(this.category_datatype, feature);
-          if(category_data_hash[ctg]) { category_data_hash[ctg].data.push(current_point); }
-          else { neither_data.data.push(current_point); }
         }
       } 
       else { 
@@ -1066,11 +1176,12 @@ function zenbuChartElement_postprocessBubbleChart() {
         if((current_point.x) || (current_point.y)) {
           if((!this.x_feature && !this.y_feature) || (this.x_feature.id == this.y_feature.id)) {
             if(current_point.x_pass) {
-              if(this.legend_group_mode == "focus_feature") { featureX_data.data.push(current_point); }
-              if(this.legend_group_mode == "category_mdata") {
+              if(this.chart_color_mode == "category_mdata") {
                 ctg = zenbuChartElement_get_category(this.category_datatype, current_point.edge);
                 if(category_data_hash[ctg]) { category_data_hash[ctg].data.push(current_point); }
                 else { neither_data.data.push(current_point); }
+              } else { // old legend_group_mode == "focus_feature"
+                featureX_data.data.push(current_point);
               }
             } else {
               neither_data.data.push(current_point);
@@ -1107,9 +1218,11 @@ function zenbuChartElement_postprocessBubbleChart() {
           current_point.edge_id = edge.id; 
         }
         current_point.edge_idx = edge_idx;
+        current_point.filter_valid = false;
         current_point.search_match = false;
         current_point.selected = false;
         current_point.edge = edge;
+        current_point.edge_id = edge.id;
 
         current_feature = edge.feature2;
         
@@ -1149,7 +1262,7 @@ function zenbuChartElement_postprocessBubbleChart() {
 
         //console.log("aso1 weight ["+weight+"]");
         //if(reportElementEdgeCheckValidFilters(datasourceElement, edge)) { current_point.x_pass = true; }
-        if(edge.filter_valid) { current_point.x_pass = true; }
+        if(edge.filter_valid) { current_point.x_pass = true; current_point.filter_valid = true; }
 
         current_point.x_edge_id = edge.id;
       }
@@ -1179,7 +1292,7 @@ function zenbuChartElement_postprocessBubbleChart() {
 
         //console.log("featureY weight ["+weight+"]");
         //if(reportElementEdgeCheckValidFilters(datasourceElement, edge)) { current_point.y_pass = true; }
-        if(edge.filter_valid) { current_point.y_pass = true; }
+        if(edge.filter_valid) { current_point.y_pass = true; current_point.filter_valid = true; }
         
         current_point.y_edge_id = edge.id;
       }
@@ -1385,6 +1498,11 @@ function zenbuChartElement_postprocessPlotly() {
     featureZ_data.hoverBackgroundColor = "#0000FF";
 
     filtered_data = new Object;
+    filtered_data.x = [];
+    filtered_data.y = [];
+    filtered_data.z = [];
+    filtered_data.text=[]; 
+    filtered_data.customdata=[]; 
     filtered_data.zenbuid = "neither";
     filtered_data.name = "filtered out";
     filtered_data.backgroundColor = "#808080";
@@ -1408,6 +1526,17 @@ function zenbuChartElement_postprocessPlotly() {
         console.log("plotly3D create category chart "+ctg_obj.ctg);
         var color = zenbuIndexColorSpace(this.colorspace, idx1++);  //Spectral_bp_11  Set2_bp_8  Set3_bp_11
         
+        if(this.colorspace == "category-colors") {
+          var colorname = categories[ctg].color;
+          var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})(.*)$/i.exec(colorname);
+          if(result) {
+            var r = parseInt(result[1], 16);
+            var g = parseInt(result[2], 16);
+            var b = parseInt(result[3], 16);
+            color = new RGBColour(r,g,b);
+          }
+        }
+        
         dataset = new Object;
         dataset.zenbuid = "category_"+ctg_obj.ctg;
         dataset.category = ctg_obj.ctg;
@@ -1427,7 +1556,7 @@ function zenbuChartElement_postprocessPlotly() {
         category_data_hash[ctg_obj.ctg] = dataset;
         this.chart_data.datasets.push(dataset);
       }
-      this.chart_data.datasets.push(filtered_data);
+      if(this.show_filtered) { this.chart_data.datasets.push(filtered_data); }
     }
 
     //new logic for choosing which datasets to include into the chart_data
@@ -1435,7 +1564,7 @@ function zenbuChartElement_postprocessPlotly() {
       if(datasourceElement.datasource_mode=="feature") {
         this.chart_data.datasets.push(both_data);
         both_data.name = "active";
-        this.chart_data.datasets.push(filtered_data);
+        if(this.show_filtered) { this.chart_data.datasets.push(filtered_data); }
       }
       if(datasourceElement.datasource_mode=="edge") {
         if(this.focus_feature_mode=="progressive") {
@@ -1446,7 +1575,7 @@ function zenbuChartElement_postprocessPlotly() {
         if(this.focus_feature_mode=="progressive") {
           this.chart_data.datasets.push(featureY_data);
         }
-        this.chart_data.datasets.push(filtered_data);
+        if(this.show_filtered) { this.chart_data.datasets.push(filtered_data); }
       }
     }
   
@@ -1880,7 +2009,6 @@ function zenbuChartElement_postprocessBoxPlot() {
 
   this.chart_data = new Object;
   this.chart_data.datasets = new Array;
-
   var datasourceElement = this.datasource();
 
   //==================
@@ -1951,8 +2079,24 @@ function zenbuChartElement_postprocessBoxPlot() {
   var display_type = this.display_type;
   if(display_type == "boxplot") { display_type = "box" };
   if(display_type == "violin") { display_type = "violin" };
-
-  var value_dtype = this.datatypes[this.xaxis.datatype];
+    
+  //value_dtype for sorting is the first active_signal datatype
+  this.dtype_columns.sort(signal_column_order_sort_func);
+  var value_dtype = null;
+  for(var i=0; i<this.dtype_columns.length; i++) {
+    var dtype_col = this.dtype_columns[i];
+    if(!dtype_col) { continue; }
+    if((dtype_col.col_type != "signal") && (dtype_col.col_type != "weight")) { continue; }
+    if(!dtype_col.signal_active) { continue; }
+    value_dtype = dtype_col;
+    this.xaxis.datatype = value_dtype.datatype; //reset for other code usage, axis label....
+    console.log("first signal_active dtype_col["+dtype_col.datatype+"] - dominant for sorting");
+    break;
+  }
+  if(!value_dtype && this.xaxis.datatype) {
+    //backward compatability saftey for converting axis.datatype to 1st signal_active
+    value_dtype = this.datatypes[this.xaxis.datatype]; 
+  }
   if(value_dtype && !value_dtype.signal_active) {
     value_dtype.signal_active=true;
     value_dtype.user_modifiable=true;
@@ -2550,7 +2694,7 @@ function zenbuChartElement_createBarChartDataset(signal_dtype, category_dtype_ct
     dataset = { data:[], backgroundColor:[] };
   }
   if(this.display_type =="line") {
-    dataset = { data:[], backgroundColor:"#0010FF", pointBackgroundColor:[], pointRadius:[], fill:false };
+    dataset = { data:[], backgroundColor:"#C0C0C0", pointBackgroundColor:[], pointRadius:[], fill:false };
   }
   dataset.label = signal_dtype.title;
 
@@ -2586,7 +2730,11 @@ function zenbuChartElement_createBarChartDataset(signal_dtype, category_dtype_ct
   var color = zenbuIndexColorSpace(colorspace, signal_dtype.signal_order-1);
   if(color) { dataset_hexcolor = color.getCSSHexadecimalRGB(); }
   if(signal_dtype.highlight_color) { dataset_hexcolor = signal_dtype.highlight_color; }
-  if(this.display_type!="bar") { dataset.backgroundColor = dataset_hexcolor; }
+  if(this.display_type=="line") { 
+    dataset.backgroundColor = dataset_hexcolor;
+    //dataset.borderColor = "#E0E0E0";
+    //dataset.borderWidth = 2; //line width
+  }
 
   if(datasourceElement.datasource_mode == "feature") {      
     //convert sorted features to bars
@@ -2712,36 +2860,45 @@ function zenbuChartElement_createBarChartDataset(signal_dtype, category_dtype_ct
 
 function zenbuChartElement_postprocessLegendCategory() {
   if(!this.category_datatype) { return; }
-  console.log("zenbuChartElement_postprocessLegendCategory "+this.elementID);
+  //console.log("zenbuChartElement_postprocessLegendCategory "+this.elementID);
     
   var datasourceElement = this.datasource();
-  
   if(!datasourceElement.dtype_columns) { return; }
-  var columns = datasourceElement.dtype_columns;
-  
+
   var category_datatype = this.category_datatype;
-  //if(this.newconfig && this.newconfig.category_datatype != undefined) { category_datatype = this.newconfig.category_datatype; }
-  
-  var selected_dtype = null;
-  for(var i=0; i<columns.length; i++) {
-    var dtype_col = columns[i];
-    if(!dtype_col) { continue; }
-    if(dtype_col.datatype == category_datatype) { selected_dtype = dtype_col; break; }
-  }
-  if(!selected_dtype) { return; }
-  console.log("zenbuChartElement_postprocessLegendCategory selected_dtype type["+selected_dtype.datatype+"]  title["+selected_dtype.title+"]")
-  if(selected_dtype.col_type != "mdata") { return; } //might loosen this in the future
+  if(this.newconfig && this.newconfig.category_datatype != undefined) { category_datatype = this.newconfig.category_datatype; }
 
-  //hijack the CategoryElement postprocess to prep the categories
+  //hijack the CategoryElement postprocess to prep the categories and sets this.selected_dtype based on this.(newconfig).category_datatype
   zenbuCategoryElement_postprocess.call(this);
+  if(!this.selected_dtype ) { return; }
+  if(this.selected_dtype.col_type != "mdata") { return; } //might loosen this in the future
+  //console.log("zenbuChartElement_postprocessLegendCategory selected_dtype type["+this.selected_dtype.datatype+"]  title["+this.selected_dtype.title+"]")
+  
+  //this.category_selected_dtype must be a local copy to avoid category_colors being shared between elements
+  if(!this.category_colors[category_datatype]) {
+    this.category_colors[category_datatype] = { datatype:category_datatype, categories:{} };
+  }
+  if(!this.category_selected_dtype || this.category_selected_dtype.datatype != category_datatype) {  //reset
+    this.category_selected_dtype = this.category_colors[category_datatype];
+  }
 
-  this.category_selected_dtype = selected_dtype;
-  
-  //for(var ctg in selected_dtype.categories) {
-  //  var ctg_obj = selected_dtype.categories[ctg];
-  //  console.log(" dtype "+selected_dtype.datatype+" category "+ctg_obj.ctg);
-  //}
-  
+  //merge categories and colors to preserve local copy distinct from datasourceElement
+  if(this.selected_dtype.categories) {
+    var categories = this.selected_dtype.categories;
+    for(var ctgval in categories) {
+      var ctg_obj1 = this.selected_dtype.categories[ctgval];
+      var ctg_obj2 = this.category_selected_dtype.categories[ctgval];
+      if(ctg_obj1 && !ctg_obj2) { 
+        this.category_selected_dtype.categories[ctgval] =  {ctg:ctgval, color:"#E0E0E0" };
+      }
+      if(ctg_obj1 && ctg_obj2) { //keep color of local but copy over new category values
+        ctg_obj2.count = ctg_obj1.count;
+        ctg_obj2.hidden_count = ctg_obj1.hidden_count;
+        ctg_obj2.value = ctg_obj1.value;
+        ctg_obj2.filtered = ctg_obj1.filtered;
+      }
+    }
+  }
 }
 
 
@@ -2846,15 +3003,29 @@ function zenbuChartElement_showSelections() {
   if(!this.chart_data) { return; }
 
   var elementID = this.elementID;
-  console.log("zenbuChartElement_showSelections ["+elementID+"]  selected_id="+this.selected_id);
   
   var datasourceElement = this.datasource();
 
-  var select_id = this.selected_id;
+  var select_id = datasourceElement.selected_id;
+  console.log("zenbuChartElement_showSelections ["+elementID+"]  selected_id="+select_id);
+
   //if(this.selected_edge) {
   //  console.log("zenbuChartElement_showSelections ["+elementID+"] has selected_edge change select_id to f2 ["+this.selected_edge.feature2.id+"]");
   //  select_id = this.selected_edge.feature2.id;
   //}
+  if(this.chart_selection_dataset) { 
+    for(var k=0; k<this.chart_selection_dataset.data.length; k++) {
+      var point = this.chart_selection_dataset.data[k];
+      point.r = point.default_radius;
+    }
+    this.chart_selection_dataset.data.length = 0; //clears array
+    if(this.chart_selection_dataset.active) {
+      //this.chart_data.datasets.shift();
+      this.chart_selection_dataset.active = false;
+      this.chart_selection_dataset.backgroundColor = "rgba(255,0,225,0.1)"; //faint pink
+      this.chart_selection_dataset.hoverBackgroundColor = "rgba(255,2,225,0.1)";
+    }
+  }
   
   
   if(this.display_type == "bar" || this.display_type == "line") {
@@ -2871,7 +3042,7 @@ function zenbuChartElement_showSelections() {
         var feature = this.feature_array[j];
         feature.selected = false;
         if(feature && feature.id == select_id) {
-          //console.log("found selected feature at idx:"+j);
+          console.log("chart found selected feature at idx:"+j);
           feature.selected = true;
           this.barchart_selected_point = { 
             color: this.chart_data.datasets[0].backgroundColor[j],
@@ -2998,13 +3169,13 @@ function zenbuChartElement_showSelections() {
     if(!this.chart.data.datasets) { return; }
 
     //bubble/scatter code below
-    console.log("this.chart.data.datasets.length = "+this.chart.data.datasets.length);
+    //console.log("this.chart.data.datasets.length = "+this.chart.data.datasets.length);
+    var selected_points = new Array();
     for(var j=0; j<this.chart.data.datasets.length; j++) {
       var dataset = this.chart.data.datasets[j];
       
       //first pass move the selected/search points to the end of array so they are visible
       //for(var k=0; k<dataset.data.length-1; k++) {
-      //var selected_points = new Array();
       var k=0;
       while(k<dataset.data.length) {
         var point = dataset.data[k];
@@ -3017,24 +3188,22 @@ function zenbuChartElement_showSelections() {
           //need this point at the top, so need to move it to the end of the data array
           //first remove it, then push to back
           //dataset.data.splice(k, 1);
-          //selected_points.push(point);
+          selected_points.push(point);
           //continue;
         }
         
-        if(datasourceElement.search_data_filter && point.search_match) {
+        if(datasourceElement.search_data_filter && point.search_match && (!datasourceElement.show_only_search_matches || point.filter_valid)) {
           //console.log("chart ["+elementID+"] found search_match point dataset["+j+"] point["+k+"]");
           //need this point at the top, so need to move it to the end of the data array
           //first remove it, then push to back
           //dataset.data.splice(k, 1);
-          //selected_points.push(point);
+          selected_points.push(point);
           //continue;
         }
         k++;
       }
-      //for(k=0; k<selected_points.length; k++) {
-      //  dataset.data.push(selected_points[k]);
-      //}
 
+      /*
       //second pass modify the metadata
       let meta = this.chart.getDatasetMeta(j);
       for(var k=0; k<dataset.data.length; k++) {
@@ -3051,11 +3220,26 @@ function zenbuChartElement_showSelections() {
         if(point.selected) {
           //then use custom meta to highlight last point
           //if(!point_meta.custom) {  point_meta.custom = {}; }
-          point_meta.custom.backgroundColor = "rgba(255,0,225,0.5)"; //pink
-          point_meta.custom.radius = point.default_radius * 2.0;
+          //point_meta.custom.backgroundColor = "rgba(255,0,225,0.5)"; //pink
+          point_meta.custom.backgroundColor = "rgba(255,0,225,1)"; //pink
+          point_meta.custom.radius = point.default_radius * 2.5;
         }
       }
+      */
     }
+
+    if(this.chart_selection_dataset && selected_points.length>0) {
+      for(k=0; k<selected_points.length; k++) {
+        var point = selected_points[k];
+        point.r = point.default_radius * 2.5;
+        this.chart_selection_dataset.data.push(point);
+      }
+      this.chart_selection_dataset.active = true;
+      this.chart_selection_dataset.backgroundColor = "rgba(255,0,225,1)"; //pink
+      this.chart_selection_dataset.hoverBackgroundColor = "rgba(255,0,225,1)"; //pink
+      //this.chart_data.datasets.unshift(this.chart_selection_dataset);
+    }
+
     //this.chart.update(0);
   }
 }
@@ -3869,7 +4053,7 @@ function zenbuChartElement_configSubpanel() {
   if(display_type=="bubble" || display_type=="scatter2D") { 
     this.configBubbleChart(datasourceElement); 
     //legend mode at bottom
-    this.configLegendGroupMode(datasourceElement);
+    //this.configLegendGroupMode(datasourceElement);
   }
   if((display_type=="bar")||(display_type=="line"))  { 
     this.configBarChart(datasourceElement); 
@@ -3877,6 +4061,9 @@ function zenbuChartElement_configSubpanel() {
   }
   if(display_type=="scatter3D") { 
     this.configPlotly3D(datasourceElement);
+  }
+  if(display_type=="ternary") { 
+    this.configTernary(datasourceElement);
   }
   if((display_type=="boxplot") || (display_type == "violin")) { 
     this.configBoxPlot(datasourceElement);
@@ -3994,13 +4181,19 @@ function zenbuChartElement_configLegendGroupMode(datasourceElement) {
           select.appendChild(option);
         }
       }
+      this.postprocessLegendCategory();
     }
     
     if(!this.hide_legend_color_config) {
       //add a color spectrum picker
       tdiv2  = legendConfigDiv.appendChild(document.createElement('div'));
       tdiv2.style.marginTop = "10px";
-      tdiv2.appendChild(reportElementColorSpaceOptions(this));
+      tdiv2.appendChild(reportElementColorSpaceOptions(this));      
+      this.colorspaceCSI.showLogScale = false;
+      this.colorspaceCSI.showInvert = false;
+      this.colorspaceCSI.showZeroCenter = false;
+      this.colorspaceCSI.category_dtype = this.category_selected_dtype;
+      zenbuColorSpaceInterfaceUpdate(this.colorspaceCSI.id);
     }
     
     var display_type = this.display_type;
@@ -4194,7 +4387,20 @@ function zenbuChartElement_configBubbleChart(datasourceElement) {
   tspan2 = tdiv2.appendChild(document.createElement('span'));
   tspan2.innerHTML = "square symetric axis scaling";
   
+  // show filtered-out group
+  var tdiv2  = configdiv.appendChild(document.createElement('div'));
+  tdiv2.setAttribute("style", "margin:5px 1px 3px 10px;");
+  tcheck = tdiv2.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 2px 1px 0px 0px;");
+  tcheck.setAttribute('type', "checkbox");
+  var val1 = this.show_filtered;
+  if(this.newconfig && this.newconfig.show_filtered != undefined) { val1 = this.newconfig.show_filtered; }
+  if(val1) { tcheck.setAttribute('checked', "checked"); }
+  tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'show_filtered', this.checked);");
+  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2.innerHTML = "show filtered group";
 
+  
   //
   // chart_color_mode
   //
@@ -4207,7 +4413,7 @@ function zenbuChartElement_configBubbleChart(datasourceElement) {
 
   tdiv2  = configdiv.appendChild(document.createElement('div'));
   var tspan = tdiv2.appendChild(document.createElement('span'));
-  tspan.setAttribute('style', "margin: 0px 0px 0px 5px; ");
+  tspan.setAttribute('style', "margin: 0px 0px 0px 10px; font-weight:bold;");
   tspan.innerHTML = "coloring mode: ";
 
   //console.log("chart_color_mode : "+chart_color_mode);
@@ -4238,14 +4444,49 @@ function zenbuChartElement_configBubbleChart(datasourceElement) {
   tspan = tdiv2.appendChild(document.createElement('span'));
   tspan.innerHTML = "signal";
 
+  radio2 = tdiv2.appendChild(document.createElement('input'));
+  radio2.setAttribute("type", "radio");
+  radio1.setAttribute("name", this.elementID + "_chart_color_mode");
+  radio2.setAttribute("value", "category_mdata");
+  if(chart_color_mode == "category_mdata") { radio2.setAttribute('checked', "checked"); }
+  radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'chart_color_mode', this.value);"); 
+  //radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'legend_group_mode', this.value);");
+  tspan = tdiv2.appendChild(document.createElement('span'));
+  tspan.innerHTML = "category grouping";
+  var msg = "<div style='text-align:left; padding:3px;'>a metadata column is used as categories to create different legend-groupings and colorings.</div>";
+  radio2.setAttribute("onmouseover", "eedbMessageTooltip(\""+msg+"\",280);");
+  radio2.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  tspan.setAttribute("onmouseover", "eedbMessageTooltip(\""+msg+"\",280);");
+  tspan.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+
+
   var color_options_div = configdiv.appendChild(document.createElement('div'));
-  color_options_div.setAttribute('style', "margin-top:2px;");
+  color_options_div.setAttribute('style', "margin:2px 0px 0px 5px;");
+  
+  //transparency
+  var transparency = this.transparency;
+  if(this.newconfig && this.newconfig.transparency != undefined) { transparency = this.newconfig.transparency; }
+  var tdiv  = configdiv.appendChild(document.createElement('span'));
+  tspan2 = tdiv.appendChild(document.createElement('span'));
+  tspan2.setAttribute('style', "margin: 1px 4px 1px 15px; ");
+  tspan2.innerHTML = "transparency alpha:";
+  var transparencyInput = tdiv.appendChild(document.createElement('input'));
+  transparencyInput.setAttribute('value', transparency);
+  transparencyInput.setAttribute('size', "7");
+  transparencyInput.setAttribute("onkeyup", "reportElementReconfigParam(\""+ this.elementID +"\", 'transparency', this.value);");
+  transparencyInput.setAttribute("onkeydown", "if(event.keyCode==13) { reportElementReconfigParam(\""+ this.elementID+"\", 'update'); }");
+  transparencyInput.setAttribute("onblur", "reportElementReconfigParam(\""+this.elementID+"\", 'update');");
+  var msg = "<div style='text-align:left; padding:3px;'>transparency (alpha): any value from 0.0 to 1.0.<br>0.0 means 100% transparent, 1.0 means 100% opaque. </div>";
+  transparencyInput.setAttribute("onmouseover", "eedbMessageTooltip(\""+msg+"\",280);");
+  transparencyInput.setAttribute("onmouseout", "eedbClearSearchTooltip();");
+  tspan2.setAttribute("onmouseover", "eedbMessageTooltip(\""+msg+"\",280);");
+  tspan2.setAttribute("onmouseout", "eedbClearSearchTooltip();");
 
   if(chart_color_mode == "fixed_color") { 
     var fixed_color = this.fixed_color;
     if(this.newconfig && this.newconfig.fixed_color != undefined) { fixed_color = this.newconfig.fixed_color; }
     tspan2 = color_options_div.appendChild(document.createElement('span'));
-    tspan2.setAttribute('style', "margin: 1px 4px 1px 10px; font-size:10px; font-family:arial,helvetica,sans-serif; ");
+    tspan2.setAttribute('style', "margin: 1px 4px 1px 10px; ");
     tspan2.innerHTML = "fixed color:";
     
     var colorInput = color_options_div.appendChild(document.createElement('input'));
@@ -4295,6 +4536,7 @@ function zenbuChartElement_configBubbleChart(datasourceElement) {
       signalCSI.elementID = this.elementID;
       signalCSI.colorspace = this.signal_colorspace;
       signalCSI.enableScaling = true;
+      signalCSI.showZeroCenter = false;
       signalCSI.min_signal = this.signal_min;
       signalCSI.max_signal = this.signal_max;
       signalCSI.logscale = this.signal_logscale;
@@ -4307,6 +4549,64 @@ function zenbuChartElement_configBubbleChart(datasourceElement) {
     color_options_div.appendChild(signalCSI);
   }
   
+
+  if(chart_color_mode=="category_mdata") {
+    //column datatype selection options
+    var tdiv2 = color_options_div.appendChild(document.createElement("div"));
+    tdiv2.setAttribute('style', "margin: 3px 1px 5px 10px;");
+    var span1 = tdiv2.appendChild(document.createElement('span'));
+    //span1.setAttribute('style', "margin: 2px 1px 2px 15px;");
+    span1.innerHTML = "category column: ";
+    var select = tdiv2.appendChild(document.createElement('select'));
+    select.className = "dropdown";
+    select.style.fontSize = "10px";
+    select.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'category_datatype', this.value);");
+
+    if(datasourceElement.dtype_columns) {
+      datasourceElement.dtype_columns.sort(reports_column_order_sort_func);
+      var columns = datasourceElement.dtype_columns;
+
+      var category_datatype = this.category_datatype;
+      if(this.newconfig && this.newconfig.category_datatype != undefined) { category_datatype = this.newconfig.category_datatype; }
+
+      var selected_dtype = null;
+      for(var i=0; i<columns.length; i++) {
+        var dtype_col = columns[i];
+        if(!dtype_col) { continue; }
+        //if((dtype_col.datatype == "name") || (dtype_col.datatype == "f1.name") || (dtype_col.datatype == "f2.name")) { continue; }
+
+        var option = document.createElement('option');
+        option.setAttribute("style", "font-size:10px;");
+        if(dtype_col.visible) { option.style.color = "blue"; }
+
+        option.setAttribute("value", dtype_col.datatype);
+        
+        var label =  dtype_col.title;
+        if(dtype_col.title != dtype_col.datatype) {
+          label +=  " ["+ dtype_col.datatype +"]";
+        }
+        option.innerHTML = label;
+
+        if(dtype_col.col_type == "mdata") {
+          if(dtype_col.datatype == category_datatype) { option.setAttribute("selected", "selected"); }
+          select.appendChild(option);
+        }
+      }
+
+      this.postprocessLegendCategory();      
+    }
+    
+    //add default colorspace picker
+    tdiv2.appendChild(reportElementColorSpaceOptions(this));
+    this.colorspaceCSI.showLogScale = false;
+    this.colorspaceCSI.showInvert = false;
+    this.colorspaceCSI.showZeroCenter = false;
+    this.colorspaceCSI.category_dtype = this.category_selected_dtype;
+    zenbuColorSpaceInterfaceUpdate(this.colorspaceCSI.id);
+
+    //TODO: add in user specified colors interface like used in the heatmap
+  }
+
   
   //
   // scatter_radius_mode
@@ -4318,9 +4618,9 @@ function zenbuChartElement_configBubbleChart(datasourceElement) {
   hr1.style.borderTop = "1px solid #afafaf";
   hr1.style.width = "95%";
 
-  tdiv2  = configdiv.appendChild(document.createElement('div'));
+  tdiv2  = configdiv.appendChild(document.createElement('div'));  
   var tspan = tdiv2.appendChild(document.createElement('span'));
-  tspan.setAttribute('style', "margin: 0px 0px 0px 5px; ");
+  tspan.setAttribute('style', "margin: 0px 0px 0px 10px; font-weight:bold;");
   tspan.innerHTML = "point radius mode: ";
 
   //console.log("scatter_radius_mode : "+scatter_radius_mode);
@@ -4343,13 +4643,13 @@ function zenbuChartElement_configBubbleChart(datasourceElement) {
   tspan.innerHTML = "signal";
 
   var radius_options_div = configdiv.appendChild(document.createElement('div'));
-  radius_options_div.setAttribute('style', "margin-top:2px;");
+  radius_options_div.setAttribute('style', "margin:2px 0px 0px 5px;");
 
   if(scatter_radius_mode == "fixed_radius") { 
     var fixed_radius = this.fixed_radius;
     if(this.newconfig && this.newconfig.fixed_radius != undefined) { fixed_radius = this.newconfig.fixed_radius; }
     tspan2 = radius_options_div.appendChild(document.createElement('span'));
-    tspan2.setAttribute('style', "margin: 1px 4px 1px 10px; font-size:10px; font-family:arial,helvetica,sans-serif; ");
+    tspan2.setAttribute('style', "margin: 1px 4px 1px 10px;");
     tspan2.innerHTML = "fixed radius:";
     
     var radiusInput = radius_options_div.appendChild(document.createElement('input'));
@@ -4413,6 +4713,7 @@ function zenbuChartElement_configBubbleChart(datasourceElement) {
     levelInput.setAttribute('value', min_signal);
     levelInput.setAttribute("onkeyup", "reportElementReconfigParam(\""+ this.elementID+"\", 'radius_signal_min', this.value);");
     levelInput.setAttribute("onkeydown", "if(event.keyCode==13) { reportElementReconfigParam(\""+ this.elementID+"\", 'update'); }");
+    levelInput.setAttribute("onblur", "reportElementReconfigParam(\""+this.elementID+"\", 'update');");
     if(radius_dtype) {
       levelInput.setAttribute("onmouseover", "eedbMessageTooltip(\""+radius_dtype.min_val+"\",100);");
       levelInput.setAttribute("onmouseout", "eedbClearSearchTooltip();");
@@ -4429,6 +4730,7 @@ function zenbuChartElement_configBubbleChart(datasourceElement) {
     levelInput.setAttribute('value', max_signal);
     levelInput.setAttribute("onkeyup", "reportElementReconfigParam(\""+ this.elementID+"\", 'radius_signal_max', this.value);");
     levelInput.setAttribute("onkeydown", "if(event.keyCode==13) { reportElementReconfigParam(\""+ this.elementID+"\", 'update'); }");
+    levelInput.setAttribute("onblur", "reportElementReconfigParam(\""+this.elementID+"\", 'update');");
     if(radius_dtype) {
       levelInput.setAttribute("onmouseover", "eedbMessageTooltip(\""+radius_dtype.max_val+"\",100);");
       levelInput.setAttribute("onmouseout", "eedbClearSearchTooltip();");
@@ -4803,36 +5105,38 @@ function zenbuChartElement_configPlotly3D(datasourceElement) {
   // datatype select -------------
   var columns_div = zenbuChartElement_signalColumnsInterface(this, configdiv);
 
-  // axis control table ----------
-  ttable  = configdiv.appendChild(document.createElement('table'));
-  ttable.setAttribute('cellspacing', "0");
-  ttable.setAttribute('style', "font-size:12px; margin:auto; border: 2px solid gray; padding:3px 10px 3px 10px;");
-//  this.xaxis = { datatype: "log2FC", fixedscale:true, symetric: true };
 
-  ttr  = ttable.appendChild(document.createElement('tr'));
+  // axis controls ----------
+  var x_axis_div  = configdiv.appendChild(document.createElement('div'));
+  var tspan = x_axis_div.appendChild(document.createElement('span'));
+  tspan.setAttribute('style', "margin: 0px 0px 0px 10px; font-weight:bold;");
+  tspan.innerHTML = "X-axis: ";
 
-  ttd  = ttr.appendChild(document.createElement('td'));
-  ttd.setAttribute('style', "border-right: solid 1px gray; padding-right:5px;");
-  tdiv2  = ttd.appendChild(document.createElement('div'));
-  tdiv2.setAttribute('style', "text-align:center;");
-  tdiv2.innerHTML = "x-axis";
-  ttd  = ttr.appendChild(document.createElement('td'));
-  ttd.setAttribute('style', "border-left: solid 1px gray; padding-left:5px;");
-  tdiv2  = ttd.appendChild(document.createElement('div'));
-  tdiv2.setAttribute('style', "text-align:center;");
-  tdiv2.innerHTML = "y-axis";
-  ttd  = ttr.appendChild(document.createElement('td'));
-  ttd.setAttribute('style', "border-left: solid 1px gray; padding-left:5px;");
-  tdiv2  = ttd.appendChild(document.createElement('div'));
-  tdiv2.setAttribute('style', "text-align:center;");
-  tdiv2.innerHTML = "z-axis";
+  var y_axis_div  = configdiv.appendChild(document.createElement('div'));
+  var tspan = y_axis_div.appendChild(document.createElement('span'));
+  tspan.setAttribute('style', "margin: 0px 0px 0px 10px; font-weight:bold;");
+  tspan.innerHTML = "Y-axis: ";
 
-  ttr  = ttable.appendChild(document.createElement('tr'));
+  var z_axis_div  = configdiv.appendChild(document.createElement('div'));
+  var tspan = z_axis_div.appendChild(document.createElement('span'));
+  tspan.setAttribute('style', "margin: 0px 0px 0px 10px; font-weight:bold;");
+  tspan.innerHTML = "Z-axis: ";
+  
+  // show filtered-out group
+  var tdiv  = configdiv.appendChild(document.createElement('div'));
+  tcheck = tdiv.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 2px 1px 0px 10px;");
+  tcheck.setAttribute('type', "checkbox");
+  var val1 = this.show_filtered;
+  if(this.newconfig && this.newconfig.show_filtered != undefined) { val1 = this.newconfig.show_filtered; }
+  if(val1) { tcheck.setAttribute('checked', "checked"); }
+  tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'show_filtered', this.checked);");
+  tspan2 = tdiv.appendChild(document.createElement('span'));
+  tspan2.innerHTML = "show filtered group";
 
-  ttd  = ttr.appendChild(document.createElement('td'));
-  ttd.setAttribute('style', "border-right: solid 1px gray;  padding-right:5px;");
-  tdiv2  = ttd.appendChild(document.createElement('div'));
-  tcheck = tdiv2.appendChild(document.createElement('input'));
+
+  //fixedscale
+  tcheck = x_axis_div.appendChild(document.createElement('input'));
   tcheck.setAttribute('style', "margin: 2px 1px 0px 5px;");
   tcheck.setAttribute('type', "checkbox");
   var val1 = this.xaxis.fixedscale;
@@ -4840,13 +5144,10 @@ function zenbuChartElement_configPlotly3D(datasourceElement) {
   if(val1) { tcheck.setAttribute('checked', "checked"); }
   //if(this.xaxis.fixedscale) { tcheck.setAttribute('checked', "checked"); }
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'xaxis_fixedscale', this.checked);");
-  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2 = x_axis_div.appendChild(document.createElement('span'));
   tspan2.innerHTML = "fixed scale";
 
-  ttd  = ttr.appendChild(document.createElement('td'));
-  ttd.setAttribute('style', "border-left: solid 1px gray; padding-left:5px;");
-  tdiv2  = ttd.appendChild(document.createElement('div'));
-  tcheck = tdiv2.appendChild(document.createElement('input'));
+  tcheck = y_axis_div.appendChild(document.createElement('input'));
   tcheck.setAttribute('style', "margin: 2px 1px 0px 5px;");
   tcheck.setAttribute('type', "checkbox");
   var val1 = this.yaxis.fixedscale;
@@ -4854,104 +5155,83 @@ function zenbuChartElement_configPlotly3D(datasourceElement) {
   if(val1) { tcheck.setAttribute('checked', "checked"); }
   //if(this.yaxis.fixedscale) { tcheck.setAttribute('checked', "checked"); }
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'yaxis_fixedscale', this.checked);");
-  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2 = y_axis_div.appendChild(document.createElement('span'));
   tspan2.innerHTML = "fixed scale";
 
-  ttd  = ttr.appendChild(document.createElement('td'));
-  ttd.setAttribute('style', "border-left: solid 1px gray; padding-left:5px;");
-  tdiv2  = ttd.appendChild(document.createElement('div'));
-  tcheck = tdiv2.appendChild(document.createElement('input'));
+  tcheck = z_axis_div.appendChild(document.createElement('input'));
   tcheck.setAttribute('style', "margin: 2px 1px 0px 5px;");
   tcheck.setAttribute('type', "checkbox");
   var val1 = this.zaxis.fixedscale;
   if(this.newconfig && this.newconfig.zaxis_fixedscale != undefined) { val1 = this.newconfig.zaxis_fixedscale; }
   if(val1) { tcheck.setAttribute('checked', "checked"); }
+  //if(this.zaxis.fixedscale) { tcheck.setAttribute('checked', "checked"); }
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'zaxis_fixedscale', this.checked);");
-  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2 = z_axis_div.appendChild(document.createElement('span'));
   tspan2.innerHTML = "fixed scale";
 
-  ttr  = ttable.appendChild(document.createElement('tr'));
-
-  ttd  = ttr.appendChild(document.createElement('td'));
-  ttd.setAttribute('style', "border-right: solid 1px gray; padding-right:5px;");
-  tdiv2  = ttd.appendChild(document.createElement('div'));
-  tcheck = tdiv2.appendChild(document.createElement('input'));
-  tcheck.setAttribute('style', "margin: 2px 1px 0px 5px;");
+  //symetric
+  tcheck = x_axis_div.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 2px 1px 0px 10px;");
   tcheck.setAttribute('type', "checkbox");
   var val1 = this.xaxis.symetric;
   if(this.newconfig && this.newconfig.xaxis_symetric != undefined) { val1 = this.newconfig.xaxis_symetric; }
   if(val1) { tcheck.setAttribute('checked', "checked"); }
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'xaxis_symetric', this.checked);");
-  tspan2 = tdiv2.appendChild(document.createElement('span'));
-  tspan2.innerHTML = "symetric +/-";
+  tspan2 = x_axis_div.appendChild(document.createElement('span'));
+  tspan2.innerHTML = "symetric +/- scaling";
 
-  ttd  = ttr.appendChild(document.createElement('td'));
-  ttd.setAttribute('style', "border-left: solid 1px gray; padding-left:5px;");
-  tdiv2  = ttd.appendChild(document.createElement('div'));
-  tcheck = tdiv2.appendChild(document.createElement('input'));
-  tcheck.setAttribute('style', "margin: 2px 1px 0px 5px;");
+  tcheck = y_axis_div.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 2px 1px 0px 10px;");
   tcheck.setAttribute('type', "checkbox");
   var val1 = this.yaxis.symetric;
   if(this.newconfig && this.newconfig.yaxis_symetric != undefined) { val1 = this.newconfig.yaxis_symetric; }
   if(val1) { tcheck.setAttribute('checked', "checked"); }
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'yaxis_symetric', this.checked);");
-  tspan2 = tdiv2.appendChild(document.createElement('span'));
-  tspan2.innerHTML = "symetric +/-";
+  tspan2 = y_axis_div.appendChild(document.createElement('span'));
+  tspan2.innerHTML = "symetric +/- scaling";
 
-  ttd  = ttr.appendChild(document.createElement('td'));
-  ttd.setAttribute('style', "border-left: solid 1px gray; padding-left:5px;");
-  tdiv2  = ttd.appendChild(document.createElement('div'));
-  tcheck = tdiv2.appendChild(document.createElement('input'));
-  tcheck.setAttribute('style', "margin: 2px 1px 0px 5px;");
+  tcheck = z_axis_div.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 2px 1px 0px 10px;");
   tcheck.setAttribute('type', "checkbox");
   var val1 = this.zaxis.symetric;
   if(this.newconfig && this.newconfig.zaxis_symetric != undefined) { val1 = this.newconfig.zaxis_symetric; }
   if(val1) { tcheck.setAttribute('checked', "checked"); }
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'zaxis_symetric', this.checked);");
-  tspan2 = tdiv2.appendChild(document.createElement('span'));
-  tspan2.innerHTML = "symetric +/-";
+  tspan2 = z_axis_div.appendChild(document.createElement('span'));
+  tspan2.innerHTML = "symetric +/- scaling";
 
-  ttr  = ttable.appendChild(document.createElement('tr'));
-  
-  ttd  = ttr.appendChild(document.createElement('td'));
-  ttd.setAttribute('style', "border-right: solid 1px gray; padding-right:5px;");
-  tdiv2  = ttd.appendChild(document.createElement('div'));
-  tcheck = tdiv2.appendChild(document.createElement('input'));
-  tcheck.setAttribute('style', "margin: 2px 1px 0px 5px;");
+  //log
+  tcheck = x_axis_div.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 2px 1px 0px 10px;");
   tcheck.setAttribute('type', "checkbox");
   var val1 = this.xaxis.log;
   if(this.newconfig && this.newconfig.xaxis_log != undefined) { val1 = this.newconfig.xaxis_log; }
   if(val1) { tcheck.setAttribute('checked', "checked"); }
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'xaxis_log', this.checked);");
-  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2 = x_axis_div.appendChild(document.createElement('span'));
   tspan2.innerHTML = "log scale";
   
-  ttd  = ttr.appendChild(document.createElement('td'));
-  ttd.setAttribute('style', "border-left: solid 1px gray; padding-left:5px;");
-  tdiv2  = ttd.appendChild(document.createElement('div'));
-  tcheck = tdiv2.appendChild(document.createElement('input'));
-  tcheck.setAttribute('style', "margin: 2px 1px 0px 5px;");
+  tcheck = y_axis_div.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 2px 1px 0px 10px;");
   tcheck.setAttribute('type', "checkbox");
   var val1 = this.yaxis.log;
   if(this.newconfig && this.newconfig.yaxis_log != undefined) { val1 = this.newconfig.yaxis_log; }
   if(val1) { tcheck.setAttribute('checked', "checked"); }
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'yaxis_log', this.checked);");
-  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2 = y_axis_div.appendChild(document.createElement('span'));
   tspan2.innerHTML = "log scale";
-  
-  ttd  = ttr.appendChild(document.createElement('td'));
-  ttd.setAttribute('style', "border-left: solid 1px gray; padding-left:5px;");
-  tdiv2  = ttd.appendChild(document.createElement('div'));
-  tcheck = tdiv2.appendChild(document.createElement('input'));
-  tcheck.setAttribute('style', "margin: 2px 1px 0px 5px;");
+
+  tcheck = z_axis_div.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 2px 1px 0px 10px;");
   tcheck.setAttribute('type', "checkbox");
   var val1 = this.zaxis.log;
   if(this.newconfig && this.newconfig.zaxis_log != undefined) { val1 = this.newconfig.zaxis_log; }
   if(val1) { tcheck.setAttribute('checked', "checked"); }
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'zaxis_log', this.checked);");
-  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2 = z_axis_div.appendChild(document.createElement('span'));
   tspan2.innerHTML = "log scale";
 
+   /*
   ttr  = ttable.appendChild(document.createElement('tr'));
   ttd  = ttr.appendChild(document.createElement('td'));
   ttd.setAttribute('colspan', 2);
@@ -4966,6 +5246,193 @@ function zenbuChartElement_configPlotly3D(datasourceElement) {
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'symetric_axis', this.checked);");
   tspan2 = tdiv2.appendChild(document.createElement('span'));
   tspan2.innerHTML = "square symetric axis scaling";
+  */
+
+  //--- datatype select
+  tdiv  = x_axis_div.appendChild(document.createElement('div'));
+  tdiv.setAttribute('style', "margin: 2px 1px 0px 20px;");
+  var tspan = tdiv.appendChild(document.createElement('span'));
+  tspan.innerHTML = "datatype:";
+  var dtypeSelect = tdiv.appendChild(document.createElement('select'));
+  dtypeSelect.setAttribute('name', "datatype");
+  dtypeSelect.className = "dropdown";  
+  dtypeSelect.style.fontSize = "10px";
+  dtypeSelect.setAttribute("onchange", "reportElementEvent(\""+ this.elementID +"\", 'xaxis_datatype', this.value); return false");
+  dtypeSelect.setAttribute("onselect", "reportElementEvent(\""+ this.elementID +"\", 'xaxis_datatype', this.value); return false");
+  var option = dtypeSelect.appendChild(document.createElement('option'));
+  option.setAttribute("value", "");
+  option.innerHTML = "please select";
+  var val1 = this.xaxis.datatype;
+  if(this.newconfig && this.newconfig.xaxis_datatype != undefined) { val1 = this.newconfig.xaxis_datatype; }
+  for(var dtype in datasourceElement.datatypes) {
+    var dtype_col = datasourceElement.datatypes[dtype];
+    if(!dtype_col) { continue; }
+    if((dtype_col.col_type != "weight") && (dtype_col.col_type != "signal")) { continue; }
+    var option = dtypeSelect.appendChild(document.createElement('option'));
+    option.setAttribute("value", dtype_col.datatype);
+    if(val1 == dtype) { option.setAttribute("selected", "selected"); }
+    option.innerHTML = dtype_col.title;
+  }
+  
+  tdiv  = y_axis_div.appendChild(document.createElement('div'));
+  tdiv.setAttribute('style', "margin: 2px 1px 0px 20px;");
+  var tspan = tdiv.appendChild(document.createElement('span'));
+  tspan.innerHTML = "datatype:";
+  var dtypeSelect = tdiv.appendChild(document.createElement('select'));
+  dtypeSelect.setAttribute('name', "datatype");
+  dtypeSelect.className = "dropdown";
+  dtypeSelect.style.fontSize = "10px";
+  dtypeSelect.setAttribute("onchange", "reportElementEvent(\""+ this.elementID +"\", 'yaxis_datatype', this.value); return false");
+  dtypeSelect.setAttribute("onselect", "reportElementEvent(\""+ this.elementID +"\", 'yaxis_datatype', this.value); return false");
+  var option = dtypeSelect.appendChild(document.createElement('option'));
+  option.setAttribute("value", "");
+  option.innerHTML = "please select";
+  var val1 = this.yaxis.datatype;
+  if(this.newconfig && this.newconfig.yaxis_datatype != undefined) { val1 = this.newconfig.yaxis_datatype; }
+  for(var dtype in datasourceElement.datatypes) {
+    var dtype_col = datasourceElement.datatypes[dtype];
+    if(!dtype_col) { continue; }
+    if((dtype_col.col_type != "weight") && (dtype_col.col_type != "signal")) { continue; }
+    var option = dtypeSelect.appendChild(document.createElement('option'));
+    option.setAttribute("value", dtype_col.datatype);
+    if(val1 == dtype) { option.setAttribute("selected", "selected"); }
+    option.innerHTML = dtype_col.title;
+  }
+
+  tdiv  = z_axis_div.appendChild(document.createElement('div'));
+  tdiv.setAttribute('style', "margin: 2px 1px 0px 20px;");
+  var tspan = tdiv.appendChild(document.createElement('span'));
+  tspan.innerHTML = "datatype:";
+  var dtypeSelect = tdiv.appendChild(document.createElement('select'));
+  dtypeSelect.setAttribute('name', "datatype");
+  dtypeSelect.className = "dropdown";
+  dtypeSelect.style.fontSize = "10px";
+  dtypeSelect.setAttribute("onchange", "reportElementEvent(\""+ this.elementID +"\", 'zaxis_datatype', this.value); return false");
+  dtypeSelect.setAttribute("onselect", "reportElementEvent(\""+ this.elementID +"\", 'zaxis_datatype', this.value); return false");
+  var option = dtypeSelect.appendChild(document.createElement('option'));
+  option.setAttribute("value", "");
+  option.innerHTML = "please select";
+  var val1 = this.zaxis.datatype;
+  if(this.newconfig && this.newconfig.zaxis_datatype != undefined) { val1 = this.newconfig.zaxis_datatype; }
+  for(var dtype in datasourceElement.datatypes) {
+    var dtype_col = datasourceElement.datatypes[dtype];
+    if(!dtype_col) { continue; }
+    if((dtype_col.col_type != "weight") && (dtype_col.col_type != "signal")) { continue; }
+    var option = dtypeSelect.appendChild(document.createElement('option'));
+    option.setAttribute("value", dtype_col.datatype);
+    if(val1 == dtype) { option.setAttribute("selected", "selected"); }
+    option.innerHTML = dtype_col.title;
+  }
+}
+
+
+function zenbuChartElement_configTernary(datasourceElement) {
+  if(!this.config_options_div) { return; }  
+  var configdiv = this.config_options_div;
+
+  // datatype select -------------
+  //var columns_div = zenbuChartElement_signalColumnsInterface(this, configdiv);
+
+  // axis controls ----------
+  var x_axis_div  = configdiv.appendChild(document.createElement('div'));
+  var tspan = x_axis_div.appendChild(document.createElement('span'));
+  tspan.setAttribute('style', "margin: 3px 0px 3px 10px; font-weight:bold;");
+  tspan.innerHTML = "X-axis: ";
+
+  var y_axis_div  = configdiv.appendChild(document.createElement('div'));
+  var tspan = y_axis_div.appendChild(document.createElement('span'));
+  tspan.setAttribute('style', "margin: 3px 0px 3px 10px; font-weight:bold;");
+  tspan.innerHTML = "Y-axis: ";
+
+  var z_axis_div  = configdiv.appendChild(document.createElement('div'));
+  var tspan = z_axis_div.appendChild(document.createElement('span'));
+  tspan.setAttribute('style', "margin: 3px 0px 3px 10px; font-weight:bold;");
+  tspan.innerHTML = "Z-axis: ";
+  
+  // show filtered-out group
+  var tdiv  = configdiv.appendChild(document.createElement('div'));
+  tcheck = tdiv.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 2px 1px 0px 10px;");
+  tcheck.setAttribute('type', "checkbox");
+  var val1 = this.show_filtered;
+  if(this.newconfig && this.newconfig.show_filtered != undefined) { val1 = this.newconfig.show_filtered; }
+  if(val1) { tcheck.setAttribute('checked', "checked"); }
+  tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'show_filtered', this.checked);");
+  tspan2 = tdiv.appendChild(document.createElement('span'));
+  tspan2.innerHTML = "show filtered group";
+
+  //--- datatype select
+  var tspan = x_axis_div.appendChild(document.createElement('span'));
+  tspan.setAttribute('style', "margin: 2px 1px 0px 5px;");
+  tspan.innerHTML = "datatype:";
+  var dtypeSelect = x_axis_div.appendChild(document.createElement('select'));
+  dtypeSelect.setAttribute('name', "datatype");
+  dtypeSelect.className = "dropdown";  
+  dtypeSelect.style.fontSize = "10px";
+  dtypeSelect.setAttribute("onchange", "reportElementEvent(\""+ this.elementID +"\", 'xaxis_datatype', this.value); return false");
+  dtypeSelect.setAttribute("onselect", "reportElementEvent(\""+ this.elementID +"\", 'xaxis_datatype', this.value); return false");
+  var option = dtypeSelect.appendChild(document.createElement('option'));
+  option.setAttribute("value", "");
+  option.innerHTML = "please select";
+  var val1 = this.xaxis.datatype;
+  if(this.newconfig && this.newconfig.xaxis_datatype != undefined) { val1 = this.newconfig.xaxis_datatype; }
+  for(var dtype in datasourceElement.datatypes) {
+    var dtype_col = datasourceElement.datatypes[dtype];
+    if(!dtype_col) { continue; }
+    if((dtype_col.col_type != "weight") && (dtype_col.col_type != "signal")) { continue; }
+    var option = dtypeSelect.appendChild(document.createElement('option'));
+    option.setAttribute("value", dtype_col.datatype);
+    if(val1 == dtype) { option.setAttribute("selected", "selected"); }
+    option.innerHTML = dtype_col.title;
+  }
+  
+  var tspan = y_axis_div.appendChild(document.createElement('span'));
+  tspan.setAttribute('style', "margin: 2px 1px 0px 5px;");
+  tspan.innerHTML = "datatype:";
+  var dtypeSelect = y_axis_div.appendChild(document.createElement('select'));
+  dtypeSelect.setAttribute('name', "datatype");
+  dtypeSelect.className = "dropdown";
+  dtypeSelect.style.fontSize = "10px";
+  dtypeSelect.setAttribute("onchange", "reportElementEvent(\""+ this.elementID +"\", 'yaxis_datatype', this.value); return false");
+  dtypeSelect.setAttribute("onselect", "reportElementEvent(\""+ this.elementID +"\", 'yaxis_datatype', this.value); return false");
+  var option = dtypeSelect.appendChild(document.createElement('option'));
+  option.setAttribute("value", "");
+  option.innerHTML = "please select";
+  var val1 = this.yaxis.datatype;
+  if(this.newconfig && this.newconfig.yaxis_datatype != undefined) { val1 = this.newconfig.yaxis_datatype; }
+  for(var dtype in datasourceElement.datatypes) {
+    var dtype_col = datasourceElement.datatypes[dtype];
+    if(!dtype_col) { continue; }
+    if((dtype_col.col_type != "weight") && (dtype_col.col_type != "signal")) { continue; }
+    var option = dtypeSelect.appendChild(document.createElement('option'));
+    option.setAttribute("value", dtype_col.datatype);
+    if(val1 == dtype) { option.setAttribute("selected", "selected"); }
+    option.innerHTML = dtype_col.title;
+  }
+
+  var tspan = z_axis_div.appendChild(document.createElement('span'));
+  tspan.setAttribute('style', "margin: 2px 1px 0px 5px;");
+  tspan.innerHTML = "datatype:";
+  var dtypeSelect = z_axis_div.appendChild(document.createElement('select'));
+  dtypeSelect.setAttribute('name', "datatype");
+  dtypeSelect.className = "dropdown";
+  dtypeSelect.style.fontSize = "10px";
+  dtypeSelect.setAttribute("onchange", "reportElementEvent(\""+ this.elementID +"\", 'zaxis_datatype', this.value); return false");
+  dtypeSelect.setAttribute("onselect", "reportElementEvent(\""+ this.elementID +"\", 'zaxis_datatype', this.value); return false");
+  var option = dtypeSelect.appendChild(document.createElement('option'));
+  option.setAttribute("value", "");
+  option.innerHTML = "please select";
+  var val1 = this.zaxis.datatype;
+  if(this.newconfig && this.newconfig.zaxis_datatype != undefined) { val1 = this.newconfig.zaxis_datatype; }
+  for(var dtype in datasourceElement.datatypes) {
+    var dtype_col = datasourceElement.datatypes[dtype];
+    if(!dtype_col) { continue; }
+    if((dtype_col.col_type != "weight") && (dtype_col.col_type != "signal")) { continue; }
+    var option = dtypeSelect.appendChild(document.createElement('option'));
+    option.setAttribute("value", dtype_col.datatype);
+    if(val1 == dtype) { option.setAttribute("selected", "selected"); }
+    option.innerHTML = dtype_col.title;
+  }
 }
 
 
@@ -5167,7 +5634,6 @@ function zenbuChartElement_configBoxPlot(datasourceElement) {
     option.setAttribute("value", dtype_col.datatype);
     if(xaxis_datatype == dtype) { 
       option.setAttribute("selected", "selected"); 
-      dtype_col.signal_active = true;  //should be active if selected
     }
     var label =  dtype_col.title;
     if(dtype_col.title != dtype_col.datatype) {
@@ -5501,12 +5967,12 @@ function chart_element_signal_asc_sort_func(a,b) {
 function chart_element_feature_sort_func(a,b) {
   if(!a) { return 1; }
   if(!b) { return -1; }
+  if(a.selected && !b.selected) { return 1; }
+  if(!a.selected && b.selected) { return -1; }
   if(a.filter_valid && !b.filter_valid) { return 1; }
   if(!a.filter_valid && b.filter_valid) { return -1; }
   if(a.search_match && !b.search_match) { return 1; }
   if(!a.search_match && b.search_match) { return -1; }
-  if(!a.selected && b.selected) { return -1; }
-  if(!a.selected && b.selected) { return -1; }
   if(a.id < b.id) { return -1; }
   if(a.id > b.id) { return  1; }
   return 0;
@@ -5544,22 +6010,48 @@ function reportsChartTooltipEvent(elementID, tooltipItems, data, mode) {
   //console.log("reportsChartTooltipEvent "+elementID);
   var reportElement = current_report.elements[elementID];
   if(!reportElement) { return ""; }
+  reportElement.current_hover_dbid = null;
   if(tooltipItems.length == 0) { return ""; }
 
   var datasourceElement = reportElement.datasource();
 
   var rtnValue = new Array; //doh finally found correct documentation, get multiple lines via array of strings
+  var values_hash = {}; //to avoid duplicates
+
   tooltipItems.forEach(function(tooltipItem) {
-    var data_obj = data.datasets[tooltipItem.datasetIndex].data[tooltipItem.index];
+    var dataset = data.datasets[tooltipItem.datasetIndex];
+    //if(reportElement.chart_selection_dataset && dataset==reportElement.chart_selection_dataset) { return; }
+    var data_obj = dataset.data[tooltipItem.index];
     var skip_first=true;
     if(mode=="title" || mode=="all") { skip_first=false; }
 
     if(typeof data_obj == "object") { //scatter plot uses point objects
       if(datasourceElement.datasource_mode=="feature") {
-        data_obj = reportElement.feature_array[data_obj.feature_idx]; //._index?
+        //data_obj = reportElement.feature_array[data_obj.feature_idx]; //._index?
+        for(var k=0; k<reportElement.feature_array.length; k++) {
+          var feature = reportElement.feature_array[k];
+          if(feature.id == data_obj.feature_id) { 
+            data_obj=feature;     
+            reportElement.current_hover_dbid = feature.id;
+            break;
+          }
+          if(feature.id == data_obj.feature2_id) { 
+            data_obj=feature;
+            reportElement.current_hover_dbid = feature.id;
+            break;
+          }
+        }
       }
       if(datasourceElement.datasource_mode=="edge") {
-        data_obj = reportElement.edge_array[data_obj.edge_idx];
+        //data_obj = reportElement.edge_array[data_obj.edge_idx];
+        for(var k=0; k<reportElement.edge_array.length; k++) {
+          var edge = reportElement.edge_array[k];
+          if(edge.id == data_obj.edge_id) { 
+            data_obj=edge;     
+            reportElement.current_hover_dbid = edge.id;
+            break;
+          }
+        }
       }
     }
     else if(typeof data_obj == "number") { 
@@ -5570,6 +6062,7 @@ function reportsChartTooltipEvent(elementID, tooltipItems, data, mode) {
         data_obj = reportElement.edge_array[tooltipItem.index];
       }
     }
+    //if(reportElement.current_hover_dbid) { console.log("current chart hover dbid:"+reportElement.current_hover_dbid); }
     
     var columns = reportElement.dtype_columns;
     for(var i=0; i<columns.length; i++) {
@@ -5594,8 +6087,11 @@ function reportsChartTooltipEvent(elementID, tooltipItems, data, mode) {
           signal = data_obj.expression_hash[datatype][0].total;
         }
         if(signal != null) {
-          rtnValue.push(dtype_col.title+": "+signal);
-          //rtnValue += signal+"; ";
+          var tval = dtype_col.title+": "+signal;
+          if(!values_hash[tval]) {
+            values_hash[tval] = true;
+            rtnValue.push(tval);
+          }
         }
       }
       if(dtype_col.col_type == "weight") {
@@ -5604,16 +6100,24 @@ function reportsChartTooltipEvent(elementID, tooltipItems, data, mode) {
           signal = data_obj.weights[datatype][0].weight;
         }
         if(signal != null) {
-          rtnValue.push(dtype_col.title+": "+signal);
-          //rtnValue += signal+"; ";
+          var tval = dtype_col.title+": "+signal;
+          if(!values_hash[tval]) {
+            values_hash[tval] = true;
+            rtnValue.push(tval);
+          }
         }
       }
       if(dtype_col.col_type == "mdata") {
         var label = zenbuChartElement_get_category(dtype_col.datatype, data_obj);
         if(label) {
-          if(mode=="title") { rtnValue.push(label); }
-          else { rtnValue.push(dtype_col.title+": "+label); }
-          //rtnValue += label+"; ";
+          var tval = label;
+          if(mode!="title") { tval = dtype_col.title+": "+label; }
+          //if(mode=="title") { rtnValue.push(label); }
+          //else { rtnValue.push(dtype_col.title+": "+label); }
+          if(!values_hash[tval]) {
+            values_hash[tval] = true;
+            rtnValue.push(tval);
+          }
         }
       }
       if(mode=="title") { break; }
@@ -5645,10 +6149,17 @@ function reportsChartClickEvent(event, eventItems) {
   
   var names = "";
   console.log("reportsChartClickEvent ["+reportElement.elementID+"] datasource["+datasourceElement.elementID+"] eventItems.length: " + eventItems.length); //should be an array of active elements what ever that means
+  if(eventItems.length == 0 ) { return; }
   
+  if(datasourceElement && reportElement.current_hover_dbid) {
+    //tracking the current_hover makes sure that the point showing in the hover-info box is the one selected
+    reportElementUserEvent(datasourceElement, 'select', reportElement.current_hover_dbid);
+    return;
+  }
+
   eventItems.forEach(function(item) {
-    console.log("item.datasetIndex: " + item._datasetIndex);
-    console.log("item.index: " + item._index);
+    console.log("click item.datasetIndex: " + item._datasetIndex);
+    console.log("click item.index: " + item._index);
     //var fields="";
     //for(var tok in item) { fields += tok+", "; }
     //console.log("item: " + fields);
@@ -5657,10 +6168,10 @@ function reportsChartClickEvent(event, eventItems) {
     var edge = undefined;
     if(reportElement.display_type == "bar" || reportElement.display_type == "line") {
       if(datasourceElement.datasource_mode=="feature") {
-        feature = reportElement.feature_array[item._index];
+        feature = reportElement.feature_array[item._index]; //use local array
       }
       if(datasourceElement.datasource_mode=="edge") {
-        edge = reportElement.edge_array[item._index];
+        edge = reportElement.edge_array[item._index]; //use local array
       }
     }
     if(feature) { 
@@ -5684,13 +6195,15 @@ function reportsChartClickEvent(event, eventItems) {
       }
     }
     if(data_obj.feature_id) {
-      if(reportElement && reportElement.datasourceElementID) {
+      //console.log("click_obj has featureID:"+data_obj.feature_id); 
+      if(datasourceElement) {
         //TODO select in datasourceElementID (ex: click in chart cascades up to dependant table)
         reportElementUserEvent(datasourceElement, 'select', data_obj.feature_id);
       }
     }
     if(data_obj.edge_id) {
-      if(reportElement && reportElement.datasourceElementID) {
+      //console.log("click_obj has edgeID:"+data_obj.edge_id); 
+      if(datasourceElement) {
         //TODO select in datasourceElementID (ex: click in chart cascades up to dependant table)
         reportElementUserEvent(datasourceElement, 'select', data_obj.edge_id);
       }

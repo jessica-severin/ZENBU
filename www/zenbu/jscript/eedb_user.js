@@ -453,9 +453,7 @@ function eedbUserProfilePanel() {
   button.innerHTML ="upgrade user uploaded databases";
   */
 
-  if(userview.user.no_password) {
-    zenbuUserResetPasswordPanel();
-  }
+  //if(userview.user.no_password) { zenbuUserResetPasswordPanel(); }
 }
 
 
@@ -558,6 +556,9 @@ function eedbUserSubmitInvitationEmail() {
   eedbUserCloseEmailValidatePanel();
 }
 
+
+/*
+ * old reset password system, moved into eedb_common and the showLogin()system
 
 function zenbuUserResetPasswordPanel() {
   var main_div = document.getElementById("eedb_user_altdiv");
@@ -706,8 +707,6 @@ function zenbuUserPasswordCheck() {
 }
 
 
-
-
 function zenbuSubmitPasswordReset() {
   userview.error_msg = "";
   var input1 = document.getElementById("zenbu_user_reset_password_new1");
@@ -748,6 +747,7 @@ function zenbuSubmitPasswordReset() {
   userview.error_msg = "";
   document.getElementById('eedb_user_altdiv').innerHTML='';
 }
+*/
 
 
 
@@ -1125,7 +1125,7 @@ function eedbUserNewUploadPanelRefresh() {
     radio1.setAttribute("onchange", "eedbUserReconfigParam('upload-edge-mode', this.value);");
     if(userview.upload.edgemode == "node") { radio1.setAttribute("checked", "checked"); }
     tspan = tdiv.appendChild(document.createElement('span'));
-    tspan.innerHTML = "nodes";
+    tspan.innerHTML = "table (nodes)";
 
     var radio2 = tdiv.appendChild(document.createElement('input'));
     radio2.setAttribute("style", "margin-left:20px;");
@@ -2002,6 +2002,7 @@ function zenbuCollaborationInviteUser(uuid) {
   if(!openid_input) { return; }
   var user_ident = openid_input.value;
   if(!user_ident) { return; }
+  user_ident = user_ident.replace(/[ \t]/g, "");
 
   var paramXML = "<zenbu_query>\n";
   paramXML += "<mode>invite_user</mode>\n";
