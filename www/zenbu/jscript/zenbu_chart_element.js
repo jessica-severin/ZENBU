@@ -3229,17 +3229,41 @@ function zenbuChartElement_showSelections() {
     }
 
     if(this.chart_selection_dataset && selected_points.length>0) {
+      selected_points.sort(chart_selected_points_sort_func);
       for(k=0; k<selected_points.length; k++) {
         var point = selected_points[k];
-        point.r = point.default_radius * 2.5;
+        //point.r = point.default_radius * 2.5;
         this.chart_selection_dataset.data.push(point);
       }
       this.chart_selection_dataset.active = true;
       this.chart_selection_dataset.backgroundColor = "rgba(255,0,225,1)"; //pink
       this.chart_selection_dataset.hoverBackgroundColor = "rgba(255,0,225,1)"; //pink
       //this.chart_data.datasets.unshift(this.chart_selection_dataset);
-    }
+    
+      //second pass modify the metadata for the chart_selection_dataset (always index 0)
+      let meta = this.chart.getDatasetMeta(0);
+      for(k=0; k<selected_points.length; k++) {
+        var point = selected_points[k];
+        var point_meta = meta.data[k];
+        if(!point_meta) { continue; }
+        point_meta.custom = {};  //clear previous custom
+        point_meta.custom.radius = point.default_radius * 2.0;
 
+        if(select_id) {
+          //a selection is made to alter the points
+          if(!point.selected) {
+            //meaned a selection is made but this point is from the search
+            point_meta.custom.backgroundColor = "rgba(252, 126, 240,1)"; //faint pink 252,101,237
+            //point_meta.custom.radius = point.default_radius * 1.5;
+          } else {
+            //this is the selected point
+            point_meta.custom.backgroundColor = "rgba(255,0,225,1)"; //pink
+            point_meta.custom.radius = point.default_radius * 2.5;
+          }
+        }
+      }
+    }
+    
     //this.chart.update(0);
   }
 }
@@ -5975,6 +5999,13 @@ function chart_element_feature_sort_func(a,b) {
   if(!a.search_match && b.search_match) { return -1; }
   if(a.id < b.id) { return -1; }
   if(a.id > b.id) { return  1; }
+  return 0;
+}
+function chart_selected_points_sort_func(a,b) {
+  if(!a) { return 1; }
+  if(!b) { return -1; }
+  if(a.selected && !b.selected) { return 1; }
+  if(!a.selected && b.selected) { return -1; }
   return 0;
 }
 
