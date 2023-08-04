@@ -1,4 +1,4 @@
-/* $Id: BAMDB.cpp,v 1.70 2022/01/10 08:37:34 severin Exp $ */
+/* $Id: BAMDB.cpp,v 1.71 2023/06/16 08:37:37 severin Exp $ */
 
 /***
 
@@ -1197,6 +1197,7 @@ EEDB::Feature* EEDB::SPStreams::BAMDB::_convert_to_feature(bam1_t *al) {
     long            aux_len = bam_get_l_aux(al);
     unsigned char*  aux = bam_get_aux(al);
     //printf("aux_data %ld [%s]\n", aux_len, aux);
+    //printf("\naux_data len=%ld\n", aux_len);
     
     //binary parsing of the aux_data into ZENBU metadata
     //TAG:TYPE:VALUE
@@ -1210,12 +1211,19 @@ EEDB::Feature* EEDB::SPStreams::BAMDB::_convert_to_feature(bam1_t *al) {
     
     unsigned int i = 0;
     int8_t   val1;
+    uint8_t  val1u;
     int16_t  val2;
+    uint16_t val2u;
     int32_t  val3;
+    uint32_t val3u;
     float    val4;
     string   val_str;
+    char     array_type;
+    uint32_t array_len;
+    //char     t_char;
 
     while (i < aux_len) {
+      //printf("bam-aux tag[%.2s] type[%c]",aux+i,*(aux+i+2));
       char tag[4];
       memset(tag, 0, 4);
       memcpy(tag, aux+i, 2);
@@ -1226,35 +1234,97 @@ EEDB::Feature* EEDB::SPStreams::BAMDB::_convert_to_feature(bam1_t *al) {
       switch (type) {
         //I think it is a 1byte integer, it's not listed in the SAM documents
         case 'c': 
+          memcpy(&val1,(aux+i),1);
+          i++;
+          break;
         case 'C': 
-          val1 = (int8_t)(*(aux+i));
-          //printf("%d", val1);
+          memcpy(&val1u,(aux+i),1);
+          //printf("%d", val1u);
           i++;
           break;
 
         case 's': //int16_t, 2byte int
+          memcpy(&val2,(aux+i),2);
+          i+=2; 
+          break;
         case 'S':
-          val2 = (int16_t)(*(aux+i));
+          memcpy(&val2u,(aux+i),2);
           //printf("%d", val2);
           i+=2;
           break;
 
         case 'i': //int32, 4 byte int
-        case 'I': 
-          val3 = (int32_t)(*(aux+i));
-          //printf("%ld", val3);
+          memcpy(&val3,(aux+i),4); 
+          i+=4; 
+          break;
+        case 'I': //uint32_t
+          memcpy(&val3u,(aux+i),4); 
           i+=4;
+          //printf("%d", val3);
           break;
 
         case 'f': //4byte float
         case 'F': 
-          val4 = (float)(*(aux+i));
+          memcpy(&val4,(aux+i),4); 
           //printf("%f", val4);
           i+=4;
           break;
 
+        case 'H': //byte array in hex format
+          //H ([0-9A-F][0-9A-F])* Byte array in the Hex format
+          array_len = (uint32_t)(*(aux+i)); //guessing it might also have 4byte int for length
+          i+=4;
+          for(uint32_t j=0; j<array_len; j++) {
+            memcpy(&val1u,(aux+i),1);
+            i++;
+          }
+          break;
+        case 'B': //Integer or numeric array
+          //[cCsSiIf](,[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?)*
+          array_type = (char)(*(aux+i));
+          i++;
+          array_len = (uint32_t)(*(aux+i)); //from hexdump it appears to start with a 4byte unsigned int as array length
+          //printf("\n  array_type[%c] array_length=%d\n", array_type, array_len);
+          i+=4;
+          //cCsSiIf corresponding to int8 t (signed 8-bit integer), uint8 t (unsigned 8-bit integer), int16 t, uint16 t, int32 t, uint32 t and float
+          for(uint32_t j=0; j<array_len; j++) {
+            switch(array_type) {
+  	      case 'c': //int8_t
+  	      case 'C': //uint8_t
+                val1 = (int8_t)(*(aux+i));
+                //printf("  c=%d\n", val1);
+                i++;
+                break;
+	      case 's': //int16_t
+	      case 'S': //uint16_t
+                val2 = (int16_t)(*(aux+i));
+                //printf("  s=%d\n", val2);
+                i+=2;
+                break;
+	      case 'i': //int32_t
+	      case 'I': //unint32_t
+                memcpy(&val3,(aux+i),4);
+                i+=4;
+                //printf("  i=%d\n", val3);
+                break;
+	      case 'f': //float
+                val4 = (float)(*(aux+i));
+                //printf("  f=%f", val4);
+                i+=4;
+                break;
+            }
+          }
+          /*
+          while(i<aux_len) {
+            t_char = (char)(*(aux+i));
+            printf(" %d char[%x %c]\n",i,(uint8_t)t_char, t_char);
+            i++;
+          }
+          */
+          break;
+
         case 'A': //char
-          val_str = (char)(*(aux+1));
+          val_str = (char)(*(aux+i));
           //printf("%s", val_str.c_str());
           //putc(*(aux+i), stdout); 
           feature->metadataset()->add_tag_data((char*)tag, val_str);
@@ -1271,10 +1341,11 @@ EEDB::Feature* EEDB::SPStreams::BAMDB::_convert_to_feature(bam1_t *al) {
           break;
        
         default:
-          i++;
+          //printf("unknown BAM aux type[%c]\n", type);
+          i = aux_len; //terminate now to avoid corruption
           break;
       }
-      //putc('\n',stdout);
+      //printf("\n");
     }
 
   }
