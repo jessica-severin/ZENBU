@@ -1049,6 +1049,7 @@ function eedbEdgeTooltip(edge) {
     if(tag=="eedb:display_name") { continue; }
     if(tag=="eedb:owner_nickname") { continue; }
     if(tag=="eedb:owner_OpenID") { continue; }
+    if(tag=="keyword") { continue; }
 
     tdiv = main_div.appendChild(document.createElement('div'));
     tspan = tdiv.appendChild(document.createElement('span'));
@@ -1064,7 +1065,7 @@ function eedbEdgeTooltip(edge) {
       }
 
       tspan = tdiv.appendChild(document.createElement('span'));
-      tspan.setAttribute('style', "color: rgb(105,105,105);");
+      //tspan.setAttribute('style', "color: rgb(105,105,105);");
       tspan.innerHTML = value;
     }
   }
