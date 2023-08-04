@@ -1107,6 +1107,7 @@ function zenbuChartElement_postprocessBubbleChart() {
             if(cmax!=0) { cmax = Math.log10(cmax); }
             cs = (c1 - cmin) / (cmax - cmin); //0..1
           }
+          if(this.radius_signal_invert) { cs = 1.0 - cs; }
           radius_signal = cs * (radius_max - radius_min) + radius_min;
           current_point.default_radius = parseFloat(radius_signal.toPrecision(5));
         }
