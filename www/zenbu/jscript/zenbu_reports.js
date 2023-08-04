@@ -10391,6 +10391,9 @@ function zenbu_object_dtypecol_value(object, dtype_col, mode) {
       value = parseFloat(weights[0].weight);
     }
   } 
+  else if(t_feature && t_feature.score && (datatype == "bedscore") && (dtype_col.col_type == "signal")) {
+    value = t_feature.score;
+  }
   else if(t_feature && t_feature.expression && (dtype_col.col_type == "signal")) {
     for(var j2=0; j2<t_feature.expression.length; j2++) {
       var expression = t_feature.expression[j2];
