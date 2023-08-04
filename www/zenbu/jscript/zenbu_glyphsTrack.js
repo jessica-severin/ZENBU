@@ -103,6 +103,7 @@ function ZenbuGlyphsTrack(glyphsGB, trackID) {
   this.createMode  = "single";
   this.whole_chrom_scale  = false;
   this.hide_spanning = false;
+  this.arc_height_factor = 1.0;
   this.xyplot_fill = false;
   this.show_hoverinfo = true;
   this.interaction_style = "diamond";
@@ -2247,7 +2248,7 @@ function gLyphsRenderTrack(glyphTrack) {
     gLyphsRenderExpressionTrack(glyphTrack);
   } else if(glyphTrack.glyphStyle == "xyplot") {
     gLyphsTrack_render_xyplot(glyphTrack);
-  } else if(glyphTrack.glyphStyle == "arc") {
+  } else if((glyphTrack.glyphStyle == "arc") || (glyphTrack.glyphStyle == "multi-arc")) {
     gLyphsTrack_render_arc(glyphTrack);
   } else if(glyphTrack.glyphStyle == "interaction-map") {
     gLyphsTrack_render_interaction_map(glyphTrack);
@@ -2302,7 +2303,7 @@ function gLyphsDrawTrack(trackID) {
   var glyphStyle = glyphTrack.glyphStyle;
   if(glyphStyle == "signal-histogram" || glyphStyle == "xyplot") {
     gLyphsDrawExpressTrack(glyphTrack);
-  } else if(glyphStyle == "arc" || glyphStyle == "interaction-map") { 
+  } else if(glyphStyle == "arc" || glyphStyle == "multi-arc" || glyphStyle == "interaction-map") { 
     gLyphsDrawExpressTrack(glyphTrack);
   } else if(glyphStyle == "split-signal") { 
     gLyphsDrawSplitSignalTrack(glyphTrack);
@@ -3474,6 +3475,8 @@ function gLyphsTrackFeatureColour(glyphTrack, feature) {
   if(glyphTrack.selected_feature && (glyphTrack.glyphStyle!="1D-heatmap")) {
     if((glyphTrack.selected_feature.fidx !== undefined) && (glyphTrack.selected_feature.fidx == feature.fidx)) { 
       colour = new RGBColour(255,0,136); //slightly red deeppink
+    } else if((glyphTrack.selected_feature.eidx !== undefined) && (glyphTrack.selected_feature.eidx == feature.eidx)) { 
+      colour = new RGBColour(255,0,136); //slightly red deeppink
     } else if(glyphTrack.selected_feature.id && (glyphTrack.selected_feature.id == feature.id)) { 
       //colour = new RGBColour(255,0,225,0.5);
       //colour = new RGBColour(255,0,0); //red
@@ -4001,11 +4004,11 @@ function gLyphsTrack_render_arc(glyphTrack) {
     
   glyphTrack.expressLine1 = null;
   glyphTrack.expressLine2 = null;
-  if(glyphTrack.glyphStyle != "arc") { return; }
+  if(glyphStyle != "arc" && glyphStyle != "multi-arc") { return; }
 
-  var height = glyphTrack.track_height;
-  if(!height || height < 20) { height = 20; }
-  glyphTrack.track_height = height;
+  var track_height = glyphTrack.track_height;
+  if(!track_height || track_height < 20) { track_height = 20; }
+  glyphTrack.track_height = track_height;
   
   var middle = 12+ Math.floor(glyphTrack.track_height / 2.0);
   if(glyphTrack.strandless) { middle = 12+glyphTrack.track_height; }
@@ -4043,6 +4046,16 @@ function gLyphsTrack_render_arc(glyphTrack) {
   
   var obj_array = []
   obj_array = glyphTrack.feature_array;
+
+  if(glyphTrack.datasource_mode=="feature") {
+    console.log("gLyphsTrack_render_arc("+glyphTrack.trackID+") feature mode");
+    obj_array = glyphTrack.feature_array;
+    for(var i=0; i<obj_array.length; i++) {
+      var feature = obj_array[i];
+      if(!feature) { continue; }
+      feature.middle = (feature.start + feature.end) /2; 
+    }
+  }
 
   if(glyphTrack.datasource_mode=="edge") {
     console.log("gLyphsTrack_render_arc("+glyphTrack.trackID+") edge mode");
@@ -4114,9 +4127,9 @@ function gLyphsTrack_render_arc(glyphTrack) {
     feature.xfe = xfe;
     feature.xfm = (xfe + xfs) / 2.0;
        
-    var arc_height = (xfe - xfs)/2.0;
-    if(arc_height > height) { arc_height = height; }
-    if(arc_height < 5) { arc_height = 5; }    
+    var arc_height = ((xfe - xfs)/2.0) * glyphTrack.arc_height_factor;
+    if(arc_height > track_height) { arc_height = track_height; }
+    if(arc_height < 1) { arc_height = 1; }    
     if(arc_height > max_arc_height) { max_arc_height = arc_height; }
     feature.arc_height = arc_height;
 
@@ -4127,29 +4140,100 @@ function gLyphsTrack_render_arc(glyphTrack) {
     var feature = obj_array[i];
     if(!feature) { continue; }
     
-    var xfs = feature.xfs;
-    var xfe = feature.xfe;
-    var xfm = feature.xfm;
-    var arc_height = feature.arc_height * (height / max_arc_height);
-    if(glyphTrack.strandless) { arc_height = arc_height*2.0; }
+    //var xfs = feature.xfs;
+    //var xfe = feature.xfe;
+    //var xfm = feature.xfm;
+    //var arc_height = feature.arc_height * (track_height / max_arc_height);
+    //if(glyphTrack.strandless) { arc_height = arc_height*2.0; }
   
-    if(xfe < 0) { continue; }
-    if(xfs > dwidth) { continue; }
-       
+    if(feature.xfe < 0) { continue; }
+    if(feature.xfs > dwidth) { continue; }
+    
+    //subfeatures
+    var subfeats = [];
+    if(glyphStyle == "arc" || !feature.subfeatures) { 
+      var sub1 = { start:feature.start, end:feature.start };
+      var sub2 = { start:feature.end, end:feature.end };
+      subfeats.push(sub1, sub2);
+    }
+    if(glyphStyle == "multi-arc" && feature.subfeatures) { 
+      subfeats = feature.subfeatures;
+    }
+
     var colour = gLyphsTrackFeatureColour(glyphTrack, feature);
 
-    // render into expression lines
-    if(feature.strand != "-") {
-      var t_path = document.createElementNS(svgNS,'path');
-      t_path.style.stroke = colour.getCSSHexadecimalRGB();
-      var points = " M "+(xfs.toFixed(1))+" "+ (middle).toFixed(1);
-      points    += " Q "+(xfm)+" "+(middle-arc_height)+" "+(xfe.toFixed(1))+" "+ (middle).toFixed(1);
+    var t_path = document.createElementNS(svgNS,'path');
+    var points = "";
+    var prev_feature = null;
+    for(var j=0; j<subfeats.length; j++) {  
+      var subfeature = subfeats[j];
+      subfeature.middle = (subfeature.start + subfeature.end) / 2;
+      if(j==0) { 
+        subfeature.middle = subfeature.start;
+        prev_feature = subfeature; 
+        continue;
+      }
+      if(j==subfeats.length-1) { 
+        subfeature.middle = subfeature.end;
+      }
+            
+      var xfs = dwidth*(prev_feature.middle-region_start)/(region_end-region_start); 
+      var xfe = dwidth*(subfeature.middle-region_start)/(region_end-region_start); 
+
+      if(glyphTrack.glyphsGB.flip_orientation) {
+        t_xfs = dwidth - xfe;
+        t_xfe = dwidth - xfs;
+        xfs = t_xfs;
+        xfe = t_xfe;
+      }
+      if(xfe-xfs<0.5) { xfe = xfs+0.5; } //at least 0.5 pixels wide
+      //if(xfe > dwidth*7.0) { xfe = dwidth*7.0; } //extremely long arc barely lift off the middle, so shorten
+      //if(xfs < -dwidth*7.0) { xfs = -dwidth*7.0; }
+      var xfm = (xfe + xfs) / 2.0;
+        
+      var arc_height = ((xfe - xfs)/2.0) * glyphTrack.arc_height_factor;
+      if(arc_height > track_height) { arc_height = track_height; }
+      if(arc_height < 5) { arc_height = 5; }    
+      if(arc_height > max_arc_height) { max_arc_height = arc_height; }
+      
+      arc_height = arc_height * (track_height / max_arc_height);
+      if(glyphTrack.strandless) { arc_height = arc_height*2.0; }
+
+      prev_feature = subfeature;
+
+      // render into expression lines
+      if(feature.strand != "-") {
+        //t_path.style.stroke = colour.getCSSHexadecimalRGB();
+        points  += " M "+(xfs.toFixed(1))+" "+ (middle.toFixed(1));
+        points  += " Q "+(xfm.toFixed(1))+" "+ (middle-arc_height).toFixed(1)+", "+(xfe.toFixed(1))+" "+ (middle.toFixed(1));
+        if(glyphTrack.xyplot_fill) { 
+          points += " Z"; 
+        } else { 
+          points += " Q "+(xfm.toFixed(1))+" "+(middle-arc_height).toFixed(1)+" "+(xfs.toFixed(1))+" "+ (middle).toFixed(1); 
+        }
+        
+      }
+      if((feature.strand == "-") && (!glyphTrack.strandless)) {
+        points  += " M "+(xfs.toFixed(1))+" "+ (middle.toFixed(1));
+        points  += " Q "+(xfm.toFixed(1))+" "+ (middle+arc_height).toFixed(1)+", "+(xfe.toFixed(1))+" "+ (middle.toFixed(1));
+        if(glyphTrack.xyplot_fill) { 
+          points += " Z";
+        } else {
+          points += " Q "+(xfm.toFixed(1))+" "+ (middle+arc_height).toFixed(1)+", "+(xfs.toFixed(1))+" "+ (middle.toFixed(1));
+        }
+      }
+    }
+
+    t_path.setAttributeNS(null,"stroke-width", 1.5);
+    if(feature.strand != "-") { 
+      //t_path.style.stroke = colour.getCSSHexadecimalRGB();
+      t_path.setAttributeNS(null,"stroke", colour.getCSSHexadecimalRGB());
       if(glyphTrack.xyplot_fill) { 
-        points += " Z"; 
-        t_path.style.fill = colour.getCSSHexadecimalRGB(); 
+        //t_path.style.fill = colour.getCSSHexadecimalRGB(); 
+        t_path.setAttributeNS(null, "fill", colour.getCSSHexadecimalRGB());
       } else { 
-        points += " Q "+(xfm)+" "+(middle-arc_height)+" "+(xfs.toFixed(1))+" "+ (middle).toFixed(1); 
-        t_path.style.fill = "rgba(255,255,225,0)";
+        //t_path.style.fill = "transparent";
+        t_path.setAttributeNS(null, "fill", "transparent");
       }
       t_path.setAttribute('d', points);
       expressLine1.appendChild(t_path);
@@ -4161,29 +4245,27 @@ function gLyphsTrack_render_arc(glyphTrack) {
         if(feature.fidx !== undefined) {
           t_path.setAttributeNS(null, "onmouseover", "gLyphsTrackFeatureInfo(\""+glyphTrack.trackID+"\", \""+(feature.fidx)+"\");");
           t_path.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \""+glyphTrack.trackID+"\", \""+feature.fidx+"\");");
-        } else if((feature.classname == "Feature") && feature.id) {
-          t_path.setAttributeNS(null, "onmouseover", "eedbSearchTooltip(\"" +(feature.id)+ "\");");
-          t_path.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \""+glyphTrack.trackID+"\", \""+feature.id+"\");"); 
-//         } else if(feature.classname == "Edge") {
-//           //if(feature.eidx) {
-//           //  t_path.setAttributeNS(null, "onmouseover", "gLyphsTrackEdgeInfo(\""+glyphTrack.trackID+"\", \""+(feature.eidx)+"\");");
-//           //}
-//           t_path.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \""+glyphTrack.trackID+"\", \""+feature.id+"\");"); 
+        } else if(feature.classname == "Edge" && feature.eidx) {
+          t_path.setAttributeNS(null, "onmouseover", "gLyphsTrackEdgeInfo(\""+glyphTrack.trackID+"\", \""+(feature.eidx)+"\");");
+          t_path.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \""+glyphTrack.trackID+"\", \""+feature.eidx+"\");");
         } else {
-          t_path.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \""+glyphTrack.trackID+"\");"); 
+          if(feature.id) {
+            t_path.setAttributeNS(null, "onmouseover", "eedbSearchTooltip(\"" +(feature.id)+ "\");");
+            t_path.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \""+glyphTrack.trackID+"\", \""+feature.id+"\");");
+          } else {
+            t_path.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \""+glyphTrack.trackID+"\");");
+          }
         }
       }
     }
+    
     if((feature.strand == "-") && (!glyphTrack.strandless)) {
-      var t_path = document.createElementNS(svgNS,'path');
-      var points = " M"+(xfs.toFixed(1))+" "+ (middle).toFixed(1);
-      points    += " Q "+(xfm)+" "+(middle+arc_height)+" "+(xfe)+" "+ (middle).toFixed(1);
-      //if(glyphTrack.xyplot_fill) { points += " Z"; }
       t_path.setAttributeNS(null, 'd', points);
       t_path.style.stroke = colour.getCSSHexadecimalRGB();
-      t_path.style.fill = "rgba(255,255,225,0)";
+      t_path.style.fill = "transparent";
+      //t_path.style.fill = "rgba(255,255,225,0)";
       expressLine2.appendChild(t_path);
-
+      
       if(!glyphTrack.glyphsGB.exportSVGconfig) {
         t_path.setAttributeNS(null, "onmousemove", "selectTrackRegion('drag', \"" +glyphTrack.trackID+"\");");
         t_path.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
@@ -4191,9 +4273,16 @@ function gLyphsTrack_render_arc(glyphTrack) {
         if(feature.fidx !== undefined) {
           t_path.setAttributeNS(null, "onmouseover", "gLyphsTrackFeatureInfo(\""+glyphTrack.trackID+"\", \""+(feature.fidx)+"\");");
           t_path.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \""+glyphTrack.trackID+"\", \""+feature.fidx+"\");");
-        } else if(feature.id) {
-          t_path.setAttributeNS(null, "onmouseover", "eedbSearchTooltip(\"" +(feature.id)+ "\");");
-          t_path.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \""+glyphTrack.trackID+"\", \""+feature.id+"\");"); 
+        } else if(feature.classname == "Edge" && feature.eidx) {
+          t_path.setAttributeNS(null, "onmouseover", "gLyphsTrackEdgeInfo(\""+glyphTrack.trackID+"\", \""+(feature.eidx)+"\");");
+          t_path.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \""+glyphTrack.trackID+"\", \""+feature.eidx+"\");");
+        } else {
+          if(feature.id) {
+            t_path.setAttributeNS(null, "onmouseover", "eedbSearchTooltip(\"" +(feature.id)+ "\");");
+            t_path.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \""+glyphTrack.trackID+"\", \""+feature.id+"\");"); 
+          } else {
+            t_path.setAttributeNS(null, "onmouseup",   "selectTrackRegion('enddrag', \""+glyphTrack.trackID+"\");"); 
+          }
         }
       }
     }
@@ -7868,7 +7957,7 @@ function gLyphsCreateMoveBar(glyphTrack) {
   var height = parseInt(svg.getAttributeNS(null, 'height'));
 
   var add_resize = false;
-  if((glyphStyle=="signal-histogram" || glyphStyle=="xyplot" || glyphStyle=="arc" || 
+  if((glyphStyle=="signal-histogram" || glyphStyle=="xyplot" || glyphStyle=="arc" || glyphStyle=="multi-arc" ||
       glyphStyle=="1D-heatmap" || glyphStyle=="interaction-map") && 
      (height>20)) { add_resize=true; }
 
@@ -8378,6 +8467,7 @@ function glyphsGenerateTrackDOM(glyphTrack) {
   if(glyphTrack.whole_chrom_scale) { trackDOM.setAttribute("whole_chrom_scale", "true"); }
   if(glyphTrack.xyplot_fill) { trackDOM.setAttribute("xyplot_fill", "true"); }
   if(glyphTrack.hide_spanning) { trackDOM.setAttribute("hide_spanning", "true"); }
+  if(glyphTrack.arc_height_factor!=1.0) { trackDOM.setAttribute("arc_height_factor", glyphTrack.arc_height_factor); }
 
   //if(glyphTrack.expscaling) { trackDOM.setAttribute("expscaling", glyphTrack.expscaling); }
   //if(glyphTrack.strandless) { trackDOM.setAttribute("strandless", glyphTrack.strandless); }
@@ -8576,6 +8666,8 @@ function gLyphsCreateTrackFromTrackDOM(trackDOM, glyphsGB) {
   if(trackDOM.getAttribute("colorspace")) { glyphTrack.colorspace = trackDOM.getAttribute("colorspace"); }
   if(trackDOM.getAttribute("whole_chrom_scale") == "true") { glyphTrack.whole_chrom_scale = true; }
   if(trackDOM.getAttribute("hide_spanning") == "true") { glyphTrack.hide_spanning = true; }
+  if(trackDOM.getAttribute("arc_height_factor")) { glyphTrack.arc_height_factor = parseFloat(trackDOM.getAttribute("arc_height_factor")); }
+
   if(trackDOM.getAttribute("xyplot_fill") == "true") { glyphTrack.xyplot_fill = true; }
   if(trackDOM.getAttribute("hide_zero") == "true") { glyphTrack.hide_zero = true; }
   if(trackDOM.getAttribute("hide_deactive_exps") == "true") { glyphTrack.hide_deactive_exps = true; }
@@ -9872,7 +9964,13 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
     if(value) { newconfig.hide_zero=true; }
     else { newconfig.hide_zero = false; }
     createGlyphstyleSelect(glyphTrack);
+  }  
+  if(param == "arc_height_factor") {  
+    if(value<=0.1) { value = 0.1; }
+    if(value>100) { value = 100; }
+    newconfig.arc_height_factor = value;
   }
+
 
   if(param == "spstream") {  
     if(value == "predefined-clear") {
@@ -10245,6 +10343,7 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
       if(newconfig.binning !== undefined) { glyphTrack.binning = newconfig.binning; }
       if(newconfig.whole_chrom_scale !== undefined) { glyphTrack.whole_chrom_scale = newconfig.whole_chrom_scale; }
       if(newconfig.hide_spanning !== undefined) { glyphTrack.hide_spanning = newconfig.hide_spanning; }
+      if(newconfig.arc_height_factor !== undefined) { glyphTrack.arc_height_factor = newconfig.arc_height_factor; }
       if(newconfig.xyplot_fill !== undefined) { glyphTrack.xyplot_fill = newconfig.xyplot_fill; }
       if(newconfig.experiment_merge !== undefined) { glyphTrack.experiment_merge = newconfig.experiment_merge; }
       if(newconfig.title !== undefined) { glyphTrack.title = newconfig.title; }
@@ -10285,7 +10384,7 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
 
     if(glyphTrack.glyphStyle == "signal-histogram" || glyphTrack.glyphStyle == "xyplot" || 
        glyphTrack.glyphStyle == "interaction-map" ||
-       glyphTrack.glyphStyle == "split-signal" || glyphTrack.glyphStyle == "arc") {
+       glyphTrack.glyphStyle == "split-signal" || glyphTrack.glyphStyle == "arc" || glyphTrack.glyphStyle == "multi-arc") {
       //console.log("new express track so set some defaults");
       if(glyphTrack.exptype === undefined)   { glyphTrack.datatype = glyphTrack.exptype = glyphTrack.default_exptype; }
       if(glyphTrack.track_height === undefined) { glyphTrack.track_height = 100; }
@@ -10361,6 +10460,7 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
       if(newconfig.binning !== undefined) { glyphTrack.binning = newconfig.binning; needReload=1; }
       if(newconfig.whole_chrom_scale !== undefined) { glyphTrack.whole_chrom_scale = newconfig.whole_chrom_scale; needReload=1; }
       if(newconfig.hide_spanning !== undefined) { glyphTrack.hide_spanning = newconfig.hide_spanning; needReload=1; }
+      if(newconfig.arc_height_factor !== undefined) { glyphTrack.arc_height_factor = newconfig.arc_height_factor; needReload=1; }
       if(newconfig.interaction_style !== undefined) { glyphTrack.interaction_style = newconfig.interaction_style; }
       if(newconfig.interaction_grid !== undefined) { glyphTrack.interaction_grid = newconfig.interaction_grid; }
       if(newconfig.interaction_flip !== undefined) { glyphTrack.interaction_flip = newconfig.interaction_flip; }
@@ -11495,15 +11595,30 @@ function createGlyphstyleSelect(glyphTrack) {
     var span1 = fillOpt.appendChild(document.createElement('span'));
     span1.innerHTML = "height fill";
 
-    //--------------
-    arcOpts = expressOptDiv.appendChild(document.createElement('span'));
+    //--------------  arc options  ---------------------
+    arcOpts = expressOptDiv.appendChild(document.createElement('div'));
     arcOpts.id = trackID + "_arcOptions";
-    arcOpts.setAttribute('style', "display:inline-block");
+    arcOpts.setAttribute('style', "display:block");
 
-    //----- hide spanning arcs which start before and end after the visible region
+    //-- arc_height_factor
+    factor_span = arcOpts.appendChild(document.createElement('span'));
+    tspan = factor_span.appendChild(document.createElement('span'));
+    tspan.innerHTML = "arc height factor: ";
+    var msg = "changes ratio of arc height to span. default 1.0<br>>1.0 makes the arcs taller, <1.0 makes them shorter";
+    tspan.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\""+msg+"\",350);");
+    tspan.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
+    var arcFactorInput = factor_span.appendChild(document.createElement('input'));
+    arcFactorInput.className = "sliminput";
+    arcFactorInput.style.marginLeft = "0px";
+    arcFactorInput.setAttribute('size', "3");
+    arcFactorInput.setAttribute('type', "text");
+    arcFactorInput.setAttribute('value', glyphTrack.arc_height_factor);
+    arcFactorInput.setAttribute("onkeyup", "reconfigTrackParam(\""+ trackID+"\", 'arc_height_factor', this.value);");
+
+    //-- hide spanning arcs which start before and end after the visible region
     tspan = arcOpts.appendChild(document.createElement('span'));
     var skipSpanCheck = tspan.appendChild(document.createElement('input'));
-    skipSpanCheck.style = "margin: 1px 2px 1px 10px;";
+    skipSpanCheck.style = "margin: 1px 2px 1px 15px;";
     skipSpanCheck.type = "checkbox";
     if(glyphTrack.hide_spanning) { skipSpanCheck.setAttribute('checked', "checked"); }
     skipSpanCheck.setAttribute("onclick", "reconfigTrackParam(\""+ trackID+"\", 'hide_spanning', this.checked);");
@@ -11703,7 +11818,7 @@ function createGlyphstyleSelect(glyphTrack) {
 
   var styles = new Array;
   styles.push("signal-histogram", "split-signal", "xyplot", "1D-heatmap", "experiment-heatmap");
-  styles.push("arc", "interaction-map");
+  styles.push("arc", "multi-arc", "interaction-map");
   styles.push("thick-arrow", "medium-arrow", "thin-arrow", "arrow", "centroid");
   styles.push("transcript", "transcript2", "thick-transcript", "thin-transcript");
   styles.push("box", "thick-box", "thin-box");
@@ -11771,12 +11886,12 @@ function createGlyphstyleSelect(glyphTrack) {
     //colorModeDiv.style.display  = "block"; //TODO: extend heatmap coloring to allow strand or fixed colors
     colorModeDiv.style.display  = "none";
     featSortModeSpan.style.display = "none";
-  } else if(glyphStyle == "arc") {
+  } else if(glyphStyle == "arc" || glyphStyle=="multi-arc") {
     expressOptDiv.style.display = "block";
     //strandlessOpt.style.display  = "inline";
     fillOpt.style.display  = "none";
     expressOpts2.style.display  = "none";
-    arcOpts.style.display  = "inline-block";
+    arcOpts.style.display  = "block";
     colorModeDiv.style.display  = "block";
     featSortModeSpan.style.display = "none";
   } else if(glyphStyle == "interaction-map") {
@@ -13446,11 +13561,12 @@ function selectTrackRegion(mode, trackID, featureID) {
         var fidx = Math.floor(featureID);
         if(fidx == featureID) {
           var obj = glyphTrack.feature_array[fidx];
+          if(glyphTrack.edge_array.length>0) { obj = glyphTrack.edge_array[fidx]; }
           if(obj) {
             if(glyphTrack.selected_feature && !glyphTrack.selected_feature.id && !obj.id) {
               gLyphsTrackSelectFeature(glyphTrack); //clear feature selection
             } else {
-              console.log("set glyphTrack.selected_feature "+obj.name+" id["+obj.id+"] fidx["+obj.fidx+"]");
+              console.log("set glyphTrack.selected_feature "+obj.name+" id["+obj.id+"] fidx["+obj.fidx+"] eidx["+obj.eidx+"]");
               gLyphsTrackSelectFeature(glyphTrack, obj);
             }
             gLyphsRenderTrack(glyphTrack);
@@ -13534,7 +13650,7 @@ function gLyphsTrackSelectFeature(glyphTrack, feature) {
     zenbuDisplayFeatureInfo(); //clears panel
     return; 
   }
-  if(feature.classname != "Feature") { return; }
+  //if(feature.classname != "Feature") { return; }
 
   //check if metadata/fullload has heppened, if not request it
   if(feature.id && !feature.full_load) { feature.request_full_load = true; }
