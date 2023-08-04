@@ -1,4 +1,4 @@
-/* $Id: Chrom.h,v 1.36 2018/08/13 03:38:49 severin Exp $ */
+/* $Id: Chrom.h,v 1.37 2023/06/21 05:18:41 severin Exp $ */
 
 /***
 
@@ -91,6 +91,7 @@ class Chrom : public MQDB::MappedQuery {
     string       chrom_name() { return _chrom_name; } //usually ucsc name
     string       ncbi_chrom_name() { return _ncbi_chrom_name; }
     string       chrom_name_alt1() { return _chrom_name_alt1; }
+    string       genbank_accession() { return _ncbi_accession; }  //GenBank accession
     string       ncbi_accession() { return _ncbi_accession; }  //GenBank accession
     string       refseq_accession() { return _refseq_accession; }
     string       chrom_type() { return _chrom_type; }
@@ -108,6 +109,7 @@ class Chrom : public MQDB::MappedQuery {
     void         chrom_name(string value);
     void         chrom_name_alt1(string value);
     void         ncbi_chrom_name(string value);
+    void         genbank_accession(string value);
     void         ncbi_accession(string value);
     void         refseq_accession(string value);
     void         chrom_type(string value);

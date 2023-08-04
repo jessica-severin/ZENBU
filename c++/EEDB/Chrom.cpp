@@ -1,4 +1,4 @@
-/* $Id: Chrom.cpp,v 1.83 2020/02/03 08:03:27 severin Exp $ */
+/* $Id: Chrom.cpp,v 1.84 2023/06/21 05:18:41 severin Exp $ */
 
 /******
 
@@ -195,6 +195,10 @@ void  EEDB::Chrom::chrom_name_alt1(string value) {
   _xml_cache.clear();
 }
 
+void  EEDB::Chrom::genbank_accession(string value) {
+  _ncbi_accession = value;
+  _xml_cache.clear();
+}
 void  EEDB::Chrom::ncbi_accession(string value) {
   _ncbi_accession = value;
   _xml_cache.clear();
