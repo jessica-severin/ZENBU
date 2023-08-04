@@ -21,6 +21,8 @@ void run_access_test(eeDBeng_t *self, long rand_iterations);
 void nextobj_test(eeDBeng_t* self);
 void access_stream_test (eeDBeng_t* eeDBeng_i, long rand_iterations);
 
+int lines_2_stream =1;
+
 /*************************************
  * main
  *************************************/
@@ -32,7 +34,6 @@ int main(int argc, char *argv[]) {
   double      runtime;
   char        *infile=NULL;
   long        rand_iterations = 5000;
-  int         lines_2_stream =1;
   enum { INDEX, STREAM, ACCESS, RANDTEST, RANDSTREAM } mode;
   
   //printf("sizeof(feature_source_t) = %ld\n", sizeof(feature_source_t));
@@ -170,11 +171,12 @@ void nextobj_test(eeDBeng_t* eeDBeng_i) {
   eedb_obj_t  *obj;
   int        iterations=10;
   double     runtime;
-  double     mbytes, rate;
+  double     mbytes, rate, last_mbytes=0, min_rate=0, max_rate=0;
   int        objcount=0;
-  struct timeval   starttime,endtime,difftime;
+  struct timeval   starttime,endtime,difftime,intervalstart;
 
   gettimeofday(&starttime, NULL);
+  gettimeofday(&intervalstart, NULL);
 
   obj = eedb_next_object(eeDBeng_i);
   while(obj) {
@@ -184,9 +186,20 @@ void nextobj_test(eeDBeng_t* eeDBeng_i) {
     obj = eedb_next_object(eeDBeng_i);
     objcount++;
     iterations--;
+
+    if(objcount > lines_2_stream) { break; }
     
     if(objcount % 250000 == 0) {
-      printf("  read %1.3f Mbytes\t%d lines\n", ((double)(eeDBeng_i->seek_pos))/(1024.0*1024.0), objcount);
+      gettimeofday(&endtime, NULL);
+      timersub(&endtime, &intervalstart, &difftime);
+      runtime = (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0;  
+      mbytes = ((double)(eeDBeng_i->seek_pos))/(1024.0*1024.0);
+      rate = (mbytes-last_mbytes)/runtime;
+      printf("  read %1.3f Mbytes\t%d lines\t\tinterval %1.3f mbytes/sec\n", mbytes, objcount,rate);
+      gettimeofday(&intervalstart, NULL);
+      last_mbytes = mbytes;
+      if(min_rate==0 || rate<min_rate) { min_rate = rate; }
+      if(max_rate==0 || rate>max_rate) { max_rate = rate; }
     }
 
     //if(iterations<0) { obj=NULL; }
@@ -203,7 +216,7 @@ void nextobj_test(eeDBeng_t* eeDBeng_i) {
   printf("obj count: %d\n", objcount);
   printf("just read %1.3f Mbytes\n", mbytes);
   printf("  %1.3f secs\n", (float)runtime);
-  printf("  %1.3f mbytes/sec\n", mbytes/runtime);   
+  printf("  %1.3f mbytes/sec\t\tmin(%1.3f)  max(%1.3f)\n", mbytes/runtime, min_rate,max_rate);   
   if(rate>1000000.0) {
     printf("  %1.3f mega objs/sec\n", rate/1000000.0); 
   } else if(rate>2000.0) {
