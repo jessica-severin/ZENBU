@@ -1,4 +1,4 @@
-/* $Id: Feature.cpp,v 1.321 2021/06/29 01:53:15 severin Exp $ */
+/* $Id: Feature.cpp,v 1.322 2023/07/20 02:47:56 severin Exp $ */
 
 /***
 
@@ -1290,9 +1290,9 @@ void  EEDB::Feature::overlap_merge_subfeatures() {
 }
 
 
-void  EEDB::Feature::create_subfeature(EEDB::FeatureSource *source, long bstart, long bsize, long bidx) {
+EEDB::Feature*  EEDB::Feature::create_subfeature(EEDB::FeatureSource *source, long bstart, long bsize, long bidx) {
   //creates a new subfeature based on 'block' like parameters (start-offset, size, and block-index number)
-  if(!source) { return; }
+  if(!source) { return NULL; }
   EEDB::Feature *subfeat = EEDB::Feature::realloc();
   subfeat->feature_source(source);
   subfeat->chrom(chrom());
@@ -1310,6 +1310,7 @@ void  EEDB::Feature::create_subfeature(EEDB::FeatureSource *source, long bstart,
   
   add_subfeature(subfeat);
   subfeat->release(); //retained by feature
+  return subfeat;
 }
 
 

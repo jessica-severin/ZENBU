@@ -1,4 +1,4 @@
-/* $Id: Feature.h,v 1.81 2020/04/15 04:04:46 severin Exp $ */
+/* $Id: Feature.h,v 1.82 2023/07/20 02:47:56 severin Exp $ */
 
 /***
 
@@ -133,7 +133,7 @@ class Feature : public MQDB::MappedQuery {
     void                        clear_subfeatures();
     void                        remove_duplicate_subfeatures();
     void                        overlap_merge_subfeatures();
-    void                        create_subfeature(EEDB::FeatureSource *source, long bstart, long bsize, long bidx);
+    EEDB::Feature*              create_subfeature(EEDB::FeatureSource *source, long bstart, long bsize, long bidx);
     void                        create_cigar_subfeatures(EEDB::FeatureSource *source, string cigar);
 
     //set atributes
