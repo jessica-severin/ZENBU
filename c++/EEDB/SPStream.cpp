@@ -1,4 +1,4 @@
-/* $Id: SPStream.cpp,v 1.108 2021/07/08 04:43:20 severin Exp $ */
+/* $Id: SPStream.cpp,v 1.109 2023/07/20 02:49:43 severin Exp $ */
 
 /***
 
@@ -107,7 +107,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <EEDB/SPStreams/AppendExpression.h>
 #include <EEDB/SPStreams/PairReads.h>
 #include <EEDB/SPStreams/EdgeLengthFilter.h>
-#include <EEDB/SPStreams/DumbBellToEdge.h>
+#include <EEDB/SPStreams/SubfeaturesToEdges.h>
 #include <EEDB/SPStreams/MergeEdges.h>
 
 
@@ -619,7 +619,8 @@ EEDB::SPStream* EEDB::SPStream::_xmlnode_create_spstream(void *xml_node) {
   if(modname == "PairReads")         { spstream = new EEDB::SPStreams::PairReads(xml_node); }
   if(modname == "CAGECorrection")    { spstream = new EEDB::SPStreams::CAGECorrection(xml_node); }
   if(modname == "AppendExpression")  { spstream = new EEDB::SPStreams::AppendExpression(xml_node); }
-  if(modname == "DumbBellToEdge")    { spstream = new EEDB::SPStreams::DumbBellToEdge(xml_node); }
+  if(modname == "DumbBellToEdge")    { spstream = new EEDB::SPStreams::SubfeaturesToEdges(xml_node); }  //backward compat for now
+  if(modname == "SubfeaturesToEdges"){ spstream = new EEDB::SPStreams::SubfeaturesToEdges(xml_node); }
   if(modname == "MergeEdges")        { spstream = new EEDB::SPStreams::MergeEdges(xml_node); }
 
   if(modname == "FederatedSourceStream")     { spstream = new  EEDB::SPStreams::FederatedSourceStream(xml_node); }
