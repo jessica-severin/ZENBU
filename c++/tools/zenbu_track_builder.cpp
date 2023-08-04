@@ -1,4 +1,4 @@
-/* $Id: zenbu_track_builder.cpp,v 1.76 2022/07/08 03:21:43 severin Exp $ */
+/* $Id: zenbu_track_builder.cpp,v 1.77 2023/08/04 01:39:32 severin Exp $ */
 
 /****
  
@@ -120,6 +120,7 @@ void repair_trackcache(string hashkey);
 bool check_overload();
 //void clear_rogue_claims();
 void show_claims();
+void show_requests();
 void get_worker_stats();
 void show_zdx_buildstats();
 void trackcache_buildstats(EEDB::TrackCache* trackcache);
@@ -189,6 +190,7 @@ int main(int argc, char *argv[]) {
     if(arg == "-repair")        { _parameters["mode"] = "repair"; }
     if(arg == "-check")         { _parameters["mode"] = "check"; }
     if(arg == "-resetclaims")   { _parameters["mode"] = "resetclaims"; }
+    if(arg == "-forcereset")    { _parameters["mode"] = "resetclaims"; _parameters["reset_mode"] = "force";}
     if(arg == "-format")        { _parameters["format"] = argvals[0]; }
     if(arg == "-filter")        { _parameters["filter"] = argvals[0]; }
     
@@ -196,6 +198,7 @@ int main(int argc, char *argv[]) {
     if(arg == "-fullstatus")    { _parameters["mode"] = "zdxstatus"; _parameters["show"] = "true"; }
     if(arg == "-segstatus")     { _parameters["mode"] = "zdxstatus"; _parameters["segstatus"] = "true"; }
     if(arg == "-showclaims")    { _parameters["mode"] = "showclaims"; }
+    if(arg == "-requests")      { _parameters["mode"] = "showrequests"; }
     if(arg == "-buildstats")    { _parameters["mode"] = "buildstats"; }
 
     if(arg == "-repairsegs")    { _parameters["mode"] = "zdxstatus"; _parameters["repairsegs"] = "true"; }
@@ -240,6 +243,9 @@ int main(int argc, char *argv[]) {
   if(_parameters["mode"] == "showclaims") {
     show_claims();
   }
+  if(_parameters["mode"] == "showrequests") {
+    show_requests();
+  }
   if(_parameters["mode"] == "buildstats") {
     show_zdx_buildstats();
   }
@@ -274,7 +280,9 @@ void usage() {
   printf("  -buildtime                : max build time for autobuilding (default 3min)\n");
   printf("  -loadlimit                : max percent of system track builders are allowed to use (default 0.9)\n");
   printf("  -showclaims               : display all trackcache which have active worker/claims\n");
-  printf("  -resetclaims              : clear 'rougue' claims for failed workers\n");
+  printf("  -resetclaims              : clear 'rougue' claims for failed workers - safe process check mode\n");
+  printf("  -forcereset               : clear 'rougue' claims for failed workers - force reset mode\n");
+  printf("  -requests                 : display all build requests for trackcache\n");
   printf("  -repair                   : repair a trackcache, build segments and load missing sources\n");
   printf("  -region <chrom_loc>       : make region query into cache/zdx-file\n");
   printf("    -export_subfeatures      : region query output subfeatures\n");
@@ -730,6 +738,64 @@ void show_zdx_status() {
     trackcache->update_buildstats(0, 0.0);
     printf("\n");
     zdxdb->disconnect();
+  }
+}
+
+//====================================================================
+
+void show_requests() {
+  //find an claimed segment and clear them
+  struct timeval      starttime,endtime,difftime;
+  gettimeofday(&starttime, NULL);  
+  
+  fprintf(stderr, "== show_requests\n");
+  
+  EEDB::TrackCache*           trackcache = NULL;
+  vector<EEDB::TrackCache*>   trackcache_array;
+  
+  if(_parameters.find("hashkey") != _parameters.end()) {
+    EEDB::Tools::TrackCacheBuilder  *trackbuilder = new EEDB::Tools::TrackCacheBuilder();  
+    trackbuilder->parse_config_file("/etc/zenbu/zenbu.conf");
+    trackbuilder->init_from_track_cache(_parameters["hashkey"]);
+
+    EEDB::TrackCache* trackcache = trackbuilder->track_cache();
+    if(!trackcache) { return; }
+    trackcache_array.push_back(trackcache);;
+  }
+  else { 
+    EEDB::WebServices::WebBase  *webservice = new EEDB::WebServices::WebBase();
+    webservice->parse_config_file("/etc/zenbu/zenbu.conf");
+    vector<DBObject*> tracks = EEDB::TrackCache::fetch_all(webservice->userDB());
+    for(unsigned i=0; i<tracks.size(); i++) {
+      EEDB::TrackCache* trackcache = (EEDB::TrackCache*)tracks[i];
+      if(!trackcache) { continue; }
+      if(!trackcache->cache_file_exists()) { continue; }
+      trackcache_array.push_back(trackcache);;
+    }
+    printf("%d track caches\n", (int)trackcache_array.size());
+  }
+
+  for(unsigned i=0; i<trackcache_array.size(); i++) {
+    EEDB::TrackCache* trackcache = trackcache_array[i];
+    if(trackcache->broken()) { 
+      //printf("%s\n", trackcache->display_desc().c_str());
+      continue;
+    }
+    //printf("%s\n", trackcache->display_desc().c_str());
+    bool first = true;
+
+    vector<DBObject*> requests = EEDB::TrackRequest::fetch_all(trackcache);
+    for(unsigned i=0; i<requests.size(); i++) {
+      EEDB::TrackRequest *request = (EEDB::TrackRequest*)requests[i];
+      if(request->unbuilt() > 0) {
+        if(first) {
+	  first = false;
+          printf("%s\n", trackcache->display_desc().c_str());
+        }
+        printf("  %s\n", request->display_desc().c_str());
+      }
+    }
+
   }
 }
 
@@ -1298,7 +1364,10 @@ void show_claims() {
         zseg->builder_host().c_str(), zseg->builder_pid(),
         zseg->assembly_name().c_str(), zseg->chrom_name().c_str(), zseg->chrom_start(), zseg->chrom_end());
       
-      if(zseg->builder_host() != host) {
+      if(_parameters["reset_mode"] == "force") { 
+        printf("\t -- force RESET");
+        zseg->clear_claim();
+      } else if(zseg->builder_host() != host) {
         printf("\t -- host does not match, can't check process");
       } else {
         printf("\t -- host matches");
