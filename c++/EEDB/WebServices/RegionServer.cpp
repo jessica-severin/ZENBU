@@ -1,4 +1,4 @@
-/* $Id: RegionServer.cpp,v 1.267 2021/06/29 02:00:00 severin Exp $ */
+/* $Id: RegionServer.cpp,v 1.268 2024/03/11 07:52:46 severin Exp $ */
 
 /***
 
@@ -1343,6 +1343,9 @@ EEDB::SPStream*  EEDB::WebServices::RegionServer::region_stream() {
   if(_parameters["expression_binning"] == "true") { 
     stream = _append_expression_histogram_binning(stream);
   }
+
+  //3.0 system allows direct use of FederatedSourceStream modules in addition to the Proxy system
+  set_federation_seeds(stream);
   
   return stream;
 }
