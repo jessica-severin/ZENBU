@@ -1,4 +1,4 @@
-/* $Id: SPStream.cpp,v 1.109 2023/07/20 02:49:43 severin Exp $ */
+/* $Id: SPStream.cpp,v 1.110 2023/12/13 05:37:04 severin Exp $ */
 
 /***
 
@@ -109,6 +109,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <EEDB/SPStreams/EdgeLengthFilter.h>
 #include <EEDB/SPStreams/SubfeaturesToEdges.h>
 #include <EEDB/SPStreams/MergeEdges.h>
+#include <EEDB/SPStreams/SamFlagFilter.h>
 
 
 using namespace std;
@@ -650,6 +651,7 @@ EEDB::SPStream* EEDB::SPStream::_xmlnode_create_spstream(void *xml_node) {
   if(modname == "FilterSubfeatures")         { spstream = new  EEDB::SPStreams::FilterSubfeatures(xml_node); }
   if(modname == "StrandFilter")              { spstream = new  EEDB::SPStreams::StrandFilter(xml_node); }
   if(modname == "FlipStrand")                { spstream = new  EEDB::SPStreams::FlipStrand(xml_node); }
+  if(modname == "SamFlagFilter")             { spstream = new  EEDB::SPStreams::SamFlagFilter(xml_node); }
   
   if(modname == "Paraclu")                   { spstream = new  EEDB::SPStreams::Paraclu(xml_node); }
   if(modname == "NeighborCutoff")            { spstream = new  EEDB::SPStreams::NeighborCutoff(xml_node); }
