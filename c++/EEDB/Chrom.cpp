@@ -1,4 +1,4 @@
-/* $Id: Chrom.cpp,v 1.84 2023/06/21 05:18:41 severin Exp $ */
+/* $Id: Chrom.cpp,v 1.85 2024/05/24 05:31:56 severin Exp $ */
 
 /******
 
@@ -451,6 +451,17 @@ string  EEDB::Chrom::get_subsequence(long int chrom_start, long int chrom_end, s
   }
   if(strand == "-") {
     //do rev-complement here
+    //fprintf(stderr, "get sequence multiple chunks so reverse complement after joining\n");
+    std::reverse(sequence.begin(),sequence.end());
+    string::iterator it1;
+    string rosette1 ="acgtrymkswhbvdnxACGTRYMKSWHBVDNX";
+    string rosette2 ="tgcayrkmswdvbhnxTGCAYRKMSWDVBHNX";
+    for(it1=sequence.begin(); it1!=sequence.end(); it1++) {
+      size_t found = rosette1.find(*it1);
+      if (found!=std::string::npos) {
+        *it1 = rosette2[found];
+      }
+    }
   }
 
   return sequence;
