@@ -1,4 +1,4 @@
-/* $Id: WebBase.h,v 1.66 2022/07/08 10:02:38 severin Exp $ */
+/* $Id: WebBase.h,v 1.67 2023/12/14 06:50:51 severin Exp $ */
 
 /***
 
@@ -96,6 +96,10 @@ class WebBase : public MQDB::DBObject {
     bool parse_config_file(string path);
     bool process_url_request();
     void disconnect();
+    
+    //for manual configuration without a config file
+    void add_seed_url(string url);
+    void init_db();
 
     void                 init_service_request();
     void                 get_url_parameters();
@@ -189,8 +193,6 @@ class WebBase : public MQDB::DBObject {
 
     //my $global_source_cache = {};
     //my $global_source_counts = {"Experiment"=>0, "FeatureSource"=>0, "ExpressionDatatype"=>0 };
-
-    void                 init_db();
 
 
 };

@@ -1,4 +1,4 @@
-/* $Id: WebBase.cpp,v 1.232 2023/05/09 09:33:07 severin Exp $ */
+/* $Id: WebBase.cpp,v 1.235 2024/05/31 06:12:26 severin Exp $ */
 
 /***
 
@@ -93,7 +93,7 @@ using namespace MQDB;
 
 const char*     EEDB::WebServices::WebBase::class_name = "EEDB::WebServices::WebBase";
 
-const char*     EEDB::WebServices::WebBase::zenbu_version = "3.1.0";
+const char*     EEDB::WebServices::WebBase::zenbu_version = "3.1.1";
 
 map<string,string>  EEDB::WebServices::WebBase::global_parameters;
 
@@ -835,6 +835,10 @@ bool EEDB::WebServices::WebBase::parse_config_file(string path) {
   return true;
 }
 
+void EEDB::WebServices::WebBase::add_seed_url(std::string url) {
+  if(url.empty()) { return; }
+  _seed_urls.push_back(url);
+}
 
 void EEDB::WebServices::WebBase::init_db() {
   //first load all the local_mirror Peers into the global peer_cache
@@ -863,7 +867,7 @@ void EEDB::WebServices::WebBase::init_db() {
     EEDB::Peer* peer = EEDB::Peer::new_from_url(url);
     if(peer) {
       _seed_peers.push_back(peer); 
-      if((peer->driver() == "http") or (peer->driver() == "zenbu")) {
+      if((peer->driver() == "http") or (peer->driver() == "https") or (peer->driver() == "zenbu")) {
         _known_remote_peers[peer->uuid()] = peer;
         //fprintf(stderr, "remote peer %s\n", peer->simple_xml().c_str());
       }
