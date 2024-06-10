@@ -129,6 +129,7 @@ void test_oscdb5(vector<EEDB::Peer*> seedpeers);
 void test_region_server();
 void test_region_server2();
 void test_region_server3();
+void test_region_server4();
 void test_search_server();
 void upgrade_oscdbs(vector<EEDB::Peer*> seedpeers);
 void upgrade_oscdbs_v2();
@@ -228,7 +229,8 @@ int main() {
   //test_edge_oscfile_read3(); exit(0);
   //test_multimode_feature_edge_oscfile_build(); exit(0);
 
-//  get_all_data(); exit(0);
+  //get_all_data(); exit(0);
+  test_region_server4(); exit(0);
 
   //test_dumbell_to_edge(); exit(0);
 
@@ -2580,7 +2582,6 @@ void test_region(vector<EEDB::Peer*> seedpeers) {
   //fstream->add_source_id_filter("C9A7628C-B1CC-4B93-9E55-E7D99A12B7AA::59:::FeatureSource");
   //fstream->add_source_id_filter("2ACDA3DC-0704-11DF-8E68-ECCE0B50B70F::5:::FeatureSource");
   //fstream->add_source_id_filter("CC9536FC-405D-11DF-9869-91394B1E0442::9:::FeatureSource");
-  //
   fstream->add_source_id_filter("1B075EE8-620E-4DE1-B005-54C5D20B5875::2:::Experiment");
 
   printf("  -- peers\n");
@@ -6307,6 +6308,76 @@ void test_region_server3() {
   webservice->execute_request();
   gettimeofday(&endtime, NULL); timersub(&endtime, &starttime, &difftime);
   printf("  after execute_request %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+
+  webservice->disconnect();
+  //sleep(100);
+}
+
+
+void test_region_server4() {
+  struct timeval                        starttime,endtime,difftime;
+  double                                last_update = 0.0;
+  EEDB::WebServices::RegionServer      *webservice = new EEDB::WebServices::RegionServer();
+
+  gettimeofday(&starttime, NULL);
+
+  printf("\n== test_region_server4\n");
+  webservice->parse_config_file("/etc/zenbu/zenbu.conf");
+
+  gettimeofday(&endtime, NULL); timersub(&endtime, &starttime, &difftime);
+  printf("  after parse %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+
+  string post_data="<zenbu_query> <track_title>FRAM WC1 10merged gap1Filter sorted</track_title> <view_uuid>0M6oU6vJKR1p1e4OVqwY9B</view_uuid> <source_ids>D890A56D-3F99-47A2-B178-72D1E9A76BB2::2:::Experiment</source_ids> <exptype>tpm</exptype> <asm>hg38</asm> <loc>chr10:102400829..102466332</loc> <mode>region</mode> <source_outmode>full_feature</source_outmode> <display_width>1905</display_width> <format>fullxml</format> </zenbu_query>";
+
+  webservice->init_service_request();
+
+  MQDB::Database *userdb = webservice->userDB();
+  EEDB::User *user = EEDB::User::fetch_by_email(userdb, "jessica.severin@gmail.com");
+  //EEDB::User *user = EEDB::User::fetch_by_email(userdb, "jessica.severin@riken.jp");
+  fprintf(stderr, "%s\n", user->xml().c_str());
+  webservice->set_user_profile(user);
+
+  webservice->set_post_data(post_data);
+  webservice->process_xml_parameters();
+  webservice->postprocess_parameters();
+
+  //webservice->execute_request();
+  //gettimeofday(&endtime, NULL); timersub(&endtime, &starttime, &difftime);
+  //printf("  after execute_request %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+
+  //EEDB::SPStream *stream = webservice->source_stream();
+  EEDB::SPStream *stream = webservice->region_stream();
+  //samtools view bamdb.bam chr10:102400829-102466332 | grep D00670:367:HYKJ5BCX2:1:2203:14129:3340
+  //samtools view bamdb.bam chr10:102400829-102466332 | grep D00670:367:HYKJ5BCX2:1:1114:15689:23660
+
+  printf("== read features\n");
+  gettimeofday(&starttime, NULL);
+  long count=0;
+  stream->stream_clear();
+  stream->stream_by_named_region("hg38","chr10", 102400829,102466332);
+  printf("  after stream_by_named_region\n");
+  while(EEDB::Feature *feature = (EEDB::Feature*)stream->next_in_stream()) { 
+    if(!feature) { continue; }
+    
+    if(feature->primary_name() == "D00670:367:HYKJ5BCX2:1:1115:15036:87850") {
+    //if(feature->primary_name() == "D00670:367:HYKJ5BCX2:1:1114:15689:23660") {
+    //if(feature->primary_name() == "D00670:367:HYKJ5BCX2:1:2203:14129:3340") {
+      printf("%s\n", feature->xml().c_str());
+      break;
+    }
+    //printf("%s\n", feature->xml().c_str());
+    count++;    
+    
+    gettimeofday(&endtime, NULL);
+    timersub(&endtime, &starttime, &difftime);
+    double runtime = (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0;
+    if(runtime > last_update + 1.0) {
+      //printf("%ld in %1.6f sec \n", count, (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+      printf("%1.3f obj/sec [%ld obj]\n", count / runtime, count);
+      last_update = runtime;
+    }
+    feature->release();
+  }
 
   webservice->disconnect();
   //sleep(100);
