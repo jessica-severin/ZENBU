@@ -336,10 +336,7 @@ function zenbuParseLocation(query) {
   var rtnval = false;
 
   //first remove leading and trailing spaces
-  var match1 = /^(\s*)(.+)(\s*)$/.exec(query);
-  if(match1 && (match1.length == 4)) { 
-    query = match1[2]; 
-  }
+  query = trim_string(query);
 
   //look for assembly is <asm>:: pattern
   var asm_match = /^([\w-._]+)\:\:(.+)$/.exec(query);

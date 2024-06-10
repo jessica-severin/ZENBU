@@ -556,7 +556,7 @@ function gLyphsExpressionPanelRenderExperimentMode(glyphTrack) {
     var back_rect = document.createElementNS(svgNS,'rect');
     back_rect.setAttributeNS(null, 'x', '0px');
     back_rect.setAttributeNS(null, 'y', ((i*12)) +'px');
-    back_rect.setAttributeNS(null, 'width', "100%");
+    back_rect.setAttributeNS(null, 'width', graph_width+"px");
     back_rect.setAttributeNS(null, 'height', '12px');
     back_rect.setAttributeNS(null, 'fill', "rgb(245,245,250)");
     //back_rect.setAttributeNS(null, 'fill', "rgb(230, 230, 255)");
@@ -963,7 +963,7 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
     var back_rect = document.createElementNS(svgNS,'rect');
     back_rect.setAttributeNS(null, 'x', '0px');
     back_rect.setAttributeNS(null, 'y', ((i*12)) +'px');
-    back_rect.setAttributeNS(null, 'width', "100%");
+    back_rect.setAttributeNS(null, 'width', graph_width+"px");
     back_rect.setAttributeNS(null, 'height', '12px');
     back_rect.setAttributeNS(null, 'fill', "rgb(245,245,250)");
     if(!glyphTrack.glyphsGB.exportSVGconfig) {

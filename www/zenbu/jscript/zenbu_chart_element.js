@@ -628,7 +628,7 @@ function zenbuChartElement_postprocess() {
       if(this.prev_focus_feature) { this.y_feature = this.prev_focus_feature; }
 
       if(this.x_feature && this.y_feature) {
-        this.title = this.title_prefix + this.x_feature.name +" - "+ this.y_feature.name;
+        this.title = this.title_prefix +" : "+ this.x_feature.name +" - "+ this.y_feature.name;
       }
     } 
     else if(this.focus_feature_mode=="current") {
@@ -637,7 +637,7 @@ function zenbuChartElement_postprocess() {
       //this.chart = null;
       //this.chart_data = null;
       if(this.x_feature) {
-        this.title = this.title_prefix + this.x_feature.name;
+        this.title = this.title_prefix +" : "+ this.x_feature.name;
       }
     }
   }
@@ -3465,6 +3465,7 @@ function zenbuChartElement_draw() {
   if(!main_div) { return; }
 
   var datasourceElement = this.datasource();
+  console.log("zenbuChartElement_draw ["+this.elementID+"]");
 
   //if(!this.chart_data || !this.x_feature || !this.y_feature || datasourceElement.filter_count==0) {
   //if(!this.chart_data || !this.x_feature || !this.y_feature) {
@@ -3472,9 +3473,14 @@ function zenbuChartElement_draw() {
     var load_info = main_div.appendChild(document.createElement('span'));
     load_info.setAttribute('style', "font-size:11px; ;margin-left:15px;");
     load_info.innerHTML = "no data...";
+    console.log("zenbuChartElement_draw ["+this.elementID+"] no chart_data");
     return;
   }
   
+  if(this.resized) { //clear render caches so it rebuilds
+    this.chart = null; 
+  }
+
   if(this.display_type == "scatter3D") {
     this.drawPlotly3D();
     this.showSelections();

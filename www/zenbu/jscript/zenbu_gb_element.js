@@ -50,6 +50,7 @@ function ZenbuGBElement(elementID) {
   this.chrom_location = "";
   this.location_padding = 0.1;
   this.searchbox_enabled = true;
+  this.editing_disabled = false;
   
   this.content_width = 800;
   this.content_height = 300;
@@ -62,6 +63,7 @@ function ZenbuGBElement(elementID) {
   this.glyphsGB = new ZenbuGenomeBrowser();
   this.glyphsGB.reportElement = this;
   this.glyphsGB.searchbox_enabled = true;
+  this.glyphsGB.editing_disabled = false;
   this.glyphsGB.hide_compacted_tracks = false;
   this.glyphsGB.view_config_loaded = true; //hack for an empty glyphsGB
   this.glyphsGB.display_width = this.content_width - 30;
@@ -137,6 +139,7 @@ function zenbuGBElement_initFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("chrom_location")) { this.chrom_location = elementDOM.getAttribute("chrom_location"); }
   if(elementDOM.getAttribute("location_padding")) { this.location_padding = parseFloat(elementDOM.getAttribute("location_padding")); }
   if(elementDOM.getAttribute("searchbox_enabled")=="false") { this.searchbox_enabled = false; }
+  if(elementDOM.getAttribute("editing_disabled")=="true") { this.editing_disabled = true; }
   
 
   return true;
@@ -151,6 +154,7 @@ function zenbuGBElement_generateConfigDOM() {
   if(this.chrom_location) { elementDOM.setAttribute("chrom_location", this.chrom_location); }
   if(this.location_padding) { elementDOM.setAttribute("location_padding", this.location_padding); }
   if(!this.searchbox_enabled) { elementDOM.setAttribute("searchbox_enabled", "false"); }
+  if(this.editing_disabled) { elementDOM.setAttribute("editing_disabled", "true"); }
 
   return elementDOM;
 }
@@ -212,11 +216,13 @@ function zenbuGBElement_reconfigureParam(param, value, altvalue) {
   }
 
   if(param == "searchbox_enabled") { this.newconfig.searchbox_enabled = value; }
+  if(param == "editing_disabled") { this.newconfig.editing_disabled = value; }
 
   if(param == "accept-reconfig") {
     //this.needReload=true;
     if(this.newconfig.location_padding !== undefined) { this.location_padding = this.newconfig.location_padding; }
     if(this.newconfig.searchbox_enabled !== undefined) { this.searchbox_enabled = this.newconfig.searchbox_enabled; }
+    if(this.newconfig.editing_disabled !== undefined) { this.editing_disabled = this.newconfig.editing_disabled; }
     if(this.newconfig.configUUID !== undefined) { 
       this.configUUID = this.newconfig.configUUID;
       //reload glyphsGB with new config
@@ -361,6 +367,7 @@ function zenbuGBElement_postprocess() {
     this.glyphsGB.activeTrackCallback = zenbuGBElement_activeTrackCallback;
     this.glyphsGB.autosave = zenbuGBElement_autosave;
     this.glyphsGB.searchbox_enabled = true;
+    this.glyphsGB.editing_disabled = false;
     this.glyphsGB.reportElement = this;
     gLyphsSearchInterface(this.glyphsGB);
   }
@@ -376,6 +383,11 @@ function zenbuGBElement_postprocess() {
 
   this.glyphsGB.searchbox_enabled = this.searchbox_enabled;
   gLyphsSearchInterface(this.glyphsGB);
+
+  this.glyphsGB.editing_disabled = this.editing_disabled;
+  console.log("editing_disabled", this.editing_disabled);
+  createAddTrackTool(this.glyphsGB);
+  //TODO: other general interfaces like settings
 
   gLyphsReloadRegion(this.glyphsGB); 
 }  
@@ -486,6 +498,7 @@ function zenbuGBElement_configSubpanel() {
   var configUUID = this.configUUID;
   if(this.newconfig && this.newconfig.configUUID != undefined) { configUUID = this.newconfig.configUUID; }
   var div1 = configdiv.appendChild(document.createElement('div'));
+  div1.setAttribute('style', "margin-left: 5px;");
   var span0 = div1.appendChild(document.createElement('span'));
   span0.setAttribute('style', "font-size:12px; font-family:arial,helvetica,sans-serif;");
   span0.innerHTML = "view config:";
@@ -509,6 +522,7 @@ function zenbuGBElement_configSubpanel() {
 
   //----
   tdiv2  = configdiv.appendChild(document.createElement('div'));
+  tdiv2.setAttribute('style', "margin-top: 1px;");
   var val1 = this.location_padding;
   if(this.newconfig && this.newconfig.location_padding != undefined) { val1 = this.newconfig.location_padding; }
   var span3 = tdiv2.appendChild(document.createElement('span'));
@@ -522,10 +536,10 @@ function zenbuGBElement_configSubpanel() {
   input.setAttribute('value', val1);
   input.setAttribute("onchange", "reportElementReconfigParam(\""+this.elementID+"\", 'location_padding', this.value);");
   
-  //tdiv2  = configdiv.appendChild(document.createElement('div'));
-  //tdiv2.setAttribute('style', "margin-top: 5px;");
+  tdiv2  = configdiv.appendChild(document.createElement('div'));
+  tdiv2.setAttribute('style', "margin-top: 3px;");
   tcheck = tdiv2.appendChild(document.createElement('input'));
-  tcheck.setAttribute('style', "margin: 0px 1px 0px 15px;");
+  tcheck.setAttribute('style', "margin: 0px 1px 0px 5px;");
   tcheck.setAttribute('type', "checkbox");
   var val1 = this.searchbox_enabled;
   if(this.newconfig && this.newconfig.searchbox_enabled != undefined) { 
@@ -535,6 +549,21 @@ function zenbuGBElement_configSubpanel() {
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'searchbox_enabled', this.checked);");
   tspan2 = tdiv2.appendChild(document.createElement('span'));
   tspan2.innerHTML = "enable search box";
+
+
+  //tdiv2  = configdiv.appendChild(document.createElement('div'));
+  //tdiv3.setAttribute('style', "margin-top: 5px;");
+  tcheck = tdiv2.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 0px 1px 0px 15px;");
+  tcheck.setAttribute('type', "checkbox");
+  var val1 = this.editing_disabled;
+  if(this.newconfig && this.newconfig.editing_disabled != undefined) { 
+    val1 = this.newconfig.editing_disabled; 
+  }
+  if(val1) { tcheck.setAttribute('checked', "checked"); }
+  tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'editing_disabled', this.checked);");
+  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2.innerHTML = "disable editing";
 
   configdiv.appendChild(document.createElement('hr'));
   return configdiv;

@@ -269,6 +269,8 @@ function reportsParseURL(urlConfig) {
   //location, and then reconfigures the view.  But it does not execute a reload/redraw
 
   //if(!urlConfig && zenbu_embedded_view) { return; }
+  if(reportsInitParams.disableURL) { return; }
+
   console.log("reportsParseURL ["+urlConfig+"]")
   if(!urlConfig) {
     reportsLoadPageFromConfig(null); //null will cause a clean reset
@@ -355,6 +357,7 @@ function reportsHandleHistoryChange() {
 
 function reportsChangeDhtmlHistoryLocation() {
   //if(zenbu_embedded_view) { return; }
+  if(reportsInitParams.disableURL) { return; }
   var urlID = current_report.configUUID;
   if(current_report.config_fixed_id) { urlID = current_report.config_fixed_id;}
   var newurl = "#"+urlID;

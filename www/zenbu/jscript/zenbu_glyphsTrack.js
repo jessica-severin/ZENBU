@@ -110,6 +110,7 @@ function ZenbuGlyphsTrack(glyphsGB, trackID) {
   this.max_interaction = 0;
   this.interaction_grid = false;
   this.interaction_flip = false;
+  this.editing_disabled = false;
   
   this.active_on_top = false;
   this.express_sort_mode = "name";
@@ -6996,7 +6997,7 @@ function gLyphsDrawHeading(glyphTrack) {
 
   createHideTrackWidget(glyphTrack);
 
-  if(!zenbu_embedded_view) {
+  if(!zenbu_embedded_view && !glyphTrack.editing_disabled) {
     createCloseTrackWidget(glyphTrack);
     createConfigTrackWidget(glyphTrack);
     createDuplicateTrackWidget(glyphTrack);

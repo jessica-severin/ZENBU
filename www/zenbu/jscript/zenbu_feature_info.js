@@ -143,7 +143,8 @@ function zenbuDisplayFeatureInfo(feature) {
       ta = tdiv.appendChild(document.createElement('a'));
       ta.setAttribute("style", "padding: 0px 5px 0px 0px;");
       ta.setAttribute("target", "zenbu_entrez");
-      ta.setAttribute("href", "http://www.ncbi.nlm.nih.gov/sites/entrez?db=gene&amp;cmd=Retrieve&amp;dopt=full_report&amp;list_uids="+feature.entrez_id);
+      //ta.setAttribute("href", "http://www.ncbi.nlm.nih.gov/sites/entrez?db=gene&amp;cmd=Retrieve&amp;dopt=full_report&amp;list_uids="+feature.entrez_id); //old URL style
+      ta.setAttribute("href", "https://www.ncbi.nlm.nih.gov/gene/"+feature.entrez_id);      
       ta.innerHTML = feature.entrez_id;
     }
     if(feature.omim_id) {

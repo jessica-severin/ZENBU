@@ -864,7 +864,7 @@ function zenbuTableElement_pagingInterface() {
   
   var content_width = this.content_width;
   
-  //interface changes at content_width: 750 700 670 630 570 500 400 320 300 250
+  //interface changes at content_width: 750 700 670 630 570 500 450 400 320 250
   
   //var num_pages = Math.ceil(this.filter_count / Math.floor(this.table_page_size));
   //this.table_num_pages = num_pages;
@@ -897,7 +897,7 @@ function zenbuTableElement_pagingInterface() {
   else if(content_width<750) { tspan.innerHTML = "<< previous"; }
   else { tspan.innerHTML = "<< previous page"; }
   
-  if(content_width>=300) {
+  if(content_width>=500) {
     var tspan2 = pagingSpan.appendChild(document.createElement('span'));
     tspan2.setAttribute('style', "margin-left: 5px; font-weight:bold; display:inline-block;");
     if(content_width<670) { tspan2.innerHTML = "page"; } else { tspan2.innerHTML = "| Page: "; }
@@ -907,22 +907,22 @@ function zenbuTableElement_pagingInterface() {
   var end_page = 10;
   if(content_width<700) { end_page=8; }
   if(content_width<630) { end_page=6; }
-  if(content_width<500) { end_page=0; }
+  if(content_width<400) { end_page=0; }
   
   if(page >= Math.ceil(end_page*0.7)) {
     var span2 = pagingSpan.appendChild(document.createElement('a'));
-    span2.setAttribute('style', "margin-left: 4px; color:purple; text-decoration:underline; display:inline-block; min-width:20px;");
-    if(content_width<320) { span2.style.minWidth = "10px"; }
+    span2.setAttribute('style', "margin-left: 4px; color:purple; text-decoration:underline; display:inline-block; min-width:10px;");
     span2.setAttribute('href', "./");
     span2.setAttribute("onclick", "reportElementEvent(\""+this.elementID+"\", 'page', \"1\"); return false");
     span2.innerHTML = 1;
     
     var span2 = pagingSpan.appendChild(document.createElement('span'));
     span2.setAttribute('style', "margin-left: 2px; display:inline-block; min-width:20px;");
-    if(content_width<320) { span2.style.marginLeft = "0px"; span2.style.minWidth = "12px"; }
+    if(content_width<450) { span2.style.minWidth = "10px"; }
+    span2.style.textAlign = "center";
     span2.innerHTML = "...";
     
-    if(content_width<500) {
+    if(content_width<400) {
       start_page = page;
       end_page = 0;
     } else if(content_width<630) {
@@ -941,15 +941,18 @@ function zenbuTableElement_pagingInterface() {
     var span2 = pagingSpan.appendChild(document.createElement('a'));
     span2.setAttribute('style', "margin-left: 4px; color:purple; text-decoration:underline; display:inline-block; min-width:20px;");
     if(j == page) { span2.setAttribute('style', "margin-left: 4px; color:black; font-weight:bold; display:inline-block; min-width:20px;"); }
+    if(content_width<450) { span2.style.minWidth = "10px"; }
+    span2.style.textAlign = "center";
     span2.setAttribute('href', "./");
     span2.setAttribute("onclick", "reportElementEvent(\""+this.elementID+"\", 'page', \"" +j+ "\"); return false");
     span2.innerHTML = j;
   }
   if(j<=this.table_num_pages) {
-    if((content_width>=500) && (j+1<this.table_num_pages)) {
+    if((content_width>=400) && (j+1<this.table_num_pages)) {
       var span2 = pagingSpan.appendChild(document.createElement('span'));
       span2.setAttribute('style', "margin-left: 4px; display:inline-block; min-width:20px;");
-      if(content_width<320) { span2.style.marginLeft = "0px"; span2.style.minWidth = "10px"; }
+      if(content_width<450) { span2.style.minWidth = "10px"; }
+      span2.style.textAlign = "center";
       span2.innerHTML = "...";
     }
     if(j+1 == this.table_num_pages) {
@@ -963,6 +966,7 @@ function zenbuTableElement_pagingInterface() {
     span2 = pagingSpan.appendChild(document.createElement('a'));
     span2.setAttribute('href', "./");
     span2.setAttribute('style', "margin-left: 4px; color:purple; text-decoration:underline; display:inline-block; min-width:20px;");
+    span2.style.textAlign = "center";
     span2.setAttribute("onclick", "reportElementEvent(\""+this.elementID+"\", 'page', \"" +this.table_num_pages+ "\"); return false");
     span2.innerHTML = this.table_num_pages;
   }
@@ -981,18 +985,19 @@ function zenbuTableElement_pagingInterface() {
   else if(content_width<750) { tspan4.innerHTML = "next >>"; }
   else { tspan4.innerHTML = "next page >>"; }
   
+  var span3 = pagingSpan.appendChild(document.createElement('span'));
+  span3.setAttribute('style', "margin-left: 5px; ");
   if(content_width>=250) {
-    var span3 = pagingSpan.appendChild(document.createElement('span'));
-    span3.setAttribute('style', "margin-left: 15px; ");
     var tspan = span3.appendChild(document.createElement('span'));
     tspan.innerHTML = "page: ";
-    var input = span3.appendChild(document.createElement('input'));
-    input.setAttribute("style", "font-size:12px; width:35px; padding: 1px 2px; margin: 3px 0px; box-sizing: border-box; border: 1px solid gray; border-radius: 4px;");
-    input.setAttribute('type', "text");
-    input.setAttribute('value', this.table_page);
-    input.setAttribute("onchange", "reportElementEvent(\""+this.elementID+"\", 'page', this.value); return false;");
   }
-  if(content_width>=400) {
+  var input = span3.appendChild(document.createElement('input'));
+  input.setAttribute("style", "font-size:12px; width:35px; padding: 1px 2px; margin: 3px 0px; box-sizing: border-box; border: 1px solid gray; border-radius: 4px;");
+  input.setAttribute('type', "text");
+  input.setAttribute('value', this.table_page);
+  input.setAttribute("onchange", "reportElementEvent(\""+this.elementID+"\", 'page', this.value); return false;");
+
+  if(content_width>=320) {
     var span3 = pagingSpan.appendChild(document.createElement('span'));
     span3.setAttribute('style', "margin-left: 5px; ");
     var tspan = span3.appendChild(document.createElement('span'));

@@ -66,6 +66,7 @@ function ZenbuGenomeBrowser(main_div) {
   this.config_fixed_id = "";
   this.view_config_loaded = false;
 
+  this.editing_disabled = false;
   this.nocache = false;
   this.share_exp_panel = true;
   this.exppanel_subscroll = false;
@@ -758,6 +759,7 @@ function glyphsNavigationControls(glyphsGB) {
     button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
     button.innerHTML = "settings";
     button.value = "settings";
+    glyphsGB.settings_button = button;
 
     // export view
     var button = navCtrlRight.appendChild(document.createElement("input"));
@@ -768,6 +770,7 @@ function glyphsNavigationControls(glyphsGB) {
     button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
     button.innerHTML = "export svg";
     button.value = "export svg";
+    glyphsGB.export_svg_button = button;
   }
 
   var button = navCtrlRight.appendChild(document.createElement("button"));
@@ -782,6 +785,7 @@ function glyphsNavigationControls(glyphsGB) {
     button.innerHTML = "F";
     button.setAttribute("onmouseover", "eedbMessageTooltip(\"switch to embedded ZENBU\",100);");
   }
+  glyphsGB.embed_toggle_button = button;
 
   // var button = navCtrlRight.appendChild(document.createElement("button"));
   // button.setAttribute("style", "font-size:10px; padding: 1px 1px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
@@ -882,6 +886,18 @@ function gLyphsReloadRegion(glyphsGB) {
   if(glyphsGB.display_width_auto) { glyphsGB.display_width = window.innerWidth-50; }
 
   glyphsNavigationControls(glyphsGB);
+  
+  if(glyphsGB.editing_disabled) {
+    if(glyphsGB.embed_toggle_button) { glyphsGB.embed_toggle_button.style.display = "none"; }
+    if(glyphsGB.settings_button) { glyphsGB.settings_button.style.display = "none"; }
+    //if(glyphsGB.export_svg_button) { glyphsGB.export_svg_button.style.display = "none"; }
+    if(glyphsGB.add_track_div) { glyphsGB.add_track_div.style.display = "none"; }
+  } else {
+    if(glyphsGB.embed_toggle_button) { glyphsGB.embed_toggle_button.style.display = "inline-block"; }
+    if(glyphsGB.settings_button) { glyphsGB.settings_button.style.display = "inline-block"; }
+    //if(glyphsGB.export_svg_button) { glyphsGB.export_svg_button.style.display = "inline-block"; }
+    if(glyphsGB.add_track_div) { glyphsGB.add_track_div.style.display = "block"; }
+  }
 
   if(glyphsGB.selected_feature) {
     console.log("gLyphsReloadRegion glyphsGB has selected_feature "+glyphsGB.selected_feature.id);
@@ -930,6 +946,7 @@ function gLyphsReloadRegion(glyphsGB) {
     var glyphTrack = glyphsGB.tracks_hash[trackID];
     if(!glyphTrack) { continue; }
     if(glyphsGB.selected_feature) { glyphTrack.selected_feature = null; }
+    glyphTrack.editing_disabled = glyphsGB.editing_disabled;
     gLyphsShowTrackLoading(trackID);
   }
   for(var trackID in glyphsGB.tracks_hash){
@@ -1049,12 +1066,18 @@ function gLyphsRegionChange(glyphsGB, mode, value) {
 //---------------------------------------------------------
 
 function createAddTrackTool(glyphsGB) {
-  if(zenbu_embedded_view) { return; }
+  if(zenbu_embedded_view) { return; }  
   var glyphset = glyphsGB.gLyphTrackSet;
   if(!glyphset) { return null; }
 
   if(glyphsGB.add_track_div) { 
     glyphset.appendChild(glyphsGB.add_track_div);
+    glyphsGB.add_track_div.style.display = "block";
+    if(glyphsGB.editing_disabled) { 
+      console.log("editing disabled should hide add track controls");
+      glyphsGB.add_track_div.style.display = "none";
+    }
+    //else { glyphsGB.add_track_div.style.display = "block"; }
     return glyphsGB.add_track_div; 
   }
   
