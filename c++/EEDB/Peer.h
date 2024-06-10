@@ -1,4 +1,4 @@
-/* $Id: Peer.h,v 1.39 2019/03/26 07:10:59 severin Exp $ */
+/* $Id: Peer.h,v 1.40 2023/12/14 06:52:53 severin Exp $ */
 
 /***
 
@@ -82,6 +82,7 @@ class Peer : public MQDB::MappedQuery {
     static EEDB::Peer*  new_from_url(string url);
     static EEDB::Peer*  new_from_xml(void *xml_node);  //constructor using a rapidxml node
     static EEDB::Peer*  create_self_peer_for_db(MQDB::Database *db);
+    static void         create_peer_table_for_db(MQDB::Database *db);
 
     bool operator<(const EEDB::Peer& b);
 

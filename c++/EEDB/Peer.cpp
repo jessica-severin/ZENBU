@@ -1,4 +1,4 @@
-/* $Id: Peer.cpp,v 1.154 2020/01/28 05:15:54 severin Exp $ */
+/* $Id: Peer.cpp,v 1.156 2024/05/31 06:12:26 severin Exp $ */
 
 /***
 
@@ -495,6 +495,15 @@ EEDB::Peer*  EEDB::Peer::create_self_peer_for_db(MQDB::Database *db) {
 }
 
 
+void  EEDB::Peer::create_peer_table_for_db(MQDB::Database *db) {
+  if(!db) { return; }
+  if(!(db->get_connection())) { return; } 
+
+  db->do_sql("CREATE TABLE IF NOT EXISTS peer ( uuid varchar(255) NOT NULL default '',  alias varchar(255) NOT NULL default '', \
+  is_self tinyint(1) default '0', db_url varchar(255) default NULL,  web_url varchar(255) default NULL, PRIMARY KEY(uuid));");
+}
+
+
 void EEDB::Peer::disconnect() {
   if(_source_stream != NULL) { 
     _source_stream->disconnect();
@@ -632,7 +641,7 @@ void EEDB::Peer::_connect_to_source_stream() {
   if(_driver == "oscdb" and _connect_via_oscdb()) { return; }
   if(_driver == "bamdb" and _connect_via_bamdb()) { return; }
   if(((_driver == "mysql") or (_driver == "sqlite")) and _connect_via_mqdb()) { return; }  
-  if(((_driver == "http") or (_driver == "zenbu")) and _connect_via_remote_stream()) { return; }  
+  if(((_driver == "http") or (_driver == "https") or (_driver == "zenbu")) and _connect_via_remote_stream()) { return; }  
   if(_driver == "zdx") { if(_connect_via_zdx()) { return; } else { /*fprintf(stderr, "zdx FAILED INIT [%s] %s\n", _peer_uuid, _db_url.c_str());*/ } }
   if(_driver == "zdx") { if(_connect_via_zdx()) { return; } /* else { fprintf(stderr, "zdx FAILED INIT [%s] %s\n", _peer_uuid, _db_url.c_str()); }*/ }
 
@@ -808,14 +817,13 @@ bool EEDB::Peer::find_peers(map<string, EEDB::Peer*> &uuid_peers, int max_depth)
   if(uuid_peers.empty()) { return false; }
   if(max_depth<=0) { return false; }
   map<string, bool>  network_search_flag;  //to track which peers we have visited  
-  /*
-  fprintf(stderr, "find_peers [%d]\n", uuid_peers.size());
-  map<string, EEDB::Peer*>::iterator  it;
-  for(it = uuid_peers.begin(); it != uuid_peers.end(); it++) {
-    fprintf(stderr, "  %s\n", it->first.c_str());
-  }
-  */
 
+  // fprintf(stderr, "find_peers [%d]\n", (int)uuid_peers.size());
+  // map<string, EEDB::Peer*>::iterator  it;
+  // for(it = uuid_peers.begin(); it != uuid_peers.end(); it++) {
+  //   fprintf(stderr, "  %s\n", it->first.c_str());
+  // }
+  
   //first recursive search the cached neighbor peers
   bool rtn = _multipeer_neighbor_search(uuid_peers, max_depth, network_search_flag);
   if(rtn) { return rtn; }
@@ -894,7 +902,7 @@ bool EEDB::Peer::_multipeer_network_search(map<string, EEDB::Peer*> &uuid_peers,
   EEDB::SPStreams::SourceStream *stream = source_stream();
   if(stream == NULL) { return false; }
 
-  if((_driver == "http") or (_driver == "zenbu")) {
+  if((_driver == "http") or (_driver == "https") or (_driver == "zenbu")) {
     map<string, EEDB::Peer*>::iterator it;
     EEDB::SPStreams::RemoteServerStream *rstream = (EEDB::SPStreams::RemoteServerStream*)stream;
     rstream->clear_filters();
