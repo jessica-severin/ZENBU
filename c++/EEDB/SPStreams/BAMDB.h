@@ -1,5 +1,5 @@
 
-/* $Id: BAMDB.h,v 1.25 2016/06/20 06:35:15 severin Exp $ */
+/* $Id: BAMDB.h,v 1.26 2023/12/13 05:40:46 severin Exp $ */
 
 /***
 
@@ -94,6 +94,7 @@ class BAMDB : public EEDB::SPStreams::ZenDB {
     // public API for tools
     bool                calc_total_counts();
     long long           q3_count();
+    long long           q10_count();
     long long           q20_count();
     long long           q40_count();
     long long           total_count();
@@ -120,6 +121,7 @@ class BAMDB : public EEDB::SPStreams::ZenDB {
     bool                   _add_metadata;
     EEDB::Experiment*      _primary_experiment;
     long long              _q3_count;
+    long long              _q10_count;
     long long              _q20_count;
     long long              _q40_count;
     long long              _unaligned_count;

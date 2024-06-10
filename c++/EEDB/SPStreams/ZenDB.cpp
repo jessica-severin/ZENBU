@@ -1,4 +1,4 @@
-/* $Id: ZenDB.cpp,v 1.31 2021/05/22 01:43:18 severin Exp $ */
+/* $Id: ZenDB.cpp,v 1.32 2023/12/13 05:39:10 severin Exp $ */
 
 /***
 
@@ -184,7 +184,7 @@ void EEDB::SPStreams::ZenDB::init() {
   
   _version = 0;  //1=oscheader/sqlite version, 2=xml/cidx version
   _modify_time = 0;
-
+  _verbose = false;
 }
 
 string EEDB::SPStreams::ZenDB::_display_desc() {
@@ -763,7 +763,11 @@ void  EEDB::SPStreams::ZenDB::set_parameter(string tag, string value) {
 
   if(tag == "build_dir")            { tag = "_build_dir"; }
   if(tag == "deploy_dir")           { tag = "_deploy_dir"; }
+  if(tag == "verbose")              { tag = "_verbose"; }
   
+  if(tag == "_verbose") {
+    if(value == "false") { _verbose = false; } else { _verbose = true; }
+  }
   _parameters[tag] = value;
 }
 

@@ -1,4 +1,4 @@
-/* $Id: BAMDB.cpp,v 1.71 2023/06/16 08:37:37 severin Exp $ */
+/* $Id: BAMDB.cpp,v 1.73 2023/12/13 05:40:46 severin Exp $ */
 
 /***
 
@@ -168,6 +168,7 @@ void EEDB::SPStreams::BAMDB::init() {
   _add_subfeatures = false;
   _add_metadata = false;
   _q3_count = -1;
+  _q10_count = -1;
   _q20_count = -1;
   _q40_count = -1;
   _unaligned_count = -1;
@@ -198,47 +199,44 @@ string  EEDB::SPStreams::BAMDB::create_new(string filepath) {
   struct stat statbuf; 
 
   if((stat(newpath.c_str(), &statbuf) == 0) &&  ((statbuf.st_mode & S_IFMT) == S_IFREG)) {
-    fprintf(stderr, "bamdb internal bam file already exists.\n");
-    //unlink(newpath.c_str());
-    _parameters["_bam_loc"] = "ok";
-    bam_ok=true;
+    if(_verbose) { fprintf(stderr, "bamdb internal bam file exists. delete and rebuild\n"); }
+    unlink(newpath.c_str());
+    //_parameters["_bam_loc"] = "ok";
+    //bam_ok=true;
   }
 
   if(_parameters["_bam_loc"] == "link") {
     if(link(filepath.c_str(), newpath.c_str()) == 0) {
-      filepath = newpath;
-      fprintf(stderr, "hard link to %s\n", filepath.c_str());    
+      if(_verbose) { fprintf(stderr, "hard link to %s\n", newpath.c_str()); }
       bam_ok=true;
     } else {
-      fprintf(stderr, "hard link failed, perform copy\n");
+      if(_verbose) { fprintf(stderr, "hard link failed, perform copy\n"); }
       _parameters["_bam_loc"] = "copy";
     }
   }
 
   if(_parameters["_bam_loc"] == "symlink") {
     if(symlink(filepath.c_str(), newpath.c_str()) == 0) {
-      filepath = newpath;
-      fprintf(stderr, "symbolic link to %s\n", filepath.c_str());    
+      if(_verbose) { fprintf(stderr, "symbolic link to %s\n", newpath.c_str()); }
       bam_ok=true;
     } else {
-      fprintf(stderr, "soft link failed, perform copy\n");
+      if(_verbose) { fprintf(stderr, "soft link failed, perform copy\n"); }
       _parameters["_bam_loc"] = "copy";
     }
   }
 
   if(_parameters["_bam_loc"] == "copy") {
     string cmd = "cp "+filepath + " " + newpath;
-    fprintf(stderr, "%s\n", cmd.c_str());
+    if(_verbose) { fprintf(stderr, "%s\n", cmd.c_str()); }
     if(system(cmd.c_str()) == 0) {
-      filepath = newpath;
-      fprintf(stderr, "copy to %s\n", filepath.c_str());    
+      if(_verbose) { fprintf(stderr, "copy to %s\n", newpath.c_str()); }
       bam_ok=true;
     } else {
-      fprintf(stderr, "copy failed\n");
+      if(_verbose) { fprintf(stderr, "copy failed\n"); }
     }
   }
   if(!bam_ok) {
-    fprintf(stderr, "problem moving bam into bamdb %s\n", filepath.c_str());    
+    fprintf(stderr, "problem moving bam into bamdb %s\n", newpath.c_str());    
     return "ERROR problem moving bam into bamdb";
   }
   
@@ -247,7 +245,7 @@ string  EEDB::SPStreams::BAMDB::create_new(string filepath) {
     //this option is for network-disk environments where hardlinks 
     //fprintf(stderr, "used shared location %s\n", filepath.c_str());    
   //}
-  _parameters["bam_path"] = filepath;
+  _parameters["bam_path"] = newpath;
 
   string cmd;
   if(!_read_bam_header()) {
@@ -261,36 +259,39 @@ string  EEDB::SPStreams::BAMDB::create_new(string filepath) {
   
   // try to Create index
   bool index_failed = false;
-  string bai_path = filepath + ".bai";
-  fprintf(stderr, "create index %s.bai\n", filepath.c_str());
-  cmd = "samtools index " + filepath;
-  fprintf(stderr, "%s\n", cmd.c_str());
+  string bai_path = newpath + ".bai";
+  if(_verbose) { fprintf(stderr, "create index %s.bai\n", newpath.c_str()); }
+  cmd = "samtools index " + newpath;
+  if(_verbose) { fprintf(stderr, "%s\n", cmd.c_str()); }
   if(system(cmd.c_str()) != 0) { index_failed = true; }
 
   if(index_failed || (stat(bai_path.c_str(), &statbuf) != 0)) {
     fprintf(stderr, "failed to make index so sort and index\n");
 
-    // sort bam file
-    fprintf(stderr, "sort bam file %s\n", filepath.c_str());
-    string prename = filepath + ".pre";
-    rename(filepath.c_str(), prename.c_str());
-    //cmd = "mv " + filepath + " " + prename;
-    //fprintf(stderr, "%s\n", cmd.c_str());
-    //system(cmd.c_str());
-    cmd = "samtools sort " + prename +" "+ _zendb_dir+"/"+_db_type;
-    fprintf(stderr, "%s\n", cmd.c_str());
+    // sort bam file from original filename into bamdb/bamdb.bam.sort
+    if(_verbose) { fprintf(stderr, "sort bam file %s\n", filepath.c_str()); }
+    string sortname = newpath + ".sort";
+    // 1st remove any previous sort files from previous failed
+    cmd = "rm "+ sortname+"*bam";
+    if(_verbose) { fprintf(stderr, "%s\n", cmd.c_str()); }
+    system(cmd.c_str());
+    // 2nd perform sort
+    cmd = "samtools sort " + filepath +" -o "+ sortname;
+    if(_verbose) { fprintf(stderr, "%s\n", cmd.c_str()); }
     if(system(cmd.c_str()) != 0) {
       fprintf(stderr, "failed to sort bam file %s\n", filepath.c_str());
       return "ERROR failed to sort bam file";
     }
-    unlink(prename.c_str());
+    // if success remove the old bamdb/bamdb.bam and then rename the new sort file back to bamdb.bam
+    unlink(newpath.c_str());
+    rename(sortname.c_str(), newpath.c_str());
   
     // Create index
-    fprintf(stderr, "create index %s.bai\n", filepath.c_str());
-    cmd = "samtools index " + filepath;
-    fprintf(stderr, "%s\n", cmd.c_str());
+    if(_verbose) { fprintf(stderr, "create index %s.bai\n", newpath.c_str()); }
+    cmd = "samtools index " + newpath;
+    if(_verbose) { fprintf(stderr, "%s\n", cmd.c_str()); }
     if(system(cmd.c_str()) != 0) {
-      fprintf(stderr, "failed to index bam file %s\n", filepath.c_str());
+      fprintf(stderr, "failed to index bam file %s\n", newpath.c_str());
       return "ERROR failed to index bam file";
     }
   }
@@ -298,7 +299,7 @@ string  EEDB::SPStreams::BAMDB::create_new(string filepath) {
   /*
   // check index
   if(!_bam_reader->LocateIndex()) {
-    fprintf(stderr, "Could not create index file %s\n", filepath.c_str());
+    fprintf(stderr, "Could not create index file %s\n", newpath.c_str());
     return "ERROR could not create index file";
   }
   */
@@ -427,8 +428,10 @@ bool  EEDB::SPStreams::BAMDB::_read_bam_header() {
       
       if(assembly() && (sq_hash.find("SN") != sq_hash.end())) {
         //fprintf(stderr, "add chrom %s\n", sq_hash["SN"].c_str());
-        EEDB::Chrom *chrom = assembly()->get_chrom(sq_hash["SN"].c_str());
-        if(chrom) { fprintf(stderr, "%s\n", chrom->xml().c_str()); }
+        //EEDB::Chrom *chrom = assembly()->get_chrom(sq_hash["SN"].c_str());
+        //get_chrom will create if if does not exist
+        assembly()->get_chrom(sq_hash["SN"].c_str());
+        //if(chrom) { fprintf(stderr, "%s\n", chrom->xml().c_str()); }
       }      
     }
     
@@ -443,7 +446,7 @@ bool  EEDB::SPStreams::BAMDB::_read_bam_header() {
         if(strlen(tok) >3) {
           //fprintf(stderr, "  tok[%s]\n", tok);
           tok[2] = '\0';
-          fprintf(stderr, "RG [%s] = [%s]\n", tok, tok+3);
+          //fprintf(stderr, "RG [%s] = [%s]\n", tok, tok+3);
           rg_hash[tok] = tok+3;
         }
         tok = strtok(NULL, "\t\n\r");
@@ -476,7 +479,7 @@ bool  EEDB::SPStreams::BAMDB::_read_bam_header() {
         if(strlen(tok) >3) {
           //fprintf(stderr, "  tok[%s]\n", tok);
           tok[2] = '\0';
-          fprintf(stderr, "PG [%s] = [%s]\n", tok, tok+3);
+          //fprintf(stderr, "PG [%s] = [%s]\n", tok, tok+3);
           pg_hash[tok] = tok+3;
         }
         tok = strtok(NULL, "\t\n\r");
@@ -1088,6 +1091,13 @@ EEDB::Feature* EEDB::SPStreams::BAMDB::_convert_to_feature(bam1_t *al) {
       }
     }
     
+    if(_expression_datatypes.find("q10_tpm") != _expression_datatypes.end()) {
+      if(q10_count() > 0 && (al->core.qual>= 10)) {
+        double value = 1000000.0 / _q10_count;
+        feature->add_expression(_primary_experiment, EEDB::Datatype::get_type("q10_tpm"), value);
+      }
+    }
+
     if(_expression_datatypes.find("q20_tpm") != _expression_datatypes.end()) {
       if(q20_count() > 0 && (al->core.qual>= 20)) {
         double value = 1000000.0 / _q20_count;
@@ -1395,6 +1405,24 @@ long long  EEDB::SPStreams::BAMDB::q3_count() {
   return _q3_count;
 }
 
+long long  EEDB::SPStreams::BAMDB::q10_count() {
+  if(_q10_count > 0) { return _q10_count; }
+  
+  //check metadata
+  //fprintf(stderr, "BAMDB::calc_q10_count\n");
+  if(!experiment()) { return -1; }
+  
+  EEDB::MetadataSet  *mdset = _primary_experiment->metadataset();
+  EEDB::Metadata     *md = mdset->find_metadata("q10_total_count", "");
+  if(md) { 
+    _q10_count = strtol(md->data().c_str(), NULL, 10);
+    return _q10_count;
+  }
+  
+  calc_total_counts();
+  return _q10_count;
+}
+
 long long  EEDB::SPStreams::BAMDB::q20_count() {
   if(_q20_count > 0) { return _q20_count; }
   
@@ -1462,12 +1490,14 @@ bool  EEDB::SPStreams::BAMDB::calc_total_counts() {
   //scan the BAM file and calculate  
   _total_count = 0;
   _q3_count = 0;
+  _q10_count = 0;
   _q20_count = 0;
   _q40_count = 0;
   _unaligned_count = 0;
 
   _primary_experiment->metadataset()->remove_metadata_like("tagcount_total", "");
   _primary_experiment->metadataset()->remove_metadata_like("q3_total_count", "");
+  _primary_experiment->metadataset()->remove_metadata_like("q10_total_count", "");
   _primary_experiment->metadataset()->remove_metadata_like("q20_total_count", "");
   _primary_experiment->metadataset()->remove_metadata_like("q40_total_count", "");
   _primary_experiment->metadataset()->remove_metadata_like("unaligned_total_count", "");
@@ -1496,12 +1526,12 @@ bool  EEDB::SPStreams::BAMDB::calc_total_counts() {
     ret = bam_read1(_samlib_fp->x.bam, _samlib_bam_align);  
     in_count++;
 
-    if(in_count % 100000 == 0) {
+    if(_verbose && in_count % 100000 == 0) {
       gettimeofday(&endtime, NULL);
       timersub(&endtime, &starttime, &difftime);
       rate = (double)_total_count / ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
       fprintf(stderr,"%10lld features  %13.2f obj/sec", _total_count, rate);
-      fprintf(stderr," q3=%lld  q20=%lld  q40=%lld unalign=%lld", _q3_count, _q20_count, _q40_count, _unaligned_count);
+      fprintf(stderr," q3=%lld  q10=%lld q20=%lld  q40=%lld unalign=%lld", _q3_count, _q10_count, _q20_count, _q40_count, _unaligned_count);
       fprintf(stderr,"\n");
     }
 
@@ -1522,20 +1552,23 @@ bool  EEDB::SPStreams::BAMDB::calc_total_counts() {
     _total_count++;
     //osc parser puts mapq into the score/significance
     if(feature->significance() >= 3)  { _q3_count++; }
+    if(feature->significance() >= 10) { _q10_count++; }
     if(feature->significance() >= 20) { _q20_count++; }
     if(feature->significance() >= 40) { _q40_count++; }
     
     feature->release(); 
   } while(ret>=0);
 
-  gettimeofday(&endtime, NULL);
-  timersub(&endtime, &starttime, &difftime);
-  rate = (double)_total_count / ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
-  fprintf(stderr,"%10lld features  %13.2f obj/sec", _total_count, rate);
-  fprintf(stderr,"  %1.6f sec \n", (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
-  fprintf(stderr," aligned %lld\n", _total_count);
-  fprintf(stderr," q3      %lld\n q20     %lld\n q40     %lld\n unalign %lld\n", _q3_count, _q20_count, _q40_count, _unaligned_count);
-
+  if(_verbose) { 
+    gettimeofday(&endtime, NULL);
+    timersub(&endtime, &starttime, &difftime);
+    rate = (double)_total_count / ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+    fprintf(stderr,"%10lld features  %13.2f obj/sec", _total_count, rate);
+    fprintf(stderr,"  %1.6f sec \n", (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+    fprintf(stderr," aligned %lld\n", _total_count);
+    fprintf(stderr," q3      %lld\n q10     %lld\n q20     %lld\n q40     %lld\n unalign %lld\n", _q3_count, _q10_count, _q20_count, _q40_count, _unaligned_count);
+  }
+  
   //store as metadata
   _primary_experiment->clear_xml_caches();
 
@@ -1546,6 +1579,10 @@ bool  EEDB::SPStreams::BAMDB::calc_total_counts() {
   snprintf(buffer, 2040, "%lld", _q3_count);
   _primary_experiment->add_datatype(EEDB::Datatype::get_type("q3_tpm"));
   _primary_experiment->metadataset()->add_tag_data("q3_total_count", string(buffer));
+
+  snprintf(buffer, 2040, "%lld", _q10_count);
+  _primary_experiment->add_datatype(EEDB::Datatype::get_type("q10_tpm"));
+  _primary_experiment->metadataset()->add_tag_data("q10_total_count", string(buffer));
 
   snprintf(buffer, 2040, "%lld", _q20_count);
   _primary_experiment->add_datatype(EEDB::Datatype::get_type("q20_tpm"));
@@ -1558,9 +1595,11 @@ bool  EEDB::SPStreams::BAMDB::calc_total_counts() {
   snprintf(buffer, 2040, "%lld", _unaligned_count);
   _primary_experiment->metadataset()->add_tag_data("unaligned_total_count", string(buffer));
   
-  //fprintf(stderr, "q20_total_count %lld %s\n", _q20_count, _primary_experiment->db_id().c_str());
-  fprintf(stderr, "%s\n", _primary_experiment->xml().c_str());
-
+  if(_verbose) {
+    //fprintf(stderr, "q20_total_count %lld %s\n", _q20_count, _primary_experiment->db_id().c_str());
+    fprintf(stderr, "%s\n", _primary_experiment->xml().c_str());
+  }
+  
   _primary_experiment->metadataset()->remove_duplicates();
   _save_xml();
     
