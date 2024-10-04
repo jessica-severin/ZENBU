@@ -30,7 +30,8 @@ SRCS_C = Assembly.cpp Chrom.cpp ChromChunk.cpp \
          SPStreams/MannWhitneyRanksum.cpp SPStreams/OverlapMerge.cpp SPStreams/SiteFinder.cpp \
          SPStreams/FoldChange.cpp SPStreams/DemultiplexSource.cpp SPStreams/CAGECorrection.cpp SPStreams/AppendExpression.cpp \
          SPStreams/AddLinkedMetadata.cpp SPStreams/PairReads.cpp SPStreams/EdgeLengthFilter.cpp \
-         SPStreams/SubfeaturesToEdges.cpp SPStreams/MergeEdges.cpp SPStreams/SamFlagFilter.cpp \
+         SPStreams/SubfeaturesToEdges.cpp SPStreams/MergeEdges.cpp SPStreams/SamFlagFilter.cpp SPStreams/GapFilterAnnotate.cpp \
+         SPStreams/Limiter.cpp \
          ZDX/ZDXsegment.cpp ZDX/ZDXstream.cpp \
          WebServices/WebBase.cpp WebServices/MetaSearch.cpp WebServices/ConfigServer.cpp WebServices/RegionServer.cpp \
          WebServices/UploadServer.cpp WebServices/DownloadServer.cpp WebServices/UserSystem.cpp WebServices/zenbu_common.cpp 
