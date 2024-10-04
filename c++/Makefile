@@ -21,7 +21,7 @@ all:	samtools
 clean:
 	rm -f *.o zenbu_test
 	rm -rf samtools-1.5
-	rm include/zenbu/*/*.h include/zenbu/*/*/*.h
+	rm -f include/zenbu/*/*.h include/zenbu/*/*/*.h
 	$(MAKE) -C lz4 clean
 	$(MAKE) -C EEDB clean
 	$(MAKE) -C MQDB clean
