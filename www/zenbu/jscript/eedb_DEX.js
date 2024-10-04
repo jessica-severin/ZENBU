@@ -129,7 +129,7 @@ function dexParseURL(urlConfig) {
       if(mode=="Experiments") { mode = "DataSources"; contents.filters.datasource="experiments"; }
       if(mode=="Annotation")  { mode = "DataSources"; contents.filters.datasource="feature_sources"; }
       if(mode=="Edges")       { mode = "DataSources"; contents.filters.datasource="edge_sources"; }
-      if(mode=="Reports")     { contents.filters.show_only_fixedIDs = true; } //default on for Reports
+      if(mode=="Reports")     { contents.filters.show_only_fixedIDs = false; } //default off for Reports since it confuses people
       if((mode=="Views")||(mode=="Tracks")||(mode == "Scripts")||(mode=="DataSources")||(mode=="Reports")) {
         contents.mode = mode;
         rtnval = true;
@@ -218,8 +218,8 @@ function dexShowSubmenu() {
   //userview.user = eedbShowLogin();
   submenu_div.innerHTML ="";
 
-  submenu_div.setAttribute('style', "margin:0px; background-repeat:repeat-x; "+
-     "background-image:url("+eedbWebRoot+"/images/subnav_bg.gif); width:400px;"+
+  submenu_div.setAttribute('style', "margin:0px;  "+
+     "background-image:linear-gradient(#E0E0E0, #A0A0A0); width:800px; "+
      "line-height:2em; border-right:1px; color:#FFFFFF; font-weight:bold;"+
      "font-family:Verdana, Arial, Helvitica, sans-serif; text-decoration:none; font-size:11px;");
 
@@ -3380,7 +3380,7 @@ function dexReconfigContentsParam(param, value) {
     contents.mode = value;
 
     contents.filters.show_only_fixedIDs = false;
-    if(value == "Reports") { contents.filters.show_only_fixedIDs = true; }
+    //if(value == "Reports") { contents.filters.show_only_fixedIDs = true; }
 
     if(value == "Scripts") { contents.filters.assembly = "";  }
     contents.filters.platform = "";
