@@ -3296,6 +3296,15 @@ function gLyphsDrawFeature(glyphTrack, feature, glyphStyle) {
   feature.xfs = xfs;
   feature.xfe = xfe;
   feature.xc  = xc;
+  
+  if(glyphTrack.hide_spanning) {
+    if((feature.start < start) && (feature.end > end)) { 
+      feature.xfs = -1;
+      feature.xfe = -1;
+      feature.xfm = -1;
+      return null;
+    }
+  }
 
   var colour = gLyphsTrackFeatureColour(glyphTrack, feature);
 
@@ -3381,7 +3390,15 @@ function gLyphsDrawFeature(glyphTrack, feature, glyphStyle) {
         xfe = xfe +2 + textWidth;
       }
     }
-    tobj.setAttributeNS(null, 'style', 'fill: black;');
+    
+    //set text based on background color luminosity_contrast
+    var cl1 = new RGBColor(glyphTrack.backColor);
+    if(cl1.ok && (luminosity_contrast(cl1.r, cl1.g, cl1.b, 0,0,0) <6)) { 
+      tobj.setAttributeNS(null, 'style', 'fill: white;');
+    } else {
+      tobj.setAttributeNS(null, 'style', 'fill: black;');
+    }
+
 
     tobj.appendChild(document.createTextNode(fname));
 
@@ -6997,6 +7014,7 @@ function gLyphsDrawHeading(glyphTrack) {
 
   createHideTrackWidget(glyphTrack);
 
+  glyphTrack.widget_offset = 0;
   if(!zenbu_embedded_view && !glyphTrack.editing_disabled) {
     createCloseTrackWidget(glyphTrack);
     createConfigTrackWidget(glyphTrack);
@@ -11616,18 +11634,18 @@ function createGlyphstyleSelect(glyphTrack) {
     arcFactorInput.setAttribute('value', glyphTrack.arc_height_factor);
     arcFactorInput.setAttribute("onkeyup", "reconfigTrackParam(\""+ trackID+"\", 'arc_height_factor', this.value);");
 
-    //-- hide spanning arcs which start before and end after the visible region
-    tspan = arcOpts.appendChild(document.createElement('span'));
-    var skipSpanCheck = tspan.appendChild(document.createElement('input'));
-    skipSpanCheck.style = "margin: 1px 2px 1px 15px;";
-    skipSpanCheck.type = "checkbox";
-    if(glyphTrack.hide_spanning) { skipSpanCheck.setAttribute('checked', "checked"); }
-    skipSpanCheck.setAttribute("onclick", "reconfigTrackParam(\""+ trackID+"\", 'hide_spanning', this.checked);");
-    var span1 = tspan.appendChild(document.createElement('span'));
-    span1.innerHTML = "hide spanning";
-    var msg = "hide arcs which start before and end after the visible region";
-    tspan.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\""+msg+"\",190);");
-    tspan.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
+    // //-- hide spanning arcs which start before and end after the visible region
+    // tspan = arcOpts.appendChild(document.createElement('span'));
+    // var skipSpanCheck = tspan.appendChild(document.createElement('input'));
+    // skipSpanCheck.style = "margin: 1px 2px 1px 15px;";
+    // skipSpanCheck.type = "checkbox";
+    // if(glyphTrack.hide_spanning) { skipSpanCheck.setAttribute('checked', "checked"); }
+    // skipSpanCheck.setAttribute("onclick", "reconfigTrackParam(\""+ trackID+"\", 'hide_spanning', this.checked);");
+    // var span1 = tspan.appendChild(document.createElement('span'));
+    // span1.innerHTML = "hide spanning";
+    // var msg = "hide arcs which start before and end after the visible region";
+    // tspan.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\""+msg+"\",190);");
+    // tspan.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
 
     
     //--------------
@@ -11863,6 +11881,7 @@ function createGlyphstyleSelect(glyphTrack) {
     }
   }
 
+  var show_hide_spanning = false;
   //if(glyphStyle == "signal-histogram" || glyphStyle == "xyplot" || glyphStyle == "split-signal") {
   arcOpts.style.display  = "none";
   if(glyphStyle == "signal-histogram" || glyphStyle == "split-signal") {
@@ -11895,6 +11914,7 @@ function createGlyphstyleSelect(glyphTrack) {
     arcOpts.style.display  = "block";
     colorModeDiv.style.display  = "block";
     featSortModeSpan.style.display = "none";
+    show_hide_spanning = true;
   } else if(glyphStyle == "interaction-map") {
     expressOptDiv.style.display = "block";
     //strandlessOpt.style.display  = "inline";
@@ -11903,9 +11923,11 @@ function createGlyphstyleSelect(glyphTrack) {
     colorModeDiv.style.display  = "block";
     featSortModeSpan.style.display = "none";
   } else {
+    //all the general features drawn with gLyphsDrawFeature()
     expressOptDiv.style.display = "none";
     colorModeDiv.style.display  = "block";
     featSortModeSpan.style.display = "inline";
+    show_hide_spanning = true;
   }
 
   //configOpts3 rebuild section
@@ -11969,6 +11991,24 @@ function createGlyphstyleSelect(glyphTrack) {
     tinput.setAttribute('value', max_interaction);
     tinput.setAttribute("onkeyup", "reconfigTrackParam(\""+ trackID+"\", 'max_interaction', this.value);");
   }
+  
+  if(show_hide_spanning) {
+    //-- hide spanning features which start before and end after the visible region
+    tspan = configOpts3.appendChild(document.createElement('span'));
+    tspan.style = "margin: 0px 10px 0px 0px;";
+    var skipSpanCheck = tspan.appendChild(document.createElement('input'));
+    skipSpanCheck.style = "margin: 1px 2px 1px 0px;";
+    skipSpanCheck.type = "checkbox";
+    if(glyphTrack.hide_spanning) { skipSpanCheck.setAttribute('checked', "checked"); }
+    skipSpanCheck.setAttribute("onclick", "reconfigTrackParam(\""+ trackID+"\", 'hide_spanning', this.checked);");
+    var span1 = tspan.appendChild(document.createElement('span'));
+    span1.innerHTML = "hide spanning";
+    var msg = "hide arcs which start before and end after the visible region";
+    tspan.setAttributeNS(null, "onmouseover", "eedbMessageTooltip(\""+msg+"\",190);");
+    tspan.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
+  }
+    
+    
   var hoverInfoCheck = configOpts3.appendChild(document.createElement('input'));
   hoverInfoCheck.style = "margin: 1px 2px 1px 0px;";
   hoverInfoCheck.type = "checkbox";
