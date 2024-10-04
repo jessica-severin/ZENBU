@@ -1,4 +1,4 @@
-/* $Id: BAMDB.cpp,v 1.73 2023/12/13 05:40:46 severin Exp $ */
+/* $Id: BAMDB.cpp,v 1.75 2024/10/03 03:40:49 severin Exp $ */
 
 /***
 
@@ -961,7 +961,7 @@ EEDB::Feature* EEDB::SPStreams::BAMDB::_next_feature() {
       return NULL;
     }
         
-    feature = _convert_to_feature(_samlib_bam_align);
+    feature = convert_align_to_feature(_samlib_bam_align, _samlib_fp);
 
     if(!feature) { return NULL; }
     if(!feature->chrom()) { 
@@ -990,7 +990,7 @@ EEDB::Feature* EEDB::SPStreams::BAMDB::_next_feature() {
 }
 
 
-EEDB::Feature* EEDB::SPStreams::BAMDB::_convert_to_feature(bam1_t *al) {
+EEDB::Feature* EEDB::SPStreams::BAMDB::convert_align_to_feature(bam1_t *al, samfile_t* bamfp) {
   if(!al) { return NULL; }
   
   EEDB::Feature *feature = EEDB::Feature::realloc();
@@ -1002,15 +1002,15 @@ EEDB::Feature* EEDB::SPStreams::BAMDB::_convert_to_feature(bam1_t *al) {
   
   // set attributes
   //feature->primary_id(al->Bin);  // BAM (standard) index bin number for this alignment.
-  feature->primary_name(bam_get_qname(al));  
+  feature->primary_name(bam_get_qname(al));
   feature->feature_source(_primary_source);
   feature->significance(al->core.qual);
   feature->chrom_start(al->core.pos+1);  // position (0-based) where alignment starts
   feature->chrom_end(bam_endpos(al));  // position (0-based) where alignment starts
 
   //chrom
-  if(al->core.tid >= 0) { // chr
-    char* chr_name = _samlib_fp->header->target_name[al->core.tid];
+  if(bamfp && assembly() && al->core.tid >= 0) { // chr
+    char* chr_name = bamfp->header->target_name[al->core.tid];
     EEDB::Chrom *chrom = assembly()->get_chrom(chr_name);
     feature->chrom(chrom);
     //TODO: manage multiple assemblies
@@ -1030,8 +1030,8 @@ EEDB::Feature* EEDB::SPStreams::BAMDB::_convert_to_feature(bam1_t *al) {
     //if(flags & 0x0008) { /*fprintf(stderr, "0x08 pair is unaligned\n");*/ feature->chrom(NULL); }
     if(_add_metadata) { 
       //mate chrom, mate_start
-      if(al->core.mtid >= 0) { // chr
-        char* chr_name = _samlib_fp->header->target_name[al->core.mtid];
+      if(bamfp && assembly() && al->core.mtid >= 0) { // chr
+        char* chr_name = bamfp->header->target_name[al->core.mtid];
         //EEDB::Chrom *mate_chrom = assembly()->get_chrom(chr_name);
         //if(mate_chrom) { feature->metadataset()->add_tag_data("sam:mate_chrom", mate_chrom->chrom_name()); }
         if(chr_name) { feature->mate_chrom_name(chr_name); }
@@ -1449,7 +1449,7 @@ long long  EEDB::SPStreams::BAMDB::q40_count() {
   if(!experiment()) { return -1; }
   
   EEDB::MetadataSet  *mdset = _primary_experiment->metadataset();
-  EEDB::Metadata     *md = mdset->find_metadata("q20_total_count", "");
+  EEDB::Metadata     *md = mdset->find_metadata("q40_total_count", "");
   if(md) { 
     _q40_count = strtol(md->data().c_str(), NULL, 10);
     return _q40_count;
@@ -1535,7 +1535,7 @@ bool  EEDB::SPStreams::BAMDB::calc_total_counts() {
       fprintf(stderr,"\n");
     }
 
-    EEDB::Feature *feature = _convert_to_feature(_samlib_bam_align);
+    EEDB::Feature *feature = convert_align_to_feature(_samlib_bam_align, _samlib_fp);
     if(!feature) { 
       fprintf(stderr, "could not parse feature line\n");
       _unaligned_count++;
