@@ -1,4 +1,4 @@
-/* $Id: MetadataFilter.cpp,v 1.8 2013/04/08 07:38:17 severin Exp $ */
+/* $Id: MetadataFilter.cpp,v 1.9 2024/10/03 03:37:27 severin Exp $ */
 
 /***
 
@@ -119,6 +119,7 @@ void EEDB::SPStreams::MetadataFilter::_xml(string &xml_buffer) {
 
   switch(_mdset_mode) {
     case FEATURE:       xml_buffer.append("<mdata_mode>feature</mdata_mode>"); break;
+    case EDGE:          xml_buffer.append("<mdata_mode>edge</mdata_mode>"); break;
     case FEATURESOURCE: xml_buffer.append("<mdata_mode>featuresource</mdata_mode>"); break;
     case EXPERIMENT:    xml_buffer.append("<mdata_mode>experiment</mdata_mode>"); break;
     case ALL:           xml_buffer.append("<mdata_mode>all</mdata_mode>"); break;
@@ -160,6 +161,7 @@ EEDB::SPStreams::MetadataFilter::MetadataFilter(void *xml_node) {
   _mdset_mode = FEATURE;
   if((node = root_node->first_node("mdata_mode")) != NULL) { 
     if(string(node->value()) == "feature") { _mdset_mode = FEATURE; }
+    if(string(node->value()) == "edge") { _mdset_mode = EDGE; }
     if(string(node->value()) == "featuresource") { _mdset_mode = FEATURESOURCE; }
     if(string(node->value()) == "experiment") { _mdset_mode = EXPERIMENT; }
     if(string(node->value()) == "all") { _mdset_mode = ALL; }
@@ -192,72 +194,96 @@ MQDB::DBObject* EEDB::SPStreams::MetadataFilter::_next_in_stream() {
   MQDB::DBObject *obj;
   while((obj = _source_stream->next_in_stream()) != NULL) {
 
-    //non-feature objects are just passed through this module      
-    if(obj->classname() != EEDB::Feature::class_name) {
-      return obj;
-    }
-    
-    EEDB::Feature*             feature = (EEDB::Feature*)obj;
+    EEDB::Feature*             feature = NULL;
+    EEDB::Edge*                edge = NULL;
     EEDB::MetadataSet*         mdset = NULL;
     vector<EEDB::Expression*>  expression;
 
+    //non-feature/edge objects are just passed through this module      
+    if(obj->classname() == EEDB::Feature::class_name) { feature = (EEDB::Feature*)obj; }
+    if(obj->classname() == EEDB::Edge::class_name)    { edge = (EEDB::Edge*)obj; }
+    if(!feature && !edge) { return obj; }
+        
     //if object passes overlap-test, return it
     bool ok = false;
     switch(_mdset_mode) {
       case FEATURE:
-        mdset = feature->metadataset();
-        if(_check_metadataset(mdset)) { ok = true; break; }
+        if(feature) {
+          mdset = feature->metadataset();
+          if(_check_metadataset(mdset)) { ok = true; break; }
+        } else { return obj; } //let edge pass through;
         break;
         
+      case EDGE:
+        if(edge) {
+          mdset = edge->metadataset();
+          if(_check_metadataset(mdset)) { ok = true; break; }
+        } else { return obj; } // let feature pass through
+        break;
+
       case FEATURESOURCE:
-        if(feature->feature_source()) {
+        if(feature && feature->feature_source()) {
           mdset = feature->feature_source()->metadataset();
           if(_check_metadataset(mdset)) { ok = true; break; }
         }
         break;
         
       case EXPERIMENT:
-        expression = feature->expression_array();
-        for(unsigned int i=0; i<expression.size(); i++) {
-          EEDB::Experiment *exp = expression[i]->experiment();
-          if(exp == NULL) { continue; }
-          mdset = exp->metadataset();
-          if(_check_metadataset(mdset)) { ok = true; break; }
+        if(feature) {
+          expression = feature->expression_array();
+          for(unsigned int i=0; i<expression.size(); i++) {
+            EEDB::Experiment *exp = expression[i]->experiment();
+            if(exp == NULL) { continue; }
+            mdset = exp->metadataset();
+            if(_check_metadataset(mdset)) { ok = true; break; }
+          }
         }
         break;
         
       case ALL:
         ok = true; //need to check backwards
-        mdset = feature->metadataset();
-        if(!_check_metadataset(mdset)) { ok = false; break; }
-        if(feature->feature_source()) {
-          mdset = feature->feature_source()->metadataset();
+        if(feature) {
+          mdset = feature->metadataset();
           if(!_check_metadataset(mdset)) { ok = false; break; }
+          if(feature->feature_source()) {
+            mdset = feature->feature_source()->metadataset();
+            if(!_check_metadataset(mdset)) { ok = false; break; }
+          }
+          expression = feature->expression_array();
+          for(unsigned int i=0; i<expression.size(); i++) {
+            EEDB::Experiment *exp = expression[i]->experiment();
+            if(exp == NULL) { continue; }
+            mdset = exp->metadataset();
+            if(!_check_metadataset(mdset)) { ok = false; break; }
+          }
         }
-        expression = feature->expression_array();
-        for(unsigned int i=0; i<expression.size(); i++) {
-          EEDB::Experiment *exp = expression[i]->experiment();
-          if(exp == NULL) { continue; }
-          mdset = exp->metadataset();
-          if(!_check_metadataset(mdset)) { ok = false; break; }
-        }        
+        if(edge) {
+          //TODO:
+        }
         break;
                 
       case ANY:
-        mdset = feature->metadataset();
-        if(_check_metadataset(mdset)) { ok = true; break; }
-        if(feature->feature_source()) {
-          mdset = feature->feature_source()->metadataset();
+        if(feature) {
+          mdset = feature->metadataset();
           if(_check_metadataset(mdset)) { ok = true; break; }
+          if(feature->feature_source()) {
+            mdset = feature->feature_source()->metadataset();
+            if(_check_metadataset(mdset)) { ok = true; break; }
+          }
+          expression = feature->expression_array();
+          for(unsigned int i=0; i<expression.size(); i++) {
+            EEDB::Experiment *exp = expression[i]->experiment();
+            if(exp == NULL) { continue; }
+            mdset = exp->metadataset();
+            if(_check_metadataset(mdset)) { ok = true; break; }
+          }
         }
-        expression = feature->expression_array();
-        for(unsigned int i=0; i<expression.size(); i++) {
-          EEDB::Experiment *exp = expression[i]->experiment();
-          if(exp == NULL) { continue; }
-          mdset = exp->metadataset();
-          if(_check_metadataset(mdset)) { ok = true; break; }
-        }        
+        if(edge) {
+          //TODO:
+        }
         break;
+        
+      default: break;
     }
     
     if(ok == !_inverse) { return obj; }

@@ -1,4 +1,4 @@
-/* $Id: MetadataFilter.h,v 1.3 2013/04/08 07:38:17 severin Exp $ */
+/* $Id: MetadataFilter.h,v 1.4 2024/10/03 03:37:27 severin Exp $ */
 
 /***
 
@@ -79,7 +79,7 @@ class MetadataFilter : public EEDB::SPStream {
     void  inverse(bool value) { _inverse = value; }
 
   private:
-    enum { FEATURE, FEATURESOURCE, EXPERIMENT, ALL, ANY }  _mdset_mode;
+    enum { FEATURE, EDGE, FEATURESOURCE, EXPERIMENT, ALL, ANY }  _mdset_mode;
     string                   _filter_logic;
     bool                     _inverse;
     vector<EEDB::Metadata*>  _specific_mdata;
