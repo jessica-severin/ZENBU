@@ -324,22 +324,22 @@ function eedbUserProfilePanel() {
 
   if(!userview.user) { 
     var div1 = main_div.appendChild(document.createElement('div'));
-    div1.setAttribute("style", "font-weight:bold; font-size:16px;");
-    div1.innerHTML = "Welcome to ZENBU : User Login";
+    div1.setAttribute("style", "font-weight:bold; font-size:18px;");
+    div1.innerHTML = "Welcome to ZENBU : User Login, data upload, and secured data sharing";
   
     var div3 = main_div.appendChild(document.createElement('div'));
-    div3.setAttribute("style", "margin-top:5px; font-size:12px;");
+    div3.setAttribute("style", "margin-top:5px; font-size:16px;");
     var div3b = div3.appendChild(document.createElement('div'));
-    div3b.innerHTML = "ZENBU user login provides additional features not available with guest accounts";
+    div3b.innerHTML = "ZENBU user accounts provides additional features not available with guest accounts";
   
     var ul1 = div3.appendChild(document.createElement('ul'));
-    ul1.setAttribute("style", "margin-top:0px; font-size:12px;");
+    ul1.setAttribute("style", "margin-top:0px; font-size:14px;");
     var li = ul1.appendChild(document.createElement('li'));
-    li.innerHTML = "secured data sharing for research collaboration projects";
+    li.innerHTML = "<b>data upload</b> : data uploads do not expire and users have full control of their data security";
+    var li = ul1.appendChild(document.createElement('li'));
+    li.innerHTML = "ability to save view/page configurations";
     li = ul1.appendChild(document.createElement('li'));
-    li.innerHTML = "user data upload capability";
-    li = ul1.appendChild(document.createElement('li'));
-    li.innerHTML = "private configurations not published to the general public";
+    li.innerHTML = "secured data and view/page sharing for research collaboration projects";
   
     return zenbuUserLoginPanel(); 
   }
