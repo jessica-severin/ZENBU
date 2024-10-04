@@ -1,4 +1,4 @@
-/* $Id: SPStream.cpp,v 1.110 2023/12/13 05:37:04 severin Exp $ */
+/* $Id: SPStream.cpp,v 1.112 2024/09/09 07:39:04 severin Exp $ */
 
 /***
 
@@ -110,6 +110,8 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <EEDB/SPStreams/SubfeaturesToEdges.h>
 #include <EEDB/SPStreams/MergeEdges.h>
 #include <EEDB/SPStreams/SamFlagFilter.h>
+#include <EEDB/SPStreams/GapFilterAnnotate.h>
+#include <EEDB/SPStreams/Limiter.h>
 
 
 using namespace std;
@@ -614,6 +616,7 @@ EEDB::SPStream* EEDB::SPStream::_xmlnode_create_spstream(void *xml_node) {
   if(modname == "MergeStreams")      { spstream = new EEDB::SPStreams::MergeStreams(xml_node); }
   if(modname == "FeatureEmitter")    { spstream = new EEDB::SPStreams::FeatureEmitter(xml_node); }
   if(modname == "ObjectCount")       { spstream = new EEDB::SPStreams::ObjectCount(xml_node); }
+  if(modname == "Limiter")           { spstream = new EEDB::SPStreams::Limiter(xml_node); }
   if(modname == "Proxy")             { spstream = new EEDB::SPStreams::Proxy(xml_node); }
   if(modname == "SiteFinder")        { spstream = new EEDB::SPStreams::SiteFinder(xml_node); }
   if(modname == "DemultiplexSource") { spstream = new EEDB::SPStreams::DemultiplexSource(xml_node); }
@@ -659,6 +662,7 @@ EEDB::SPStream* EEDB::SPStream::_xmlnode_create_spstream(void *xml_node) {
   if(modname == "OverlapAnnotate")           { spstream = new  EEDB::SPStreams::OverlapAnnotate(xml_node); }
   if(modname == "MetadataFilter")            { spstream = new  EEDB::SPStreams::MetadataFilter(xml_node); }
   if(modname == "MetadataManipulate")        { spstream = new  EEDB::SPStreams::MetadataManipulate(xml_node); }
+  if(modname == "GapFilterAnnotate")         { spstream = new  EEDB::SPStreams::GapFilterAnnotate(xml_node); }
 
   if(modname == "MannWhitneyRanksum")        { spstream = new  EEDB::SPStreams::MannWhitneyRanksum(xml_node); }
 
