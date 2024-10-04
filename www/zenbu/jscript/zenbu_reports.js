@@ -2954,6 +2954,7 @@ function reportsSendElementXHR(xhrObj) {
   //xhr.setRequestHeader("Content-length", xhrObj.paramXML.length);
   //xhr.setRequestHeader("Content-encoding", "x-compress, x-gzip, gzip");
   //xhr.setRequestHeader("Connection", "close");
+  //console.log(xhrObj.paramXML);
   xhr.send(xhrObj.paramXML);
 }
 
@@ -4295,7 +4296,8 @@ function reportElementLoadSourceEdges(reportElement) {
     paramXML += "</mdkey_list>";
   }
   paramXML += "</zenbu_query>\n";
-  
+  //console.log("load query"+paramXML);
+
   //var paramXML = "<zenbu_query><format>fullxml</format><mode>edges</mode><edge_search_depth>3</edge_search_depth>";
   //paramXML += "<source_ids>CCFED83C-F889-43DC-BA41-7843FCB90095::2:::EdgeSource</source_ids>";
   //paramXML += "<source_ids>CCFED83C-F889-43DC-BA41-7843FCB90095::1:::EdgeSource,CCFED83C-F889-43DC-BA41-7843FCB90095::2:::EdgeSource,CCFED83C-F889-43DC-BA41-7843FCB90095::10:::EdgeSource</source_ids>";
@@ -4624,7 +4626,7 @@ function reportsLoadElement(elementID) {
   var reportElement = current_report.elements[elementID];
   if(!reportElement) { return; }
 
-  console.log("reportsLoadElement ["+elementID+"]");
+  console.log("reportsLoadElement ["+elementID+"] datasource["+reportElement.datasource_mode+"]");
   reportsResetElement(elementID);
 
   //datasource general
@@ -4661,7 +4663,7 @@ function reportsPostprocessElement(elementID) {
   console.log("reportsPostprocessElement "+elementID);
   
   //datasource general
-  if(reportElement.datasource_mode == "feature") {
+  if(reportElement.datasource_mode == "feature" || reportElement.datasource_mode == "search") {
     reportElementPostprocessFeaturesQuery(reportElement);
   }
   if(reportElement.datasource_mode == "edge") {
@@ -4855,6 +4857,7 @@ function reportsDrawElement(elementID) {
   if(reportElement.content_height && !reportElement.auto_content_height) { style += "height: "+(reportElement.content_height)+"px; "; }
   if(is_hidden == "none") { style += "display:none; "; }  //debug for tab-layout children
   main_div.setAttribute('style', style);
+  if(reportElement.backgroundColor) { main_div.style.backgroundColor = reportElement.backgroundColor; }
 
   if(current_report.edit_page_configuration) {
     main_div.setAttribute("onmousedown", "reportElementEvent(\""+reportElement.elementID+"\", 'main_div_resize_mousedown');");
@@ -4862,7 +4865,7 @@ function reportsDrawElement(elementID) {
   }
   reportElementDrawTitlebar(reportElement);
   
-  if(datasourceElement.loading) {
+  if(datasourceElement.loading && !reportElement.loading_custom_draw) {
     var load_info = main_div.appendChild(document.createElement('span'));
     load_info.setAttribute('style', "font-size:11px; ;margin-left:15px;");
     load_info.innerHTML = "loading...";
@@ -4873,6 +4876,9 @@ function reportsDrawElement(elementID) {
   if(reportElement.drawElement) {
     reportElement.drawElement();
   }
+  
+  if(datasourceElement.loading) { return; }
+  
   //if(reportElement.element_type == "table") {
   //  //reportsDrawTable(reportElement);
   //  reportElement.drawElement();
@@ -4905,18 +4911,20 @@ function reportsDrawElement(elementID) {
   }
   
   var master_div = document.getElementById("zenbuReportsDiv");
-  var masterRect = master_div.getBoundingClientRect();
-  //console.log("masterRect x:"+masterRect.x+" y:"+masterRect.y+" left:"+masterRect.left+" top:"+masterRect.top+ " bottom:"+masterRect.bottom);
-  var mainRect = main_div.getBoundingClientRect();
-  //console.log("mainRect "+reportElement.main_div_id+" rect x:"+mainRect.x+" y:"+mainRect.y+" left:"+mainRect.left+" top:"+mainRect.top+" bottom:"+mainRect.bottom);
-  if(masterRect.bottom < mainRect.bottom + 10) {
-    //console.log("master_div top:"+masterRect.top+" bottom:"+masterRect.bottom+" height:"+masterRect.height+" adjust because "+reportElement.elementID + " bottom is "+mainRect.bottom);
-    var t_height = mainRect.bottom - masterRect.top + 10;
-    if(t_height < 100) { t_height = 100; }
-    //console.log("master_div["+elementID+"] new height: "+t_height);
-    master_div.style.height = t_height + "px";
+  if(master_div) {
+    var masterRect = master_div.getBoundingClientRect();
+    //console.log("masterRect x:"+masterRect.x+" y:"+masterRect.y+" left:"+masterRect.left+" top:"+masterRect.top+ " bottom:"+masterRect.bottom);
+    var mainRect = main_div.getBoundingClientRect();
+    //console.log("mainRect "+reportElement.main_div_id+" rect x:"+mainRect.x+" y:"+mainRect.y+" left:"+mainRect.left+" top:"+mainRect.top+" bottom:"+mainRect.bottom);
+    if(masterRect.bottom < mainRect.bottom + 10) {
+      //console.log("master_div top:"+masterRect.top+" bottom:"+masterRect.bottom+" height:"+masterRect.height+" adjust because "+reportElement.elementID + " bottom is "+mainRect.bottom);
+      var t_height = mainRect.bottom - masterRect.top + 10;
+      if(t_height < 100) { t_height = 100; }
+      //console.log("master_div["+elementID+"] new height: "+t_height);
+      master_div.style.height = t_height + "px";
+    }
   }
-
+  
   var endtime = new Date();
   var runtime = (endtime.getTime() - starttime.getTime());
   console.log("reportsDrawElement "+reportElement.elementID+" "+(runtime)+"msec");
@@ -5223,6 +5231,21 @@ function reportElementTriggerCascade(reportElement, on_trigger) {
         reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_location);
       } else if(datasource.selected_feature) {
         reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_feature.chromloc);
+      } else if(datasource.selected_edge) {
+        console.log("select_location with EDGE, use opt:"+trigger.options);
+        switch(trigger.options) {
+          case "left_feature":
+            console.log("select_location with EDGE ["+trigger.options+"] : "+ datasource.selected_edge.feature1.chromloc);
+            reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_edge.feature1.chromloc);
+	    break;
+          case "right_feature":
+            console.log("select_location with EDGE ["+trigger.options+"] : "+ datasource.selected_edge.feature2.chromloc);
+            reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_edge.feature2.chromloc);
+	    break;
+          default:
+            reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_edge.chromloc);
+	    break;
+        }
       }
       //reportElementCascadeEvent(trigger.targetElement, 'select', datasource.selected_edge.id); }
       //reportsDrawElement(trigger.targetElement.elementID);
@@ -5650,7 +5673,8 @@ function reportsPrepElement(reportElement) {
     var auxID = reportElement.main_div_id + "_subpanel_aux";
     var auxdiv = document.getElementById(auxID);
     if(!auxdiv) {
-      auxdiv = master_div.appendChild(document.createElement('div'));
+      auxdiv = document.createElement('div');
+      if(master_div) { master_div.appendChild(auxdiv); }
       auxdiv.id = auxID;
       reportElement.auxdiv = auxdiv;
       auxdiv.setAttribute('style', "position:absolute; z-index:10; left:0px; top:0px; width:100px;");
@@ -5660,7 +5684,7 @@ function reportsPrepElement(reportElement) {
     var headerID = reportElement.main_div_id + "_header_div";
     var header_div = document.getElementById(headerID);
     if(!header_div) {
-      header_div = main_div.appendChild(document.createElement('div'));
+      header_div = reportElement.main_div.appendChild(document.createElement('div'));
     }
     reportElement.header_div = header_div;
   }
@@ -5676,6 +5700,7 @@ function reportsDrawLayoutElement(layoutElement, traverse_down) {
 
   console.log("reportsDrawLayoutElement ["+layoutElement.elementID+"] "+layoutElement.layout_type);
   var master_div = document.getElementById("zenbuReportsDiv");
+  if(!master_div) { return; }
   var masterRect = master_div.getBoundingClientRect();
   //console.log("masterRect x:"+masterRect.x+" y:"+masterRect.y+" left:"+masterRect.left+" top:"+masterRect.top+ " bottom:"+masterRect.bottom);
 
@@ -7638,6 +7663,7 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
     if(reportElement.datasource_mode != "shared_element") {
       reportElement.datasourceElementID = ""; //need to clear if not in shared mode
     }
+    if(!reportElement.load_on_page_init) { needReload=0; }  //never trigger reload on accept unless load_on_page_init is also set
 
     //check if anything changed
     //var new_atr_count = 0;
@@ -7680,6 +7706,7 @@ function reportElementDrawTitlebar(reportElement) {
   if(!current_report.edit_page_configuration && !show_titlebar) { return; }
     
   var master_div = document.getElementById("zenbuReportsDiv");
+  if(!master_div) { return; }
   var masterRect = master_div.getBoundingClientRect();
   //console.log("masterRect x:"+masterRect.x+" y:"+masterRect.y+" left:"+masterRect.left+" top:"+masterRect.top+ " bottom:"+masterRect.bottom);
 
@@ -10460,6 +10487,8 @@ function reportElementCascadeTriggersInterface(reportElement) {
   var configdiv = document.getElementById(cfgID);
   if(!configdiv) { return; }
   
+  var datasourceElement = reportElement.datasource();
+
   configdiv.appendChild(document.createElement('hr'));
   
   var cascadesID = reportElement.main_div_id + "_config_cascades_div";
@@ -10518,7 +10547,7 @@ function reportElementCascadeTriggersInterface(reportElement) {
     for(var trig_idx=0; trig_idx<reportElement.newconfig.cascade_triggers.length; trig_idx++){
       var trigger = reportElement.newconfig.cascade_triggers[trig_idx];
       if(!trigger) { continue; }
-      //console.log("trigger "+reportElement.elementID+" ["+trig_idx+"] on["+trigger.on_trigger+"]  action["+trigger.action_mode+" - "+trigger.options+"]");
+      console.log("trigger "+reportElement.elementID+" ["+trig_idx+"] on["+trigger.on_trigger+"]  action["+trigger.action_mode+" - "+trigger.options+"]");
       //if(!trigger.targetElement) { trigger.targetElement = current_report.elements[trigger.targetElementID]; }
       //if(!trigger.targetElement) { continue; }
 
@@ -10655,11 +10684,15 @@ function reportElementCascadeTriggersInterface(reportElement) {
       if(trigger.action_mode == "set_filter_features") {
         opts2 = ["clear", "selection", "subnetwork", "all_features"];
       }
+      if(trigger.action_mode=="select_location" && datasourceElement.datasource_mode == "edge") { 
+        //show edge position options         
+        opts2 = ["edge", "left_feature", "right_feature"];
+      }
       if(reportElement.element_type=="category" && 
          (trigger.action_mode == "search_filter" || trigger.action_mode == "set_load_filter")) {
         opts2 = ["clear", "category_filter"]; 
       }
-
+      
       if(opts2.length>0) {
         var span1 = td1.appendChild(document.createElement('span'));
         span1.innerHTML = " send: ";

@@ -1,4 +1,4 @@
-/* $Id: zenbu_search_element.js,v 1.1 2020/10/05 07:20:29 severin Exp $ */
+/* $Id: zenbu_search_element.js,v 1.2 2024/06/21 07:12:45 severin Exp $ */
 
 // ZENBU zenbu_search_element.js
 //
@@ -39,6 +39,7 @@ function ZenbuSearchElement(elementID) {
   //create empty, uninitialized Category report-element object
   //console.log("create ZenbuSearchElement");
   this.element_type = "search";
+  this.loading_custom_draw = true;
   if(!elementID) { elementID = this.element_type + (newElementID++); }
   this.elementID = elementID;
   
@@ -58,6 +59,7 @@ function ZenbuSearchElement(elementID) {
   this.signal_datatype = "";
   this.filter_abs = false;
   this.hide_zero = true;
+  this.show_result_counts = true;
   
   //methods
   this.initFromConfigDOM  = ZenbuSearchElement_initFromConfigDOM;  //pass a ConfigDOM object
@@ -71,6 +73,10 @@ function ZenbuSearchElement(elementID) {
   this.reconfigureParam   = ZenbuSearchElement_reconfigureParam;
 
   this.configSubpanel     = ZenbuSearchElement_configSubpanel;
+  
+  this.datasourceSearch   = ZenbuSearchElement_datasourceSearch;
+  
+  if(current_report) { current_report.elements[this.elementID] = this; }
 
   return this;
 }
@@ -86,6 +92,9 @@ function ZenbuSearchElement_initFromConfigDOM(elementDOM) {
   var element_type = elementDOM.getAttribute("element_type");
   if(element_type != "search") { return false; }
   
+  this.show_result_counts = true;
+  if(elementDOM.getAttribute("show_result_counts") == "false") { this.show_result_counts = false; }
+  
   return true;
 }
 
@@ -93,6 +102,9 @@ function ZenbuSearchElement_initFromConfigDOM(elementDOM) {
 function ZenbuSearchElement_generateConfigDOM() {
   //TODO: need to figure this out, not currently using
   var elementDOM = reportsGenerateElementDOM(this);  //superclass method eventually
+  
+  if(this.show_result_counts) { elementDOM.setAttribute("show_result_counts", "true"); }
+  else { elementDOM.setAttribute("show_result_counts", "false"); }
   
   return elementDOM;
 }
@@ -117,7 +129,12 @@ function ZenbuSearchElement_elementEvent(mode, value, value2) {
 
 function ZenbuSearchElement_reconfigureParam(param, value, altvalue) {
   if(!this.newconfig) { return; }
-  //TODO: eventually a superclass method here, but for now a hybrid function=>obj.method approach    
+  
+  if(param == "show_result_counts")   { this.newconfig.show_result_counts = value; }
+  
+  if(param == "accept-reconfig") {
+    if(this.newconfig.show_result_counts !== undefined) { this.show_result_counts = this.newconfig.show_result_counts; }
+  }
 }
 
 
@@ -157,6 +174,34 @@ function ZenbuSearchElement_postprocess() {
 
 function ZenbuSearchElement_configSubpanel() {
   if(!this.config_options_div) { return; }
+  
+  var datasourceElement = this.datasource();
+
+  var configdiv = this.config_options_div;
+    
+  var labelDiv = configdiv.appendChild(document.createElement('div'));
+  labelDiv.setAttribute("style", "font-size:12px; font-family:arial,helvetica,sans-serif;");
+  var span1 = labelDiv.appendChild(document.createElement('span'));
+  span1.setAttribute("style", "font-size:12px; margin-right:7px; font-family:arial,helvetica,sans-serif; font-weight:bold;");
+  span1.innerHTML ="Visualization:";
+
+  tdiv2  = configdiv.appendChild(document.createElement('div'));
+  tdiv2.setAttribute('style', "margin-top: 5px;");
+  tcheck = tdiv2.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 0px 1px 0px 5px;");
+  tcheck.setAttribute('type', "checkbox");
+  var val1 = this.show_result_counts;
+  if(this.newconfig && this.newconfig.show_result_counts != undefined) { val1 = this.newconfig.show_result_counts; }
+  if(val1) { tcheck.setAttribute('checked', "checked"); }
+  tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'show_result_counts', this.checked);");
+  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2.innerHTML = "show search result counts";
+
+  configdiv.appendChild(document.createElement('hr'));
+
+  return configdiv;
+  
+  
   /*
   var signal_datatype = this.signal_datatype;
   if(this.newconfig && this.newconfig.signal_datatype != undefined) { signal_datatype = this.newconfig.signal_datatype; }
@@ -242,6 +287,79 @@ function ZenbuSearchElement_configSubpanel() {
 
 //=================================================================================
 //
+// custom code for converting search_filter into a webservice filter-load
+//
+//=================================================================================
+
+function ZenbuSearchElement_datasourceSearch() {
+  if(this.newconfig.search_data_filter) { this.search_data_filter = this.newconfig.search_data_filter; }
+  var filter = this.search_data_filter;
+  console.log("direct webservice search mode:", this.elementID, " filter: ["+filter+"]");
+  
+  //copy the search_data_filter into load_filter to perform server side filter
+  filter = filter.replace(/^\s+/, '').replace(/\s+$/, ''); //remove leading and trailing spaces
+  console.log("load_filter", filter);
+  if(!filter) { return; }
+  
+  //using the same "search" webservice as the zenbu genome browser feature search system
+
+  var elementID = this.elementID;
+  
+  reportsResetElement(elementID);
+  
+  //clear previous loaded data
+  this.features = new Object();
+  this.feature_array = new Array();
+  this.edge_array = new Array();
+  this.edge_count = 0;
+  this.filter_count = 0;
+  this.raw_count = 0;
+
+  this.selected_id = ""; //selected row in the table
+  this.selected_feature = null; //selected row in the table
+  this.selected_edge = null; //selected row in the table
+  this.selected_source = null; //selected row in the table
+  this.selected_location = null; //selected location
+
+  this.table_num_pages = 0;
+  this.table_page = 1;
+
+  var paramXML = "<zenbu_query><format>fullxml</format><mode>search</mode>";
+  paramXML += "<source_ids>"+this.source_ids+"</source_ids>";
+  if(filter) {
+    paramXML += "<name>"+filter+"</name>";
+    console.log("load "+this.elementID+" features with load_filter ["+filter+"]");
+  }
+  paramXML += "</zenbu_query>\n";
+  
+  if(reports_pending_XHRs[this.elementID] != null) {
+    var xhrObj = reports_pending_XHRs[this.elementID];
+    if(xhrObj.xhr != null) { xhrObj.xhr=null; }
+    reports_pending_XHRs[this.elementID] = null;
+    delete reports_pending_XHRs[this.elementID];
+  }
+  delete reports_active_XHRs[this.elementID];
+  
+  var xhrObj        = new Object;
+  xhrObj.elementID  = this.elementID;
+  xhrObj.xhr        = null; //not active yet
+  xhrObj.paramXML   = paramXML;
+  xhrObj.mode       = "search";  //eedb_search.cgi
+  
+  this.loading = true;
+  this.load_retry = 0;
+  //document.getElementById("message").innerHTML += " prepare["+this.elementID+"]";
+  
+  reports_pending_XHRs[this.elementID] = xhrObj;
+  setTimeout("reportsSendPendingXHRs();", 30); //30msec
+  
+  reportsDrawElement(elementID);  //clear and show loading
+  
+  reportElementTriggerCascade(this, "preload");  //on_trigger==preload happens before element loads/postprocess
+}
+
+//=================================================================================
+//
 // Draw section
 //
 //=================================================================================
@@ -289,16 +407,27 @@ function ZenbuSearchElement_draw() {
   //filterInput.setAttribute('style', "width:235px; margin: 5px 5px 3px 5px; font-size:10px; font-family:arial,helvetica,sans-serif;");
   filterInput.setAttribute('type', "text");
   filterInput.setAttribute('value', filter);
-  filterInput.setAttribute("onkeydown", "if(event.keyCode==13) { reportElementReconfigParam(\""+datasourceElement.elementID+"\", 'search_data_filter_search'); }");    
   filterInput.setAttribute("onkeyup", "reportElementReconfigParam(\""+ datasourceElement.elementID +"\", 'search_data_filter', this.value);");
   filterInput.setAttribute("onchange", "reportElementReconfigParam(\""+ datasourceElement.elementID +"\", 'search_data_filter', this.value);");
   filterInput.setAttribute("onblur", "reportElementReconfigParam(\""+ datasourceElement.elementID +"\", 'search_data_filter', this.value);");
+  if(this.datasource_mode=="shared_element") {
+    filterInput.setAttribute("onkeydown", "if(event.keyCode==13) { reportElementReconfigParam(\""+datasourceElement.elementID+"\", 'search_data_filter_search'); }");
+  } else {
+    filterInput.onkeydown= function(searchElement) { return function() { 
+      if(event.keyCode==13) { searchElement.datasourceSearch(); }
+    };}(this);
+  }
 
   search_button = div1.appendChild(document.createElement("button"));
   search_button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
   //button.setAttribute("onmouseover", "eedbMessageTooltip(\"search experiments and filter\",100);");
   //button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-  search_button.setAttribute("onclick", "reportElementReconfigParam(\""+ datasourceElement.elementID +"\", 'search_data_filter_search');");
+  if(this.datasource_mode=="shared_element") {
+    search_button.setAttribute("onclick", "reportElementReconfigParam(\""+ datasourceElement.elementID +"\", 'search_data_filter_search');");
+    //search_button.onclick = function() { reportElementReconfigParam(datasourceElement.elementID, 'search_data_filter_search'); }
+  } else {
+    search_button.onclick= function(searchElement) { return function() { searchElement.datasourceSearch(); };}(this);
+  }
   search_button.innerHTML = "search";
 
   clear_button = div1.appendChild(document.createElement("button"));
@@ -317,24 +446,35 @@ function ZenbuSearchElement_draw() {
   tdiv.setAttribute("style", "font-size:10px; margin-left:5px; margin-left:40px;");
   tspan = tdiv.appendChild(document.createElement('span'));
   tspan.innerHTML = "searchable data";
-  if(feature_count==0 && edge_count==0 && source_count==0) {
+  if(this.source_ids != "") {
+    //direct search via webservice query mode
+    tspan.innerHTML = "";
+    if(this.loading) { tspan.innerHTML = "searching...."; }
+    //return searchdiv;
+  }
+  if(feature_count==0 && edge_count==0 && source_count==0 && this.source_ids=="") {
     tspan.innerHTML = "no data to search";
     search_button.setAttribute('disabled', "disabled");
   }
-  if(feature_count>0) {
+  if(feature_count>0 && this.show_result_counts) {
     tspan = tdiv.appendChild(document.createElement('span'));
     tspan.setAttribute("style", "padding-left:5px;");
     tspan.innerHTML = "  features:<i>"+ feature_count+ "</i>";
   }
-  if(edge_count>0) {
+  if(edge_count>0 && this.show_result_counts) {
     tspan = tdiv.appendChild(document.createElement('span'));
     tspan.setAttribute("style", "padding-left:5px;");
     tspan.innerHTML += "  edges:<i>"+ edge_count+"</i>";
   }
-  if(source_count>0) {
+  if(source_count>0 && this.show_result_counts) {
     tspan = tdiv.appendChild(document.createElement('span'));
     tspan.setAttribute("style", "padding-left:5px;");
     tspan.innerHTML += "  sources:<i>"+ source_count+"</i>";
+  }
+
+  if(this.source_ids != "") {
+    //direct search via webservice query mode
+    return searchdiv;
   }
 
   //results display

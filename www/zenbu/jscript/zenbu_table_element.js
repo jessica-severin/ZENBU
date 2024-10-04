@@ -36,6 +36,7 @@ function ZenbuTableElement(elementID) {
   //create empty, uninitialized Category report-element object
   //console.log("create ZenbuTableElement");
   this.element_type = "table";
+  this.loading_custom_draw = true;
   if(!elementID) { elementID = this.element_type + (newElementID++); }
   this.elementID = elementID;
   
@@ -70,6 +71,9 @@ function ZenbuTableElement(elementID) {
   //internal methods
   this.pagingInterface    = zenbuTableElement_pagingInterface
   this.tableSortFunc     = zenbuTableElement_tableSortFunc;
+  
+  if(current_report) { current_report.elements[this.elementID] = this; }
+
   return this;
 }
 
@@ -358,12 +362,19 @@ function zenbuTableElement_showSelections() {
 //==========  Table draw =======================================================================
 
 function zenbuTableElement_draw() {
-  if(this.loading) { return; }
-
+  //if(this.loading) { return; }
+  
   var datasourceElement = this.datasource();
 
   var main_div =  this.main_div;
   if(!main_div) { return; }
+
+  if(datasourceElement.loading) {
+    var load_info = main_div.appendChild(document.createElement('span'));
+    load_info.setAttribute('style', "font-size:11px; ;margin-left:15px;");
+    load_info.innerHTML = "loading...";
+    return;
+  }
 
   //resize to pagesize logic
   if(this.resized) {
@@ -572,17 +583,17 @@ function zenbuTableElement_draw() {
 
     //in google Chrome, can not mix onclick and onmouseover, so must use onmousedown instead
     if(feature) {
-      tr.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select', '"+ feature.id+"');");
+      tr.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select', '"+ feature.id+"');");
       tr.setAttribute("onmouseover", "zenbuTableElement_hoverInfo('"+this.elementID+"', 'feature', '"+feature.id+"');");
       tr.setAttribute("onmouseout", "eedbClearSearchTooltip();");
     }
     if(edge) {
-      tr.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select', '"+ edge.id+"');");
+      tr.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select', '"+ edge.id+"');");
       tr.setAttribute("onmouseover", "zenbuTableElement_hoverInfo('"+this.elementID+"', 'edge', '"+edge.id+"');");
       tr.setAttribute("onmouseout", "eedbClearSearchTooltip();");
     }
     if(source) {
-      tr.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select', '"+ source.id+"');");
+      tr.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select', '"+ source.id+"');");
       tr.setAttribute("onmouseover", "zenbuTableElement_hoverInfo('"+this.elementID+"', 'source', '"+source.id+"');");
       tr.setAttribute("onmouseout", "eedbClearSearchTooltip();");
     }
@@ -725,7 +736,7 @@ function zenbuTableElement_draw() {
           a1.setAttribute("target", "top");
           a1.setAttribute("href", "#");
           //a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select_location', '"+t_object.id+"');");
-          a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select_location', '"+t_object.chromloc+"');");
+          a1.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select_location', '"+t_object.chromloc+"');");
           a1.setAttribute("onclick", "return false;");
           if(datatype == "location_link") { a1.innerHTML = dtype_col.title; }
           else { a1.innerHTML = t_object.chromloc; }
@@ -734,7 +745,7 @@ function zenbuTableElement_draw() {
         var a1 = td.appendChild(document.createElement('a'));
         a1.setAttribute("target", "top");
         a1.setAttribute("href", "#"+datatype);
-        a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'hyperlink_trigger', '"+t_object.id+"', '"+datatype+"');");
+        a1.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'hyperlink_trigger', '"+t_object.id+"', '"+datatype+"');");
         a1.setAttribute("onclick", "return false;");
         a1.innerHTML = dtype_col.title;
       }
