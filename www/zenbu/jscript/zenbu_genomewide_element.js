@@ -1,4 +1,4 @@
-/* $Id: zenbu_genomewide_element.js,v 1.29 2023/04/28 06:31:44 severin Exp $ */
+/* $Id: zenbu_genomewide_element.js,v 1.30 2024/08/27 06:14:29 severin Exp $ */
 
 // ZENBU
 //
@@ -529,8 +529,10 @@ function zenbuGenomeWideElement_postprocess() {
   }
   if(max_length>0) {
     var range = region_ranges[max_chrom];
+    this.max_region = max_chrom+":"+range.start+".."+range.end;
     this.selected_location = max_chrom+":"+range.start+".."+range.end;
-    datasourceElement.selected_location = this.selected_location;
+    datasourceElement.max_region = this.max_region;
+    //datasourceElement.selected_location = this.max_region;
     //console.log("postprocess["+this.elementID+"] MAX range, selected_location set: "+this.selected_location);
   }
 
@@ -788,7 +790,12 @@ function zenbuGenomeWideElement_drawChromosomeView() {
     if(bbox.width > max_name_width) { max_name_width = bbox.width; }
   }
   console.log("max chrom name width: "+max_name_width);
-  this.max_name_width = max_name_width;
+  if(this.max_name_width != max_name_width) {
+    //the bbox doesn't always work if view is off-screen (like in a hidden tab)
+    console.log("max_name_width changed: "+this.max_name_width+" -> "+max_name_width);
+    this.max_name_width = max_name_width;
+    this.chromview_render = null; //clear to re-render
+  }
   this.render_width = width;
   
   var g3 = g1.appendChild(document.createElementNS(svgNS,'g'));
@@ -1318,7 +1325,12 @@ function zenbuGenomeWideElement_drawManhattanPlot() {
   //console.log("chrom name max_name_width="+max_name_width);
   var offset = 25-max_name_width;
   g2.setAttribute('transform', "translate(0,"+offset+")");
-  this.manhattan_bottom = height+offset-50;
+  if(this.manhattan_bottom != height+offset-50) {
+    //the bbox doesn't always work if view is off-screen (like in a hidden tab)
+    console.log("manhattan_bottom changed: "+this.manhattan_bottom+" -> "+(height+offset-50));
+    this.manhattan_bottom = height+offset-50;
+    this.manhattan_render = null; //clear to re-render
+  }
 
   //draw x-axis label "chromosome"
   var text = g1.appendChild(document.createElementNS(svgNS,'text'));
