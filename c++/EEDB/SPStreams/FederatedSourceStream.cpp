@@ -1,4 +1,4 @@
-/* $Id: FederatedSourceStream.cpp,v 1.92 2020/03/02 08:26:32 severin Exp $ */
+/* $Id: FederatedSourceStream.cpp,v 1.93 2024/06/25 06:58:43 severin Exp $ */
 
 /***
 
@@ -415,6 +415,10 @@ void  EEDB::SPStreams::FederatedSourceStream::clear_seed_peers() {
   if(_source_stream) { _source_stream->release(); _source_stream=NULL; }
 }
 
+bool  EEDB::SPStreams::FederatedSourceStream::has_seed_peers() {
+  if(!_seed_peers.empty()) { return true; }
+  return false;
+}
 
 /***** add_peer_id_filter
   Description: add a list of federated source IDS to be used for configuring

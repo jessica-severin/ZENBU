@@ -1,5 +1,5 @@
 
-/* $Id: FederatedSourceStream.h,v 1.23 2015/01/22 05:01:11 severin Exp $ */
+/* $Id: FederatedSourceStream.h,v 1.24 2024/06/25 06:58:43 severin Exp $ */
 
 /***
 
@@ -91,6 +91,7 @@ class FederatedSourceStream : public EEDB::SPStream {
 
     void    add_seed_peer(EEDB::Peer* peer);
     void    clear_seed_peers();
+    bool    has_seed_peers();
     void    set_peer_search_depth(int value);
     
     void    add_peer_id_filter(string id);
