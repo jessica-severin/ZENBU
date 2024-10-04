@@ -1,4 +1,4 @@
-/* $Id: WebBase.cpp,v 1.235 2024/05/31 06:12:26 severin Exp $ */
+/* $Id: WebBase.cpp,v 1.237 2024/09/09 07:28:24 severin Exp $ */
 
 /***
 
@@ -1503,10 +1503,13 @@ void  EEDB::WebServices::WebBase::set_federation_seeds(EEDB::SPStream*  spstream
     fprintf(stderr, "set_federation_seeds %ld [%s]\n", (long)spstream, spstream->classname());
     EEDB::SPStreams::FederatedSourceStream  *fstream = (EEDB::SPStreams::FederatedSourceStream*)spstream;
     
+    //this will prevent the stream from being rebuild/cloned with seeds already set
+    if(fstream->has_seed_peers()) { return; } 
+
     fstream->set_peer_search_depth(_peer_search_depth);
     fstream->allow_full_federation_search(false);
-    fstream->clone_peers_on_build(true);
-    
+    fstream->clone_peers_on_build(true); //this will break the dynamically generated sources since it rebuilds the stream
+
     //first clear any previous seed settings
     fstream->clear_seed_peers();
     
@@ -1820,6 +1823,65 @@ void EEDB::WebServices::WebBase::show_single_object() {
       EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
       if(peer) { printf("%s\n", peer->xml().c_str()); }
       print_object_xml(obj);
+    }
+    
+    if(obj->classname() == EEDB::Edge::class_name) {
+      //need to fetch the edge features
+      //fprintf(stderr, "single fetch edge\n");
+      EEDB::Edge *edge = (EEDB::Edge*)obj;
+      if(!edge->feature1()) {
+        //fprintf(stderr, "fetch feature1\n");
+        string id1 = edge->feature1_dbid();
+        size_t p1;
+        if((p1 = id1.find("::")) != string::npos) {
+          string uuid = id1.substr(0, p1);
+          _filter_peer_ids[uuid] = true;
+          //fprintf(stderr, "add peer [%s]\n", uuid.c_str());
+        }
+        stream = source_stream();  
+        EEDB::Feature *f1 = (EEDB::Feature*)stream->fetch_object_by_id(id1);
+        if(f1) {
+          edge->feature1(f1);
+        }
+      }
+      if(!edge->feature2()) {
+        //fprintf(stderr, "fetch feature2\n");
+        string id2 = edge->feature2_dbid();
+        size_t p1;
+        if((p1 = id2.find("::")) != string::npos) {
+          string uuid = id2.substr(0, p1);
+          _filter_peer_ids[uuid] = true;
+          //fprintf(stderr, "add peer [%s]\n", uuid.c_str());
+        }
+        stream = source_stream();  
+        EEDB::Feature *f2 = (EEDB::Feature*)stream->fetch_object_by_id(id2);
+        if(f2) {
+          edge->feature2(f2);
+        }
+      }      
+      
+      if(edge->feature1()) {         
+        string uuid = edge->feature1()->peer_uuid();
+        EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
+        if(peer) { printf("%s\n", peer->xml().c_str()); }
+        print_object_xml(edge->feature1());
+        //fprintf(stderr, "%s\n", edge->feature1()->xml().c_str());
+      }
+      if(edge->feature2()) {
+        string uuid = edge->feature2()->peer_uuid();
+        EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
+        if(peer) { printf("%s\n", peer->xml().c_str()); }
+        print_object_xml(edge->feature2());\
+        //fprintf(stderr, "%s\n", edge->feature2()->xml().c_str());
+      }
+      if(edge->edge_source()) {
+        string uuid = edge->edge_source()->peer_uuid();
+        EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
+        if(peer) { printf("%s\n", peer->xml().c_str()); }
+        print_object_xml(edge->edge_source());\
+        //fprintf(stderr, "%s\n", edge->feature2()->xml().c_str());
+      }
+      //fprintf(stderr, "%s\n", edge->xml().c_str());
     }
   }
   stream->disconnect();  
