@@ -28,14 +28,14 @@ CREATE TABLE `assembly` (
   `taxon_name` varchar(255) default NULL,
   `sequence_loaded` char(1) NOT NULL default '',
   PRIMARY KEY  (`assembly_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=Aria DEFAULT CHARSET=latin1;
 
 CREATE TABLE `assembly_2_metadata` (
   `assembly_id` int(11) default NULL,
   `metadata_id` int(11) default NULL,
   KEY `assembly_id` (`assembly_id`),
   KEY `metadata_id` (`metadata_id`)
-) ENGINE=MyISAM;
+) ENGINE=Aria;
 
 --
 -- Table structure for table `chrom`
@@ -54,7 +54,7 @@ CREATE TABLE `chrom` (
   `description` char(255) default '',
   PRIMARY KEY  (`chrom_id`),
   UNIQUE KEY `uqname` (`chrom_name`,`assembly_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=Aria DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 
 
 --
@@ -70,7 +70,7 @@ CREATE TABLE `chrom_chunk` (
   PRIMARY KEY  (`chrom_chunk_id`),
   UNIQUE KEY `uniq_chunk` (`chrom_id`,`chrom_start`,`chrom_end`),
   KEY `chrom_name_id` (`chrom_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
+) ENGINE=Aria DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 --
 -- Table structure for table `chrom_chunk_seq`
@@ -81,7 +81,7 @@ CREATE TABLE `chrom_chunk_seq` (
   `length` int(10) NOT NULL default '0',
   `sequence` longtext NOT NULL,
   PRIMARY KEY  (`chrom_chunk_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 MAX_ROWS=10000000 AVG_ROW_LENGTH=19000;
+) ENGINE=Aria DEFAULT CHARSET=latin1 MAX_ROWS=10000000 AVG_ROW_LENGTH=19000;
 
 --
 -- Table structure for table `experiment`
@@ -101,7 +101,7 @@ CREATE TABLE `experiment` (
   `create_date` datetime NOT NULL default CURRENT_TIMESTAMP,
   PRIMARY KEY  (`experiment_id`),
   UNIQUE KEY `experiment_unq_name` USING BTREE (`exp_accession`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=Aria DEFAULT CHARSET=latin1;
 
 
 --
@@ -117,7 +117,7 @@ CREATE TABLE `experiment_2_metadata` (
   UNIQUE KEY `experiment_2_metadata_uq` USING BTREE (`experiment_id`,`metadata_id`),
   KEY `experiment_id` USING BTREE (`experiment_id`),
   KEY `metadata_id` USING BTREE (`metadata_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=Aria DEFAULT CHARSET=latin1;
 
 
 --
@@ -133,7 +133,7 @@ CREATE TABLE `experiment_2_symbol` (
   UNIQUE KEY `experiment_2_symbol_uq` USING BTREE (`experiment_id`,`symbol_id`),
   KEY `symbol_id` (`symbol_id`),
   KEY `experiment_id` USING BTREE (`experiment_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=Aria DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `experiment_2_datatype`
@@ -145,7 +145,7 @@ CREATE TABLE `experiment_2_datatype` (
   UNIQUE KEY `experiment_2_datatype_uq` USING BTREE (`experiment_id`,`datatype_id`),
   KEY `experiment_id` (`experiment_id`),
   KEY `datatype_id` (`datatype_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=Aria DEFAULT CHARSET=latin1;
 
 
 --
@@ -166,7 +166,7 @@ CREATE TABLE `feature` (
   KEY `chrom_id` (`chrom_id`),
   KEY `feature_source_id` (`feature_source_id`),
   KEY `primary_name` (`primary_name`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
+) ENGINE=Aria DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 --
 -- Table structure for table `feature_2_chunk`
@@ -177,7 +177,7 @@ CREATE TABLE `feature_2_chunk` (
   `chrom_chunk_id` int(11) default NULL,
   KEY `feature_id` (`feature_id`),
   KEY `chrom_chunk_id` (`chrom_chunk_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
+) ENGINE=Aria DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 --
 -- Table structure for table `feature_2_metadata`
@@ -188,7 +188,7 @@ CREATE TABLE `feature_2_metadata` (
   `metadata_id` int(11) default NULL,
   KEY `feature_id` (`feature_id`),
   KEY `metadata_id` USING BTREE (`metadata_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
+) ENGINE=Aria DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 --
 -- Table structure for table `feature_2_symbol`
@@ -199,7 +199,7 @@ CREATE TABLE `feature_2_symbol` (
   `symbol_id` int(11) default NULL,
   KEY `feature_id` (`feature_id`),
   KEY `symbol_id` (`symbol_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
+) ENGINE=Aria DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 --
 -- Table structure for table `expression`
@@ -215,7 +215,7 @@ CREATE TABLE `expression` (
   PRIMARY KEY  (`expression_id`),
   KEY `feature_id` (`feature_id`),
   KEY `experiment_id` (`experiment_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
+) ENGINE=Aria DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 --
 -- Table structure for table `expression_datatype`
@@ -226,7 +226,7 @@ CREATE TABLE `expression_datatype` (
   `datatype` char(64) NOT NULL default '',
   PRIMARY KEY  (`datatype_id`),
   UNIQUE KEY `datatype_unq` (`datatype`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=Aria DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `edge`
@@ -244,7 +244,7 @@ CREATE TABLE `edge` (
   KEY `feature1_id` (`feature1_id`),
   KEY `feature2_id` (`feature2_id`),
   KEY `edge_source_id` (`edge_source_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
+) ENGINE=Aria DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 --
 -- Table structure for table `edge_2_metadata`
@@ -255,7 +255,7 @@ CREATE TABLE `edge_2_metadata` (
   `metadata_id` int(11) default NULL,
   KEY `edge_id` USING BTREE (`edge_id`),
   KEY `metadata_id` USING BTREE (`metadata_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
+) ENGINE=Aria DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 --
 -- Table structure for table `edge_2_symbol`
@@ -266,7 +266,7 @@ CREATE TABLE `edge_2_symbol` (
   `symbol_id` int(11) default NULL,
   KEY `symbol_id` USING BTREE (`symbol_id`),
   KEY `edge_id` USING BTREE (`edge_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
+) ENGINE=Aria DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 --
 -- Table structure for table `edge_source`
@@ -289,7 +289,7 @@ CREATE TABLE `edge_source` (
 
   PRIMARY KEY  (`edge_source_id`),
   UNIQUE KEY `unq_name` (`name`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=Aria DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `edge_source_2_metadata`
@@ -304,7 +304,7 @@ CREATE TABLE `edge_source_2_metadata` (
   UNIQUE KEY `edgesrc_2_metadata_unq` USING BTREE (`edge_source_id`,`metadata_id`),
   KEY `edge_source_id` (`edge_source_id`),
   KEY `metadata_id` (`metadata_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=Aria DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `edge_source_2_symbol`
@@ -319,7 +319,7 @@ CREATE TABLE `edge_source_2_symbol` (
   UNIQUE KEY `edgesrc2sym_unq` USING BTREE (`edge_source_id`,`symbol_id`),
   KEY `edge_source_id` (`edge_source_id`),
   KEY `symbol_id` (`symbol_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=Aria DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `feature_source`
@@ -338,7 +338,7 @@ CREATE TABLE `feature_source` (
   `last_update` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
   PRIMARY KEY  (`feature_source_id`),
   UNIQUE KEY `fsrc_unq` (`name`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=Aria DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `feature_source_2_metadata`
@@ -353,7 +353,7 @@ CREATE TABLE `feature_source_2_metadata` (
   UNIQUE KEY `fsrc2mdata_unq` (`metadata_id`,`feature_source_id`),
   KEY `feature_source_id` (`feature_source_id`),
   KEY `metadata_id` (`metadata_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=Aria DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `feature_source_2_symbol`
@@ -368,7 +368,7 @@ CREATE TABLE `feature_source_2_symbol` (
   UNIQUE KEY `fsrc2sym_unq` (`symbol_id`,`feature_source_id`),
   KEY `feature_source_id` (`feature_source_id`),
   KEY `symbol_id` (`symbol_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=Aria DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `feature_source_2_datatype`
@@ -380,7 +380,7 @@ CREATE TABLE `feature_source_2_datatype` (
   UNIQUE KEY `feature_source_2_datatype_uq` USING BTREE (`feature_source_id`,`datatype_id`),
   KEY `feature_source_id` (`feature_source_id`),
   KEY `datatype_id` (`datatype_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=Aria DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `metadata`
@@ -393,7 +393,7 @@ CREATE TABLE `metadata` (
   PRIMARY KEY  USING BTREE (`metadata_id`),
   KEY `data_prefix` (`data`(256)),
   KEY `type` (`data_type`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 MIN_ROWS=10000000;
+) ENGINE=Aria DEFAULT CHARSET=utf8 MIN_ROWS=10000000;
 
 
 --
@@ -407,7 +407,7 @@ CREATE TABLE `peer` (
   `db_url` varchar(255) default NULL,
   `web_url` varchar(255) default NULL,
   PRIMARY KEY  (`uuid`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=Aria DEFAULT CHARSET=latin1;
 
 --
 --
@@ -422,7 +422,7 @@ CREATE TABLE `symbol` (
   UNIQUE KEY `symbol_unq` (`sym_type`,`sym_value`),
   KEY `sym_type` (`sym_type`),
   KEY `sym_value` (`sym_value`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
+) ENGINE=Aria DEFAULT CHARSET=latin1 MIN_ROWS=10000000;
 
 --
 -- Table structure for table `taxon`
@@ -438,7 +438,7 @@ CREATE TABLE `taxon` (
   PRIMARY KEY  (`taxon_id`),
   KEY `genus` (`genus`,`species`),
   KEY `common_name` (`common_name`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=Aria DEFAULT CHARSET=latin1;
 
 
 optimize table assembly,chrom,chrom_chunk,chrom_chunk_seq,edge,edge_2_metadata,edge_2_symbol,
