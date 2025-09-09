@@ -1,4 +1,4 @@
-/* $Id: FederatedSourceStream.cpp,v 1.93 2024/06/25 06:58:43 severin Exp $ */
+/* $Id: FederatedSourceStream.cpp,v 1.94 2025/03/06 01:37:29 severin Exp $ */
 
 /***
 
@@ -65,6 +65,8 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <EEDB/FeatureSource.h>
 #include <EEDB/EdgeSource.h>
 #include <EEDB/Symbol.h>
+#include <EEDB/Feature.h>
+#include <EEDB/Edge.h>
 #include <EEDB/SPStream.h>
 #include <EEDB/Peer.h>
 #include <EEDB/SPStreams/FederatedSourceStream.h>
@@ -99,9 +101,7 @@ void _spstream_federatedsourcestream_stream_peers_func(EEDB::SPStream* node) {
   ((EEDB::SPStreams::FederatedSourceStream*)node)->_stream_peers();
 }
 bool _spstream_federatedsourcestream_stream_by_named_region_func(EEDB::SPStream* node, string assembly_name, string chrom_name, long int start, long int end) {
-  EEDB::SPStream* stream = ((EEDB::SPStreams::FederatedSourceStream*)node)->_build_source_stream();
-  if(stream != NULL) { return stream->stream_by_named_region(assembly_name, chrom_name, start, end); }
-  return false;
+  return ((EEDB::SPStreams::FederatedSourceStream*)node)->_stream_by_named_region(assembly_name, chrom_name, start, end);  
 }
 void _spstream_federatedsourcestream_stream_data_sources_func(EEDB::SPStream* node, string classname, string filter_logic) {
   EEDB::SPStream* stream = ((EEDB::SPStreams::FederatedSourceStream*)node)->_build_source_stream();
@@ -187,7 +187,8 @@ void EEDB::SPStreams::FederatedSourceStream::init() {
   _allow_full_federation_search = true;
   _clone_peers_on_build         = false;
   _peer_search_depth            = 7;
-  _sourcestream_output           = "feature";
+  _sourcestream_output          = "feature";
+  _has_edge_source              = false;
   
   /*
   $self->{'_sourcenames'} = {};
@@ -446,11 +447,14 @@ void  EEDB::SPStreams::FederatedSourceStream::add_source_id_filter(string id) {
   if(id.empty()) { return; }
   _filter_source_ids[id] = true;
   
-  size_t p1;
-  if((p1 = id.find("::")) != string::npos) {
-    string uuid = id.substr(0, p1);
+  string   uuid, objClass;
+  long int objID;
+  MQDB::unparse_dbid(id, uuid, objID, objClass);
+  if(!uuid.empty()) {
     _filter_peer_ids[uuid] = true;
   }
+  if(objClass == "EdgeSource") { _has_edge_source = true; }
+
   if(_source_stream) { _source_stream->release(); _source_stream=NULL; }
 }
 
@@ -608,6 +612,179 @@ MQDB::DBObject* EEDB::SPStreams::FederatedSourceStream::_fetch_object_by_id(stri
   if(!peer) { return NULL; }
   if(peer->source_stream() == NULL) { return NULL; }
   return peer->source_stream()->fetch_object_by_id(fid);
+}
+
+
+bool EEDB::SPStreams::FederatedSourceStream::_stream_by_named_region(string assembly_name, string chrom_name, long int start, long int end) {
+  _region_start = start;
+  _region_end   = end;
+  _clear_edge_feature_hash();
+
+  EEDB::SPStream* stream = _build_source_stream();
+  if(stream == NULL) { return false; }
+
+  if(_has_edge_source) {
+    //need to do the magic prefetch, edge, loop code here
+    fprintf(stderr, "FederatedSourceStream stream_by_named_region %s::%s:%ld..%ld with EdgeSource\n", 
+            assembly_name.c_str(), chrom_name.c_str(), start, end);
+
+    //prefetch features in region and hash the featureIDs for a post fetch of edges from the stream
+    stream->stream_by_named_region(assembly_name, chrom_name, _region_start, _region_end);
+    while(MQDB::DBObject *obj = stream->next_in_stream()) {
+      EEDB::Feature *feature = NULL;
+      if(obj->classname() == EEDB::Feature::class_name) { 
+        feature = (EEDB::Feature*)obj;
+        _edge_feature_id_hash[feature->db_id()] = feature;
+        feature->retain();
+      }
+      obj->release();
+    }
+    fprintf(stderr, "FederatedSourceStream _stream_by_named_region prefetch %ld features for EdgeSource\n", _edge_feature_id_hash.size());
+    
+    _fetch_dependent_edges();
+    
+    //finally clear the _edge_feature_id_hash since they have been attached to the edges
+    _clear_edge_feature_hash();
+    return true;
+  }
+
+  return stream->stream_by_named_region(assembly_name, chrom_name, start, end);
+}
+
+
+void EEDB::SPStreams::FederatedSourceStream::_clear_edge_feature_hash() {
+  if(_edge_feature_id_hash.empty()) { return; }
+  
+  map<string, EEDB::Feature*>::iterator it;
+  for(it=_edge_feature_id_hash.begin(); it!=_edge_feature_id_hash.end(); it++) {
+    if(it->second) { it->second->release(); }
+    it->second = NULL;
+  }
+  _edge_feature_id_hash.clear();
+}
+
+
+void  EEDB::SPStreams::FederatedSourceStream::_fetch_dependent_edges() {  
+  map<string, EEDB::Feature*>             new_fid_hash; //features connected to edges outside the original region
+  map<string, EEDB::Feature*>::iterator   it1;
+  map<string, bool>                       new_source_ids;
+  map<string, bool>::iterator             it2;
+  vector<EEDB::Edge*>                     edge_buffer;
+  vector<EEDB::Edge*>::iterator           it3;
+  
+  EEDB::SPStreams::StreamBuffer*          stream_buffer = new EEDB::SPStreams::StreamBuffer();
+
+  if(!_source_stream) { return; }
+  if(_edge_feature_id_hash.empty()) { return; }
+  
+  fprintf(stderr, "_fetch_dependent_edges %ld features in hash\n", _edge_feature_id_hash.size());
+      
+  new_source_ids.clear();
+  new_fid_hash.clear();
+  
+  //if we are doing again clear the edge_buffer
+  for(it3 = edge_buffer.begin(); it3!=edge_buffer.end(); it3++) {
+    if(!(*it3)) { continue; }
+    (*it3)->release();
+  }
+  edge_buffer.clear();
+  
+  _source_stream->stream_edges(_edge_feature_id_hash, ""); //_parameters["filter"] filter doesn't make sense deep in here
+
+  while(EEDB::Edge *edge = (EEDB::Edge*)_source_stream->next_in_stream()) {
+    if(!edge) { continue; }
+    if(edge->classname() != EEDB::Edge::class_name) {
+      edge->release();
+      continue;
+    }
+          
+    //if edges include new features, add to the _edge_feature_id_hash and new_fid_hash
+    if(_edge_feature_id_hash.find(edge->feature1_dbid()) == _edge_feature_id_hash.end()) {
+      //fprintf(stderr, "add edge feature %s\n", edge->feature1_dbid().c_str());
+      _edge_feature_id_hash[edge->feature1_dbid()] = NULL;
+      new_fid_hash[edge->feature1_dbid()] = NULL;
+    }
+    if(_edge_feature_id_hash.find(edge->feature2_dbid()) == _edge_feature_id_hash.end()) {
+      //fprintf(stderr, "add edge feature %s\n", edge->feature2_dbid().c_str());
+      _edge_feature_id_hash[edge->feature2_dbid()] = NULL;
+      new_fid_hash[edge->feature2_dbid()] = NULL;
+    }
+
+    //find missing sources based on edge feature_sources
+    string fsrcid1 = edge->edge_source()->feature_source1_dbid();
+    string fsrcid2 = edge->edge_source()->feature_source2_dbid();
+    if((_filter_source_ids.find(fsrcid1) == _filter_source_ids.end()) && 
+        (new_source_ids.find(fsrcid1) == new_source_ids.end())) {
+      new_source_ids[fsrcid1] = true;
+    }
+    if((_filter_source_ids.find(fsrcid2) == _filter_source_ids.end()) &&
+        (new_source_ids.find(fsrcid2) == new_source_ids.end())) {
+      new_source_ids[fsrcid2] = true;
+    }
+
+    if(edge->direction() == ' ') { edge->calc_direction(); }
+    edge_buffer.push_back(edge); //add edge to stream buffer (don't release)
+  }
+
+  //if new sources and new feature_ids then rebuild stream before fetching features
+  if(!new_source_ids.empty() && !new_fid_hash.empty()) {
+    fprintf(stderr, "rebuild the stream because new sources from edges\n");
+    for(it2=new_source_ids.begin(); it2!=new_source_ids.end(); it2++) {
+      string fsrcid = (*it2).first;
+      _filter_source_ids[fsrcid] = true;
+    }
+    _build_source_stream();
+  }
+      
+
+  unsigned feature_fail_count = 0;
+  if(!new_fid_hash.empty()) {
+    fprintf(stderr, "found %ld new features to fetch\n", new_fid_hash.size());
+  
+    //get remaining features which were found by the edges
+    if(!_source_stream->fetch_features(_edge_feature_id_hash)) {
+      fprintf(stderr, "failed to post-fetch all features\n");
+    }
+      
+    for(it1=_edge_feature_id_hash.begin(); it1!=_edge_feature_id_hash.end(); it1++) {
+      EEDB::Feature *feature = (*it1).second;
+      if(!feature) { feature_fail_count++; }
+    }
+    if(feature_fail_count>0) { fprintf(stderr, "failed to fetch %d features\n", feature_fail_count); }
+  }
+
+  //fprintf(stderr, "edge_buffer %ld edges\n", edge_buffer.size());
+  
+  //can't decide if I should include the features separately on the stream or force it into edges only
+  // for(it1=_edge_feature_id_hash.begin(); it1!=_edge_feature_id_hash.end(); it1++) {
+  //   EEDB::Feature *feature = (*it1).second;
+  //   if(!feature) { continue; }
+  //   feature->retain();
+  //   stream_buffer->add_object(feature);
+  // }
+
+  //transfer edges from edge_buffer to StreamBuffer
+  for(it3 = edge_buffer.begin(); it3!=edge_buffer.end(); it3++) {
+    if(!(*it3)) { continue; }
+    EEDB::Edge* edge = *it3;
+    //add missing features from _edge_feature_id_hash
+    if(!edge->feature1()) {
+      EEDB::Feature *f1 = _edge_feature_id_hash[edge->feature1_dbid()];
+      if(f1) { edge->feature1(f1); }
+    }
+    if(!edge->feature2()) {
+      EEDB::Feature *f2 = _edge_feature_id_hash[edge->feature2_dbid()];
+      if(f2) { edge->feature2(f2); }
+    }
+    
+    edge->retain();  //do I need to retain here?
+    stream_buffer->add_object(edge);
+  }
+
+  stream_buffer->region_sort();
+  
+  _source_stream->release();
+  _source_stream = stream_buffer;  
 }
 
 

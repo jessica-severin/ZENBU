@@ -1,5 +1,5 @@
 
-/* $Id: FederatedSourceStream.h,v 1.24 2024/06/25 06:58:43 severin Exp $ */
+/* $Id: FederatedSourceStream.h,v 1.25 2025/03/06 01:37:29 severin Exp $ */
 
 /***
 
@@ -117,6 +117,7 @@ class FederatedSourceStream : public EEDB::SPStream {
     bool                         _clone_peers_on_build;
     vector<EEDB::Peer*>          _cloned_peers;
     bool                         _allow_full_federation_search;
+    bool                         _has_edge_source;
     map<string, bool>            _filter_source_ids;
     map<string, bool>            _filter_object_ids;
     map<string, bool>            _filter_peer_ids;
@@ -125,6 +126,11 @@ class FederatedSourceStream : public EEDB::SPStream {
     int                          _peer_search_depth;
     string                       _sourcestream_output;
     map<string, EEDB::Datatype*> _expression_datatypes;
+    
+    map<string, EEDB::Feature*>  _edge_feature_id_hash; //prefetch when region query
+    void                         _clear_edge_feature_hash();
+    void                         _fetch_dependent_edges();
+
 
     vector<EEDB::Peer*>    _get_peers();
     EEDB::Peer*            _find_peer(string uuid);
@@ -143,6 +149,7 @@ class FederatedSourceStream : public EEDB::SPStream {
     void               _disconnect_stream();
 
     void               _xml(string &xml_buffer);
+    bool               _stream_by_named_region(string assembly_name, string chrom_name, long int start, long int end);
 
 };
 

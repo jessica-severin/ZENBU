@@ -1,4 +1,4 @@
-/* $Id: OSCFileDB.cpp,v 1.282 2022/02/02 10:59:14 severin Exp $ */
+/* $Id: OSCFileDB.cpp,v 1.285 2025/04/21 03:44:02 severin Exp $ */
 
 /***
 
@@ -1454,6 +1454,12 @@ void EEDB::SPStreams::OSCFileDB::_stream_edges(map<string, EEDB::Feature*> fid_h
             continue;
           }
         }
+        
+        //add features from fid_hash
+        EEDB::Feature *f1 = fid_hash[edge->feature1_dbid()];
+        EEDB::Feature *f2 = fid_hash[edge->feature2_dbid()];
+        if(f1) { edge->feature1(f1); }
+        if(f2) { edge->feature2(f2); }
 
         count++;
         streambuffer->add_object(edge);
@@ -1835,6 +1841,7 @@ void  EEDB::SPStreams::OSCFileDB::set_parameter(string tag, string value) {
 
   if(tag == "build_dir")            { tag = "_build_dir"; }
   if(tag == "deploy_dir")           { tag = "_deploy_dir"; }
+  if(tag == "peer_uuid")            { tag = "_peer_uuid"; }
 
   if(tag == "featuresource1")       { tag = "_featuresource1"; }
   if(tag == "featuresource2")       { tag = "_featuresource2"; }
@@ -3020,17 +3027,17 @@ bool  EEDB::SPStreams::OSCFileDB::_create_edge_osc_filedb() {
   }
   // special code if file does not have a edgef1 column, but uses a fixed feature1
   EEDB::Feature* feature1 = NULL;
-  if(_parameters.find("feature1_name") != _parameters.end()) {
-    string feature1_name = _parameters["feature1_name"];
-    vector<DBObject*> tarray = EEDB::Feature::fetch_all_by_source_metadata(fsrc1, "", feature1_name.c_str());
-    fprintf(stderr, "got %ld features\n", tarray.size());
-    if(tarray.size()!=1) {
-      fprintf(stderr, "ERROR fetching unique feature for [%s], found got %ld features\n", feature1_name.c_str(), tarray.size());
-      return false;
-    }
-    feature1 = (EEDB::Feature*)(tarray[0]);
-    fprintf(stderr, "%s\n", feature1->xml().c_str());
-  }
+  // if(_parameters.find("feature1_name") != _parameters.end()) {
+  //   string feature1_name = _parameters["feature1_name"];
+  //   vector<DBObject*> tarray = EEDB::Feature::fetch_all_by_source_metadata(fsrc1, "", feature1_name.c_str());
+  //   fprintf(stderr, "got %ld features\n", tarray.size());
+  //   if(tarray.size()!=1) {
+  //     fprintf(stderr, "ERROR fetching unique feature for [%s], found got %ld features\n", feature1_name.c_str(), tarray.size());
+  //     return false;
+  //   }
+  //   feature1 = (EEDB::Feature*)(tarray[0]);
+  //   fprintf(stderr, "%s\n", feature1->xml().c_str());
+  // }
   if(!edgef2) {
     _error_msg = "edgef2 column not defined, needed for edge linking";
     return false;
@@ -3051,7 +3058,8 @@ bool  EEDB::SPStreams::OSCFileDB::_create_edge_osc_filedb() {
     if(edgef1->datatype) { f1_link_key = edgef1->datatype->type(); }
   }
   fprintf(stderr,"\nfeaturesource1\n");
-  map<string, vector<EEDB::Feature*> > fsrc1_feature_hash = _load_edgelink_feature_hash(fsrc1, f1_link_key);
+  //map<string, vector<EEDB::Feature*> > fsrc1_feature_hash = _load_edgelink_feature_hash(fsrc1, f1_link_key);
+  map<string, vector<long> > fsrc1_feature_hash = _load_edgelink_featureid_hash(fsrc1, f1_link_key);
   if(fsrc1_feature_hash.empty()) {
     snprintf(buffer, 8190, "fsrc1 error: no features with linking key[%s]", f1_link_key.c_str());
     _error_msg += oscfileparser()->get_parameter("_parsing_error") + " -";
@@ -3064,7 +3072,14 @@ bool  EEDB::SPStreams::OSCFileDB::_create_edge_osc_filedb() {
     if(edgef2->datatype) { f2_link_key = edgef2->datatype->type(); }
   }
   fprintf(stderr,"\nfeaturesource2\n");
-  map<string, vector<EEDB::Feature*> > fsrc2_feature_hash = _load_edgelink_feature_hash(fsrc2, f2_link_key);
+  map<string, vector<long> > fsrc2_feature_hash;
+  if((fsrc1->db_id() == fsrc2->db_id()) && (f1_link_key == f2_link_key)) {
+    fprintf(stderr,"featuresource2 + link_key same as fsrc1+link_key : use same link_hash\n");
+    fsrc2_feature_hash = fsrc1_feature_hash;
+  } else {
+    //map<string, vector<EEDB::Feature*> > fsrc2_feature_hash = _load_edgelink_feature_hash(fsrc2, f2_link_key);
+    fsrc2_feature_hash = _load_edgelink_featureid_hash(fsrc2, f2_link_key);
+  }
   if(fsrc2_feature_hash.empty()) {
     snprintf(buffer, 8190, "fsrc2 error: no features with linking key[%s]", f2_link_key.c_str());
     _error_msg += oscfileparser()->get_parameter("_parsing_error") + " -";
@@ -3147,12 +3162,14 @@ bool  EEDB::SPStreams::OSCFileDB::_create_edge_osc_filedb() {
     datarow_count++;
     
     //this is where I need to do the edge expansion if linking to mutiple f1 or f2 
-    vector<EEDB::Feature*> f1_array;
-    vector<EEDB::Feature*> f2_array;
+    //vector<EEDB::Feature*> f1_array;
+    //vector<EEDB::Feature*> f2_array;
+    vector<long> f1_array;
+    vector<long> f2_array;
     vector<EEDB::Edge*> output_edges;
 
     //TODO: I might just abandon the global feature idea
-    if(feature1) { f1_array.push_back(feature1); }
+    //if(feature1) { f1_array.push_back(feature1); }
     
     //lookup feature1 if using column rather than global feature1
     if(!feature1 && edgef1 && (edgef1->colname == "edgef1_name")) {
@@ -3199,14 +3216,18 @@ bool  EEDB::SPStreams::OSCFileDB::_create_edge_osc_filedb() {
     
     //now double loop on f1/f2 to expand out edges
     for(unsigned f1_idx=0; f1_idx<f1_array.size(); f1_idx++) {
-      EEDB::Feature *f1 = f1_array[f1_idx];
+      //EEDB::Feature *f1 = f1_array[f1_idx];
+      long f1_id = f1_array[f1_idx];
       
       for(unsigned f2_idx=0; f2_idx<f2_array.size(); f2_idx++) {
-        EEDB::Feature *f2 = f2_array[f2_idx];
+        //EEDB::Feature *f2 = f2_array[f2_idx];
+        long f2_id = f2_array[f2_idx];
           
         EEDB::Edge *out_edge = in_edge->copy();  //TODO: need to implement proper edge copy()
-        out_edge->feature1(f1);
-        out_edge->feature2(f2);
+        //out_edge->feature1(f1);
+        //out_edge->feature2(f2);
+        out_edge->feature1_id(f1_id);
+        out_edge->feature2_id(f2_id);
         //printf("%s", out_edge->feature1()->simple_xml().c_str());
         //printf("%s", out_edge->feature2()->simple_xml().c_str());
 
@@ -3234,8 +3255,10 @@ bool  EEDB::SPStreams::OSCFileDB::_create_edge_osc_filedb() {
       EEDB::Edge* out_edge = output_edges[eidx2];
       edge_count++;
 
-      long f1id = out_edge->feature1()->primary_id();
-      long f2id = out_edge->feature2()->primary_id();
+      //long f1id = out_edge->feature1()->primary_id();
+      //long f2id = out_edge->feature2()->primary_id();
+      long f1id = out_edge->feature1_id();
+      long f2id = out_edge->feature2_id();
       long max_fid = f1id;
       if(f2id > max_fid) { max_fid = f2id; }
       snprintf(buffer, 8190, "%ld\t%ld\t%ld\t", max_fid, f1id, f2id);
@@ -3451,7 +3474,7 @@ EEDB::SPStreams::OSCFileDB::_load_edgelink_feature_hash(EEDB::FeatureSource* fsr
     //EEDB::Metadata* md1 = feature->metadataset()->find_metadata(link_key,"");
     vector<EEDB::Metadata*> md_list = feature->metadataset()->find_all_metadata_like(link_key, "");
     if(md_list.empty()) { 
-      fprintf(stderr, "WARNING: fsrc1 key[%s] feature %s has no value\n", link_key.c_str(), feature->db_id().c_str());
+      //fprintf(stderr, "WARNING: fsrc1 key[%s] feature %s has no value\n", link_key.c_str(), feature->db_id().c_str());
       continue; 
     }
     for(unsigned midx=0; midx<md_list.size(); midx++) {
@@ -3475,6 +3498,82 @@ EEDB::SPStreams::OSCFileDB::_load_edgelink_feature_hash(EEDB::FeatureSource* fsr
     }
   }
   return fsrc_feature_hash;
+}
+
+
+map<string, vector<long> > 
+EEDB::SPStreams::OSCFileDB::_load_edgelink_featureid_hash(EEDB::FeatureSource* fsrc, string link_key) {
+  struct timeval    starttime,endtime,difftime;
+  gettimeofday(&starttime, NULL);
+  map<string, vector<long> > fsrc_feature_id_hash;
+
+  if(link_key.empty()) { return fsrc_feature_id_hash; }
+  if(!fsrc) { return fsrc_feature_id_hash; }
+  string uuid = fsrc->peer_uuid();
+  EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
+  if(!peer) { return fsrc_feature_id_hash; }
+
+  //fsrc stream all the features and create in-memory hashes to find matchups
+  EEDB::SPStreams::SourceStream *stream = peer->source_stream();
+  fprintf(stderr, "load featuresource [%s] features for linking via key[%s]\n", fsrc->display_name().c_str(), link_key.c_str());
+  stream->clear_sourcestream_filters();
+  stream->add_source_id_filter(fsrc->db_id());
+  stream->stream_all_features();
+
+  long in_feature_count=0;
+  while(EEDB::Feature *feature = (EEDB::Feature*)stream->next_in_stream()) {
+
+    if(in_feature_count>0 && (in_feature_count % 1000000 == 0)) {
+      gettimeofday(&endtime, NULL);
+      timersub(&endtime, &starttime, &difftime);
+      double runtime = ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+      double rate = (double)in_feature_count / runtime;
+      fprintf(stderr, " %10ld features  %13.2f obj/sec\n", in_feature_count, rate);
+    }
+
+    if(feature->classname() != EEDB::Feature::class_name) {
+      //fprintf(stderr, "problem, stream returned non-features\n");
+      feature->release();
+      continue;
+    }
+    feature->metadataset(); //make sure it is loaded
+    string name;
+    if(link_key.empty() || (link_key == "name") || (link_key == "primary_name")) {
+      name = feature->primary_name();
+      in_feature_count++;
+      fsrc_feature_id_hash[name].push_back(feature->primary_id());
+      feature->release();
+      continue;
+    }
+    //EEDB::Metadata* md1 = feature->metadataset()->find_metadata(link_key,"");
+    vector<EEDB::Metadata*> md_list = feature->metadataset()->find_all_metadata_like(link_key, "");
+    if(md_list.empty()) { 
+      fprintf(stderr, "WARNING: fsrc1 key[%s] feature %s has no value\n", link_key.c_str(), feature->db_id().c_str());
+      feature->release();
+      continue; 
+    }
+    for(unsigned midx=0; midx<md_list.size(); midx++) {
+      EEDB::Metadata* md1 = md_list[midx];
+      if(!md1) { continue; }
+      name = md1->data();
+      in_feature_count++;
+      fsrc_feature_id_hash[name].push_back(feature->primary_id());
+    }
+    feature->release();
+  }
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  double loadtime = ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+  fprintf(stderr, "featuresource [%s] hashkeys:%ld infeatures:%ld in %1.3f sec\n", fsrc->display_name().c_str(), fsrc_feature_id_hash.size(), in_feature_count, loadtime);
+
+  map<string, vector<long> >::iterator fnh_it;
+  for(fnh_it=fsrc_feature_id_hash.begin(); fnh_it!=fsrc_feature_id_hash.end(); fnh_it++) {
+    if(fnh_it->second.size()>1) {
+      fprintf(stderr, "fsrc1 key[%s] value[%s] multiple features %ld\n", link_key.c_str(), fnh_it->first.c_str(),
+        fnh_it->second.size()+1);
+    }
+  }
+  return fsrc_feature_id_hash;
 }
 
 

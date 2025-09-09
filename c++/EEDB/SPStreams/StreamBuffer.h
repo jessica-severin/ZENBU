@@ -1,4 +1,4 @@
-/* $Id: StreamBuffer.h,v 1.5 2015/02/05 06:18:08 severin Exp $ */
+/* $Id: StreamBuffer.h,v 1.6 2025/03/05 06:44:52 severin Exp $ */
 
 /***
 
@@ -84,6 +84,8 @@ class StreamBuffer : public EEDB::SPStream {
     void   add_objects(vector<MQDB::DBObject*> objs);
 
     void   release_objects();
+    
+    void   region_sort();
 
   protected:
     deque<DBObject*>       _object_buffer;
