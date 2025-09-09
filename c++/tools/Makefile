@@ -6,14 +6,14 @@ CFLAGS   = -Wall -Wno-unused-result -O3 -I./ -I../ -I/usr/local/include -I/usr/i
 CPPFLAGS = -Wno-unused-result -O3 -I./ -I../ -I/usr/local/include -I/usr/include/mariadb/ -I/usr/local/mysql/include -I/usr/include/mysql -I/usr/local/boost/ \
            -I../rapidxml-1.13/ -I../samtools-1.5/ -I../samtools-1.5/htslib-1.5
 LIBFLAGS = -L../EEDB -L../MQDB -L../ZDX -L../lz4 -L../samtools-1.5 -L../samtools-1.5/htslib-1.5 -L../curl-7.59.0/lib -L/usr/lib64/mysql -L/usr/local/lib -L/usr/local/mysql/lib
-LIBS = -lm -leedb -lmqdb -lzdx -llz4 -lmariadb -lfcgi -lsqlite3 -lz -lhts -lbam -lcurl -lssl -lcrypto -lpthread -llzma -lbz2
+LIBS = -lm -leedb -lmqdb -lzdx -llz4 -lmariadb -lfcgi -lsqlite3 -lz -lhts -lbam -lcurl -lssl -lcrypto -lpthread -llzma -lbz2 -lz
 SRCS_C = 
 SRCS   = $(SRCS_C)
 OBJS   = $(SRCS_C:.cpp=.o)
 
 all:	lz4 mqdb zdx eedb zenbu_federation_upgrade zenbu_edit_source_metadata zenbu_create_OSCFileDB zenbu_test_peer \
-	zenbu_register_peer zenbu_lsarchive_sync zenbu_create_filedb zenbu_config_manager zenbu_track_builder zenbu_job_runner \
-        zenbutools zenbu_upload zenbu_ncbi_genome_load zenbu_sql_load_oscfile
+      zenbu_register_peer zenbu_lsarchive_sync zenbu_create_filedb zenbu_config_manager zenbu_track_builder zenbu_job_runner \
+      zenbutools zenbu_upload zenbu_ncbi_genome_load zenbu_sql_load_oscfile bedpeToOSC
 
 zenbu_register_peer:	mqdb eedb zenbu_register_peer.o
 	$(CPP) $(CPPFLAGS) zenbu_register_peer.o $(LIBFLAGS) $(LIBS) -o zenbu_register_peer
@@ -57,6 +57,9 @@ zenbu_ncbi_genome_load:	mqdb eedb zenbu_ncbi_genome_load.o
 zenbu_sql_load_oscfile:	mqdb eedb zenbu_sql_load_oscfile.o
 	$(CPP) $(CPPFLAGS) zenbu_sql_load_oscfile.o $(LIBFLAGS) $(LIBS) -o zenbu_sql_load_oscfile
 
+bedpeToOSC:	bedpeToOSC.o
+	$(CPP) $(CPPFLAGS) bedpeToOSC.o $(LIBFLAGS) $(LIBS) -o bedpeToOSC
+
 lz4: 
 	$(MAKE) -C ../lz4
 
@@ -72,13 +75,13 @@ eedb:
 clean:
 	rm -f *.o  zenbu_edit_source_metadata zenbu_federation_upgrade zenbu_lsarchive_sync zenbu_register_peer zenbutools zenbu_upload \
            zenbu_test_peer zenbu_create_OSCFileDB  zenbu_track_builder zenbu_create_filedb zenbu_job_runner zenbu_config_manager \
-	   zenbu_ncbi_genome_load zenbu_sql_load_oscfile
+           zenbu_ncbi_genome_load zenbu_sql_load_oscfile bedpeToOSC
 
 install:
 	cp -f zenbu_edit_source_metadata zenbu_federation_upgrade zenbu_lsarchive_sync zenbu_register_peer zenbu_upload \
            zenbu_test_peer zenbu_create_OSCFileDB zenbu_job_runner zenbu_track_builder zenbu_create_filedb \
            zenbu_agent_launcher.sh zenbu_agent_launcher-track.sh zenbu_agent_launcher-upload.sh \
-           zenbu_config_manager zenbu_ncbi_genome_load zenbu_sql_load_oscfile \
+           zenbu_config_manager zenbu_ncbi_genome_load zenbu_sql_load_oscfile bedpeToOSC \
            /usr/local/bin/
 
 cleanobj :

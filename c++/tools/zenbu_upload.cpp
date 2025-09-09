@@ -1,18 +1,15 @@
-/* $Id: zenbu_upload.cpp,v 1.25 2020/10/03 01:13:51 severin Exp $ */
+/* $Id: zenbu_upload.cpp,v 1.29 2025/07/28 05:32:33 severin Exp $ */
 
 /****
  
  NAME
  
- zdxtools - DESCRIPTION of Object
+ zenbu_upload - DESCRIPTION of Object
  
  DESCRIPTION
  
- zdxtools is a ZENBU system command line tool to access and process data both
- remotely on ZENBU federation servers and locally with ZDX file databases.
- The API is designed to both enable ZENBU advanced features, but also to provide
- a backward compatibility to samtools and bedtools so that zdxtools can be a "drop in"
- replacement for these other tools.
+ zenbu_upload is a command line tool to allow users to easily upload data from servers.
+ It allows for bulk upload with file lists and it also allows for bulk metadata loaded and editing.
  
  CONTACT
  
@@ -22,7 +19,7 @@
  
  * Software License Agreement (BSD License)
  * MappedQueryDB [MQDB] toolkit
- * copyright (c) 2006-2009 Jessica Severin
+ * copyright (c) 2006-2025 Jessica Severin
  * All rights reserved.
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -132,6 +129,7 @@ void  show_upload_queue();
 bool  upload_file_prep();
 bool  upload_file_send(string orig_filename);
 bool  bulk_upload_filelist();
+void  bulk_upload_filelist_edges(); //an automated version of single sending
 
 bool  delete_upload();
 bool  share_uploads(map<string,bool> source_ids);
@@ -139,6 +137,7 @@ bool  share_uploads(map<string,bool> source_ids);
 void append_metadata_edit_command(string id_filter, string mode, string tag, string newvalue, string oldvalue);
 bool send_mdata_edit_commands();
 bool read_mdedit_file();
+bool read_mdata_table_file();
 void show_mdedit_commands();
 
 int main(int argc, char *argv[]) {
@@ -175,6 +174,8 @@ int main(int argc, char *argv[]) {
     if(arg == "-queue")         { _parameters["mode"] = "show_queue"; continue; }
     if(arg == "-collabs")       { _parameters["mode"] = "list_collaborations"; continue; }
     if(arg == "-collaborations") { _parameters["mode"] = "list_collaborations"; continue; }
+
+    if(arg == "-dry_run")       { _parameters["_dry_run"] = "true"; continue; }
 
     if(arg == "-edges") { _parameters["assembly"] = "non-genomic"; _parameters["submode"] = "edges"; _parameters["strict_edge_linking"] = "on"; continue; }
 
@@ -230,6 +231,10 @@ int main(int argc, char *argv[]) {
 
     if(arg == "-delete")        { _parameters["mode"] = "delete"; _parameters["_delete_id"] = argvals[0]; }
     
+    if(arg == "-mdtable")       { _parameters["_mdata_table_file"] = argvals[0]; _parameters["mode"] = "mdtable"; }
+    if(arg == "-link_column")   { _parameters["_link_column"] = argvals[0]; }
+    if(arg == "-link_prefix")   { _parameters["_link_prefix"] = argvals[0]; }
+
     //metadata interface
     //if(arg == "-mdata") { //adding metadata
     //  _parameters["mode"] = "mdedit";
@@ -294,6 +299,10 @@ int main(int argc, char *argv[]) {
       read_mdedit_file();
     }      
   }
+
+  if(!_parameters["featuresource1"].empty() && _parameters["featuresource2"].empty()) {
+    _parameters["featuresource2"] = _parameters["featuresource1"];
+  }
   
   get_cmdline_user();
   if(!_user_profile) {
@@ -331,6 +340,8 @@ int main(int argc, char *argv[]) {
     if(!delete_upload()) { usage(); }
   } else if(_parameters["mode"] == "mdedit") {    
     if(!send_mdata_edit_commands()) { usage(); }
+  } else if(_parameters["mode"] == "mdtable") {    
+    if(!read_mdata_table_file()) { usage(); }
   } else {
     usage();
   }
@@ -382,6 +393,13 @@ void usage() {
   printf("  -mdfile <path>                : ability to specify a block of mdedit commands in a single control file\n");  
   printf("                                  file is tab-separated columns following the same logic as the -mdedit cmdline option\n");
   printf("                                  <id/filter> -tab- <cmd> -tab- <optional columns depending on cmd>\n");
+
+  printf("  -mdtable <path>               : load metadata from a tab-separated spreadsheet like table.\n");  
+  printf("                                  first row is column header labels for the metadata tags. cells in the table are the values.\n");
+  printf("                                  each row should correspond to unique loaded dataset.\n");
+  printf("                                  one column in the table should contain unique search information (like a filename or ID)\n");
+  printf("    -link_column <number>       : column in the mdtable containing the unqiue search information (default column #1)\n");  
+  printf("    -link_prefix <string>       : additional search terms for mdtable linking to guarantee the link_column finds a unique datasource\n");  
   printf("zenbu_upload v%s\n", EEDB::WebServices::WebBase::zenbu_version);
   
   exit(1);  
@@ -1149,6 +1167,11 @@ bool list_uploads() {
       printf("        name: %s\n", sources[0]->display_name().c_str());
       printf(" description: %s\n", sources[0]->description().c_str());
       printf(" sources    : %ld\n", sources.size());
+      vector<EEDB::DataSource*>::iterator it2;
+      for(it2 = sources.begin(); it2!=sources.end(); it2++) {
+        EEDB::DataSource* source = (*it2);
+        printf("   %s\n", source->display_desc().c_str());
+      }
     } else {
       //show all sources
       vector<EEDB::DataSource*>::iterator it2;
@@ -1924,6 +1947,129 @@ bool read_mdedit_file() {
   //printf("generated %d commands\n", _mdata_edit_commands.size());
   
   _parameters["mode"] = "mdedit";
+  return true;
+}
+
+
+bool read_mdata_table_file() {
+  // most people prepare metadata in excel as a table where each row is an entry 
+  // and the column names are the labels/tags
+  // although less flexible, this format is the most easiest for people to prepare
+  // this function will convert the table to mdedit "add" commands and use a "linking column"
+  // one column in the table must be unique enough to link the metadata to that loaded source
+  
+  if(_parameters.find("_mdata_table_file") == _parameters.end()) {
+    printf("\nERROR: must specify -mdata_table <path>\n\n");
+    return false;
+  }
+  
+  string _mdata_table_file = _parameters["_mdata_table_file"];
+  long   _link_column      = 0;
+  string _link_prefix = "";
+
+  if(!_parameters["_link_prefix"].empty()) { _link_prefix = _parameters["_link_prefix"]; }
+
+  if(!_parameters["_link_column"].empty()) {
+    //users input columns as 1,2,3 but we use 0,1,2 internally for array access
+    _link_column = strtol(_parameters["_link_column"].c_str(), NULL, 10) - 1;
+    if(_link_column<0) { _link_column=0; }
+  }
+  
+  struct timeval    starttime,endtime,difftime;
+  double            rate, runtime;
+  vector<string>    header_cols;
+
+  printf("read_mdata_table_file : start\n");
+      
+  int fildes = open(_parameters["_mdata_table_file"].c_str(), O_RDONLY, 0x700);
+  if(fildes<0) { 
+    fprintf(stderr, "ERROR: unable to open file [%s]\n", _parameters["_mdata_table_file"].c_str());
+    return false; 
+  }
+  off_t file_len = lseek(fildes, 0, SEEK_END);
+  lseek(fildes, 0, SEEK_SET);
+  //printf("file_len : %ld\n", file_len);
+  
+  char* mdtable_text = (char*)malloc(file_len+1);
+  memset(mdtable_text, 0, file_len+1);
+  read(fildes, mdtable_text, file_len);
+  //printf("config:::%s\n=========\n", mdtable_text);
+  close(fildes);
+
+  char *p1 = mdtable_text;
+  char *cline = mdtable_text;
+  long count=0;
+  while(p1 - mdtable_text < file_len) {
+    cline = p1;
+    while((p1 - mdtable_text < file_len) && (*p1 != '\0') && (*p1 != '\n') && (*p1 != '\r')) { p1++; } 
+    if(*p1 != '\0') { 
+      *p1 = '\0';  //null terminate the line
+    }
+    p1++;
+    
+    if(cline[0] == '#') { continue; }
+    count++;
+    //printf("[%d] %s\n", count, cline);
+
+    if(count==1) {
+      //printf("read header\n");
+      char* tok = strtok(cline, "\t");
+      while(tok) {
+        header_cols.push_back(tok);
+        tok = strtok(NULL, "\t");
+      }
+      continue;
+    }
+    
+    //convert line/data_buffer into tag/value cols_obj (tab delimited)
+    map <string,string> cols_obj;
+    map <string,string>::iterator it1;
+    string id_filter = "";
+    long col_idx=0;
+    char* tok = strtok(cline, "\t");
+    while(tok) {
+      if(col_idx >= header_cols.size()) { break; }
+      string tag = header_cols[col_idx];
+      if(strcmp(tok, "__na")==0) { tok[0] = '\0'; }
+      if(strcmp(tok, "N/A")==0) { tok[0] = '\0'; }
+      cols_obj[tag] = tok;
+      if(_link_column == col_idx) { id_filter = tok; }
+      
+      tok = strtok(NULL, "\t");
+      col_idx++;
+    }
+
+    if(id_filter.empty()) { continue; }
+    if(!_link_prefix.empty()) { id_filter = _link_prefix + " " + id_filter; }
+
+    for(it1 = cols_obj.begin(); it1 != cols_obj.end(); it1++) {
+      string tag   = it1->first;
+      string value = it1->second;
+      if(tag.find("ignore.") == 0) { continue; } //if column header tag starts with ignore, then skip column
+      if(id_filter.empty() || value.empty() || tag.empty()) { continue; }
+      append_metadata_edit_command(id_filter, "add", tag, value, "");
+      //printf("\tadd %25s : %s\n", tag.c_str(), value.c_str());    
+    }
+  }
+  //printf("generated %d commands\n", _mdata_edit_commands.size());
+  
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  runtime = (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0;
+  long minutes = floor(runtime/60.0);
+  double secs  = runtime - (minutes*60.0);
+  rate = (double)count / runtime;
+  //fprintf(stderr, "FINISHED read_mdata_table_file %10ld :: %ld min %1.3f sec  :  %13.2f obj/sec\n", count, minutes, secs, rate);
+
+  
+  // send the mdedit commands
+  if(_parameters.find("_dry_run") != _parameters.end()) {
+    printf("DRY RUN\n");
+    show_mdedit_commands();
+  } else {
+    printf("SEND COMMANDS\n");
+    return send_mdata_edit_commands();
+  }
   return true;
 }
 
