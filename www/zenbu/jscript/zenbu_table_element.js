@@ -432,6 +432,8 @@ function zenbuTableElement_draw() {
 
   var thead = table.appendChild(document.createElement('thead'));
   var tr = thead.appendChild(document.createElement('tr'));
+  //tr.style.cursor = "pointer";
+  tr.style.cursor = "default";
 
   for(var i=0; i<columns.length; i++) {
     var dtype_col = columns[i];
@@ -447,6 +449,11 @@ function zenbuTableElement_draw() {
     if(this.sort_col == dtype_col.datatype) {
       //if(this.sort_reverse) { th.innerHTML += "&#11167;"; } else { th.innerHTML += "&#11165;"; } //dart arrow
       if(this.sort_reverse) { th.innerHTML += "&#9660;"; } else { th.innerHTML += "&#9650;"; } //triangle
+    }
+    
+    if(dtype_col.description) {
+      th.onmouseover= function(dtc) { return function() { eedbMessageTooltip(dtc.description, 200, 'left'); };}(dtype_col);
+      th.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
     }
 
     //th.setAttribute("ondblclick", "reportElementColumnsInterface((\""+this.elementID+"\");");
@@ -646,6 +653,7 @@ function zenbuTableElement_draw() {
       if(column_count==0) { td.setAttribute("style", "white-space:nowrap;"); }
       if(this.grid_lines) { td.style.border = "1px solid gray"; }
       td.colnum = column_count++;
+      td.style.cursor = "default";
 
       if(select_row && dtype_col.highlight_color) { 
         td.style.background = dtype_col.highlight_color; 

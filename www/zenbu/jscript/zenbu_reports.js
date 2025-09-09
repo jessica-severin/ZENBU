@@ -885,6 +885,7 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
   reportElement.title_prefix = "";  
   reportElement.title_load_filter = false;
   reportElement.title_focus_feature = false;
+  reportElement.description_tooltip = false;
   //reportElement.resetable = false;
   
   if(elementDOM.getAttribute("main_div_id")) {  reportElement.main_div_id = elementDOM.getAttribute("main_div_id"); }
@@ -892,6 +893,7 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("title_prefix")) {  reportElement.title_prefix = elementDOM.getAttribute("title_prefix"); }
   if(elementDOM.getAttribute("title_focus_feature") == "true") { reportElement.title_focus_feature = true; }
   if(elementDOM.getAttribute("title_load_filter") == "true") { reportElement.title_load_filter = true; }
+  if(elementDOM.getAttribute("description_tooltip") == "true") { reportElement.description_tooltip = true; }
 
   if(elementDOM.getAttribute("datasource_mode")) {  reportElement.datasource_mode = elementDOM.getAttribute("datasource_mode"); }
   if(elementDOM.getAttribute("datasource_submode")) {  reportElement.datasource_submode = elementDOM.getAttribute("datasource_submode"); }
@@ -935,6 +937,9 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("content_width")) {  reportElement.content_width = parseInt(elementDOM.getAttribute("content_width")); }
   if(elementDOM.getAttribute("content_height")) {  reportElement.content_height = parseInt(elementDOM.getAttribute("content_height")); }
   if(elementDOM.getAttribute("auto_content_height") == "true") { reportElement.auto_content_height = true; }
+  
+  //if(reportElement.layout_xpos<0) { reportElement.layout_xpos=0; }
+  //if(reportElement.layout_ypos<0) { reportElement.layout_ypos=0; }
 
   if(elementDOM.getAttribute("assembly_name")) { reportElement.assembly_name = elementDOM.getAttribute("assembly_name"); }
 
@@ -945,6 +950,11 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("signal_invert")) { reportElement.signal_invert = elementDOM.getAttribute("signal_invert"); }
   if(elementDOM.getAttribute("signal_min")) { reportElement.signal_min = elementDOM.getAttribute("signal_min"); }
   if(elementDOM.getAttribute("signal_max")) { reportElement.signal_max = elementDOM.getAttribute("signal_max"); }
+
+  var desc = elementDOM.getElementsByTagName("description")[0];
+  if(desc) {
+    reportElement.description = desc.firstChild.nodeValue;
+  }
 
   //general subclass method
   if(reportElement.initFromConfigDOM) {
@@ -1032,6 +1042,7 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
       if(t_col.filter_max != "max") { t_col.filter_max = parseFloat(t_col.filter_max); }
     }
     if(colDOM.getAttribute("highlight_color")) { t_col.highlight_color = colDOM.getAttribute("highlight_color"); }
+    if(colDOM.getAttribute("description")) { t_col.description = colDOM.getAttribute("description"); }
     
     if(t_col.filtered && (t_col.col_type == "mdata")) {
       //parse categories for mdata filters
@@ -1217,7 +1228,8 @@ function reportsGenerateElementDOM(reportElement) {
   if(reportElement.title_prefix) { elementDOM.setAttribute("title_prefix", reportElement.title_prefix); }
   if(reportElement.title_focus_feature) { elementDOM.setAttribute("title_focus_feature", "true"); }
   if(reportElement.title_load_filter) { elementDOM.setAttribute("title_load_filter", "true"); }
-  
+  if(reportElement.description_tooltip) { elementDOM.setAttribute("description_tooltip", "true"); }
+    
   if(reportElement.datasource_mode) { elementDOM.setAttribute("datasource_mode", reportElement.datasource_mode); } //feature, edge, shared_element
   if(reportElement.datasource_submode) { elementDOM.setAttribute("datasource_submode", reportElement.datasource_submode); } //feature, edge, shared_element
   if(reportElement.datasourceElementID) { elementDOM.setAttribute("datasourceElementID", reportElement.datasourceElementID); }  //for shared_element mode
@@ -1273,6 +1285,11 @@ function reportsGenerateElementDOM(reportElement) {
   if(reportElement.signal_min) { elementDOM.setAttribute("signal_min", reportElement.signal_min); }
   if(reportElement.signal_max) { elementDOM.setAttribute("signal_max", reportElement.signal_max); }
 
+  if(reportElement.description) {
+    var desc = elementDOM.appendChild(doc.createElement("description"));
+    desc.appendChild(doc.createTextNode(reportElement.description));
+  }
+
   //dtype_columns
   if(reportElement.datatypes) {
     for(var dtype in reportElement.datatypes) {
@@ -1297,6 +1314,7 @@ function reportsGenerateElementDOM(reportElement) {
       if(dtype_col.signal_active) { colDoc.setAttribute("signal_active", "true"); }
       
       if(dtype_col.highlight_color) { colDoc.setAttribute("highlight_color", dtype_col.highlight_color); }
+      if(dtype_col.description) { colDoc.setAttribute("description", dtype_col.description); }
 
       if(dtype_col.filtered && (dtype_col.col_type == "mdata") && dtype_col.categories) {
         //need to save categories for mdata filters
@@ -3159,8 +3177,18 @@ function reportsParseElementData(reportElement, xhrObj) {
     }
   }
   
+  //pull the top level feature/edges into arrays. don't use the getElementsByTagName since it also pulls internal objects
+  var features = [];
+  var edges = [];
+  var children = xmlDoc.childNodes;
+  for (var i = 0; i < children.length; i++) {
+    var objectXML = children[i];
+    if(objectXML.tagName == "feature") { features.push(objectXML); }
+    if(objectXML.tagName == "edge") { edges.push(objectXML);; }
+  }
+  
   //read the features
-  var features = xmlDoc.getElementsByTagName("feature");
+  //var features = xmlDoc.getElementsByTagName("feature");
   var dtype_score = null;
   var dtype_name = null;
   var dtype_category = null;
@@ -3189,7 +3217,7 @@ function reportsParseElementData(reportElement, xhrObj) {
     var feature = eedbParseFeatureFullXML(featureDOM);
     if(!feature) { continue; }
     feature.filter_valid = true;
-    feature.search_match = false;
+    feature.search_match = true;
     feature.f1_edge_count = 0;
     feature.f2_edge_count = 0;
 
@@ -3290,12 +3318,12 @@ function reportsParseElementData(reportElement, xhrObj) {
   //document.getElementById("message").innerHTML += " read "+ reportElement.sources_array.length +" sources,";
 
   //read the edges
-  var edges = xmlDoc.getElementsByTagName("edge");
+  //var edges = xmlDoc.getElementsByTagName("edge");
   for(var i=0; i<edges.length; i++) {
     var edgeDOM  = edges[i];
     var edge     = eedbParseEdgeXML(edgeDOM);
     edge.filter_valid = true;
-    edge.search_match = false;
+    edge.search_match = true;
     //connect datasource and features
     if(reportElement.datasources[edge.source_id]) { 
       edge.source = reportElement.datasources[edge.source_id];
@@ -3448,6 +3476,7 @@ function reportElementAddDatatypeColumn(reportElement, dtype, title, visible) {
     dtype_col.min_val = 0;
     dtype_col.max_val = 0;
     dtype_col.highlight_color = "";  //default is #EBEBEB" but leave empty unless different from default
+    dtype_col.description = "";
     
     if(visible) { dtype_col.visible = true; }
 
@@ -3606,6 +3635,10 @@ function reportElementCheckCategoryFilters(reportElement, object) {
   if(!reportElement) { return false; }
   if(!object) { return false; }
 
+  //changed search_match so it defaults to true and only set to false when search-filter fails
+  //now I can easily alter the categories and counts to show only those from the search_match results
+  if(!object.search_match) { return false; }
+
   //performs a combination of logic.
   //within same datatype, multiple categories are treated as OR
   //between different datatypes, filter is treated as AND
@@ -3641,18 +3674,6 @@ function reportsObjectCheckCategoryFilters(object, dtype_col) {
   if(!dtype_col.categories) { return true; }
   //console.log("reportsObjectCheckCategoryFilters "+dtype_col.datatype+" has categories");
 
-  //perform class specific tests if datatype is not generic mdata
-  //if(dtype_col.datatype == "name") {
-  //  val = object.name;
-  //}
-  //if((object.classname == "Experiment") || (object.classname == "FeatureSource") || (object.classname == "EdgeSource")) {
-  //   if(dtype_col.datatype == "category") {
-  //    val = object.category;
-  //  }
-  //}
-  //if(object.classname == "Feature") { }
-  //if(object.classname == "Edge") { }
-  //if(object.classname == "Configuration") { }
   if(object.classname == "Edge") {
     var t_feature = null;
     if(/^f1\./.test(dtype_col.datatype)) { t_feature = object.feature1;}
@@ -3667,6 +3688,26 @@ function reportsObjectCheckCategoryFilters(object, dtype_col) {
   var datatype = dtype_col.datatype;
   datatype = datatype.replace(/^f1\./, '');
   datatype = datatype.replace(/^f2\./, '');
+
+  //perform class specific tests if datatype is not generic mdata
+  var val = "";
+  if(datatype == "name") {
+    val = object.name;
+  }
+  if(datatype == "category") {
+    if((object.classname == "Feature" || object.classname == "Edge") && object.source && object.source.category) { 
+      val = object.source.category;
+    }
+    if((object.classname == "Experiment") || (object.classname == "FeatureSource") || (object.classname == "EdgeSource")) {
+      val = object.category;
+    }
+  }
+  if(val) {
+    var ctg_obj = dtype_col.categories[val];
+    if(ctg_obj && ctg_obj.filtered) {
+      return true;
+    }
+  }
 
   //this is one of the filtered dtypes, must pass this category test in order to continue checking next dtype
   if(!object.mdata || !object.mdata[datatype]) {
@@ -3695,6 +3736,7 @@ function reportsObjectCheckCategoryFilters(object, dtype_col) {
 
 function reportElementSearchTestObject(feature, filter) {
   feature.search_match = false;
+  if(!filter) { feature.search_match = true; }
   if(feature.name && (feature.name.toLowerCase().indexOf(filter) != -1)) {
     feature.search_match = true;
     return;
@@ -3756,15 +3798,15 @@ function reportElementSearchData(elementID) {
 
   for(var k=0; k<feature_count; k++) {
     var feature = datasourceElement.feature_array[k];
-    if(feature) { feature.search_match = false; }
+    if(feature) { feature.search_match = true; }
   }
   for(var k=0; k<edge_count; k++) {
     var edge = datasourceElement.edge_array[k];
-    if(edge) { edge.search_match = false; }
+    if(edge) { edge.search_match = true; }
   }
   for(var k=0; k<source_count; k++) {
     var source = datasourceElement.sources_array[k];
-    if(source) { source.search_match = false; }
+    if(source) { source.search_match = true; }
   }
 
   var endtime = new Date();
@@ -5205,6 +5247,8 @@ function reportElementTriggerCascade(reportElement, on_trigger) {
         for(var k=0; k<datasource.feature_array.length; k++) {
           var feature = datasource.feature_array[k];
           if(!feature) { continue; }
+          if(!feature.filter_valid) { continue; }
+          if(!feature.search_match) { continue; }
           if(all_feature_ids != "") { all_feature_ids += ","; }
           all_feature_ids += feature.id;
         }
@@ -5229,22 +5273,32 @@ function reportElementTriggerCascade(reportElement, on_trigger) {
     if(trigger.action_mode == "select_location") {
       if(datasource.selected_location) {
         reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_location);
-      } else if(datasource.selected_feature) {
+      } 
+      else if(trigger.options == "clear") {
+        reportElementCascadeEvent(trigger.targetElement, 'select_location', "");
+      } 
+      else if(trigger.options == "max_region") {
+        if(datasource.max_region) {
+          reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.max_region);
+        }
+      } 
+      else if(datasource.selected_feature) {
         reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_feature.chromloc);
-      } else if(datasource.selected_edge) {
+      } 
+      else if(datasource.selected_edge) {
         console.log("select_location with EDGE, use opt:"+trigger.options);
         switch(trigger.options) {
           case "left_feature":
             console.log("select_location with EDGE ["+trigger.options+"] : "+ datasource.selected_edge.feature1.chromloc);
             reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_edge.feature1.chromloc);
-	    break;
+            break;
           case "right_feature":
             console.log("select_location with EDGE ["+trigger.options+"] : "+ datasource.selected_edge.feature2.chromloc);
             reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_edge.feature2.chromloc);
-	    break;
+            break;
           default:
             reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_edge.chromloc);
-	    break;
+            break;
         }
       }
       //reportElementCascadeEvent(trigger.targetElement, 'select', datasource.selected_edge.id); }
@@ -6911,6 +6965,12 @@ function reportElementCascadeEvent(reportElement, mode, value, value2) {
     //reportElementColumnsInterface(elementID, 'refresh');
     reportElementToggleSubpanel(elementID, 'refresh');
   }
+  if(mode == "dtype-description") {
+    var dtype = reportElement.datatypes[value];
+    if(dtype) { dtype.description = value2; }
+    //reportElementColumnsInterface(elementID, 'refresh');
+    reportElementToggleSubpanel(elementID, 'refresh');
+  }
   if(mode == "dtype-colnum") {
     var dtype = reportElement.datatypes[value];
     if(dtype) {
@@ -7307,7 +7367,8 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
   if(param == "title_focus_feature") { newconfig.title_focus_feature = value; }
   if(param == "title_load_filter") { newconfig.title_load_filter = value; }
 
-  if(param == "description") {  newconfig.description = value; return; }
+  if(param == "description") { newconfig.description = value; return; }
+  if(param == "description_tooltip") { newconfig.description_tooltip = value; }
   if(param == "backColor") {
     if(!value) { value = "#F6F6F6"; }
     if(value.charAt(0) != "#") { value = "#"+value; }
@@ -7617,7 +7678,9 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
         reportElement.title_prefix = newconfig.title_prefix;
       }
       reportElement.title=reportElement.title_prefix;
-  
+      if(newconfig.description !== undefined) { reportElement.description = newconfig.description; }
+      if(newconfig.description_tooltip !== undefined) { reportElement.description_tooltip = newconfig.description_tooltip; }
+
       if(newconfig.symetric_axis !== undefined) { reportElement.symetric_axis = newconfig.symetric_axis; }
 
       if(newconfig.xaxis_fixedscale !== undefined) { reportElement.xaxis.fixedscale = newconfig.xaxis_fixedscale; reportElement.chart=null; }
@@ -7701,6 +7764,14 @@ function reportElementDrawTitlebar(reportElement) {
   
   var datasourceElement = reportElement.datasource();
 
+  var main_div = reportElement.main_div;
+  if(!main_div) { return; }
+
+  if(reportElement.description_tooltip && !reportElement.show_titlebar) {
+    main_div.onmouseover= function(element) { return function() { eedbMessageTooltip(element.description, 400, 'left'); };}(reportElement);
+    main_div.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
+  }
+  
   var show_titlebar = reportElement.show_titlebar;
   if(reportElement.newconfig && reportElement.newconfig.show_titlebar != undefined) { show_titlebar = reportElement.newconfig.show_titlebar; }
   if(!current_report.edit_page_configuration && !show_titlebar) { return; }
@@ -7709,9 +7780,6 @@ function reportElementDrawTitlebar(reportElement) {
   if(!master_div) { return; }
   var masterRect = master_div.getBoundingClientRect();
   //console.log("masterRect x:"+masterRect.x+" y:"+masterRect.y+" left:"+masterRect.left+" top:"+masterRect.top+ " bottom:"+masterRect.bottom);
-
-  var main_div = reportElement.main_div;
-  if(!main_div) { return; }
 
   var mainRect = main_div.getBoundingClientRect();
   //console.log("mainRect "+reportElement.main_div_id+" rect x:"+mainRect.x+" y:"+mainRect.y+" left:"+mainRect.left+" top:"+mainRect.top+" bottom:"+mainRect.bottom);
@@ -7771,6 +7839,7 @@ function reportElementDrawTitlebar(reportElement) {
 
   //widgets
   var header_g = svg.appendChild(document.createElementNS(svgNS,'g'));
+  header_g.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
 
   var titleBar = header_g.appendChild(document.createElementNS(svgNS,'rect'));
   titleBar.setAttributeNS(null, 'x', '0px');
@@ -7781,6 +7850,9 @@ function reportElementDrawTitlebar(reportElement) {
   if(current_report.edit_page_configuration) {
     titleBar.setAttribute("onmousedown", "reportElementEvent(\""+reportElement.elementID+"\", 'start_element_drag');");
     titleBar.setAttribute("onmouseup",   "reportElementEvent(\""+reportElement.elementID+"\", 'stop_element_drag');");
+  }
+  if(reportElement.description_tooltip) {
+    titleBar.onmouseover= function(element) { return function() { eedbMessageTooltip(element.description, 400, 'left'); };}(reportElement);
   }
   
   var title = reportElement.title_prefix;
@@ -7809,6 +7881,10 @@ function reportElementDrawTitlebar(reportElement) {
     heading.setAttribute("onmousedown", "reportElementEvent(\""+reportElement.elementID+"\", 'start_element_drag');");
     heading.setAttribute("onmouseup",   "reportElementEvent(\""+reportElement.elementID+"\", 'stop_element_drag');");
   }
+  if(reportElement.description_tooltip) {
+    heading.onmouseover= function(element) { return function() { eedbMessageTooltip(element.description, 400, 'left'); };}(reportElement);
+  }
+
 
   //widgets
   var widget_pos = width - 4;
@@ -8698,7 +8774,37 @@ function reportElementConfigSubpanel(reportElement) {
     }
   }
 
+  //description and description_tooltip
+  var desc_div = general_ctrl_div.appendChild(document.createElement('div'));
+  tdiv2 = desc_div.appendChild(document.createElement('div'));
+  tdiv2.setAttribute('style', "margin-left:3px; font-size:12px; font-family:arial,helvetica,sans-serif;");
+  tdiv2.innerHTML = "description:";
+  
+  tcheck = tdiv2.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 0px 1px 0px 25px; vertical-align: middle; ");
+  tcheck.setAttribute('type', "checkbox");
+  var val1 = reportElement.description_tooltip;
+  if(reportElement.newconfig && reportElement.newconfig.description_tooltip != undefined) { val1 = reportElement.newconfig.description_tooltip; }
+  if(val1) { tcheck.setAttribute('checked', "checked"); }
+  tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'description_tooltip', this.checked);");
+  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2.setAttribute("style", "margin-bottom:3px;");
+  tspan2.innerHTML = "show description tooltip";
 
+  var description = reportElement.description;
+  if(reportElement.newconfig && reportElement.newconfig.description !== undefined) {  description = reportElement.newconfig.description; }
+  var descInput = desc_div.appendChild(document.createElement('textarea'));
+  descInput.setAttribute('style', "min-width:"+(configwidth-20)+"px; max-width:"+(configwidth-20)+"px; min-height:20px; margin: 3px 5px 3px 5px; font-size:10px; font-family:arial,helvetica,sans-serif;");
+  descInput.setAttribute('rows', 3);
+  //descInput.setAttribute("onkeydown", "if(event.keyCode==13) { reportElementReconfigParam(\""+reportElement.elementID+"\", 'description', this.value); }");
+  descInput.setAttribute("onkeyup", "reportElementReconfigParam(\""+reportElement.elementID+"\", 'description', this.value);");
+  descInput.setAttribute("onblur", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'refresh', this.value);");
+  if(description) { 
+    descInput.setAttribute("value", description); 
+    descInput.innerHTML = description; 
+  }
+
+  
   //-------  sources and triggers section -------------
   var sourcesDiv = reportElementBuildSourcesInterface(reportElement);
   
@@ -10684,9 +10790,14 @@ function reportElementCascadeTriggersInterface(reportElement) {
       if(trigger.action_mode == "set_filter_features") {
         opts2 = ["clear", "selection", "subnetwork", "all_features"];
       }
-      if(trigger.action_mode=="select_location" && datasourceElement.datasource_mode == "edge") { 
-        //show edge position options         
-        opts2 = ["edge", "left_feature", "right_feature"];
+      if(trigger.action_mode=="select_location") {
+        if(datasourceElement.datasource_mode == "feature") { 
+          opts2 = ["feature"];
+        }
+        if(datasourceElement.datasource_mode == "edge") { 
+          opts2 = ["edge", "left_feature", "right_feature"];
+        }
+        opts2.push("max_region", "clear");
       }
       if(reportElement.element_type=="category" && 
          (trigger.action_mode == "search_filter" || trigger.action_mode == "set_load_filter")) {
@@ -11116,6 +11227,25 @@ function reportElementColumnsInterfaceRender(reportElement, columns_div, signalM
       tcheck.setAttribute("onclick", "reportElementEvent(\""+reportElement.elementID+"\", 'dtype-user_modifiable', \""+selected_dtype_col.datatype+"\", this.value);");                        
       var tspan = tdiv.appendChild(document.createElement('span'));
       tspan.innerHTML = "column user modifiable";
+    }
+ 
+    //description and description_tooltip
+    if(current_report.edit_page_configuration) {
+      var desc_div = details_div.appendChild(document.createElement('div'));
+      tdiv2 = desc_div.appendChild(document.createElement('div'));
+      tdiv2.setAttribute('style', "margin:2px 0px 0px 3px; font-size:12px; font-family:arial,helvetica,sans-serif;");
+      tdiv2.innerHTML = "description:";
+      
+      var description = selected_dtype_col.description;
+      var descInput = desc_div.appendChild(document.createElement('textarea'));
+      descInput.setAttribute('style', "min-width:280px; max-width:280px; min-height:20px; margin: 3px 5px 3px 5px; font-size:10px; font-family:arial,helvetica,sans-serif;");
+      descInput.setAttribute('rows', 3);
+      descInput.setAttribute("onkeydown", "if(event.keyCode==13) { reportElementEvent(\""+reportElement.elementID+"\", 'dtype-description', \""+selected_dtype_col.datatype+"\", this.value); }");
+      descInput.setAttribute("onblur", "reportElementEvent(\""+reportElement.elementID+"\", 'dtype-description', \""+selected_dtype_col.datatype+"\", this.value);");  
+      if(description) { 
+        descInput.setAttribute("value", description); 
+        descInput.innerHTML = description; 
+      }
     }
   }
   return  columns_div;

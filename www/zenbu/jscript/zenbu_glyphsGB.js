@@ -82,6 +82,7 @@ function ZenbuGenomeBrowser(main_div) {
   this.init_search_term = undefined;
   this.hide_compacted_tracks = true;
   this.selected_feature = undefined;
+  this.hide_titlebars = false;
 
   this.tracks_hash = new Object();
   this.tracks_array = new Array();
@@ -116,7 +117,7 @@ function gLyphsGB_regionLocation() {
 
 function gLyphsGB_activeTrack() {
   if(!this.active_trackID) { return null; }
-  var activeTrack = glyphsTrack_global_track_hash[this.active_trackID];
+  var activeTrack = this.tracks_hash[this.active_trackID];
   return activeTrack;
 }
 
@@ -227,6 +228,7 @@ function gLyphsChangeActiveTrack(glyphTrack) {
   
   glyphTrack.glyphsGB.active_trackID = glyphTrack.trackID;
   glyphTrack.expPanelActive = true;
+  if(glyphTrack.grouping_id) { gLyphsChangeGlobalSetting(glyphTrack.glyphsGB, 'grouping_id', glyphTrack.grouping_id); }
 
   gLyphsProcessFeatureSelect(glyphTrack.glyphsGB); //clear feature selection
   gLyphsUpdateTrackTitleBars(glyphTrack.glyphsGB);
@@ -241,12 +243,15 @@ function gLyphsUpdateTrackTitleBars(glyphsGB) {
   for(var trackID in glyphsGB.tracks_hash){
     var glyphTrack = glyphsGB.tracks_hash[trackID];
     
-    if(glyphsGB.share_exp_panel) { glyphTrack.expPanelActive = false; }
+    if(glyphsGB.share_exp_panel && !glyphTrack.trackUniqExpPanel) { glyphTrack.expPanelActive = false; }
     if(glyphTrack.trackID == glyphTrack.glyphsGB.active_trackID) { glyphTrack.expPanelActive = true; }
     
     if(glyphTrack.titleBar) {
       if(glyphTrack.trackID == glyphTrack.glyphsGB.active_trackID) {
         glyphTrack.titleBar.setAttributeNS(null, 'style', 'fill: #DECAAF;'); 
+      //} else if(glyphTrack.glyphsGB.hide_titlebars) {
+      } else if(glyphTrack.glyphsGB.hide_titlebars || (glyphsGB.exportSVGconfig && glyphsGB.exportSVGconfig.hide_titlebar)) { 
+        glyphTrack.titleBar.setAttributeNS(null, 'style', 'fill:' + glyphTrack.backColor+';');
       } else {
         glyphTrack.titleBar.setAttributeNS(null, 'style', 'fill: #D7D7D7;'); 
       }
@@ -634,6 +639,22 @@ function gLyphsRedrawRegion(glyphsGB) {
   gLyphsDrawExpressionPanel(glyphsGB);
 }
 
+function gLyphsRedrawGroupRegion(glyphsGB, trackGroup) {
+  if(!glyphsGB) { return; }
+  if(!trackGroup) { return; }
+  if(!glyphsGB.gLyphTrackSet) { return; }
+  var glyphset = glyphsGB.gLyphTrackSet;
+  glyphset.setAttribute("style", 'width: '+ (glyphsGB.display_width+10) +'px;');
+
+  for(var i=0; i<trackGroup.tracks_array.length; i++) {
+    var glyphTrack = trackGroup.tracks_array[i];
+    if(!glyphTrack) { continue; }
+    gLyphsRenderTrack(glyphTrack);
+    gLyphsDrawTrack(glyphTrack.trackID);
+  }
+  zenbuDisplayFeatureInfo(); //clears panel
+  gLyphsDrawExpressionPanel(glyphsGB);
+}
 
 function glyphsNavigationControls(glyphsGB) {
   if(!glyphsGB) { return; }
@@ -843,8 +864,14 @@ function glyphsNavigationControls(glyphsGB) {
 }
 
 
-function gLyphsUpdateLoadingProgress(glyphsGB) {
+function gLyphsUpdateLoadingProgress(glyphsGB, refGlyphTrack) {
   if(!glyphsGB) { return; }
+  
+  //perform grouping logic calls here
+  var trackGroup = null;
+  if(refGlyphTrack) { trackGroup = gLyphsTrackGroupForId(glyphsGB, refGlyphTrack.grouping_id); }
+  gLyphsUpdateGroupingSync(glyphsGB, trackGroup);
+
   var loadProgress = glyphsGB.load_progress_div;
   if(!loadProgress) { return; }
 
@@ -865,6 +892,7 @@ function gLyphsUpdateLoadingProgress(glyphsGB) {
     loadProgress.innerHTML = "";
   }
   glyphsGB.load_count = load_count;
+   
   glyphsGB.trackLoadComplete(); 
 }
 
@@ -1217,6 +1245,23 @@ function gLyphsGB_configDOM(glyphsGB) {
   if(glyphsGB.flip_orientation) { settings.setAttribute("flip_orientation", "true"); }
   if(glyphsGB.nocache) { settings.setAttribute("global_nocache", "true"); }
   gbDOM.appendChild(settings);
+  
+  var groupings = doc.createElement("track_groupings");
+  for(var grouping_id in glyphsGB.track_groups_hash) {
+    var trackGroup = glyphsGB.track_groups_hash[grouping_id];
+    if(!trackGroup) { continue; }
+    var trGrp = doc.createElement("trackGroup");
+    trGrp.setAttribute("idx", trackGroup.idx);
+    trGrp.setAttribute("grouping_id", trackGroup.grouping_id);
+    trGrp.setAttribute("name", trackGroup.name);
+    trGrp.setAttribute("color", trackGroup.color); //#808080 format 
+    if(trackGroup.autoscale) { trGrp.setAttribute("autoscale", "true"); } else { trGrp.setAttribute("autoscale", "false"); }
+    if(trackGroup.sync_collapse) { trGrp.setAttribute("sync_collapse", "true"); } else { trGrp.setAttribute("sync_collapse", "false"); }
+    if(trackGroup.sync_move) { trGrp.setAttribute("sync_move", "true"); } else { trGrp.setAttribute("sync_move", "false"); }
+    groupings.appendChild(trGrp);
+  }
+  gbDOM.appendChild(groupings);
+
 
   if(glyphsGB.selected_feature) { 
     var feat = doc.createElement("feature");
@@ -1229,7 +1274,7 @@ function gLyphsGB_configDOM(glyphsGB) {
   }  
 
   var tracks = doc.createElement("gLyphTracks");
-  tracks.setAttribute("next_trackID", newTrackID);
+  tracks.setAttribute("newTrackID", newTrackID);
   gbDOM.appendChild(tracks);
 
   var glyphset = glyphsGB.gLyphTrackSet;
@@ -1366,6 +1411,7 @@ function gLyphsInitFromViewConfig(glyphsGB, config) {
   glyphsGB.selected_feature = undefined;
   glyphsGB.tracks_hash = new Object();
   glyphsGB.tracks_array = new Array();
+  glyphsGB.track_groups_hash = {};
 
   current_dragTrack = undefined;
   currentSelectTrackID =undefined;
@@ -1419,6 +1465,36 @@ function gLyphsInitFromViewConfig(glyphsGB, config) {
       }
     }
   }
+  
+  //var trackGroups = configDOM.getElementsByTagName("trackGroup");  
+  var groupings = configDOM.getElementsByTagName("track_groupings");
+  if(groupings) { groupings = groupings[0]; }
+  if(groupings) {
+    var children = groupings.childNodes;
+    for(var j=0; j<children.length; j++) {
+      var trackGroupDOM = children[j];
+      if(!trackGroupDOM) { continue; }
+      if(trackGroupDOM.tagName != "trackGroup") { continue; }
+
+      var trackGroup = {};
+      trackGroup.idx = parseInt(trackGroupDOM.getAttribute("idx"));
+      trackGroup.grouping_id = trackGroupDOM.getAttribute("grouping_id");
+      trackGroup.name = trackGroupDOM.getAttribute("name");
+      trackGroup.color = trackGroupDOM.getAttribute("color");
+      trackGroup.autoscale = false;
+      trackGroup.sync_collapse = false;
+      trackGroup.hide_tracks = false; //for storing state
+      trackGroup.sync_move = false;
+
+      if(trackGroupDOM.getAttribute("autoscale") == "true") { trackGroup.autoscale = true; }
+      if(trackGroupDOM.getAttribute("sync_collapse") == "true") { trackGroup.sync_collapse = true; }
+      if(trackGroupDOM.getAttribute("sync_move") == "true") { trackGroup.sync_move = true; }
+      console.log("xmlInt trackGroup ", trackGroup);
+      if(trackGroup.grouping_id) {
+        glyphsGB.track_groups_hash[trackGroup.grouping_id] = trackGroup;
+      }
+    }
+  }
 
   //--------------------------------
   gLyphsEmptySearchResults(glyphsGB);
@@ -1461,6 +1537,11 @@ function gLyphsInitFromViewConfig(glyphsGB, config) {
 
   var trackset = configDOM.getElementsByTagName("gLyphTracks");
   if(!trackset) { return false; }
+  trackset = trackset[0];
+  if(trackset.getAttribute("newTrackID")) { 
+    var id = parseInt(trackset.getAttribute("newTrackID"));
+    if(id>newTrackID) { newTrackID = id; }
+  }
 
   var tracks = configDOM.getElementsByTagName("gLyphTrack");
   for(var i=0; i<tracks.length; i++) {
@@ -1865,7 +1946,7 @@ function configureExportSVG(glyphsGB) {
   tcheck.onclick = function() { exportSVGConfigParam(glyphsGB, 'titlebar', this.checked); }
   tdiv.appendChild(tcheck);
   tspan1 = document.createElement('span');
-  tspan1.innerHTML = "hide title bar";
+  tspan1.innerHTML = "hide title bars";
   tdiv.appendChild(tspan1);
   divFrame.appendChild(tdiv);
 
@@ -2027,7 +2108,7 @@ function generateSvgXML(glyphsGB) {
   //text += "<svg xmlns=\"http://www.w3.org/2000/svg\" height=\"100%\" width=\""+ (glyphsGB.display_width+30) +"\" >\n";
   text += "<svg xmlns=\"http://www.w3.org/2000/svg\" height=\"100%\" width=\"100%\" >\n";
 
-  var activeTrack = glyphsTrack_global_track_hash[glyphsGB.active_trackID];
+  var activeTrack = glyphsGB.tracks_hash[glyphsGB.active_trackID];
 
   var export_g1 = document.createElementNS(svgNS,'g');
 
@@ -2110,7 +2191,7 @@ function gLyphsGlobalSettingsPanel(glyphsGB) {
                                 + "border:2px solid #808080; border-radius: 4px; "
                                 +"left:"+(navRect.left+window.scrollX+glyphsGB.display_width-430)+"px; "
                                 +"top:"+(navRect.top+window.scrollY+20)+"px; "
-                                +"width:350px; z-index:90; "
+                                +"width:400px; z-index:90; "
                              );
   divFrame.innerHTML = "";
   var tdiv, tdiv2, tspan1, tspan2, tinput, tcheck;
@@ -2169,6 +2250,16 @@ function gLyphsGlobalSettingsPanel(glyphsGB) {
   tcheck.onclick = function() { gLyphsChangeGlobalSetting(glyphsGB, 'compacted_tracks', this.checked); }
   tspan2 = tdiv2.appendChild(document.createElement('span'));
   tspan2.innerHTML = "hide compacted tracks";
+  
+  tdiv2 = rightdiv.appendChild(document.createElement('div'));
+  tcheck = tdiv2.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 7px 1px 0px 14px;");
+  tcheck.setAttribute('type', "checkbox");
+  if(glyphsGB.hide_titlebars) { tcheck.setAttribute('checked', "checked"); }
+  tcheck.onclick = function() { gLyphsChangeGlobalSetting(glyphsGB, 'hide_titlebars', this.checked); }
+  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2.innerHTML = "transparent title bars";
+
 
   //----------
   tdiv2 = leftdiv.appendChild(document.createElement('div'));
@@ -2223,6 +2314,123 @@ function gLyphsGlobalSettingsPanel(glyphsGB) {
   widthInput.onkeyup = function(evt) {
     if(evt.keyCode==13) { gLyphsChangeGlobalSetting(glyphsGB, 'highlight_search', this.value); }
   }
+  
+  var groupEditDiv  = gLyphsGB_group_edit_panel(glyphsGB);
+  divFrame.appendChild(groupEditDiv);
+}
+
+
+function gLyphsGB_group_edit_panel(glyphsGB) {
+  if(!glyphsGB) { return null; }
+
+  var groupEditDiv  = document.getElementById(glyphsGB.elementID + "_group_edit_div");
+  if(!groupEditDiv) {
+    groupEditDiv = document.createElement('div');
+    groupEditDiv.setAttribute("id", glyphsGB.elementID + "_group_edit_div");
+  }
+    
+  groupEditDiv.innerHTML = "";
+  groupEditDiv.style.backgroundColor = "#D4DBD6"; //C0CAC2"; //B2BEB5
+  groupEditDiv.style.marginTop = "3px";
+  groupEditDiv.style.paddingBottom = "2px";
+  groupEditDiv.style.paddingTop = "2px";
+  
+  var grouping_id = glyphsGB.active_grouping_id;
+  var trackGroup = gLyphsTrackGroupForId(glyphsGB, grouping_id);
+  
+  var tspan1 = groupEditDiv.appendChild(document.createElement('span'));
+  tspan1.setAttribute('style', "margin: 0px 0px 0px 5px; font-size:10px; font-family:arial,helvetica,sans-serif; ");
+  tspan1.innerHTML = "track grouping:";
+
+  var groupSelect = groupEditDiv.appendChild(document.createElement('select'));
+  groupSelect.className = "dropdown";
+  groupSelect.onchange = function() { gLyphsChangeGlobalSetting(glyphsGB, 'grouping_id', this.value); }
+  
+  var option = groupSelect.appendChild(document.createElement('option'));
+  option.setAttribute("value", "");
+  option.innerHTML = "select group";
+  if(!grouping_id) { option.setAttributeNS(null, "selected", "selected"); }
+
+  var valueArray = Object.keys(glyphsGB.track_groups_hash);
+  for(var i=0; i<valueArray.length; i++) {
+    var val1 = valueArray[i];
+    var tgrp = glyphsGB.track_groups_hash[val1];
+    var option = document.createElement('option');
+    option.setAttributeNS(null, "value", val1);
+    if(val1 == grouping_id) {
+      option.setAttributeNS(null, "selected", "selected");
+    }
+    if(tgrp) { option.innerHTML = tgrp.name; } else { option.innerHTML = val1; }
+    groupSelect.appendChild(option);
+  }
+  
+  var button1 = groupEditDiv.appendChild(document.createElement('input'));
+  button1.className = "slimbutton";
+  button1.style.marginLeft = "10px";
+  button1.setAttribute("type", "button");
+  button1.setAttribute("value", "create new group");
+  button1.onclick = function() { 
+    trackGroup = gLyphsCreateNewTrackGroup(glyphsGB);
+    gLyphsChangeGlobalSetting(glyphsGB, 'grouping_id', trackGroup.grouping_id);
+  }
+
+
+  if(trackGroup) {
+    var div2 = groupEditDiv.appendChild(document.createElement('div'));
+    div2.setAttribute('style', "margin:2px 0px 0px 0px;");    
+    var tspan1 = div2.appendChild(document.createElement('span'));
+    tspan1.setAttribute('style', "margin: 0px 0px 0px 4px; font-size:10px; font-family:arial,helvetica,sans-serif; ");
+    tspan1.innerHTML = "group name:";
+    var inputbox = div2.appendChild(document.createElement('input'));
+    inputbox.className = "sliminput";
+    inputbox.setAttribute('type', "text");
+    inputbox.setAttribute('size', "10");
+    inputbox.setAttribute('value', trackGroup.name);
+    inputbox.onkeyup = function(evt) { 
+      if(evt.keyCode==13) { gLyphsChangeGlobalSetting(glyphsGB, 'grouping_name', this.value); } 
+    }
+
+    tspan2 = div2.appendChild(document.createElement('span'));
+    tspan2.setAttribute('style', "margin: 1px 2px 1px 8px; font-size:10px; font-family:arial,helvetica,sans-serif; ");
+    tspan2.innerHTML = "color:";
+    var colorInput = document.createElement('input');
+    if(glyphsGB.groupColorInput) { colorInput = glyphsGB.groupColorInput; }
+    var color = "#808080";  //gray
+    color = trackGroup.color;
+    colorInput.setAttribute('value', color);
+    colorInput.setAttribute('size', "6");
+    colorInput.onchange = function() { gLyphsChangeGlobalSetting(glyphsGB, 'grouping_color', this.value); }
+    colorInput.color = new jscolor.color(colorInput);
+    glyphsGB.groupColorInput = colorInput;
+    div2.appendChild(colorInput);    
+
+    div2 = groupEditDiv.appendChild(document.createElement('div'));
+    div2.setAttribute('style', "margin:2px 0px 2px 0px;");    
+    var check1 = div2.appendChild(document.createElement('input'));
+    check1.setAttribute('style', "margin: 1px 1px 1px 9px;");
+    check1.setAttribute('type', "checkbox");
+    if(trackGroup.autoscale) { check1.setAttribute('checked', "checked"); }
+    check1.onclick = function() { gLyphsChangeGlobalSetting(glyphsGB, 'grouping_autoscale', this.checked); }
+    var tspan = div2.appendChild(document.createElement('span'));
+    tspan.innerHTML = "auto-scale";
+
+    var check1 = div2.appendChild(document.createElement('input'));
+    check1.setAttribute('style', "margin: 1px 1px 1px 7px;");
+    check1.setAttribute('type', "checkbox");
+    if(trackGroup.sync_collapse) { check1.setAttribute('checked', "checked"); }
+    check1.onclick = function() { gLyphsChangeGlobalSetting(glyphsGB, 'grouping_sync_collapse', this.checked); }
+    var tspan = div2.appendChild(document.createElement('span'));
+    tspan.innerHTML = "sync collapse";
+
+    var check1 = div2.appendChild(document.createElement('input'));
+    check1.setAttribute('style', "margin: 1px 1px 1px 7px;");
+    check1.setAttribute('type', "checkbox");
+    if(trackGroup.sync_move) { check1.setAttribute('checked', "checked"); }
+    check1.onclick = function() { gLyphsChangeGlobalSetting(glyphsGB, 'grouping_sync_move', this.checked); }
+    var tspan = div2.appendChild(document.createElement('span'));
+    tspan.innerHTML = "sync move";
+  }
+  return groupEditDiv;
 }
 
 
@@ -2249,6 +2457,10 @@ function gLyphsChangeGlobalSetting(glyphsGB, param, value) {
     glyphsGB.hide_compacted_tracks = value;
     need_to_reload = true;    
   }
+  if(param =="hide_titlebars") {
+    glyphsGB.hide_titlebars = value;
+    gLyphsRedrawRegion(glyphsGB);
+  }
   if(param =="flip_orientation") {
     glyphsGB.flip_orientation = value;
     need_to_reload = true;    
@@ -2273,10 +2485,12 @@ function gLyphsChangeGlobalSetting(glyphsGB, param, value) {
       for(var trackID in glyphsGB.tracks_hash) {
         var glyphTrack = glyphsGB.tracks_hash[trackID];
         if(!glyphTrack) { continue; }
-        if(glyphTrack.expPanelActive && glyphTrack.exp_panel_frame) {
-          glyphTrack.exp_panel_frame.style.display = "none";
+        if(!glyphTrack.trackUniqExpPanel) {
+          if(glyphTrack.expPanelActive && glyphTrack.exp_panel_frame) {
+            glyphTrack.exp_panel_frame.style.display = "none";
+          }
+          glyphTrack.expPanelActive = false;
         }
-        glyphTrack.expPanelActive = false;
       }  
       gLyphsUpdateTrackTitleBars(glyphsGB);
     }
@@ -2289,7 +2503,56 @@ function gLyphsChangeGlobalSetting(glyphsGB, param, value) {
       glyphsGB.settings_panel = null;
     }
   }
-
+  
+  //grouping system 
+  if(param == "grouping_id") {  
+    glyphsGB.active_grouping_id = value;
+    glyphsGB.groupColorInput = null;
+    gLyphsGB_group_edit_panel(glyphsGB);
+  }  
+  if(param == "grouping_name") {
+    var grouping_id = glyphsGB.active_grouping_id;
+    var trackGroup = gLyphsTrackGroupForId(glyphsGB, grouping_id);
+    if(value && trackGroup) { trackGroup.name = value; }
+    gLyphsGB_group_edit_panel(glyphsGB);
+  }
+  if(param == "grouping_color") {
+    var grouping_id = glyphsGB.active_grouping_id;
+    var trackGroup = gLyphsTrackGroupForId(glyphsGB, grouping_id);
+    if(trackGroup) {
+      if(!value) { value = "#808080"; }
+      if(value.charAt(0) != "#") { value = "#"+value; }
+      //var cl1 = new RGBColor(value);
+      //trackGroup.color = new RGBColour(cl1.r, cl1.g, cl1.b);
+      trackGroup.color = value;
+    }
+    gLyphsGB_group_edit_panel(glyphsGB);
+    gLyphsRedrawGroupRegion(glyphsGB, trackGroup);  
+    //gLyphsUpdateGroupingSync(glyphsGB, trackGroup);
+  }  
+  if(param == "grouping_autoscale") {
+    var grouping_id = glyphsGB.active_grouping_id;
+    var trackGroup = gLyphsTrackGroupForId(glyphsGB, grouping_id);
+    if(trackGroup) { trackGroup.autoscale = value; }
+    gLyphsGB_group_edit_panel(glyphsGB);
+    gLyphsRedrawGroupRegion(glyphsGB, trackGroup);  //force to recalc each track autoscale
+    gLyphsUpdateGroupingSync(glyphsGB, trackGroup);
+  }
+  if(param == "grouping_sync_collapse") {
+    var grouping_id = glyphsGB.active_grouping_id;
+    var trackGroup = gLyphsTrackGroupForId(glyphsGB, grouping_id);
+    if(trackGroup) { 
+      trackGroup.sync_collapse = value;
+      gLyphsUpdateGroupingSync(glyphsGB, trackGroup);
+    }
+    gLyphsGB_group_edit_panel(glyphsGB);
+  }
+  if(param == "grouping_sync_move") {
+    var trackGroup = gLyphsTrackGroupForId(glyphsGB, glyphsGB.active_grouping_id);
+    if(trackGroup) { trackGroup.sync_move = value; }
+    gLyphsGB_group_edit_panel(glyphsGB);
+  }
+  
   if(need_to_reload) { gLyphsReloadRegion(glyphsGB); }
 }
 
@@ -2896,4 +3159,226 @@ function gLyphsAddSelectedPredefinedTracks(glyphsGB) {
   gLyphsClosePredefinedTracksPanel(glyphsGB);
 }
 
+
+//-------------------------------------------------------------
+//
+// track grouping system. 
+// initially to duplicate the IGV track-group-autoscale feature
+// but I might expand what can be done with a track group later
+// each track can only be part of one group (track.grouping_id)
+// but managing the groups will be handled in the glyphsGB
+//
+//-------------------------------------------------------------
+
+function gLyphsCreateNewTrackGroup(glyphsGB, glyphTrack) {
+  if(!glyphsGB) { return null; }
+  if(!glyphsGB.track_groups_hash) { glyphsGB.track_groups_hash = {}; }
+
+  var idx = 1;
+  var grouping_id = "group" + (idx);
+  while(glyphsGB.track_groups_hash[grouping_id]) {
+    idx++;
+    grouping_id = "group" + (idx);
+  }
+  var trackGroup = gLyphsTrackGroupForId(glyphsGB, grouping_id);
+  if(!trackGroup) { return null; }    
+  if(glyphTrack) { glyphTrack.grouping_id = trackGroup.grouping_id; }
+  return trackGroup;
+}
+
+
+function gLyphsTrackGroupForId(glyphsGB, grouping_id) {
+  if(!glyphsGB) { return null; }
+  if(!grouping_id) { return null; }
+  if(!glyphsGB.track_groups_hash) { glyphsGB.track_groups_hash = {}; }
+
+  if(glyphsGB.track_groups_hash[grouping_id]) {
+    return glyphsGB.track_groups_hash[grouping_id];
+  }
+  
+  //doesn't exist so create it
+  var trackGroup = {};
+  trackGroup.idx = Object.keys(glyphsGB.track_groups_hash).length;
+  trackGroup.grouping_id = grouping_id;
+  trackGroup.name = grouping_id; //like a displayname
+  trackGroup.autoscale = true;
+  trackGroup.sync_collapse = true;
+  trackGroup.hide_tracks = false; //for storing state
+  trackGroup.sync_move = true;
+  trackGroup.color = zenbuIndexColorSpace("Dark2_bp_7", trackGroup.idx).getCSSHexadecimalRGB();
+  
+  //console.log("new trackGroup id:", trackGroup.grouping_id, " color:", trackGroup.color.getCSSHexadecimalRGB());
+  console.log("new trackGroup id:", trackGroup.grouping_id, " color:", trackGroup.color);
+                      
+  glyphsGB.track_groups_hash[grouping_id] = trackGroup;
+  return trackGroup;
+}
+
+
+function gLyphsUpdateGroupingSync(glyphsGB, trackGroup) {
+  //trackGroup is optional. if not defined then it will perform sync across all groups
+  if(!glyphsGB) { return; }
+  if(!glyphsGB.track_groups_hash) { return; }
+  
+  var group_id_list = Object.keys(glyphsGB.track_groups_hash);
+  if(group_id_list.length==0) { return; }
+  //console.log("gLyphsUpdateGroupingSync ", group_id_list.length, " groups to check");
+  
+  var track_group_array = [];
+  if(trackGroup) {
+    trackGroup.sync_completed = false; //if specific trackGroup then always resync
+    track_group_array.push(trackGroup);
+  } else {
+    for(var grouping_id in glyphsGB.track_groups_hash){
+      var trackGroup = glyphsGB.track_groups_hash[grouping_id];
+      if(!trackGroup) { continue; }
+      track_group_array.push(trackGroup);
+    }
+  }
+  //first link tracks into groups then check sync
+  for(var i=0; i<track_group_array.length; i++) {
+    var trackGroup = track_group_array[i];
+    if(!trackGroup) { continue; }
+    trackGroup.tracks_array = [];
+    trackGroup.scaling = null;
+    trackGroup.sync_ready = true; //default to true, set false if any track is not ready
+  }
+  for(var trackID in glyphsGB.tracks_hash){
+    var glyphTrack = glyphsGB.tracks_hash[trackID];
+    if(!glyphTrack) { continue; }
+    if(!glyphTrack.grouping_id) { continue; }
+    var trackGroup = glyphsGB.track_groups_hash[glyphTrack.grouping_id];
+    if(!trackGroup) { continue; }
+    trackGroup.tracks_array.push(glyphTrack);
+    if(!glyphTrack.hideTrack && !glyphTrack.dataLoaded) { trackGroup.sync_ready = false; }
+  }
+
+  for(var i=0; i<track_group_array.length; i++) {
+    var trackGroup = track_group_array[i];
+    if(!trackGroup) { continue; }
+    if(!trackGroup.sync_ready) { continue; }
+    if(trackGroup.sync_completed) { continue; }
+    console.log("group: ", trackGroup.grouping_id, "(",trackGroup.name,") sync ready");
+    gLyphsTrackGroupSyncCollapse(glyphsGB, trackGroup);
+    gLyphsTrackGroupAutoscale(glyphsGB, trackGroup);
+    trackGroup.sync_completed = true;
+    gLyphsRedrawGroupRegion(glyphsGB, trackGroup);
+  }
+}
+
+
+function gLyphsTrackGroupAutoscale(glyphsGB, trackGroup) {
+  //perform the group autoscale
+  if(!glyphsGB) { return; }
+  if(!trackGroup) { return; }
+  if(!trackGroup.autoscale) { return; }
+  if(!trackGroup.sync_ready) { return; }
+  //console.log("group: ", trackGroup.grouping_id, " autoscale. ", trackGroup.tracks_array.length, "tracks");
+  
+  trackGroup.scaling = null;
+  var scaling = {
+   max_express: 0,
+   total_min_express: 0,
+   total_max_express: 0,
+   sense_max_express: 0,
+   anti_max_express: 0,
+   max_express_element: 0,
+   max_score: 0,
+   min_score: 0
+  };
+
+  //first recalc the per-track autoscaling
+  for(var i=0; i<trackGroup.tracks_array.length; i++) {
+    var glyphTrack = trackGroup.tracks_array[i];
+    if(!glyphTrack) { continue; }
+    gLyphsRecalcTrackExpressionScaling(glyphTrack.trackID);
+  }
+  
+  //then calc the sync scaling values
+  var first = true;
+  for(var i=0; i<trackGroup.tracks_array.length; i++) {
+    var glyphTrack = trackGroup.tracks_array[i];
+    if(!glyphTrack) { continue; }
+    
+    if(first) {
+      scaling.max_express = glyphTrack.max_express;
+      scaling.total_min_express = glyphTrack.total_min_express;
+      scaling.total_max_express = glyphTrack.total_max_express;
+      scaling.sense_max_express = glyphTrack.sense_max_express;
+      scaling.anti_max_express = glyphTrack.anti_max_express;
+      scaling.max_express_element = glyphTrack.max_express_element;
+      scaling.max_score = glyphTrack.max_score;
+      scaling.min_score = glyphTrack.min_score;
+      first = false;
+    }
+    
+    if(glyphTrack.max_express > scaling.max_express)  { scaling.max_express = glyphTrack.max_express; }
+    if(glyphTrack.total_max_express > scaling.total_max_express) { scaling.total_max_express = glyphTrack.total_max_express; }
+    if(glyphTrack.sense_max_express > scaling.sense_max_express) { scaling.sense_max_express = glyphTrack.sense_max_express; }
+    if(glyphTrack.anti_max_express > scaling.anti_max_express)  { scaling.anti_max_express = glyphTrack.anti_max_express; }
+    if(glyphTrack.max_express_element > scaling.max_express_element)  { scaling.max_express_element = glyphTrack.max_express_element; }
+    if(glyphTrack.max_score > scaling.max_score)  { scaling.max_score = glyphTrack.max_score; }
+
+    if(glyphTrack.total_min_express < scaling.total_min_express) { scaling.total_min_express = glyphTrack.total_min_express; }
+    if(glyphTrack.min_score < scaling.min_score)  { scaling.min_score = glyphTrack.min_score; }
+  }
+  trackGroup.scaling = scaling;
+  
+  // //second pass sync the scaling
+  // for(var i=0; i<trackGroup.tracks_array.length; i++) {
+  //   var glyphTrack = trackGroup.tracks_array[i];
+  //   if(!glyphTrack) { continue; }
+  // 
+  //   glyphTrack.max_express = scaling.max_express;
+  //   glyphTrack.total_min_express = scaling.total_min_express;
+  //   glyphTrack.total_max_express = scaling.total_max_express;
+  //   glyphTrack.sense_max_express = scaling.sense_max_express;
+  //   glyphTrack.anti_max_express = scaling.anti_max_express;
+  //   glyphTrack.max_express_element = scaling.max_express_element;
+  //   glyphTrack.max_score = scaling.max_score;
+  //   glyphTrack.min_score = scaling.min_score;
+  //   
+  //   glyphTrack.skip_autoscale = true; //skip next time
+  //   
+  //   //gLyphsDrawTrack(glyphTrack.trackID);
+  // }
+  console.log("group ",trackGroup.grouping_id," autoscale:", scaling);
+  
+  //TODO: need to re-render without recalculating the per-track autoscale
+  //gLyphsRedrawRegion(glyphsGB);
+  gLyphsRedrawGroupRegion(glyphsGB, trackGroup);
+}
+
+
+function gLyphsTrackGroupSyncCollapse(glyphsGB, trackGroup) {
+  //perform the group autoscale
+  if(!glyphsGB) { return; }
+  if(!trackGroup) { return; }
+  if(!trackGroup.sync_collapse) { return; }
+  if(!trackGroup.sync_ready) { return; }
+  //console.log("group: ", trackGroup.grouping_id, " sync_collapse. ", trackGroup.tracks_array.length, "tracks");
+
+  var hide_count = 0;
+  var show_count = 0;
+  for(var i=0; i<trackGroup.tracks_array.length; i++) {
+    var glyphTrack = trackGroup.tracks_array[i];
+    if(!glyphTrack) { continue; }
+    if(glyphTrack.hideTrack) { hide_count++; } else { show_count++; }
+  }
+  //console.log("group sync_collapse hide_count:", hide_count, " show_count:",show_count);
+  if(hide_count==0 || show_count==0) {
+    //console.log("group collapse already in sync");
+    return;
+  }
+  
+  //not in sync. last hide/show event was recorded into trackGroup.hide_tracks
+  //console.log("group sync_collapse hide[", trackGroup.hide_tracks,"]");
+  
+  for(var i=0; i<trackGroup.tracks_array.length; i++) {
+    var glyphTrack = trackGroup.tracks_array[i];
+    glyphTrack.hideTrack = trackGroup.hide_tracks;
+    if(!glyphTrack.hideTrack && !glyphTrack.dataLoaded) { prepareTrackXHR(glyphTrack.trackID); }
+    else { gLyphsDrawTrack(glyphTrack.trackID); }
+  }
+}
 

@@ -1618,7 +1618,7 @@ function luminosity_contrast(R1,G1,B1, R2,G2,B2) {
   var lum = 0;
   if(L1 > L2) { lum = (L1+0.05) / (L2+0.05); }
   else { lum = (L2+0.05) / (L1+0.05); }
-  console.log("luminosity = "+lum);
+  //console.log("luminosity = "+lum);
   return lum;
 }
 

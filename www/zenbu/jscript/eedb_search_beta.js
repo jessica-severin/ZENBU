@@ -725,17 +725,19 @@ function eedbDisplayTooltipObj(obj) {
 }
 
 
-function eedbMessageTooltip(message, width) {
+function eedbMessageTooltip(message, width, talign) {
   if(!message) return;
   var tooltip = document.getElementById("toolTipLayer");
   if(!tooltip) { return; }
+  if(!talign) { talign = "center"; }
+  if(message.search(/^<div/) == -1) { message = message.replace("\n", "<br>"); }
 
   var msg_div = document.createElement('div');
   msg_div.innerHTML = message;
-  msg_div.style = "text-align:center; font-size:10px; font-family:arial,helvetica,sans-serif; "+
+  msg_div.style = "text-align:"+talign+"; font-size:10px; font-family:arial,helvetica,sans-serif; "+
                   "z-index:100; padding: 3px 5px 3px 5px; "+
                   "box-sizing: border-box; border: 1px solid #808080; border-radius: 4px; "+
-                  "background-color:#404040; color:#FDFDFD; opacity:0.85;";
+                  "background-color:#404040; color:#FDFDFD;"; //opacity:0.85;";
 
   tooltip.innerHTML = "";
   tooltip.appendChild(msg_div);
@@ -1282,33 +1284,86 @@ function eedbFullLoadCurrentObjectReply(objID) {
 
   var xmlDoc=objectXHR.responseXML.documentElement;
   if(xmlDoc==null) { return; }
-
-  var currentObjectDOM = null;
+  
+  var obj_id_hash = {}; //collect all the parsable objects here for later integration
+  var found_match = false;
+  
   var object_reply_children = xmlDoc.childNodes;
-  console.log("eedbFullLoadCurrentObjectReply sources block. has "+object_reply_children.length+" children");
+  var child_tagnames = "";
   for (var i = 0; i < object_reply_children.length; i++) {
     var objectDOM = object_reply_children[i];
     if(!objectDOM) { continue; }
     if(!objectDOM.tagName) { continue; }
+    child_tagnames += objectDOM.tagName+", ";
+    
+    var temp_id =  objectDOM.getAttribute("id");
+    //console.log("eedbFullLoadCurrentObjectReply child_tagname : "+objectDOM.tagName + " : "+temp_id);
 
-    var objID =  objectDOM.getAttribute("id");
-    if(current_object.id == objID) {
-      console.log("found matching objectDOM by id: "+objID);
-      currentObjectDOM = objectDOM;
+    var temp_obj = null;
+    if(current_object.id == temp_id) {
+      //console.log("eedbFullLoadCurrentObjectReply found matching objectDOM by id: "+temp_id);
+      temp_obj = current_object;
+      found_match = true;
+    }
+    
+    if(current_object.classname == "Edge") {
+      var edge = current_object;
+      if(edge.feature1_id == temp_id && edge.feature1) {
+        console.log("eedbFullLoadCurrentObjectReply update edge.feature1 in place");
+        temp_obj = edge.feature1;
+      }
+      if(edge.feature2_id == temp_id && edge.feature2) {
+        console.log("eedbFullLoadCurrentObjectReply update edge.feature2 in place");
+        temp_obj = edge.feature2;
+      }
+      if(edge.source_id == temp_id && edge.source) {
+        console.log("eedbFullLoadCurrentObjectReply update edge.source in place");
+        temp_obj = edge.source;
+      }
+    }
+    
+    if(objectDOM.tagName == "assembly")      { temp_obj = eedbParseAssemblyData(objectDOM, temp_obj); } 
+    if(objectDOM.tagName == "featuresource") { temp_obj = eedbParseFeatureSourceData(objectDOM, temp_obj); }
+    if(objectDOM.tagName == "experiment")    { temp_obj = eedbParseExperimentData(objectDOM, temp_obj); }
+    if(objectDOM.tagName == "edgesource")    { temp_obj = eedbParseEdgeSourceXML(objectDOM, temp_obj); }    
+    if(objectDOM.tagName == "configuration") { temp_obj = eedbParseConfigurationData(objectDOM, temp_obj); }
+    if(objectDOM.tagName == "feature")       { temp_obj = eedbParseFeatureFullXML(objectDOM, temp_obj); }
+    if(objectDOM.tagName == "edge")          { temp_obj = eedbParseEdgeXML(objectDOM, temp_obj); }
+
+    if(temp_obj) {
+      temp_obj.full_load = true;
+      obj_id_hash[temp_obj.id] = temp_obj;
+      //console.log(temp_obj);
     }
   }
+  console.log("eedbFullLoadCurrentObjectReply children ["+object_reply_children.length+"] : "+ child_tagnames);
 
-  if(currentObjectDOM) {
-    console.log("have currentObjectDOM tagName:", currentObjectDOM.tagName);
-    if(currentObjectDOM.tagName == "assembly")      { eedbParseAssemblyData(currentObjectDOM, current_object); } 
-    if(currentObjectDOM.tagName == "featuresource") { eedbParseFeatureSourceData(currentObjectDOM, current_object); }
-    if(currentObjectDOM.tagName == "experiment")    { eedbParseExperimentData(currentObjectDOM, current_object); }
-    if(currentObjectDOM.tagName == "edgesource")    { eedbParseEdgeSourceXML(currentObjectDOM, current_object); }    
-    if(currentObjectDOM.tagName == "configuration") { eedbParseConfigurationData(currentObjectDOM, current_object); }
-    if(currentObjectDOM.tagName == "feature")       { eedbParseFeatureFullXML(currentObjectDOM, current_object); }
-    if(currentObjectDOM.tagName == "edge")          { eedbParseEdgeXML(currentObjectDOM, current_object); }
+  if(found_match) {
+    if(current_object.classname == "Edge") {
+      //console.log("eedbFullLoadCurrentObjectReply object is Edge so need to glue in features, source");
+      var edge = current_object;
+      var f1 = obj_id_hash[edge.feature1_id];
+      if(f1 && (!edge.feature1 || !edge.feature1.full_load)) {
+        console.log("eedbFullLoadCurrentObjectReply Edge set feature1 : " + edge.feature1_id);
+        console.log(f1);
+        edge.feature1 = f1;
+      }
+      var f2 = obj_id_hash[edge.feature2_id];
+      if(f2 && (!edge.feature2 || !edge.feature2.full_load)) {
+        console.log("eedbFullLoadCurrentObjectReply Edge set feature2 : " + edge.feature2_id);
+        console.log(f2);
+        edge.feature2 = f2;
+      }
+      var src = obj_id_hash[edge.source_id];
+      if(src && (!edge.source || !edge.source.full_load)) {
+        console.log("eedbFullLoadCurrentObjectReply Edge set edgesource : " + edge.source_id);
+        console.log(src);
+        edge.source = src;
+      }
+      console.log(edge);
+    }
   } else {
-    console.log("FAILED to find matching currentObjectDOM");
+    console.log("FAILED to find matching objectDOM for "+current_object.id);
     current_object.full_load_error = true;
   }
   current_object.full_load = true;
@@ -1631,15 +1686,17 @@ function feature_size_sort_func(a,b) {
 function eedbParseEdgeXML(edgeXML, edge) {
   if(!edgeXML) { return; }
 
-  if(!edge) { edge = new Object; }
+  if(!edge) { 
+    edge = new Object;
+    edge.source         = null; //object
+    edge.feature1       = null;
+    edge.feature2       = null;    
+  }
 
   edge.classname      = "Edge";
   edge.id             = edgeXML.getAttribute("id");
-  edge.source         = null; //object
   edge.source_id      = edgeXML.getAttribute("esrc_id");
   edge.dir            = edgeXML.getAttribute("dir");
-  edge.feature1       = null;
-  edge.feature2       = null;
   edge.feature1_id    = edgeXML.getAttribute("f1id");
   edge.feature2_id    = edgeXML.getAttribute("f2id");
   edge.name  = "";

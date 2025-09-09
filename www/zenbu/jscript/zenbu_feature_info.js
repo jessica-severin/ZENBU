@@ -44,6 +44,8 @@ function zenbuDisplayFeatureInfo(feature) {
   info_div.setAttribute('style', "");
 
   if(!feature) { return; }
+  var edge = null;
+  if(feature.classname == "Edge") { edge = feature; } //rename to make the code easier to read
 
   if(ns4) toolTipSTYLE.visibility = "hidden";
   else toolTipSTYLE.display = "none";
@@ -71,11 +73,13 @@ function zenbuDisplayFeatureInfo(feature) {
 
   //titlebar area to capture move events
   var titlebar_div = main_div.appendChild(document.createElement('div'));
+  titlebar_div.setAttribute("style", "width:349px; min-height:14px; background-color:#D7D7D7;");
+
   titlebar_div.setAttribute("onmousedown", "zenbuFeatureInfoToggleDrag('start');");
   titlebar_div.setAttribute("onmouseup", "zenbuFeatureInfoToggleDrag('stop');");
 
   tdiv = titlebar_div.appendChild(document.createElement('div'));
-  tdiv.setAttribute('style', "float:right; margin: 0px 4px 4px 4px;");
+  tdiv.setAttribute('style', "float:right; margin: 1px 4px 4px 4px;");
   var a1 = tdiv.appendChild(document.createElement('a'));
   a1.setAttribute("target", "top");
   a1.setAttribute("href", "./");
@@ -86,15 +90,122 @@ function zenbuDisplayFeatureInfo(feature) {
   img1.setAttribute("height", "12");
   img1.setAttribute("alt","close");
 
-  tdiv = titlebar_div.appendChild(document.createElement('div'));
-  tspan = tdiv.appendChild(document.createElement('span'));
+  //tdiv = titlebar_div.appendChild(document.createElement('div'));
+  tspan = titlebar_div.appendChild(document.createElement('span'));
   tspan.setAttribute('style', "font-size:12px; font-weight: bold;");
   tspan.innerHTML = feature.name;
   if(feature.category && feature.source_name) {
-    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan = titlebar_div.appendChild(document.createElement('span'));
     tspan.setAttribute('style', "font-size:9px; padding: 0px 0px 0px 3px;");
     tspan.innerHTML = feature.category +" : " + feature.source_name;
   }
+  
+  if(edge) {
+    if(edge.platform) {
+      tspan = titlebar_div.appendChild(document.createElement('span'));
+      tspan.setAttribute('style', "font-size:10px; padding: 0px 3px 0px 0px;");
+      tspan.innerHTML = edge.platform;
+    }
+    if(edge.source) {
+      tspan = titlebar_div.appendChild(document.createElement('span'));
+      tspan.setAttribute('style', "font-size:10px; padding: 0px 3px 0px 0px;");
+      tspan.innerHTML = edge.source.name;
+
+      tspan = titlebar_div.appendChild(document.createElement('span'));
+      tspan.setAttribute('style', "font-size:10px; padding: 0px 3px 0px 0px;");
+      tspan.innerHTML = edge.source.category;
+    }
+  }
+  
+  zenbuFeatureInfo_info_for_feature(feature, main_div);
+  
+  // edge section (if this is an Edge and not a feature)
+  if(edge) {
+    if(edge.feature1) {
+      main_div.appendChild(document.createElement('hr'));
+      var feature1 = edge.feature1;
+      feature1.request_full_load = false;
+
+      tdiv = main_div.appendChild(document.createElement('div'));
+      tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.setAttribute('style', "font-weight: bold; padding: 0px 3px 0px 2px; color:darkgreen;");
+      tspan.innerHTML = "feature1: ";
+      
+      var tdiv = main_div.appendChild(document.createElement('div'));
+      tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.setAttribute('style', "font-size:12px; font-weight: bold;");
+      tspan.innerHTML = feature1.name;
+      if(feature1.category && feature1.source_name) {
+        tspan = tdiv.appendChild(document.createElement('span'));
+        tspan.setAttribute('style', "font-size:9px; padding: 0px 0px 0px 3px;");
+        tspan.innerHTML = feature1.category +" : " + feature1.source_name;
+      }
+
+      zenbuFeatureInfo_info_for_feature(feature1, main_div);      
+    }
+    if(edge.feature2) {
+      main_div.appendChild(document.createElement('hr'));
+      var feature2 = edge.feature2;
+      feature2.request_full_load = false;
+      
+      tdiv = main_div.appendChild(document.createElement('div'));
+      tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.setAttribute('style', "font-weight: bold; padding: 0px 3px 0px 2px; color:darkgreen;");
+      tspan.innerHTML = "feature2: ";
+      
+      var tdiv = main_div.appendChild(document.createElement('div'));
+      tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.setAttribute('style', "font-size:12px; font-weight: bold;");
+      tspan.innerHTML = feature2.name;
+      if(feature2.category && feature2.source_name) {
+        tspan = tdiv.appendChild(document.createElement('span'));
+        tspan.setAttribute('style', "font-size:9px; padding: 0px 0px 0px 3px;");
+        tspan.innerHTML = feature2.category +" : " + feature2.source_name;
+      }
+
+      zenbuFeatureInfo_info_for_feature(feature2, main_div);
+    }
+  }
+  
+  // sequence related section
+  if(!feature.chrom_id) {
+    var chrom = eedbFetchChrom(feature.asm, feature.chrom);
+    if(chrom) { 
+      feature.chrom_id = chrom.chrom_id; 
+      if(chrom.assembly) { feature.has_sequence = chrom.assembly.has_sequence; }
+    }
+  }
+
+  if(feature.has_sequence) {
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tdiv.setAttribute('style', "float:right; margin: 0px 4px 4px 4px;");
+    var button1 = tdiv.appendChild(document.createElement('input'));
+    button1.setAttribute("type", "button");
+    button1.setAttribute("value", "sequence");
+    button1.className = "slimbutton";    
+    button1.style.marginLeft = "0px";
+    button1.style.marginTop = "0px";
+    button1.style.fontSize = "9px";
+    button1.setAttribute("onclick", "zenbuFeatureInfoShowSequence(); return false;");
+    button1.innerHTML = "sequence";
+  }
+
+  // xml fetch section
+  if(feature.id) {
+    tdiv = main_div.appendChild(document.createElement('div'));
+    tdiv.setAttribute('style', "float:right; margin: 0px 4px 4px 4px;");
+    tdiv.innerHTML = "<a target=\"_eedb_xml\" href=\""+eedbSearchCGI+"?format=fullxml;id="+feature.id+"\">xml</a>";
+  }
+  
+  eedbClearSearchTooltip();
+}
+
+
+function zenbuFeatureInfo_info_for_feature(feature, main_div) {
+  if(!feature || !main_div) { return; }
+  
+  var tdiv;
+  
   if(feature.description && feature.description.length > 0) {
     tdiv = main_div.appendChild(document.createElement('div'));
     tdiv.innerHTML = feature.description;
@@ -139,9 +250,10 @@ function zenbuDisplayFeatureInfo(feature) {
     tdiv = main_div.appendChild(document.createElement('div'));
     if(feature.entrez_id) {
       tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.setAttribute("style", "margin: 0px 3px 0px 0px;");
       tspan.innerHTML = "EntrezID:";
       ta = tdiv.appendChild(document.createElement('a'));
-      ta.setAttribute("style", "padding: 0px 5px 0px 0px;");
+      ta.setAttribute("style", "padding: 0px 15px 0px 0px;");
       ta.setAttribute("target", "zenbu_entrez");
       //ta.setAttribute("href", "http://www.ncbi.nlm.nih.gov/sites/entrez?db=gene&amp;cmd=Retrieve&amp;dopt=full_report&amp;list_uids="+feature.entrez_id); //old URL style
       ta.setAttribute("href", "https://www.ncbi.nlm.nih.gov/gene/"+feature.entrez_id);      
@@ -149,6 +261,7 @@ function zenbuDisplayFeatureInfo(feature) {
     }
     if(feature.omim_id) {
       tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.setAttribute("style", "margin: 0px 3px 0px 0px;");
       tspan.innerHTML = "OMIM:";
       ta = tdiv.appendChild(document.createElement('a'));
       ta.setAttribute("style", "padding: 0px 5px 0px 0px;");
@@ -160,6 +273,7 @@ function zenbuDisplayFeatureInfo(feature) {
   if((feature.category == "mrna") || (feature.category == "refgene")) {
     tdiv = main_div.appendChild(document.createElement('div'));
     tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.setAttribute("style", "margin: 0px 3px 0px 0px;");
     tspan.innerHTML = "NCBI:";
     ta = tdiv.appendChild(document.createElement('a'));
     ta.setAttribute("style", "padding: 0px 5px 0px 0px;");
@@ -202,10 +316,11 @@ function zenbuDisplayFeatureInfo(feature) {
   }
   tdiv = main_div.appendChild(document.createElement('div'));
   tspan = tdiv.appendChild(document.createElement('span'));
+  tspan.setAttribute("style", "margin: 0px 3px 0px 0px;");
   tspan.innerHTML = "location: ";
   if(feature.genloc) { tspan.innerHTML += feature.genloc + " :: "; }
   
-  if(info_div.locationCallOutFunction) { 
+  if(main_div.locationCallOutFunction) { 
     ta = tdiv.appendChild(document.createElement('a'));
     ta.setAttribute("style", "padding: 0px 5px 0px 0px;");
     ta.setAttribute("href", "./");
@@ -217,7 +332,7 @@ function zenbuDisplayFeatureInfo(feature) {
     start -= Math.round(range*.25);
     end += Math.round(range*.25);
     var chromloc = feature.chrom+":" + start +".."+end;
-    ta.onclick = function() { info_div.locationCallOutFunction(chromloc); return false; }
+    ta.onclick = function() { main_div.locationCallOutFunction(chromloc); return false; }
   } else {
     tspan = tdiv.appendChild(document.createElement('span'));
     tspan.setAttribute("style", "padding: 0px 5px 0px 0px; ");
@@ -232,7 +347,6 @@ function zenbuDisplayFeatureInfo(feature) {
   else { len += "bp"; }
   tspan = tdiv.appendChild(document.createElement('span'));
   tspan.innerHTML = "("+len+")";
-
 
   //hyperlinks here
   if(feature.mdata && feature.mdata["zenbu:hyperlink"]) {
@@ -250,17 +364,19 @@ function zenbuDisplayFeatureInfo(feature) {
         var title = "hyperlink";
         if(hyperlink.getAttribute("title"))  { title = hyperlink.getAttribute("title"); }
         if(hyperlink.getAttribute("prefix")) { title = hyperlink.getAttribute("prefix"); }
+        if(hyperlink.getAttribute("label"))  { title = hyperlink.getAttribute("label"); }
         if(!title) { tile = "hyperlink"; }
 
         var tdiv2 = tdiv.appendChild(document.createElement('div'));
         tspan = tdiv2.appendChild(document.createElement('span'));
-        //tspan.innerHTML = "hyperlink: ";
-        tspan.innerHTML = escape(title) + ": "; 
+        tspan.setAttribute("style", "margin: 0px 3px 0px 0px;");
+        //tspan.setAttribute('style', "font-weight: bold;");
+        tspan.innerHTML = title + ": "; 
 
         var link1 = tdiv2.appendChild(document.createElement("a"));
-        link1.setAttribute("target", "f5rb");
+        link1.setAttribute("target", "zenbu_hyper");
         link1.setAttribute("href", unescape(url));
-        link1.innerHTML = escape(name);
+        link1.innerHTML = name;
       }
     }
   }
@@ -302,10 +418,11 @@ function zenbuDisplayFeatureInfo(feature) {
       if(tag=="eedb:owner_nickname") { continue; }
       if(tag=="eedb:owner_OpenID") { continue; }
       if(tag=="keyword") { continue; }
+      if(tag=="zenbu:hyperlink") { continue; }
 
       tdiv = main_div.appendChild(document.createElement('div'));
       tspan = tdiv.appendChild(document.createElement('span'));
-      tspan.setAttribute('style', "font-weight: bold;");
+      tspan.setAttribute('style', "font-weight: bold; margin: 0px 3px 0px 0px;");
       tspan.innerHTML = tag + ": ";
       var value_array = feature.mdata[tag];
       for(var idx1=0; idx1<value_array.length; idx1++) {
@@ -316,42 +433,21 @@ function zenbuDisplayFeatureInfo(feature) {
           tspan.innerHTML = ", " 
         }
 
-        tspan = tdiv.appendChild(document.createElement('span'));
-        tspan.setAttribute('style', "color: rgb(105,105,105); word-wrap: break-word; ");
-        tspan.innerHTML = value;
+        if(["EntrezID", "OMIM"].includes(tag)) {
+          var ta = tdiv.appendChild(document.createElement('a'));
+          ta.setAttribute("style", "padding: 0px 15px 0px 0px;");
+          ta.setAttribute("target", "zenbu_ncbi");
+          if(tag == "EntrezID") { ta.setAttribute("href", "https://www.ncbi.nlm.nih.gov/gene/"+value); }
+          if(tag == "OMIM") { ta.setAttribute("href", "http://www.ncbi.nlm.nih.gov/omim/"+ value); }
+          ta.innerHTML = value
+        } else {
+          tspan = tdiv.appendChild(document.createElement('span'));
+          tspan.setAttribute('style', "color: rgb(105,105,105); word-wrap: break-word; ");
+          tspan.innerHTML = value;
+        }
       }
     }
   }
-
-  if(!feature.chrom_id) {
-    var chrom = eedbFetchChrom(feature.asm, feature.chrom);
-    if(chrom) { 
-      feature.chrom_id = chrom.chrom_id; 
-      if(chrom.assembly) { feature.has_sequence = chrom.assembly.has_sequence; }
-    }
-  }
-
-  if(feature.has_sequence) {
-    tdiv = main_div.appendChild(document.createElement('div'));
-    tdiv.setAttribute('style', "float:right; margin: 0px 4px 4px 4px;");
-    var button1 = tdiv.appendChild(document.createElement('input'));
-    button1.setAttribute("type", "button");
-    button1.setAttribute("value", "sequence");
-    button1.className = "slimbutton";    
-    button1.style.marginLeft = "0px";
-    button1.style.marginTop = "0px";
-    button1.style.fontSize = "9px";
-    button1.setAttribute("onclick", "zenbuFeatureInfoShowSequence(); return false;");
-    button1.innerHTML = "sequence";
-  }
-
-  if(feature.id) {
-    tdiv = main_div.appendChild(document.createElement('div'));
-    tdiv.setAttribute('style', "float:right; margin: 0px 4px 4px 4px;");
-    tdiv.innerHTML = "<a target=\"_eedb_xml\" href=\""+eedbSearchCGI+"?format=fullxml;id="+feature.id+"\">xml</a>";
-  }
-  
-  eedbClearSearchTooltip();
 }
 
 
@@ -447,6 +543,7 @@ function zenbuFeatureInfoShowSequence(showseq) {
 
   var strand = feature.strand;
   if(strand!="+" && strand!="-") { strand = "+"; }
+  console.log("show seq strand = "+strand);
 
   //better to copy the array so as not disrupt the feature
   var subfeats = [];

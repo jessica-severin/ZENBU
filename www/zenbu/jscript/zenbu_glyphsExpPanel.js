@@ -53,6 +53,10 @@ function gLyphsDrawExpressionPanel(glyphsGB) {
   glyphTrack.expPanelActive = true;  //need this here for first page draw after track load
   glyphsExpPanelRecalcAndDraw(glyphTrack);
   
+  if(glyphTrack.trackUniqExpPanel && glyphsGB.expPanelFrame)  {
+    glyphsGB.expPanelFrame.setAttribute('style', "visibility:hidden;"); 
+  }  
+
   gLyphsUpdateTrackTitleBars(glyphTrack.glyphsGB);
 }
 
@@ -323,7 +327,7 @@ function gLyphsExpressionPanelHeader(glyphTrack) {
   
   var titlepos = 8;
   if(!glyphTrack.glyphsGB.exportSVGconfig) {
-    if(!glyphTrack.glyphsGB.share_exp_panel) {
+    if(!glyphTrack.glyphsGB.share_exp_panel || glyphTrack.trackUniqExpPanel) {
       var widget = gLyphsExpPanelCloseWidget(glyphTrack);
       widget.setAttributeNS(null, 'transform', "translate(5,3)");
       header_g.appendChild(widget);
@@ -645,6 +649,10 @@ function gLyphsExpressionPanelRenderExperimentMode(glyphTrack) {
       //if((sig_error < 0.01) || (sig_error >0.99)) rect.setAttributeNS(null, 'fill', "rgb(123, 123, 240)");
       //else rect.setAttributeNS(null, 'fill', "rgb(170, 170, 170)");
       if(glyphTrack.exppanel_use_rgbcolor) { rect.setAttributeNS(null, 'fill', experiment.rgbcolor); }
+      else if(glyphTrack.colorMode=="mdata" && glyphTrack.color_mdkey!="bed:itemRgb" && experiment.mdata[glyphTrack.color_mdkey]) { 
+        var color = experiment.mdata[glyphTrack.color_mdkey][0];
+        rect.setAttributeNS(null, 'fill', color);
+      }
       else { rect.setAttributeNS(null, 'fill', glyphTrack.posStrandColor); }
       g5b.appendChild(rect);
       
@@ -676,6 +684,10 @@ function gLyphsExpressionPanelRenderExperimentMode(glyphTrack) {
       //if((sig_error < 0.01) || (sig_error >0.99)) rect1.setAttributeNS(null, 'fill', "rgb(57, 177, 58)");  //green
       //else rect1.setAttributeNS(null, 'fill', "rgb(170, 170, 170)");
       if(glyphTrack.exppanel_use_rgbcolor) { rect1.setAttributeNS(null, 'fill', experiment.rgbcolor); }
+      else if(glyphTrack.colorMode=="mdata" && glyphTrack.color_mdkey!="bed:itemRgb" && experiment.mdata[glyphTrack.color_mdkey]) { 
+        var color = experiment.mdata[glyphTrack.color_mdkey][0];
+        rect1.setAttributeNS(null, 'fill', color);
+      }
       else { rect1.setAttributeNS(null, 'fill', glyphTrack.posStrandColor); }
       g5b.appendChild(rect1);
       
@@ -688,6 +700,10 @@ function gLyphsExpressionPanelRenderExperimentMode(glyphTrack) {
       //if((sig_error < 0.01) || (sig_error >0.99)) rect2.setAttributeNS(null, 'fill', "rgb(177, 89, 178)");  //purple
       //else rect2.setAttributeNS(null, 'fill', "rgb(170, 170, 170)");
       if(glyphTrack.exppanel_use_rgbcolor) { rect2.setAttributeNS(null, 'fill', experiment.rgbcolor); }
+      else if(glyphTrack.colorMode=="mdata" && glyphTrack.color_mdkey!="bed:itemRgb" && experiment.mdata[glyphTrack.color_mdkey]) { 
+        var color = experiment.mdata[glyphTrack.color_mdkey][0];
+        rect2.setAttributeNS(null, 'fill', color);
+      }
       else { rect2.setAttributeNS(null, 'fill', glyphTrack.revStrandColor); }
       g5a.appendChild(rect2);
             
@@ -950,6 +966,7 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
     var mdgroup = glyphTrack.experiment_mdgrouping[i];
     mdgroup.array_index = i;
     //if(mdgroup.source_count==0) { continue; }
+    if(mdgroup.source_count==0 && (mdgroup.mdvalue == "UNKNOWN - no metadata key")) { continue; }
     active_mdgroups.push(mdgroup);
   }
   g1.setAttribute('mdgroup_graph_height', 12 * active_mdgroups.length);
@@ -1037,8 +1054,9 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
       rect.setAttributeNS(null, 'width', 2*scale*value);
       rect.setAttributeNS(null, 'height', '11px');
       //rect.setAttributeNS(null, 'fill', glyphTrack.posStrandColor);
-      if(glyphTrack.exppanel_use_rgbcolor) { rect.setAttributeNS(null, 'fill', mdgroup.rgbcolor); }
-      else { rect.setAttributeNS(null, 'fill', glyphTrack.posStrandColor); }
+      //if(glyphTrack.exppanel_use_rgbcolor) { rect.setAttributeNS(null, 'fill', mdgroup.rgbcolor); }
+      //else { rect.setAttributeNS(null, 'fill', glyphTrack.posStrandColor); }
+      rect.setAttributeNS(null, 'fill', mdgroup.posStrandColor);
 
       if(!glyphTrack.glyphsGB.exportSVGconfig) {
         rect.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\", true);");
@@ -1068,8 +1086,9 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
       var text1 = document.createElementNS(svgNS,'text');
       text1.setAttributeNS(null, 'x', (graph_width-460)+'px');
       text1.setAttributeNS(null, 'y', ((i*12)+9) +'px');
-      var cl1 = new RGBColor(glyphTrack.posStrandColor);
-      if(glyphTrack.exppanel_use_rgbcolor) { if(mdgroup.rgbcolor) { cl1 = new RGBColor(mdgroup.rgbcolor); } else { cl1 = new RGBColor("black"); } }
+      //var cl1 = new RGBColor(glyphTrack.posStrandColor);
+      //if(glyphTrack.exppanel_use_rgbcolor) { if(mdgroup.rgbcolor) { cl1 = new RGBColor(mdgroup.rgbcolor); } else { cl1 = new RGBColor("black"); } }      
+      var cl1 = new RGBColor(mdgroup.posStrandColor);
       var Y = 0.2126 * Math.pow(cl1.r/255.0,2.2)  +  0.7151 * Math.pow(cl1.g/255.0,2.2)  +  0.0721 * Math.pow(cl1.b/255.0,2.2);
       var textColor = "rgb(44,44,44);"; //or black
       if(Y<=0.28) { textColor = "rgb(230, 230, 230);"; }
@@ -1093,8 +1112,9 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
       rect1.setAttributeNS(null, 'width', sense_value * scale);
       rect1.setAttributeNS(null, 'height', '11px');
       //rect1.setAttributeNS(null, 'fill', glyphTrack.posStrandColor);
-      if(glyphTrack.exppanel_use_rgbcolor) { rect1.setAttributeNS(null, 'fill', mdgroup.rgbcolor); }
-      else { rect1.setAttributeNS(null, 'fill', glyphTrack.posStrandColor); }
+      //if(glyphTrack.exppanel_use_rgbcolor) { rect1.setAttributeNS(null, 'fill', mdgroup.rgbcolor); }
+      //else { rect1.setAttributeNS(null, 'fill', glyphTrack.posStrandColor); }
+      rect1.setAttributeNS(null, 'fill', mdgroup.posStrandColor);
 
       if(!glyphTrack.glyphsGB.exportSVGconfig) {
         rect1.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\", true);");
@@ -1128,8 +1148,9 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
       rect2.setAttributeNS(null, 'width', width2);
       rect2.setAttributeNS(null, 'height', '11px');
       //rect2.setAttributeNS(null, 'fill', glyphTrack.revStrandColor);
-      if(glyphTrack.exppanel_use_rgbcolor) { rect2.setAttributeNS(null, 'fill', mdgroup.rgbcolor); }
-      else { rect2.setAttributeNS(null, 'fill', glyphTrack.revStrandColor); }
+      //if(glyphTrack.exppanel_use_rgbcolor) { rect2.setAttributeNS(null, 'fill', mdgroup.rgbcolor); }
+      //else { rect2.setAttributeNS(null, 'fill', glyphTrack.revStrandColor); }
+      rect2.setAttributeNS(null, 'fill', mdgroup.revStrandColor);
 
       if(!glyphTrack.glyphsGB.exportSVGconfig) {
         rect2.setAttributeNS(null, "onclick", "gLyphsTrackMDGroupInfo(\""+ glyphTrack.trackID+ "\", \"" + mdgroup.array_index +"\", true);");
@@ -1163,8 +1184,9 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
       text1.appendChild(document.createTextNode(Math.round(sense_value*1000.0)/1000.0));
       //if(mdgroup.hide) { text1.setAttributeNS(null, 'style', 'fill: rgb(192, 192, 192);'); }
       //else { text1.setAttributeNS(null, 'style', 'fill: black;'); }
-      var cl1 = new RGBColor(glyphTrack.posStrandColor);
-      if(glyphTrack.exppanel_use_rgbcolor) { if(mdgroup.rgbcolor) { cl1 = new RGBColor(mdgroup.rgbcolor); } else { cl1 = new RGBColor("black"); } }
+      //var cl1 = new RGBColor(glyphTrack.posStrandColor);
+      //if(glyphTrack.exppanel_use_rgbcolor) { if(mdgroup.rgbcolor) { cl1 = new RGBColor(mdgroup.rgbcolor); } else { cl1 = new RGBColor("black"); } }
+      var cl1 = new RGBColor(mdgroup.posStrandColor);
       var Y = 0.2126 * Math.pow(cl1.r/255.0,2.2)  +  0.7151 * Math.pow(cl1.g/255.0,2.2)  +  0.0721 * Math.pow(cl1.b/255.0,2.2);
       var textColor = "rgb(44,44,44);"; //or black
       if(Y<=0.28) { textColor = "rgb(230, 230, 230);"; }
@@ -1183,8 +1205,9 @@ function gLyphsExpressionPanelRenderMDGroupMode(glyphTrack) {
       text2.appendChild(document.createTextNode(Math.round(antisense_value*1000.0)/1000.0));
       //if(mdgroup.hide) { text2.setAttributeNS(null, 'style', 'fill: rgb(192, 192, 192);'); }
       //else { text2.setAttributeNS(null, 'style', 'fill: black;'); }
-      var cl1 = new RGBColor(glyphTrack.revStrandColor);
-      if(glyphTrack.exppanel_use_rgbcolor) { if(mdgroup.rgbcolor) { cl1 = new RGBColor(mdgroup.rgbcolor); } else { cl1 = new RGBColor("black"); } }
+      //var cl1 = new RGBColor(glyphTrack.revStrandColor);
+      //if(glyphTrack.exppanel_use_rgbcolor) { if(mdgroup.rgbcolor) { cl1 = new RGBColor(mdgroup.rgbcolor); } else { cl1 = new RGBColor("black"); } }
+      var cl1 = new RGBColor(mdgroup.revStrandColor);
       var Y = 0.2126 * Math.pow(cl1.r/255.0,2.2)  +  0.7151 * Math.pow(cl1.g/255.0,2.2)  +  0.0721 * Math.pow(cl1.b/255.0,2.2);
       var textColor = "rgb(44,44,44);"; //or black
       if(Y<=0.28) { textColor = "rgb(230, 230, 230);"; }
@@ -1554,6 +1577,7 @@ function gLyphsTrackMDGroupInfo(trackID, mdgroupIdx, fullmode) {
   var glyphTrack = glyphsTrack_global_track_hash[trackID];
   if(!glyphTrack) { return; }
   if(!glyphTrack.experiment_mdgrouping) { return; }
+  //console.log("gLyphsTrackMDGroupInfo ", trackID, " : ", mdgroupIdx);
 
   //change background highlight
   for(var i=0; i<glyphTrack.experiment_mdgrouping.length; i++) {
@@ -1970,8 +1994,7 @@ function gLyphsTrackGroupInfo(glyphTrack, mdgroup, fullmode, paneltype) {
         rect.setAttributeNS(null, 'y', (j*12+1) +'px');
         rect.setAttributeNS(null, 'width', 100.0 * experiment.value / max_value);
         rect.setAttributeNS(null, 'height', '10px');
-        if(glyphTrack.exppanel_use_rgbcolor) { rect.setAttributeNS(null, 'fill', experiment.rgbcolor); }
-        else { rect.setAttributeNS(null, 'fill', glyphTrack.posStrandColor); }
+        rect.setAttributeNS(null, 'fill', mdgroup.posStrandColor);
         if(experiment.hide) { rect.setAttribute('style', "opacity:0.2"); }
 
         if(!glyphTrack.glyphsGB.exportSVGconfig) {
@@ -1985,8 +2008,7 @@ function gLyphsTrackGroupInfo(glyphTrack, mdgroup, fullmode, paneltype) {
         rect.setAttributeNS(null, 'y', (j*12+1) +'px');
         rect.setAttributeNS(null, 'width', 100.0 * experiment.sense_value / max_value);
         rect.setAttributeNS(null, 'height', '5px');
-        if(glyphTrack.exppanel_use_rgbcolor) { rect.setAttributeNS(null, 'fill', experiment.rgbcolor); }
-        else { rect.setAttributeNS(null, 'fill', glyphTrack.posStrandColor); }
+        rect.setAttributeNS(null, 'fill', mdgroup.posStrandColor);
         if(experiment.hide) { rect.setAttribute('style', "opacity:0.2"); }
 
         if(!glyphTrack.glyphsGB.exportSVGconfig) {
@@ -2000,8 +2022,7 @@ function gLyphsTrackGroupInfo(glyphTrack, mdgroup, fullmode, paneltype) {
         rect.setAttributeNS(null, 'y', (j*12 +6) +'px');
         rect.setAttributeNS(null, 'width', 100.0 * experiment.antisense_value / max_value);
         rect.setAttributeNS(null, 'height', '5px');
-        if(glyphTrack.exppanel_use_rgbcolor) { rect.setAttributeNS(null, 'fill', experiment.rgbcolor); }
-        else { rect.setAttributeNS(null, 'fill', glyphTrack.revStrandColor); }
+        rect.setAttributeNS(null, 'fill', mdgroup.revStrandColor);
         if(experiment.hide) { rect.setAttribute('style', "opacity:0.2"); }
 
         if(!glyphTrack.glyphsGB.exportSVGconfig) {
@@ -2367,7 +2388,7 @@ function gLyphsExpressionPanelGroupingSubpanel(glyphTrack) {
     form1.setAttribute("onsubmit", "gLyphsExpressionPanelReconfigParam('"+glyphTrack.trackID+"', 'mdgroup_input'); return false;");
     tdiv = form1.appendChild(document.createElement('div'));
     var expInput = tdiv.appendChild(document.createElement('input'));
-    expInput.setAttribute('style', "width:200px; margin: 5px 5px 3px 5px; font-size:10px; font-family:arial,helvetica,sans-serif;");
+    expInput.setAttribute('style', "width:250px; margin: 5px 5px 3px 5px; font-size:10px; font-family:arial,helvetica,sans-serif;");
     expInput.id = "expExp_mdgroup_inputID";  //id allows for autocomplete history 
     glyphTrack.expPanelFrame().mdgroup_input = expInput;
     expInput.setAttribute('type', "text");
@@ -2375,11 +2396,22 @@ function gLyphsExpressionPanelGroupingSubpanel(glyphTrack) {
       expInput.setAttribute('value', glyphTrack.mdgroupkey);
     }
     
-    button = tdiv.appendChild(document.createElement("button"));
-    button.setAttribute("style", "font-size:10px; padding: 1px 4px; margin-left:5px; border-radius: 5px; border: solid 1px #20538D; background: #EEEEEE; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.2); ");
+    button = tdiv.appendChild(document.createElement('input'));
+    button.setAttribute("type", "button");
+    button.setAttribute("value", "group");
+    button.className = "slimbutton";
     button.setAttribute("onmouseover", "eedbMessageTooltip(\"search experiment metadata and group\",100);");
     button.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-    button.innerHTML = "group";
+    button.setAttribute("onclick", "gLyphsExpressionPanelReconfigParam('"+glyphTrack.trackID+"', 'mdgroup_input')");
+    
+    tdiv = groupingdiv.appendChild(document.createElement('div'));
+    tinput = tdiv.appendChild(document.createElement('input'));
+    tinput.setAttribute('type', "checkbox");
+    tinput.setAttribute("style", "margin-left: 5px;");
+    if(glyphTrack.mdgroup_show_keys) { tinput.setAttribute('checked', "checked"); }
+    tinput.setAttribute('onclick', "gLyphsExpressionPanelReconfigParam('"+glyphTrack.trackID+"', 'mdgroup_show_keys',this.checked)");
+    tspan2 = tdiv.appendChild(document.createElement('span'));
+    tspan2.innerHTML = "display keys";
     
     /*
     button = tdiv.appendChild(document.createElement("button"));
@@ -3485,6 +3517,12 @@ function gLyphsExpressionPanelReconfigParam(trackID, param, value) {
       glyphTrack.checked_missing_mdata = false;
     }
   }
+  if(param == "mdgroup_show_keys") {
+    glyphTrack.mdgroup_show_keys = value;
+    glyphTrack.experiment_mdgrouping = null;  //clear this so it recalcs
+    glyphTrack.checked_missing_mdata = false;
+  }
+
   if(param == "exp_name_mdkeys") {
     var searchInput = glyphTrack.expPanelFrame().name_mdkeys_input;
     if(searchInput) {
@@ -3501,7 +3539,6 @@ function gLyphsExpressionPanelReconfigParam(trackID, param, value) {
     glyphTrack.exp_name_mdkeys = "";
     gLyphsAutosaveConfig(); 
   }
-  
   
   if(param == "errorbar_type") {
     glyphTrack.errorbar_type = value; 

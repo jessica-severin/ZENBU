@@ -1,4 +1,4 @@
-/* $Id: zenbu_search_element.js,v 1.2 2024/06/21 07:12:45 severin Exp $ */
+/* $Id: zenbu_search_element.js,v 1.3 2025/05/15 05:36:06 severin Exp $ */
 
 // ZENBU zenbu_search_element.js
 //
@@ -60,6 +60,7 @@ function ZenbuSearchElement(elementID) {
   this.filter_abs = false;
   this.hide_zero = true;
   this.show_result_counts = true;
+  this.show_search_match_radio = true;
   
   //methods
   this.initFromConfigDOM  = ZenbuSearchElement_initFromConfigDOM;  //pass a ConfigDOM object
@@ -94,6 +95,9 @@ function ZenbuSearchElement_initFromConfigDOM(elementDOM) {
   
   this.show_result_counts = true;
   if(elementDOM.getAttribute("show_result_counts") == "false") { this.show_result_counts = false; }
+
+  this.show_search_match_radio = true;
+  if(elementDOM.getAttribute("show_search_match_radio") == "false") { this.show_search_match_radio = false; }
   
   return true;
 }
@@ -105,6 +109,9 @@ function ZenbuSearchElement_generateConfigDOM() {
   
   if(this.show_result_counts) { elementDOM.setAttribute("show_result_counts", "true"); }
   else { elementDOM.setAttribute("show_result_counts", "false"); }
+
+  if(this.show_search_match_radio) { elementDOM.setAttribute("show_search_match_radio", "true"); }
+  else { elementDOM.setAttribute("show_search_match_radio", "false"); }
   
   return elementDOM;
 }
@@ -130,10 +137,12 @@ function ZenbuSearchElement_elementEvent(mode, value, value2) {
 function ZenbuSearchElement_reconfigureParam(param, value, altvalue) {
   if(!this.newconfig) { return; }
   
-  if(param == "show_result_counts")   { this.newconfig.show_result_counts = value; }
+  if(param == "show_result_counts")       { this.newconfig.show_result_counts = value; }
+  if(param == "show_search_match_radio")  { this.newconfig.show_search_match_radio = value; }
   
   if(param == "accept-reconfig") {
     if(this.newconfig.show_result_counts !== undefined) { this.show_result_counts = this.newconfig.show_result_counts; }
+    if(this.newconfig.show_search_match_radio !== undefined) { this.show_search_match_radio = this.newconfig.show_search_match_radio; }
   }
 }
 
@@ -187,6 +196,7 @@ function ZenbuSearchElement_configSubpanel() {
 
   tdiv2  = configdiv.appendChild(document.createElement('div'));
   tdiv2.setAttribute('style', "margin-top: 5px;");
+
   tcheck = tdiv2.appendChild(document.createElement('input'));
   tcheck.setAttribute('style', "margin: 0px 1px 0px 5px;");
   tcheck.setAttribute('type', "checkbox");
@@ -196,6 +206,16 @@ function ZenbuSearchElement_configSubpanel() {
   tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'show_result_counts', this.checked);");
   tspan2 = tdiv2.appendChild(document.createElement('span'));
   tspan2.innerHTML = "show search result counts";
+
+  tcheck = tdiv2.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 0px 1px 0px 25px;");
+  tcheck.setAttribute('type', "checkbox");
+  var val1 = this.show_search_match_radio;
+  if(this.newconfig && this.newconfig.show_search_match_radio != undefined) { val1 = this.newconfig.show_search_match_radio; }
+  if(val1) { tcheck.setAttribute('checked', "checked"); }
+  tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'show_search_match_radio', this.checked);");
+  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2.innerHTML = "show search match options";
 
   configdiv.appendChild(document.createElement('hr'));
 
@@ -445,109 +465,114 @@ function ZenbuSearchElement_draw() {
   tdiv = searchdiv.appendChild(document.createElement('div'));
   tdiv.setAttribute("style", "font-size:10px; margin-left:5px; margin-left:40px;");
   tspan = tdiv.appendChild(document.createElement('span'));
-  tspan.innerHTML = "searchable data";
+  //tspan.innerHTML = "searchable data";
   if(this.source_ids != "") {
     //direct search via webservice query mode
     tspan.innerHTML = "";
     if(this.loading) { tspan.innerHTML = "searching...."; }
     //return searchdiv;
   }
-  if(feature_count==0 && edge_count==0 && source_count==0 && this.source_ids=="") {
-    tspan.innerHTML = "no data to search";
-    search_button.setAttribute('disabled', "disabled");
-  }
-  if(feature_count>0 && this.show_result_counts) {
-    tspan = tdiv.appendChild(document.createElement('span'));
-    tspan.setAttribute("style", "padding-left:5px;");
-    tspan.innerHTML = "  features:<i>"+ feature_count+ "</i>";
-  }
-  if(edge_count>0 && this.show_result_counts) {
-    tspan = tdiv.appendChild(document.createElement('span'));
-    tspan.setAttribute("style", "padding-left:5px;");
-    tspan.innerHTML += "  edges:<i>"+ edge_count+"</i>";
-  }
-  if(source_count>0 && this.show_result_counts) {
-    tspan = tdiv.appendChild(document.createElement('span'));
-    tspan.setAttribute("style", "padding-left:5px;");
-    tspan.innerHTML += "  sources:<i>"+ source_count+"</i>";
-  }
 
-  if(this.source_ids != "") {
-    //direct search via webservice query mode
-    return searchdiv;
-  }
+  if(this.show_result_counts) {
+    if(feature_count==0 && edge_count==0 && source_count==0 && this.source_ids=="") {
+      tspan.innerHTML = "no data to search";
+      search_button.setAttribute('disabled', "disabled");
+    }
+    if(feature_count>0 && this.show_result_counts) {
+      tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.setAttribute("style", "padding-left:5px;");
+      tspan.innerHTML = "  features:<i>"+ feature_count+ "</i>";
+    }
+    if(edge_count>0 && this.show_result_counts) {
+      tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.setAttribute("style", "padding-left:5px;");
+      tspan.innerHTML += "  edges:<i>"+ edge_count+"</i>";
+    }
+    if(source_count>0 && this.show_result_counts) {
+      tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.setAttribute("style", "padding-left:5px;");
+      tspan.innerHTML += "  sources:<i>"+ source_count+"</i>";
+    }
 
-  //results display
-  // var feature_matches=0;
-  // for(var k=0; k<feature_count; k++) {
-  //   var feature = datasourceElement.feature_array[k];
-  //   if(!feature) { continue; }
-  //   if(feature.search_match) { feature_matches++; }
-  // }
-  // var edge_matches=0;
-  // for(var k=0; k<datasourceElement.edge_array.length; k++) {
-  //   var edge = datasourceElement.edge_array[k];
-  //   if(!edge) { continue; }
-  //   if(!edge.filter_valid) { continue; }
-  //   if(edge.search_match) { edge_matches++; }
-  // }
-  // if(this.datasource_mode == "edge" && edge_matches==0) { feature_matches=0; }
+    if(this.source_ids != "") {
+      //direct search via webservice query mode
+      return searchdiv;
+    }
 
-  var feature_matches = datasourceElement.search_match_feature_count;
-  var edge_matches    = datasourceElement.search_match_edge_count;
-  var source_matches  = datasourceElement.search_match_source_count;
-
-  if(feature_matches>0 || edge_matches>0 || source_matches>0) {
-    tdiv = searchdiv.appendChild(document.createElement('div'));
-    tdiv.setAttribute("style", "font-size:12px; margin-left:10px;");
-    tspan = tdiv.appendChild(document.createElement('span'));
-    tspan.setAttribute("style", "color:#0000D0;"); //0071EC
-    tspan.innerHTML = "found matching";
+    //results display
+    // var feature_matches=0;
+    // for(var k=0; k<feature_count; k++) {
+    //   var feature = datasourceElement.feature_array[k];
+    //   if(!feature) { continue; }
+    //   if(feature.search_match) { feature_matches++; }
+    // }
+    // var edge_matches=0;
+    // for(var k=0; k<datasourceElement.edge_array.length; k++) {
+    //   var edge = datasourceElement.edge_array[k];
+    //   if(!edge) { continue; }
+    //   if(!edge.filter_valid) { continue; }
+    //   if(edge.search_match) { edge_matches++; }
+    // }
+    // if(this.datasource_mode == "edge" && edge_matches==0) { feature_matches=0; }
+  
+    var feature_matches = datasourceElement.search_match_feature_count;
+    var edge_matches    = datasourceElement.search_match_edge_count;
+    var source_matches  = datasourceElement.search_match_source_count;
+  
+    if(feature_matches>0 || edge_matches>0 || source_matches>0) {
+      tdiv = searchdiv.appendChild(document.createElement('div'));
+      tdiv.setAttribute("style", "font-size:12px; margin-left:10px;");
+      tspan = tdiv.appendChild(document.createElement('span'));
+      tspan.setAttribute("style", "color:#0000D0;"); //0071EC
+      tspan.innerHTML = "found matching";
+      
+      //if(this.datasource_mode == "feature") { }
     
-    //if(this.datasource_mode == "feature") { }
-  
-    if(feature_matches>0) {
-      tspan = tdiv.appendChild(document.createElement('span'));
-      tspan.setAttribute("style", "padding-left:5px;");
-      tspan.innerHTML = "features:<i>"+ feature_matches+ "</i>";
+      if(feature_matches>0) {
+        tspan = tdiv.appendChild(document.createElement('span'));
+        tspan.setAttribute("style", "padding-left:5px;");
+        tspan.innerHTML = "features:<i>"+ feature_matches+ "</i>";
+      }
+      if(edge_matches>0) {
+        tspan = tdiv.appendChild(document.createElement('span'));
+        tspan.setAttribute("style", "padding-left:5px;");
+        tspan.innerHTML += "edges:<i>"+ edge_matches+"</i>";
+      }
+      if(source_matches>0) {
+        tspan = tdiv.appendChild(document.createElement('span'));
+        tspan.setAttribute("style", "padding-left:5px;");
+        tspan.innerHTML += "sources:<i>"+ source_matches+"</i>";
+      }
     }
-    if(edge_matches>0) {
+    if(filter!="" && feature_matches==0 && edge_matches==0 && source_matches==0) {
+      tdiv = searchdiv.appendChild(document.createElement('div'));
+      tdiv.setAttribute("style", "font-size:12px; margin-left:10px;");
       tspan = tdiv.appendChild(document.createElement('span'));
       tspan.setAttribute("style", "padding-left:5px;");
-      tspan.innerHTML += "edges:<i>"+ edge_matches+"</i>";
-    }
-    if(source_matches>0) {
-      tspan = tdiv.appendChild(document.createElement('span'));
-      tspan.setAttribute("style", "padding-left:5px;");
-      tspan.innerHTML += "sources:<i>"+ source_matches+"</i>";
+      tspan.innerHTML = "no matches found";
     }
   }
-  if(filter!="" && feature_matches==0 && edge_matches==0 && source_matches==0) {
+  
+  if(this.show_search_match_radio) {
     tdiv = searchdiv.appendChild(document.createElement('div'));
-    tdiv.setAttribute("style", "font-size:12px; margin-left:10px;");
+    radio1 = tdiv.appendChild(document.createElement('input'));
+    radio1.setAttribute("type", "radio");
+    radio1.setAttribute("name", this.elementID + "_searchelementmatchmode");
+    radio1.setAttribute("value", "show_highlight");
+    if(!(datasourceElement.show_only_search_matches)) { radio1.setAttribute('checked', "checked"); }
+    radio1.setAttribute("onchange", "reportElementReconfigParam(\""+ datasourceElement.elementID +"\", 'show_only_search_matches', false);");
     tspan = tdiv.appendChild(document.createElement('span'));
-    tspan.setAttribute("style", "padding-left:5px;");
-    tspan.innerHTML = "no matches found";
+    tspan.innerHTML = "highlight matches";
+    
+    radio2 = tdiv.appendChild(document.createElement('input'));
+    radio2.setAttribute("type", "radio");
+    radio2.setAttribute("name", this.elementID + "_searchelementmatchmode");
+    radio2.setAttribute("value", "show_only");
+    if(datasourceElement.show_only_search_matches) { radio2.setAttribute('checked', "checked"); }
+    radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ datasourceElement.elementID +"\", 'show_only_search_matches', true);");
+    tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.innerHTML = "show only matches";
   }
-
-  tdiv = searchdiv.appendChild(document.createElement('div'));
-  radio1 = tdiv.appendChild(document.createElement('input'));
-  radio1.setAttribute("type", "radio");
-  radio1.setAttribute("name", this.elementID + "_searchmatchmode");
-  radio1.setAttribute("value", "show_highlight");
-  if(!(datasourceElement.show_only_search_matches)) { radio1.setAttribute('checked', "checked"); }
-  radio1.setAttribute("onchange", "reportElementReconfigParam(\""+ datasourceElement.elementID +"\", 'show_only_search_matches', false);");
-  tspan = tdiv.appendChild(document.createElement('span'));
-  tspan.innerHTML = "highlight matches";
-  
-  radio2 = tdiv.appendChild(document.createElement('input'));
-  radio2.setAttribute("type", "radio");
-  radio2.setAttribute("name", this.elementID + "_searchmatchmode");
-  radio2.setAttribute("value", "show_only");
-  if(datasourceElement.show_only_search_matches) { radio2.setAttribute('checked', "checked"); }
-  radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ datasourceElement.elementID +"\", 'show_only_search_matches', true);");
-  tspan = tdiv.appendChild(document.createElement('span'));
-  tspan.innerHTML = "show only matches";
   
   return searchdiv;
 }
