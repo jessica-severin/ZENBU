@@ -1,4 +1,4 @@
-/* $Id: EdgeSource.h,v 1.18 2017/10/12 07:58:15 severin Exp $ */
+/* $Id: EdgeSource.h,v 1.19 2025/07/11 07:24:00 severin Exp $ */
 
 /***
 
@@ -106,7 +106,7 @@ class EdgeSource : public EEDB::DataSource {
 
     //display and export
     void   display_info();
-    string display_desc();
+    string _display_desc();
     string display_contents();
 
     bool check_exists_db(Database *db);

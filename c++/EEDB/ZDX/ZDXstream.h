@@ -1,4 +1,4 @@
-/* $Id: ZDXstream.h,v 1.22 2016/04/05 08:40:26 severin Exp $ */
+/* $Id: ZDXstream.h,v 1.23 2025/04/21 05:14:19 severin Exp $ */
 
 /****
 NAME - EEDB::ZDX::ZDXstream
@@ -153,6 +153,7 @@ namespace EEDB {
       EEDB::Peer*                   _self_peer;
       
       map<string, vector<int64_t> >    _mdkey_znodes;
+      vector<EEDB::Chrom*>             _all_feature_stream_chroms;
 
 
     protected: //internal API below
@@ -172,6 +173,7 @@ namespace EEDB {
       void               _stream_peers();
       
       void               _stream_features_by_metadata_search(string filter_logic);
+      void               _stream_all_features();
       bool               _stream_by_named_region(string assembly_name, string chrom_name, long int start, long int end);
       void               _stream_chromosomes(string assembly_name, string chrom_name);
       

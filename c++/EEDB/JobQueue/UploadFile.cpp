@@ -1,4 +1,4 @@
-/* $Id: UploadFile.cpp,v 1.47 2019/10/31 04:27:39 severin Exp $ */
+/* $Id: UploadFile.cpp,v 1.48 2024/12/03 05:36:14 severin Exp $ */
 
 /***
 
@@ -500,7 +500,15 @@ EEDB::Peer*  EEDB::JobQueue::UploadFile::load_into_zdx() {
     return NULL;
   }
   fprintf(stderr, "%ld chroms\n", chroms.size());
-    
+  //create all the chromosomes
+  for(unsigned int j=0; j<chroms.size(); j++) {
+    EEDB::Chrom *chrom = chroms[j];
+    if(chrom->chrom_length() < 1) { continue; }
+    zdxstream->create_chrom(chrom);
+  }
+  long numchroms =  EEDB::ZDX::ZDXsegment::num_chroms(zdxdb);
+  fprintf(stderr, "loaded %ld chroms into zdx\n", numchroms);
+
   //
   // OscFileParser based parsing
   //

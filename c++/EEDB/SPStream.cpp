@@ -1,4 +1,4 @@
-/* $Id: SPStream.cpp,v 1.112 2024/09/09 07:39:04 severin Exp $ */
+/* $Id: SPStream.cpp,v 1.113 2025/02/27 04:49:21 severin Exp $ */
 
 /***
 
@@ -324,6 +324,14 @@ void  EEDB::SPStream::source_stream(EEDB::SPStream* value) {
     }
 
   }
+}
+
+EEDB::SPStream* EEDB::SPStream::stream_head() {
+  EEDB::SPStream *head = this;
+  while(head->source_stream()!=NULL) {
+    head = head->source_stream();
+  }
+  return head;
 }
 
 /***** side_stream

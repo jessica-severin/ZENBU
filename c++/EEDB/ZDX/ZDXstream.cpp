@@ -1,4 +1,4 @@
-/*  $Id: ZDXstream.cpp,v 1.59 2019/07/31 06:59:15 severin Exp $ */
+/*  $Id: ZDXstream.cpp,v 1.60 2025/04/21 05:14:19 severin Exp $ */
 
 /*******
 
@@ -115,6 +115,9 @@ void _zdx_zdxstream_stream_clear_func(EEDB::SPStream* node) {
 bool _zdx_zdxstream_stream_by_named_region_func(EEDB::SPStream* node, string assembly_name, string chrom_name, long int start, long int end) {
   return ((EEDB::ZDX::ZDXstream*)node)->_stream_by_named_region(assembly_name, chrom_name, start, end);
 }
+void _zdx_zdxstream_stream_all_features_func(EEDB::SPStream* node) {
+  ((EEDB::ZDX::ZDXstream*)node)->_stream_all_features();
+}
 void _zdx_zdxstream_xml_func(MQDB::DBObject *obj, string &xml_buffer) { 
   ((EEDB::ZDX::ZDXstream*)obj)->_xml(xml_buffer);
 }
@@ -152,6 +155,7 @@ void EEDB::ZDX::ZDXstream::init() {
   _funcptr_disconnect                         = _zdx_zdxstream_disconnect_func;
   _funcptr_stream_by_named_region             = _zdx_zdxstream_stream_by_named_region_func;
   _funcptr_stream_features_by_metadata_search = _zdx_zdxstream_stream_features_by_metadata_search_func;
+  _funcptr_stream_all_features                = _zdx_zdxstream_stream_all_features_func;
   _funcptr_stream_data_sources                = _zdx_zdxstream_stream_data_sources_func;
   _funcptr_reload_stream_data_sources         = _zdx_zdxstream_reload_stream_data_sources_func;
   _funcptr_stream_chromosomes                 = _zdx_zdxstream_stream_chromosomes_func;
@@ -690,6 +694,37 @@ bool  EEDB::ZDX::ZDXstream::_stream_by_named_region(string assembly_name, string
   return _zsegment->stream_region(start, end);  //preps first segment for feature streaming;
 }
 
+
+void EEDB::ZDX::ZDXstream::_stream_all_features() {
+  fprintf(stderr, "EEDB::ZDX::ZDXstream::_stream_all_features\n");
+  if(!_zdxdb) { return; }
+
+  _reload_stream_data_sources();
+  
+  if(_source_stream != NULL) { _source_stream->release(); }
+  _source_stream = NULL;
+  
+  _region_start = 1;
+  _region_end   = -1;
+  
+  _all_feature_stream_chroms = EEDB::ZDX::ZDXsegment::fetch_all_chroms(_zdxdb);
+  fprintf(stderr, "all_feature prep %ld chroms\n", _all_feature_stream_chroms.size());
+  
+  //pop the last chrom off the vector and use that to start
+  EEDB::Chrom*  chrom = _all_feature_stream_chroms.back();
+  _all_feature_stream_chroms.pop_back();
+  if(!chrom) { return; }
+  
+  _zsegment = EEDB::ZDX::ZDXsegment::fetch(_zdxdb, chrom->assembly_name(), chrom->chrom_name(), 1);
+  if(!_zsegment) { return; }
+  
+  fprintf(stderr, "zdx_stream_all_features start asm:%s chrom:%s\n", chrom->assembly_name().c_str(), chrom->chrom_name().c_str());
+  
+  _zsegment->stream_region(_region_start, _region_end);  //preps first segment for feature streaming;
+  return;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 //  other streaming callback methods 
@@ -821,8 +856,22 @@ MQDB::DBObject*    EEDB::ZDX::ZDXstream::_next_in_stream() {
       _zsegment->release();
       _zsegment = t_zseg;
     }
+    if(_zsegment) { 
+      _zsegment->stream_region(_region_start, _region_end);  //preps segment for feature streaming;
+    } //if NULL then dies in while loop
+  }
+  
+  if(!_all_feature_stream_chroms.empty()) {
+    EEDB::Chrom*  chrom = _all_feature_stream_chroms.back();
+    _all_feature_stream_chroms.pop_back();
+    if(!chrom) { return NULL; }
+    
+    _zsegment = EEDB::ZDX::ZDXsegment::fetch(_zdxdb, chrom->assembly_name(), chrom->chrom_name(), 1);
     if(!_zsegment) { return NULL; }
-    _zsegment->stream_region(_region_start, _region_end);  //preps segment for feature streaming;
+    
+    fprintf(stderr, "zdx_stream_all_features NEXT chrom asm:%s chrom:%s\n", chrom->assembly_name().c_str(), chrom->chrom_name().c_str());
+    _zsegment->stream_region(_region_start, _region_end);  //preps first segment for feature streaming;
+    return _next_in_stream();
   }
   
   return NULL;

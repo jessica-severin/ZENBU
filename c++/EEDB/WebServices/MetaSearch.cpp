@@ -1,4 +1,4 @@
-/* $Id: MetaSearch.cpp,v 1.102 2023/05/29 04:18:07 severin Exp $ */
+/* $Id: MetaSearch.cpp,v 1.103 2025/02/27 04:29:33 severin Exp $ */
 
 /***
 
@@ -1313,6 +1313,9 @@ void EEDB::WebServices::MetaSearch::show_expression_datatypes() {
     }
     if(source->classname() == EEDB::FeatureSource::class_name) {
       datatypes = ((EEDB::FeatureSource*)source)->expression_datatypes();
+    }
+    if(source->classname() == EEDB::EdgeSource::class_name) {
+      datatypes = ((EEDB::EdgeSource*)source)->expression_datatypes();
     }
 
     map<string, EEDB::Datatype*>::iterator it;

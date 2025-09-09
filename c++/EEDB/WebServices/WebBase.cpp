@@ -1,4 +1,4 @@
-/* $Id: WebBase.cpp,v 1.237 2024/09/09 07:28:24 severin Exp $ */
+/* $Id: WebBase.cpp,v 1.239 2025/08/04 02:48:04 severin Exp $ */
 
 /***
 
@@ -93,7 +93,7 @@ using namespace MQDB;
 
 const char*     EEDB::WebServices::WebBase::class_name = "EEDB::WebServices::WebBase";
 
-const char*     EEDB::WebServices::WebBase::zenbu_version = "3.1.1";
+const char*     EEDB::WebServices::WebBase::zenbu_version = "3.1.2";
 
 map<string,string>  EEDB::WebServices::WebBase::global_parameters;
 
@@ -1818,12 +1818,6 @@ void EEDB::WebServices::WebBase::show_single_object() {
   
   obj = stream->fetch_object_by_id(_parameters["id"]);
   if(obj) { 
-    if(obj->peer_uuid()) {
-      string uuid = obj->peer_uuid();
-      EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
-      if(peer) { printf("%s\n", peer->xml().c_str()); }
-      print_object_xml(obj);
-    }
     
     if(obj->classname() == EEDB::Edge::class_name) {
       //need to fetch the edge features
@@ -1859,7 +1853,14 @@ void EEDB::WebServices::WebBase::show_single_object() {
           edge->feature2(f2);
         }
       }      
-      
+
+      if(edge->direction() == ' ') { edge->calc_direction(); }
+
+      string uuid = obj->peer_uuid();
+      EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
+      if(peer) { printf("%s\n", peer->xml().c_str()); }
+      print_object_xml(obj);      
+
       if(edge->feature1()) {         
         string uuid = edge->feature1()->peer_uuid();
         EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
@@ -1883,6 +1884,13 @@ void EEDB::WebServices::WebBase::show_single_object() {
       }
       //fprintf(stderr, "%s\n", edge->xml().c_str());
     }
+    else if(obj->peer_uuid()) {
+      string uuid = obj->peer_uuid();
+      EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
+      if(peer) { printf("%s\n", peer->xml().c_str()); }
+      print_object_xml(obj);
+    }
+
   }
   stream->disconnect();  
     

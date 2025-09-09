@@ -1,4 +1,4 @@
-/* $Id: RegionServer.cpp,v 1.271 2024/09/09 07:25:57 severin Exp $ */
+/* $Id: RegionServer.cpp,v 1.275 2025/08/12 04:39:35 severin Exp $ */
 
 /***
 
@@ -629,6 +629,10 @@ void  EEDB::WebServices::RegionServer::postprocess_parameters() {
     if(_parameters.find("bin_size") != _parameters.end()) { 
       EEDB::WebServices::WebBase::global_parameters["global_bin_size"] = _parameters["bin_size"];
     }
+  }
+
+  if(_parameters.find("mdkey_list")!=_parameters.end()) {
+    fprintf(stderr, "region postprocess has filter_mdkeys : %s\n", _parameters["mdkey_list"].c_str() );
   }
   
   //lastly check the processing script for proxies and replace with FederatedSourceStreams
@@ -1461,7 +1465,9 @@ void  EEDB::WebServices::RegionServer::_direct_show_region() {
   
   //for edge system if needed
   bool                         has_edge_source = false;
-  map<string, EEDB::Feature*>  feature_id_hash;
+  //map<string, EEDB::Feature*>  feature_id_hash;
+  //EEDB::SPStream               *stream_head=NULL, *scripted_stream=NULL;
+  map<string, bool>            edge_feature_id_hash; //track edge featureIDs so don't outputput them more than once
 
   find_assembly(assembly); //to load into cache
 
@@ -1491,8 +1497,15 @@ void  EEDB::WebServices::RegionServer::_direct_show_region() {
       }
     }
   }
-  if(has_edge_source) { 
-    fprintf(stderr, "_direct_show_region has an EdgeSource\n");
+  //if(has_edge_source) { 
+    //fprintf(stderr, "_direct_show_region has an EdgeSource\n");
+    //flip stream to the raw HEAD to get unprocessed features
+    //stream_head = stream->stream_head();
+    //scripted_stream = stream;
+    //stream = stream_head;
+    //fprintf(stderr, "HEAD: %s\n====\n", stream_head->xml().c_str());
+    //fprintf(stderr, "scripted_stream: %s\n====\n", scripted_stream->xml().c_str());
+    
     //
     // might need to implement something like this when and an EdgeSource is discovered
     // to automatically find and add the dependant FeatureSources
@@ -1534,7 +1547,7 @@ void  EEDB::WebServices::RegionServer::_direct_show_region() {
     //   }
     // }
     // //fprintf(stderr, "now %ld sources in filter\n", _filter_source_ids.size());
-  }
+  //}
 
   if(_parameters["format"] == "xml") { 
 
@@ -1570,18 +1583,29 @@ void  EEDB::WebServices::RegionServer::_direct_show_region() {
     EEDB::Edge    *edge = NULL;
     if(obj->classname() == EEDB::Feature::class_name) { 
       feature = (EEDB::Feature*)obj;
-      if(has_edge_source) {
-        //need to collect the featureIDs for a post fetch of edges from the stream
-        feature_id_hash[feature->db_id()] = NULL;
-      }
+      //if(has_edge_source) {
+      //  //need to collect the featureIDs for a post fetch of edges from the stream
+      //  feature_id_hash[feature->db_id()] = feature;
+      //  feature->retain();
+      //}
     }
-    if(obj->classname() == EEDB::Edge::class_name)    { edge = (EEDB::Edge*)obj; }
+    if(obj->classname() == EEDB::Edge::class_name) { 
+      edge = (EEDB::Edge*)obj;
+    }
 
     if(!edge && !feature) { obj->release(); continue; }
 
     if(edge) {
       if(format == "xml")  { 
         edge->xml(_output_buffer); 
+        if(edge->feature1() && edge_feature_id_hash.find(edge->feature1_dbid()) == edge_feature_id_hash.end()) {
+          edge->feature1()->xml(_output_buffer);
+          edge_feature_id_hash[edge->feature1_dbid()] = true;
+        }
+        if(edge->feature2() && edge_feature_id_hash.find(edge->feature2_dbid()) == edge_feature_id_hash.end()) {
+          edge->feature2()->xml(_output_buffer);
+          edge_feature_id_hash[edge->feature2_dbid()] = true;
+        }
       }
       _total_count++;
       if(_total_count<10) { check_over_memory(); }
@@ -1675,9 +1699,10 @@ void  EEDB::WebServices::RegionServer::_direct_show_region() {
   _raw_count = _raw_objcounter->count();
   //stream->stream_clear();
   
-  if(has_edge_source) {
-    _show_dependent_edges(stream, feature_id_hash);
-  }
+  //if(has_edge_source) {
+  //  stream = scripted_stream;
+  //  _show_dependent_edges(stream, feature_id_hash);
+  //}
 
   //add all the sources and dependant sources that appeared in the features that streamed
   if(_parameters["format"] == "xml") {
@@ -1732,7 +1757,7 @@ void  EEDB::WebServices::RegionServer::_direct_show_region() {
   _output_footer();
 }
 
-
+/*
 void  EEDB::WebServices::RegionServer::_show_dependent_edges(EEDB::SPStream* stream, map<string, EEDB::Feature*> fid_hash) {
   //helper function for _direct_show_region when an EdgeSource has been selected
   
@@ -1746,10 +1771,17 @@ void  EEDB::WebServices::RegionServer::_show_dependent_edges(EEDB::SPStream* str
   map<string, EEDB::Feature*>::iterator   it1;
   map<string, EEDB::Feature*>             new_fid_hash; //features connected to edges outside the original region
   
+  map<string, bool>                       new_source_ids;
+  map<string, bool>::iterator             it2;
+
+  EEDB::SPStreams::FederatedSourceStream *fstream = NULL;
+
   input_feature_count = fid_hash.size();
+  fprintf(stderr, "_show_dependent_edges %ld features in hash\n", fid_hash.size());
+  fprintf(stderr, "%s\n", stream->xml().c_str());
+
   if(input_feature_count==0) { return; }
 
-  fprintf(stderr, "stream_edges %ld features\n", fid_hash.size());
   snprintf(buffer, 2040, "<note>stream_edges %ld feature_ids</note>\n", fid_hash.size());
   _output_buffer.append(buffer);
 
@@ -1759,6 +1791,10 @@ void  EEDB::WebServices::RegionServer::_show_dependent_edges(EEDB::SPStream* str
     if(deep_loop<1) { deep_loop = 1; }
   }
   //fprintf(stderr, "starting deep_loop = %ld\n", deep_loop);
+  
+  //TODO: I might remove the deep_loop concept from region edges
+  //it's only partially working now and doesn't make as much sense 
+  //for a region query
   
   while(deep_loop>0) {
     //printf("<note>deep loop %ld</note>\n", deep_loop);
@@ -1774,7 +1810,8 @@ void  EEDB::WebServices::RegionServer::_show_dependent_edges(EEDB::SPStream* str
     while(EEDB::Edge *edge = (EEDB::Edge*)stream->next_in_stream()) {
       if(!edge) { continue; }
       
-      if(deep_loop ==1) { 
+      if(deep_loop ==1) {
+        if(edge->direction() == ' ') { edge->calc_direction(); }
         //printf("%s", edge->simple_xml().c_str());
         if(_parameters["format"] == "xml") {
           if(_parameters["format_mode"]  == "fullxml") {
@@ -1803,19 +1840,21 @@ void  EEDB::WebServices::RegionServer::_show_dependent_edges(EEDB::SPStream* str
         features_changed = true;
       }
 
-      //
-      // might add this concept later but for now this is a simpler version of the edge query code
-      //
-      // string fsrcid1 = edge->edge_source()->feature_source1_dbid();
-      // string fsrcid2 = edge->edge_source()->feature_source2_dbid();
-      // if(_filter_source_ids.find(fsrcid1) == _filter_source_ids.end()) {
-      //   //fprintf(stderr, "add filter_source %s\n", fsrcid1.c_str());
-      //   _filter_source_ids[fsrcid1] = true;
-      // }
-      // if(_filter_source_ids.find(fsrcid2) == _filter_source_ids.end()) {
-      //   //fprintf(stderr, "add filter_source %s\n", fsrcid2.c_str());
-      //   _filter_source_ids[fsrcid2] = true;
-      // }
+      //find missing sources based on edge feature_sources
+      string fsrcid1 = edge->edge_source()->feature_source1_dbid();
+      string fsrcid2 = edge->edge_source()->feature_source2_dbid();
+      if((_filter_source_ids.find(fsrcid1) == _filter_source_ids.end()) && 
+         (new_source_ids.find(fsrcid1) == new_source_ids.end())) {
+        //fprintf(stderr, "add filter_source %s\n", fsrcid1.c_str());
+        //_filter_source_ids[fsrcid1] = true;
+        new_source_ids[fsrcid1] = true;
+      }
+      if((_filter_source_ids.find(fsrcid2) == _filter_source_ids.end()) &&
+         (new_source_ids.find(fsrcid2) == new_source_ids.end())) {
+        //fprintf(stderr, "add filter_source %s\n", fsrcid2.c_str());
+        //_filter_source_ids[fsrcid2] = true;
+        new_source_ids[fsrcid2] = true;
+      }
 
       edge->release();
       _output_buffer_send(true);
@@ -1831,7 +1870,26 @@ void  EEDB::WebServices::RegionServer::_show_dependent_edges(EEDB::SPStream* str
       fprintf(stderr, "features didn't change, so loop 1 more time to output edges\n");
     }
   }
+
+  if(!new_source_ids.empty() && !new_fid_hash.empty()) {
+    fprintf(stderr, "rebuild the stream because new sources from edges\n");
+    for(it2=new_source_ids.begin(); it2!=new_source_ids.end(); it2++) {
+      string fsrcid = (*it2).first;
+      _filter_source_ids[fsrcid] = true;
+    }
   
+    fstream = secured_federated_source_stream();
+    fstream->set_sourcestream_output(_parameters["source_outmode"]);
+    if(_parameters.find("exptype") != _parameters.end()) {
+      fstream->add_expression_datatype_filter(EEDB::Datatype::get_type(_parameters["exptype"]));
+    }
+    for(it2=_filter_source_ids.begin(); it2!=_filter_source_ids.end(); it2++) {
+      fstream->add_source_id_filter((*it2).first);
+    }    
+    stream = fstream;    
+  }
+        
+
   if(!new_fid_hash.empty()) {
     fprintf(stderr, "after stream_edges found %ld new features to fetch\n", new_fid_hash.size());
     snprintf(buffer, 2040, "<note>stream_edges found %ld new/linked features to fetch</note>\n", new_fid_hash.size());
@@ -1871,6 +1929,8 @@ void  EEDB::WebServices::RegionServer::_show_dependent_edges(EEDB::SPStream* str
     //if(feature_fail_count>0) { snprintf(buffer, 2040, "_show_dependent_edges failed to fetch %d features\n", feature_fail_count); }
   }
   
+  if(fstream) { fstream->release(); }
+  
   gettimeofday(&endtime, NULL);
   timersub(&endtime, &_starttime, &time_diff);
   total_time  = (double)time_diff.tv_sec + ((double)time_diff.tv_usec)/1000000.0;
@@ -1878,7 +1938,7 @@ void  EEDB::WebServices::RegionServer::_show_dependent_edges(EEDB::SPStream* str
   
   _output_buffer_send(true);
 }
-
+*/
 
      
 bool  EEDB::WebServices::RegionServer::_trackcache_show_region() {  
@@ -1961,7 +2021,8 @@ bool  EEDB::WebServices::RegionServer::_trackcache_show_region() {
     stream->stream_data_sources();
     long int experiment_count=0, fsrc_count=0;
     while(EEDB::DataSource* source = (EEDB::DataSource*)stream->next_in_stream()) {
-      source->simple_xml(_output_buffer);
+      //source->simple_xml(_output_buffer);
+      source->mdata_xml(_output_buffer, _desc_xml_tags);
       EEDB::DataSource::add_to_sources_cache(source);
       if(source->classname() == EEDB::FeatureSource::class_name) { fsrc_count++; }
       if(source->classname() == EEDB::Experiment::class_name) { experiment_count++; }      

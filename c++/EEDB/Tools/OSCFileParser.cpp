@@ -1,4 +1,4 @@
-/* $Id: OSCFileParser.cpp,v 1.227 2022/02/02 10:40:59 severin Exp $ */
+/* $Id: OSCFileParser.cpp,v 1.230 2025/02/21 02:01:24 severin Exp $ */
 
 /***
 
@@ -906,7 +906,9 @@ bool  EEDB::Tools::OSCFileParser::init_from_oscheader_file(string path) {
         primary_feature_source()->add_datatype(colobj->datatype);
       }
       if(_coordinate_system == EDGES) {
-        primary_edge_source()->add_datatype(colobj->datatype);
+        if((colobj->colname != "edgef1_name") && (colobj->colname!= "edgef2_name")) {
+          primary_edge_source()->add_datatype(colobj->datatype);
+        }
       }
       //primary_feature_source()->add_datatype(colobj->datatype);
       //primary_feature_source()->metadataset()->add_tag_symbol("eedb:expression_datatype", colobj->datatype->type() + "_pm");
@@ -1546,6 +1548,7 @@ void  EEDB::Tools::OSCFileParser::_process_column(OSC_column *colobj) {
 
     if(colobj->colname == "eedb:sam_flag")     { colobj->oscnamespace = METADATA; _idx_sam_flag = i; }
     if(colobj->colname == "eedb:sam_cigar")    { colobj->oscnamespace = METADATA; _idx_cigar = i; }
+    if(colobj->colname == "sam:cigar")         { colobj->oscnamespace = METADATA; _idx_cigar = i; }
     if(colobj->colname == "eedb:sam_opt")      { colobj->oscnamespace = METADATA; _idx_sam_opt = i; }
 
     if(colobj->colname == "eedb:ctg_cigar")    { colobj->oscnamespace = GENOMIC; _idx_ctg_cigar = i; }
@@ -1684,6 +1687,7 @@ void  EEDB::Tools::OSCFileParser::postprocess_columns() {
     
     if(colobj->colname == "eedb:sam_flag")         { _idx_sam_flag = i; }
     if(colobj->colname == "eedb:sam_cigar")        { _idx_cigar = i; }
+    if(colobj->colname == "sam:cigar")             { _idx_cigar = i; }
     if(colobj->colname == "eedb:sam_opt")          { _idx_sam_opt = i; }
 
     if(colobj->colname == "eedb:ctg_cigar")        { _idx_ctg_cigar = i; }
@@ -3208,7 +3212,7 @@ string  EEDB::Tools::OSCFileParser::sort_input_file() {
   timersub(&endtime, &starttime, &difftime);
   rate = (double)count / ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
   fprintf(stderr, "%10ld features  %13.2f obj/sec\n", count, rate);
-  
+  fprintf(stderr, "%ld chrom_outfiles\n", chrom_outfiles.size());
   //close files
   gzclose(gz);
   map<string, int>::iterator chr_it;
@@ -3216,7 +3220,23 @@ string  EEDB::Tools::OSCFileParser::sort_input_file() {
     close((*chr_it).second);
     //maybe do something else here since we know all the chromosomes in the file now
   }
-  
+
+  /* possible single sort option
+  //sort -k1 -k4rn -k5n -k7n 
+  string sort_cmd = "sort ";
+  snprintf(buffer, 8190, " -k%d ", chrom_idx+1);
+  sort_cmd += buffer;
+  snprintf(buffer, 8190, " -k%dn ", start_idx+1);
+  sort_cmd += buffer;
+  if(end_idx != -1) { 
+    snprintf(buffer, 8190, "-k%drn ", end_idx+1);
+    sort_cmd += buffer;
+  }
+  if(strand_idx != -1) { 
+    snprintf(buffer, 8190, "-k%dn ", strand_idx+1);
+    sort_cmd += buffer;
+  }
+  */
 
   string sort_cmd;
   snprintf(buffer, 8190, "sort -n -k%d ", start_idx+1);
@@ -3248,21 +3268,23 @@ string  EEDB::Tools::OSCFileParser::sort_input_file() {
     chrom_list.push_back((*chr_it2).second);
   }
   chrom_list.sort(chrom_length_sort_func);
+  fprintf(stderr, "chrom_list %ld\n", chrom_list.size());
   
   for(chr_it3=chrom_list.begin(); chr_it3!=chrom_list.end(); chr_it3++) {
-    fprintf(stderr, "sort chrom [%s]\n", (*chr_it3)->chrom_name().c_str());
+    //fprintf(stderr, "sort chrom [%s]\n", (*chr_it3)->chrom_name().c_str());
     
     string chrfile     = builddir + (*chr_it3)->chrom_name();
     string sortchrfile = chrfile+".sort";
         
     string cmd = sort_cmd;
     cmd += chrfile +" > " + sortchrfile;
-    fprintf(stderr, "\t%s\n", cmd.c_str());
+    //fprintf(stderr, "\t%s\n", cmd.c_str());
     system(cmd.c_str());
     
     //concat into main file
     char readbuf[65535];
     FILE *chrfp = fopen(sortchrfile.c_str(), "r");
+    if(!chrfp) { fprintf(stderr, "failed to open : %s\n", sortchrfile.c_str()); }
     while(fgets(readbuf, 65530, chrfp) != NULL) {
       linebuffer = readbuf;
       write(sort_fd, linebuffer.c_str(), linebuffer.length());      
