@@ -3139,7 +3139,7 @@ function gLyphsDrawFeatureTrack(glyphTrack) {
   if(glyphStyle == "probesetloc") { levelHeight=7; }
   if(glyphStyle == "thin") { levelHeight=3; }
   if(glyphStyle == "thin-box") { levelHeight=3; }
-  if(glyphStyle == "seqalign") { levelHeight=8; }
+  if(glyphStyle == "seqalign") { levelHeight=9; }
 
   if(glyphStyle == "cytoband") { 
     levelHeight=34;
@@ -4430,12 +4430,13 @@ function gLyphsTrack_render_arc(glyphTrack) {
     }
 
     t_path.setAttributeNS(null,"stroke-width", 1.5);
+    if(glyphTrack.colorAlpha<1.0) { t_path.setAttributeNS(null,"opacity", glyphTrack.colorAlpha); }
     if(feature.strand != "-") { 
-      //t_path.style.stroke = colour.getCSSHexadecimalRGB();
-      t_path.setAttributeNS(null,"stroke", colour.getCSSIntegerRGBA());
+      t_path.style.stroke = colour.getCSSHexadecimalRGB();
+      //t_path.setAttributeNS(null,"stroke", colour.getCSSIntegerRGBA());
       if(glyphTrack.xyplot_fill) { 
-        //t_path.style.fill = colour.getCSSHexadecimalRGB(); 
-        t_path.setAttributeNS(null, "fill", colour.getCSSIntegerRGBA());
+        t_path.style.fill = colour.getCSSHexadecimalRGB(); 
+        //t_path.setAttributeNS(null, "fill", colour.getCSSIntegerRGBA());
       } else { 
         //t_path.style.fill = "transparent";
         t_path.setAttributeNS(null, "fill", "transparent");
@@ -4466,7 +4467,8 @@ function gLyphsTrack_render_arc(glyphTrack) {
     
     if((feature.strand == "-") && (!glyphTrack.strandless)) {
       t_path.setAttributeNS(null, 'd', points);
-      t_path.style.stroke = colour.getCSSIntegerRGBA();
+      //t_path.style.stroke = colour.getCSSIntegerRGBA();
+      t_path.style.stroke = colour.getCSSHexadecimalRGB(); 
       t_path.style.fill = "transparent";
       //t_path.style.fill = "rgba(255,255,225,0)";
       expressLine2.appendChild(t_path);
@@ -4646,8 +4648,10 @@ function gLyphsTrack_render_dual_interaction(glyphTrack) {
   
     t_path.setAttributeNS(null,"stroke-width", 1.5);
     t_path.setAttributeNS(null, 'd', points);
-    //t_path.style.stroke = colour.getCSSHexadecimalRGB();
-    t_path.style.stroke = colour.getCSSIntegerRGBA();
+    if(glyphTrack.colorAlpha<1.0) { t_path.setAttributeNS(null,"opacity", glyphTrack.colorAlpha); }
+    t_path.style.stroke = colour.getCSSHexadecimalRGB();
+    //t_path.style.stroke = colour.getCSSIntegerRGBA();
+    //t_path.style.stroke = colour.getCSSHexadecimalRGBA();
     t_path.style.fill = "transparent";
     if(!glyphTrack.glyphsGB.exportSVGconfig) {
       t_path.setAttributeNS(null, "onmousemove", "selectTrackRegion('drag', \"" +glyphTrack.trackID+"\");");
@@ -7077,8 +7081,12 @@ function gLyphsDrawSeqAlignment(glyphTrack, feature) {
           cig_pos += 3;
         }
       }
-      if(cigop == "D") { pos += ciglen; ciglen=0; }
-      if(cigop == "N") { pos += ciglen; ciglen=0; }
+      while(cigop == "D" || cigop == "N") { 
+        pos += ciglen; 
+        ciglen = parseInt(mymatch[cig_pos+1]);
+        cigop  = mymatch[cig_pos+2];
+        cig_pos += 3;
+      }      
       if(cigop == "I") { 
         //have the base overwrite, or maybe place it midway
         if(insert_pos<0) { insert_length = ciglen; insert_pos=pos; }
@@ -7095,7 +7103,7 @@ function gLyphsDrawSeqAlignment(glyphTrack, feature) {
       var tobj = document.createElementNS(svgNS,'text');
       //tobj.setAttributeNS(null, 'x',  (xfs-3) +'px');
       tobj.setAttributeNS(null, 'x',  '0px');
-      tobj.setAttributeNS(null, 'y', '18px');
+      tobj.setAttributeNS(null, 'y', '19px');
       tobj.setAttributeNS(null, "font-size","8px");
       tobj.setAttributeNS(null, "font-family", 'arial,helvetica,sans-serif');
       tobj.setAttributeNS(null, "fill", 'black');
