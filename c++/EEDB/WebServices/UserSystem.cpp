@@ -1,4 +1,4 @@
-/* $Id: UserSystem.cpp,v 1.126 2023/02/17 07:21:27 severin Exp $ */
+/* $Id: UserSystem.cpp,v 1.127 2025/12/02 06:50:44 severin Exp $ */
 
 /***
 
@@ -866,7 +866,6 @@ void  EEDB::WebServices::UserSystem::send_password_reset_email() {
   string email = _parameters["profile_email"];
   EEDB::User *user = EEDB::User::fetch_by_email(_userDB, email);
   if(!user) {
-    user->release();
     _processing_error = "user not found";
     return show_user();
   }
