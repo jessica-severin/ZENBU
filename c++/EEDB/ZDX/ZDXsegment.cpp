@@ -1,4 +1,4 @@
-/*  $Id: ZDXsegment.cpp,v 1.89 2019/07/31 06:59:15 severin Exp $ */
+/*  $Id: ZDXsegment.cpp,v 1.90 2025/12/11 04:32:44 severin Exp $ */
 
 /*******
 
@@ -396,16 +396,24 @@ void  EEDB::ZDX::ZDXsegment::_load_builder_stats() {
   //load from znode
   if(!_zdxdb) { return; }
   if(!_zchrom) { return; }
-  if(_zsegment.znode == 0) { return; }
+  if(_segment_offset<=0) { return; }
   
   //get last znode of segment
   zdxnode *znode = NULL;
-  int64_t zoff = abs(_zsegment.znode);
-  while(zoff != 0) {
+  int64_t zoff = _zsegment.znode;
+  
+  //<0 is building, =0 is unbuiilt, 1-100 are built but no znode, >100 has znode
+  if(zoff>=1 && zoff<=100) { return; } //empty segment
+  
+  while(zoff>0 || zoff < -100) {
+    if(znode) { free(znode); znode=NULL; }
+    if(zoff>=1 && zoff<=100) { zoff = -1; continue; } //empty segment
+    //<0 is building, =0 is unbuiilt, 1-100 are built but no znode, >100 has real znode
+    
+    zoff = llabs(zoff); //load the claimed and building nodes too
     znode = _zdxdb->fetch_znode(zoff);
     if(!znode) { return; }
     zoff = znode->next_znode;
-    if(zoff != 0) { free(znode); }
   }
   if(!znode) { return; }
   
@@ -2563,7 +2571,8 @@ long  EEDB::ZDX::ZDXsegment::test_next_znode() {
   return size;  
 }
 
-
+// znode_stats is a commandline tool method which prints information about each znode in the segment
+//sends to stdout (not stderr) anymore
 bool  EEDB::ZDX::ZDXsegment::znode_stats() {
   if(!_zdxdb) { return false; }
   if(!_zchrom) { return false; }
@@ -2603,7 +2612,7 @@ bool  EEDB::ZDX::ZDXsegment::znode_stats() {
     char buf1[10];
     bzero(buf1,10);
     strncpy(buf1, znode->content_format_code, 8);
-    fprintf(stderr, "  znode[%ld] %s : %d bytes", _next_znode, buf1, znode->blob_size);
+    printf("  znode[%ld] %s : %d bytes", _next_znode, buf1, znode->blob_size);
 
     _next_znode = znode->next_znode;
 
@@ -2647,7 +2656,7 @@ bool  EEDB::ZDX::ZDXsegment::znode_stats() {
         fc++;
         node = node->next_sibling("feature");
       }
-      fprintf(stderr, " : %ld features", fc);
+      printf(" : %ld features", fc);
       feat_count += fc;
     }
     // chrom_chunk
@@ -2657,12 +2666,12 @@ bool  EEDB::ZDX::ZDXsegment::znode_stats() {
         cc++;
         node = node->next_sibling("chrom_chunk");
       }
-      fprintf(stderr, " : %ld chunks", cc);
+      printf(" : %ld chunks", cc);
       chunk_count += cc;
     }
-    fprintf(stderr, "\n");
+    printf("\n");
   }
-  //fprintf(stderr, "  %ld feat : %ld chunks\n", feat_count, chunk_count);
+  //printf("  %ld feat : %ld chunks\n", feat_count, chunk_count);
   
 
   _streambuffer->release_objects();
