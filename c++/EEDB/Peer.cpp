@@ -1,4 +1,4 @@
-/* $Id: Peer.cpp,v 1.156 2024/05/31 06:12:26 severin Exp $ */
+/* $Id: Peer.cpp,v 1.158 2025/12/02 23:35:52 severin Exp $ */
 
 /***
 
@@ -223,14 +223,46 @@ EEDB::Peer*  EEDB::Peer::new_from_url(string url) {
 // must return as DBObject* cast
 //
 DBObject*  EEDB::Peer::create(map<string, dynadata> &row_map, MQDB::Database* db) {
-  Peer  *obj = EEDB::Peer::check_cache(row_map["uuid"].i_string);
-  if(obj!=NULL) { obj->retain(); return obj; }
+  string uuid   = row_map["uuid"].i_string;
+  string db_url = row_map["db_url"].i_string;
+
+  //new testing logic: 
+  // since this method is the primary way to create/check a peer registry from a sql database, 
+  // this is one of the key locations for checking for peer relocation and valid/invalid locations
+  // - on first uuid: it's the same fast logic to create new peer
+  // - check cache now also checks if db_url is same or different
+  // - if same url then fast (delayed connection testing)
+  // - if different url now triggers a connection valid test to choose the correct peer
+  Peer  *obj = EEDB::Peer::check_cache(uuid);
+  if(obj!=NULL) {
+    if(db_url == obj->db_url()) {
+      //fprintf(stderr, "  uuid[%s] url[%s] same\n", uuid.c_str(), db_url.c_str());
+      obj->retain(); 
+      return obj; 
+    } else { //different db_url
+      //fprintf(stderr, "peer uuid[%s] url[%s] != cache db_url[%s]\n", 
+      //          uuid.c_str(), db_url.c_str(), obj->db_url().c_str());
+      if(obj->is_valid()) {
+        //fprintf(stderr, "peer cache uuid[%s] is_valid\n", uuid.c_str());
+        obj->retain();
+        return obj;
+      } else {
+        // cache failed valid test. need to replace the invalid one in cache with this new peer db_url
+        fprintf(stderr, "peer cache uuid[%s] invalid[%s]  new db_url[%s]\n", uuid.c_str(), obj->db_url().c_str(), db_url.c_str());
+        obj->db_url(db_url);
+        obj->alias(row_map["alias"].i_string);
+        obj->retain();
+        return obj;    
+      }
+    }
+  }
   
-  obj = new EEDB::Peer;
-  obj->database(db);
-  obj->init_from_row_map(row_map);
-  EEDB::Peer::add_to_cache(obj);
-  return obj;
+  //new peer
+  EEDB::Peer* peer = new EEDB::Peer;
+  peer->database(db);
+  peer->init_from_row_map(row_map);
+  EEDB::Peer::add_to_cache(peer);
+  return peer;
 }
 
 //
@@ -347,6 +379,10 @@ void EEDB::Peer::_xml(string &xml_buffer) {
   char buffer[2048];
   snprintf(buffer, 2040, " depth=\"%d\"", federation_depth());
   xml_buffer.append(buffer);
+
+  if(_is_remote) { 
+    xml_buffer.append(" remote=\"true\"");
+  }
   xml_buffer.append(" ></peer>");
 }
 
@@ -415,6 +451,7 @@ void EEDB::Peer::db_url(string value) {
   _db_url = value;
   size_t p1 = _db_url.find("://");
   if(p1!=string::npos) { _driver = _db_url.substr(0, p1); }
+  _database_is_valid = -1; //reset to unknown testing state
 }
 
 void EEDB::Peer::alias(string value) { _alias = value; }
