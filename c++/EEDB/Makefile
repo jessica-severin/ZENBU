@@ -12,7 +12,7 @@ SRCS_C = Assembly.cpp Chrom.cpp ChromChunk.cpp \
          Peer.cpp SPStream.cpp User.cpp Collaboration.cpp Configuration.cpp \
          Datatype.cpp Feature.cpp Expression.cpp Edge.cpp EdgeWeight.cpp TrackCache.cpp TrackRequest.cpp \
          Tools/OSCFileParser.cpp Tools/OSCTableGenerator.cpp Tools/ResortBuffer.cpp Tools/LSArchiveImport.cpp \
-         Tools/Paraclu.cpp Tools/TrackCacheBuilder.cpp Tools/RemoteUserTool.cpp \
+         Tools/Paraclu.cpp Tools/TrackCacheBuilder.cpp Tools/RemoteUserTool.cpp Tools/ZDXBuilder.cpp \
          JobQueue/Job.cpp JobQueue/UploadFile.cpp \
          SPStreams/Dummy.cpp SPStreams/SourceStream.cpp SPStreams/StreamBuffer.cpp SPStreams/MergeStreams.cpp \
          SPStreams/OSCFileDB.cpp SPStreams/MultiMergeStream.cpp SPStreams/FederatedSourceStream.cpp \
