@@ -1,4 +1,4 @@
-/* $Id: zenbu_track_builder.cpp,v 1.77 2023/08/04 01:39:32 severin Exp $ */
+/* $Id: zenbu_track_builder.cpp,v 1.78 2025/12/11 06:21:25 severin Exp $ */
 
 /****
  
@@ -867,16 +867,18 @@ void trackcache_segment_stats(ZDXdb* zdxdb) {
         pid_t pid = segment->builder_pid();
         double buildtime = segment->build_time_msec();
         time_t tm = (time_t)segment->build_starttime();
-        printf("  build %s  pid=%d -- %7.3fmsec -- start %s", hostname.c_str(), pid, buildtime, ctime(&tm));
-        if(host_segcount.find(hostname) == host_segcount.end()) { host_segcount[hostname] = 0; }
-        host_segcount[hostname] += 1;
-
-        total_buildtime += buildtime;
-        if(buildtime>max_buildtime) { max_buildtime = buildtime; }
-        if(min_buildtime<0 || buildtime<min_buildtime) { min_buildtime = buildtime; }
-
-        if(real_starttime<0 || segment->build_starttime() < real_starttime) { real_starttime = segment->build_starttime(); }
-        if(real_endtime<0 || segment->build_endtime() > real_endtime) { real_endtime = segment->build_endtime(); }
+        if(tm>0) {
+          printf("  build %s  pid=%d -- %7.3fmsec -- start %s", hostname.c_str(), pid, buildtime, ctime(&tm));
+          if(host_segcount.find(hostname) == host_segcount.end()) { host_segcount[hostname] = 0; }
+          host_segcount[hostname] += 1;
+        
+          total_buildtime += buildtime;
+          if(buildtime>max_buildtime) { max_buildtime = buildtime; }
+          if(min_buildtime<0 || buildtime<min_buildtime) { min_buildtime = buildtime; }
+        
+          if(real_starttime<0 || segment->build_starttime() < real_starttime) { real_starttime = segment->build_starttime(); }
+          if(real_endtime<0 || segment->build_endtime() > real_endtime) { real_endtime = segment->build_endtime(); }
+        }
       }
       
       EEDB::ZDX::ZDXsegment* seg = segment->next_segment();
