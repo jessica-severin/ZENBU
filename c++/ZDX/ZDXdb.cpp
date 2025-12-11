@@ -1,4 +1,4 @@
-/*  $Id: ZDXdb.cpp,v 1.20 2014/10/22 07:05:12 severin Exp $ */
+/*  $Id: ZDXdb.cpp,v 1.21 2025/12/10 08:45:18 severin Exp $ */
 
 /*******
 
@@ -405,7 +405,7 @@ ZDX::zdxnode*  ZDX::ZDXdb::fetch_znode(int64_t offset) {
   //read again with blob_size
   lseek(_zdx_fd, offset, SEEK_SET);  
   if(read(_zdx_fd, node, fullsize) != fullsize) { 
-    fprintf(stderr, "zdx can't read znode blob\n"); 
+    fprintf(stderr, "zdx can't read znode blob (offset:%ld  size:%d)\n", offset, tnode.blob_size); 
     free(node);
     return NULL;
   }
