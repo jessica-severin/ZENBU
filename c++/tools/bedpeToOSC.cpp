@@ -1,4 +1,4 @@
-/* $Id: bedpeToOSC.cpp,v 1.6 2025/07/18 06:45:21 severin Exp $ */
+/* $Id: bedpeToOSC.cpp,v 1.7 2025/12/11 06:20:12 severin Exp $ */
 
 /*
  * this tool converts bedpe files into ZENBU node/edge OSC files. 
@@ -15,6 +15,9 @@
  *  9: strand1 - Defines the strand for the first end of the feature. Either ‘+’ or ‘-‘.
  *  10: strand2 - Defines the strand for the second end of the feature. Either ‘+’ or ‘-‘.
  *  11: Any number of additional, user-defined fields
+
+example: 
+for FILE in `ls -Sr *merge*v1c*.bedpe`; do  echo $FILE; bedpeToOSC $FILE -auxlabels MAPQ_RNA,MAPQ_DNA,CIGAR_RNA,CIGAR_DNA Source_gene_ID_RNA,Source_gene_name_RNA,  Type_source_gene_RNA, 25kb_bin_ID_DNA  intron_exon  RNA_read_split_over_exon_intron_junction  ewt.p.value   ewt.FDR  ewt.log10_pvalue  ewt.log10_FDR; done
 
  * 
  */
