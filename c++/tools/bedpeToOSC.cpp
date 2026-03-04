@@ -1,4 +1,4 @@
-/* $Id: bedpeToOSC.cpp,v 1.7 2025/12/11 06:20:12 severin Exp $ */
+/* $Id: bedpeToOSC.cpp,v 1.8 2026/01/16 05:44:13 severin Exp $ */
 
 /*
  * this tool converts bedpe files into ZENBU node/edge OSC files. 
@@ -62,6 +62,7 @@ vector<string>        _aux_labels;
 string                _bedpe_file;
 vector<string>        _header = {"chrom1", "start1", "end1", "chrom2", "start2", "end2", "name", "score", "strand1", "strand2"};
 vector<string>        _aux_header;
+bool                  _score_one = false; //force score to 1 for counting
   
 void   usage();
 void   parse_aux_labels();
@@ -72,7 +73,7 @@ int main(int argc, char *argv[]) {
   
   setlocale(LC_NUMERIC, "");
 
-  vector<string> valid_args = {"-f", "-file", "-help", "-h", "-suffix", "-output", "-auxlabels"};
+  vector<string> valid_args = {"-f", "-file", "-help", "-h", "-suffix", "-output", "-auxlabels", "-score1"};
 
   for(int argi=1; argi<argc; argi++) {
     if(argi==1 && argv[argi][0] != '-') { _bedpe_file = argv[argi]; }
@@ -92,6 +93,7 @@ int main(int argc, char *argv[]) {
 
     //first options without args
     if(arg == "-help" || arg == "-h") { usage(); }
+    if(arg == "-score1") { _score_one = true; continue; }
     
     //then options with args
     if(argvals.empty()) {
@@ -132,6 +134,7 @@ void usage() {
   printf("  -output <name>        : file name prefix for node/edge output files\n");
   printf("  -suffix <name>        : optional suffix for versioning of output files\n");
   printf("  -auxlabels <string>   : comma or tab separated list of header labels for the user defined columns\n");
+  printf("  -score1               : force score to 1.0 for simple counting\n");
   printf("bedpeToOSC v%s\n", version.c_str());
   
   exit(1);  
@@ -225,6 +228,7 @@ void convert_bedpe_file() {
     long col_idx=0;
     char* tok = strtok(data_buffer, "\t");
     while(tok) {
+      if(col_idx >= _header.size()) { break; }  //if ignoring auxlabels
       if(strcmp(tok, "__na")==0) { tok[0] = '\0'; }
       if(strcmp(tok, "N/A")==0) { tok[0] = '\0'; }
       cols_obj[_header[col_idx]] = tok;
@@ -238,6 +242,8 @@ void convert_bedpe_file() {
     long start2 = strtol(cols_obj["start2"].c_str(), NULL, 10);
     long end1 = strtol(cols_obj["end1"].c_str(), NULL, 10);
     long end2 = strtol(cols_obj["end2"].c_str(), NULL, 10);
+
+    if(_score_one) { cols_obj["score"] = "1"; }
 
     //output node1 
     fprintf(node_fp, "n%ld\t%s\t%s\t%s\t%s\t%s\t%s\tpe1\n",
