@@ -1,4 +1,4 @@
-/*  $Id: ZDXdb.cpp,v 1.21 2025/12/10 08:45:18 severin Exp $ */
+/*  $Id: ZDXdb.cpp,v 1.23 2026/02/18 03:50:37 severin Exp $ */
 
 /*******
 
@@ -135,12 +135,14 @@ ZDX::ZDXdb*   ZDX::ZDXdb::create_new(string path, string magic) {
   }
   
   //create file and write header
+  //fprintf(stderr, "ZDXdb:create_new with 0664\n");
   zdxdb->_zdx_fd = open(path.c_str(), O_CREAT | O_TRUNC | O_RDWR, 0664);
   if(zdxdb->_zdx_fd == -1) { 
     fprintf(stderr, "zdx error : can't create file [%s]\n", path.c_str()); 
     zdxdb->release();
     return NULL; //error
   }
+  chmod(path.c_str(), 0664); //force the file mode since it's not working with the open/create
   
   //use write lock and fstat to see if there is race condition on creating file
   //if I got the first write-lock the file will be zero size
@@ -201,7 +203,7 @@ int  ZDX::ZDXdb::connect(zdx_mode mode) {
   disconnect();
   
   if(mode == ZDXREAD) {
-    _zdx_fd = open(_zdx_path.c_str(), O_RDONLY | O_NONBLOCK, 0644);
+    _zdx_fd = open(_zdx_path.c_str(), O_RDONLY | O_NONBLOCK, 0664);
     if(_zdx_fd == -1) { 
       fprintf(stderr, "zdx error opening file [%s]\n", _zdx_path.c_str());
       return -1;
@@ -215,7 +217,7 @@ int  ZDX::ZDXdb::connect(zdx_mode mode) {
   }
 
   if(mode == ZDXWRITE) {
-    _zdx_fd = open(_zdx_path.c_str(), O_RDWR, 0644);
+    _zdx_fd = open(_zdx_path.c_str(), O_RDWR, 0664);
     if(_zdx_fd == -1) { 
       fprintf(stderr, "zdx error opening file [%s]\n", _zdx_path.c_str());
       return -1;
