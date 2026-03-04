@@ -1,4 +1,4 @@
-/* $Id: MetadataFilter.cpp,v 1.9 2024/10/03 03:37:27 severin Exp $ */
+/* $Id: MetadataFilter.cpp,v 1.10 2026/02/19 05:33:53 severin Exp $ */
 
 /***
 
@@ -210,6 +210,7 @@ MQDB::DBObject* EEDB::SPStreams::MetadataFilter::_next_in_stream() {
       case FEATURE:
         if(feature) {
           mdset = feature->metadataset();
+          if(mdset && !feature->primary_name().empty()) { mdset->add_tag_data("primary_name", feature->primary_name()); }
           if(_check_metadataset(mdset)) { ok = true; break; }
         } else { return obj; } //let edge pass through;
         break;
