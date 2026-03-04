@@ -73,6 +73,7 @@ int main(int argc, char *argv[]) {
     if(arg == "-keywords")      { _parameters["keywords"] = argval; }
     if(arg == "-display_name")  { _parameters["display_name"] = argval; }
     if(arg == "-description")   { _parameters["description"] = argval; }
+    if(arg == "-desc")   { _parameters["description"] = argval; }
     if(arg == "-platform")      { _parameters["platform"] = argval; }
     if(arg == "-assembly")      { _parameters["genome_assembly"] = argval; }
     if(arg == "-asm")           { _parameters["genome_assembly"] = argval; }
@@ -80,6 +81,7 @@ int main(int argc, char *argv[]) {
     if(arg == "-score_express") { _parameters["score_as_expression"] = argval; }
     if(arg == "-test")          { _parameters["test_stream"] = "true"; }
     if(arg == "-bamloc")        { _parameters["_bam_loc"] = argval; }
+    if(arg == "-owner")         { _parameters["owner_identity"] = argval; }
     if(arg == "-owner_openid")  { _parameters["owner_openid"] = argval; }
         
     if(arg == "-single_tagmap") { _parameters["singletagmap_expression"] = "true"; }
@@ -124,6 +126,7 @@ void usage() {
   printf("  -platform <name>          : name of the experimental platform\n");
   printf("  -assembly <name>          : name of the genome assembly for this file (eg hg18 or mm9)\n");
   printf("  -ignore_int_asm           : for BAM, ignore internal assembly and override with externally specified\n");
+  printf("  -owner <email>            : set owner email to allow user editing after loading\n");
   printf("  -owner_openid <openid>    : set owner_openID to allow user editing after loading\n");
   printf("  -single_tagmap            : enable simple expression for files with single sequence tags mapped to single locations\n");
   printf("  -score_express <exptype>  : eedb:score column is mapped to expression of type <exptype>\n");
