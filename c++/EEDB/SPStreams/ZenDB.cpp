@@ -1,4 +1,4 @@
-/* $Id: ZenDB.cpp,v 1.32 2023/12/13 05:39:10 severin Exp $ */
+/* $Id: ZenDB.cpp,v 1.33 2026/02/18 02:57:26 severin Exp $ */
 
 /***
 
@@ -224,7 +224,7 @@ string  EEDB::SPStreams::ZenDB::_create_new(string filepath) {
   
   //last step write out the XML setup
   string xml_path = _zendb_dir + "/"+_db_type+".xml";
-  int xmlfd = open(xml_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+  int xmlfd = open(xml_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0664);
   if(xmlfd == -1) { 
     fprintf(stderr, "zendb can't open xml file [%s]\n", xml_path.c_str()); 
     return ""; //error
@@ -812,7 +812,7 @@ bool  EEDB::SPStreams::ZenDB::_save_xml() {
   //write out the XML setup
   _parameters["filetype"].clear();
   string xml_path = _zendb_dir + "/"+_db_type+".xml";
-  int xmlfd = open(xml_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+  int xmlfd = open(xml_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0664);
   if(xmlfd == -1) { 
     fprintf(stderr, "zendb can't open xml file [%s]\n", xml_path.c_str()); 
     return false; //error

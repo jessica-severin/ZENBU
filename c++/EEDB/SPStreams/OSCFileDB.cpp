@@ -1,4 +1,4 @@
-/* $Id: OSCFileDB.cpp,v 1.285 2025/04/21 03:44:02 severin Exp $ */
+/* $Id: OSCFileDB.cpp,v 1.286 2026/02/18 02:57:26 severin Exp $ */
 
 /***
 
@@ -1739,7 +1739,7 @@ bool  EEDB::SPStreams::OSCFileDB::_region_index_cidx(string assembly_name, strin
   
   if(_cidx_fd == -1) {
     string cidx_path = _oscdb_dir + "/oscdb.cidx";
-    _cidx_fd = open(cidx_path.c_str(), O_RDONLY, 0644);
+    _cidx_fd = open(cidx_path.c_str(), O_RDONLY, 0664);
     if(_cidx_fd == -1) { 
       fprintf(stderr, "oscdb can't open cidx file [%s]\n", cidx_path.c_str()); 
       throw("oscdb error cidx file");
@@ -1952,7 +1952,7 @@ string  EEDB::SPStreams::OSCFileDB::create_db_for_file(string filepath) {
   
   //last step write out the XML setup
   string xml_path = _oscdb_dir + "/oscdb.xml";
-  int xmlfd = open(xml_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+  int xmlfd = open(xml_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0664);
   if(xmlfd == -1) { 
     fprintf(stderr, "filessystem error: can't open oscdb.xml file [%s]\n", xml_path.c_str()); 
     return ""; //error
@@ -2059,7 +2059,7 @@ bool  EEDB::SPStreams::OSCFileDB::_save_xml() {
   //write out the XML setup
   oscfileparser()->clear_parameter("filetype");
   string xml_path = _oscdb_dir + "/oscdb.xml";
-  int xmlfd = open(xml_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+  int xmlfd = open(xml_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0664);
   if(xmlfd == -1) { 
     fprintf(stderr, "oscdb can't open xml file [%s]\n", xml_path.c_str()); 
     return false; //error
@@ -2221,7 +2221,7 @@ bool  EEDB::SPStreams::OSCFileDB::_sort_input_file(string path) {
       //create chrom outfile
       string tpath = workdir + chrname;
       //fprintf(stderr, "create chr_outfile [%s]\n", tpath.c_str());
-      chrfd = open(tpath.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+      chrfd = open(tpath.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0664);
       chrom_outfiles[chrname] = chrfd;
       chroms[chrname] = feature->chrom();
       if(chroms[chrname] == NULL) {
@@ -2297,7 +2297,7 @@ bool  EEDB::SPStreams::OSCFileDB::_sort_input_file(string path) {
     
   string oscdb_file = _oscdb_dir + "/oscdb.oscdata";
   unlink(oscdb_file.c_str());  
-  int oscdb_fd = open(oscdb_file.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+  int oscdb_fd = open(oscdb_file.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0664);
 
   //sort chromosomes by chrom_length for merging
   list<EEDB::Chrom*>                  chrom_list;
@@ -2395,13 +2395,13 @@ bool  EEDB::SPStreams::OSCFileDB::_build_indexes() {
   if(_ridx_fd != -1) { close(_ridx_fd); }
   if(_cidx_fd != -1) { close(_cidx_fd); }
   string ridx_path = _oscdb_dir + "/oscdb.ridx";
-  _ridx_fd = open(ridx_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+  _ridx_fd = open(ridx_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0664);
   if(_ridx_fd == -1) { 
     fprintf(stderr, "oscdb can't open ridx file [%s]\n", ridx_path.c_str()); 
     return false; //error
   }
   string cidx_path = _oscdb_dir + "/oscdb.cidx";
-  _cidx_fd = open(cidx_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+  _cidx_fd = open(cidx_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0664);
   if(_cidx_fd == -1) { 
     fprintf(stderr, "oscdb can't open cidx file [%s]\n", cidx_path.c_str()); 
     return false; //error
@@ -3101,7 +3101,7 @@ bool  EEDB::SPStreams::OSCFileDB::_create_edge_osc_filedb() {
   
   string edges_file = _oscdb_dir + "/edges.presort";
   unlink(edges_file.c_str());
-  int edgeb_fd = open(edges_file.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+  int edgeb_fd = open(edges_file.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0664);
   
   unsigned buflen = 10*1024*1024; //10MB, max allowed line length
   _data_buffer = (char*)malloc(buflen);
@@ -3332,7 +3332,7 @@ bool  EEDB::SPStreams::OSCFileDB::_create_edge_osc_filedb() {
   gz = gzopen(sorted_path.c_str(), "rb");
   string edgedb_path = _oscdb_dir + "/oscdb.edgedata";
   unlink(edgedb_path.c_str());
-  edgeb_fd = open(edgedb_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+  edgeb_fd = open(edgedb_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0664);
 
   bzero(_data_buffer, buflen);
   oscfileparser()->set_parameter("_skip_ignore_on_output", "true");
@@ -3515,7 +3515,7 @@ EEDB::SPStreams::OSCFileDB::_load_edgelink_featureid_hash(EEDB::FeatureSource* f
 
   //fsrc stream all the features and create in-memory hashes to find matchups
   EEDB::SPStreams::SourceStream *stream = peer->source_stream();
-  fprintf(stderr, "load featuresource [%s] features for linking via key[%s]\n", fsrc->display_name().c_str(), link_key.c_str());
+  fprintf(stderr, "load featuresource [%s] feature ids for linking via key[%s]\n", fsrc->display_name().c_str(), link_key.c_str());
   stream->clear_sourcestream_filters();
   stream->add_source_id_filter(fsrc->db_id());
   stream->stream_all_features();
@@ -3589,13 +3589,13 @@ bool  EEDB::SPStreams::OSCFileDB::_build_edge_indexes() {
   if(_ridx_fd != -1) { close(_ridx_fd); }
   if(_efidx_fd != -1) { close(_efidx_fd); }
   string ridx_path = _oscdb_dir + "/oscdb.ridx";
-  _ridx_fd = open(ridx_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+  _ridx_fd = open(ridx_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0664);
   if(_ridx_fd == -1) {
     fprintf(stderr, "oscdb can't open eridx file [%s]\n", ridx_path.c_str());
     return false; //error
   }
   string efidx_path = _oscdb_dir + "/oscdb.efidx";
-  _efidx_fd = open(efidx_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+  _efidx_fd = open(efidx_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0664);
   if(_efidx_fd == -1) {
     fprintf(stderr, "oscdb can't open efidx file [%s]\n", efidx_path.c_str());
     return false; //error
