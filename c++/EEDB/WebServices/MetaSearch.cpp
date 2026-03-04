@@ -1,4 +1,4 @@
-/* $Id: MetaSearch.cpp,v 1.103 2025/02/27 04:29:33 severin Exp $ */
+/* $Id: MetaSearch.cpp,v 1.104 2026/03/04 04:12:37 severin Exp $ */
 
 /***
 
@@ -1940,12 +1940,12 @@ void EEDB::WebServices::MetaSearch::show_edges() {
       
       //if edges include new features, add to the _feature_id_hash
       if(_feature_id_hash.find(edge->feature1_dbid()) == _feature_id_hash.end()) {
-        //fprintf(stderr, "add edge feature %s\n", edge->feature1_dbid().c_str());
+        //fprintf(stderr, "add edge feature1 %s\n", edge->feature1_dbid().c_str());
         _feature_id_hash[edge->feature1_dbid()] = NULL;
         features_changed = true;
       }
       if(_feature_id_hash.find(edge->feature2_dbid()) == _feature_id_hash.end()) {
-        //fprintf(stderr, "add edge feature %s\n", edge->feature2_dbid().c_str());
+        //fprintf(stderr, "add edge feature2 %s\n", edge->feature2_dbid().c_str());
         _feature_id_hash[edge->feature2_dbid()] = NULL;
         features_changed = true;
       }
