@@ -66,6 +66,7 @@ libzenbu:	samtools lz4 mqdb zdx eedb includedir
 	ar sr libzenbu.a MQDB/*.o ZDX/*.o EEDB/*.o EEDB/JobQueue/*.o EEDB/SPStreams/*.o EEDB/Tools/*.o EEDB/WebServices/*.o EEDB/ZDX/*.o 
 	chmod -R +r include
 	cp -f libzenbu.a /usr/local/lib/
+	cp -f lz4/liblz4.a /usr/local/lib/
 	cp -frp include/zenbu /usr/local/include/
 
 
