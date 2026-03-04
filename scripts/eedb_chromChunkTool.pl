@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w 
 BEGIN{
-    unshift(@INC, "/zenbu/src/ZENBU_2.11.3/lib");
+    unshift(@INC, "/zenbu/src/ZENBU/lib");
 }
 
 =head1 NAME - eedb_chromChunkTool.pl
@@ -235,7 +235,7 @@ sub chromosome_chunk_fasta {
         if($nm1 =~ /^gi\|(.*)\|(.*)\|(.*)\|/) {
           $name = $3;
         } else {
-          $nm1 =~ /([\w-.]*)/;
+          $nm1 =~ /([\w\-\.]*)/;
           $name = $1; #first word no spaces
         }
       }
