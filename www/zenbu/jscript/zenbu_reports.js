@@ -1026,6 +1026,7 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
     if(colDOM.getAttribute("col_type")) { t_col.col_type = colDOM.getAttribute("col_type"); }
 
     if(colDOM.getAttribute("user_modifiable") == "true") { t_col.user_modifiable = true; } else { t_col.user_modifiable = false; }
+    if(colDOM.getAttribute("minuslog_transform") == "true") { t_col.minuslog_transform = true; } else { t_col.minuslog_transform = false; }
     if(colDOM.getAttribute("visible") == "true") { t_col.visible = true; } else { t_col.visible = false; }
     if(colDOM.getAttribute("filtered") == "true") { t_col.filtered = true; } else { t_col.filtered = false; }
     if(colDOM.getAttribute("filter_abs") == "true") { t_col.filter_abs = true; } else { t_col.filter_abs = false; }
@@ -1311,6 +1312,7 @@ function reportsGenerateElementDOM(reportElement) {
       if(dtype_col.filtered) { colDoc.setAttribute("filtered", "true"); }
       if(dtype_col.filter_abs) { colDoc.setAttribute("filter_abs", "true"); }
       if(dtype_col.user_modifiable) { colDoc.setAttribute("user_modifiable", "true"); }
+      if(dtype_col.minuslog_transform) { colDoc.setAttribute("minuslog_transform", "true"); }
       if(dtype_col.signal_active) { colDoc.setAttribute("signal_active", "true"); }
       
       if(dtype_col.highlight_color) { colDoc.setAttribute("highlight_color", dtype_col.highlight_color); }
@@ -3271,6 +3273,10 @@ function reportsParseElementData(reportElement, xhrObj) {
           dtype_score = reportElementAddDatatypeColumn(reportElement, "bedscore", "bedscore");
           dtype_score.col_type = "signal";
         }
+        if(dtype_score.minuslog_transform) {
+          //if(!feature.score_orig) { feature.score_orig = feature.score; }
+          if(feature.score != 0) { feature.score = -1 * Math.log10(feature.score); }
+        }
         if((dtype_score.min_val == 0) && (dtype_score.max_val == 0)) {
           dtype_score.min_val = feature.score;
           dtype_score.max_val = feature.score;
@@ -3287,6 +3293,10 @@ function reportsParseElementData(reportElement, xhrObj) {
           if(!dtype) { continue; }
           var dtype_col = reportElementAddDatatypeColumn(reportElement, dtype, dtype);
           dtype_col.col_type = "signal";
+          if(dtype_col.minuslog_transform) {
+            //if(!expr.total_orig) { expr.total_orig = expr.total; }
+            if(expr.total != 0) { expr.total = -1 * Math.log10(expr.total); }
+          }
           //console.log("feature_expression "+dtype+" total="+expr.total);
           if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
             dtype_col.min_val = expr.total;
@@ -3346,6 +3356,10 @@ function reportsParseElementData(reportElement, xhrObj) {
           var dtype = "f1."+expr.datatype;
           var dtype_col = reportElementAddDatatypeColumn(reportElement, dtype, expr.datatype);
           dtype_col.col_type = "signal";
+          if(dtype_col.minuslog_transform) {
+            //if(!expr.total_orig) { expr.total_orig = expr.total; }
+            if(expr.total != 0) { expr.total = -1 * Math.log10(expr.total); }
+          }          
           if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
             dtype_col.min_val = expr.total;
             dtype_col.max_val = expr.total;
@@ -3374,6 +3388,10 @@ function reportsParseElementData(reportElement, xhrObj) {
           var dtype = "f2."+expr.datatype;
           var dtype_col = reportElementAddDatatypeColumn(reportElement, dtype, expr.datatype);
           dtype_col.col_type = "signal";
+          if(dtype_col.minuslog_transform) {
+            //if(!expr.total_orig) { expr.total_orig = expr.total; }
+            if(expr.total != 0) { expr.total = -1 * Math.log10(expr.total); }
+          }          
           if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
             dtype_col.min_val = expr.total;
             dtype_col.max_val = expr.total;
@@ -3389,12 +3407,20 @@ function reportsParseElementData(reportElement, xhrObj) {
       if(!weights) { continue; }
       var dtype_col = reportElementAddDatatypeColumn(reportElement, dtype, dtype);
       dtype_col.col_type = "weight";
-      if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
-        dtype_col.min_val = weights[0].weight;
-        dtype_col.max_val = weights[0].weight;
-      }
+      // if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
+      //   dtype_col.min_val = weights[0].weight;
+      //   dtype_col.max_val = weights[0].weight;
+      // }
       for(var j=0; j<weights.length; j++) {
+        if(dtype_col.minuslog_transform) {
+          //if(!weights[j].weight_orig) { weights[j].weight_orig = weights[j].weight; }
+          if(weights[j].weight != 0) { weights[j].weight = -1 * Math.log10(weights[j].weight); }
+        }
         var w1 = weights[j].weight;
+        if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
+          dtype_col.min_val = w1;
+          dtype_col.max_val = w1;
+        }
         if(w1 < dtype_col.min_val) { dtype_col.min_val = w1; }
         if(w1 > dtype_col.max_val) { dtype_col.max_val = w1; }
       }
@@ -3469,6 +3495,7 @@ function reportElementAddDatatypeColumn(reportElement, dtype, title, visible) {
     dtype_col.col_type = "mdata";
     dtype_col.visible = false;
     dtype_col.user_modifiable = false;    
+    dtype_col.minuslog_transform = false;    
     dtype_col.filtered = false;
     dtype_col.filter_abs = false;
     dtype_col.filter_min = "min";
@@ -4311,6 +4338,7 @@ function reportElementLoadSourceEdges(reportElement) {
   var feature_ids = "";
   if(reportElement.focus_feature) {
     feature_ids += reportElement.focus_feature.id;
+    console.log("load "+reportElement.elementID+" edges with focus_feature: "+reportElement.focus_feature.id);
   }
   if(reportElement.filter_feature_ids) {
     if(feature_ids!="") { feature_ids += ","; }
@@ -4387,7 +4415,7 @@ function reportElementPostprocessEdgesQuery(reportElement) {
   
   if(reportElement.focus_feature) {
     //if(!reportElement.selected_feature) { reportElement.selected_feature = reportElement.focus_feature; }  //DONT do this anymore
-    console.log("reportElementPostprocessEdgesQuery "+elementID+" focus_feature["+reportElement.focus_feature.name+"]");
+    console.log("reportElementPostprocessEdgesQuery "+elementID+" focus_feature["+reportElement.focus_feature.name + " : "+ reportElement.focus_feature.id+"]");
   }
   
   var filter_feature_ids_hash = {};
@@ -4724,6 +4752,7 @@ function reportsPostprocessElement(elementID) {
         if(!dtype_col) { continue; }
         var t_col = reportElementAddDatatypeColumn(reportElement, dtype_col.datatype, dtype_col.title);
         t_col.col_type = dtype_col.col_type;
+        t_col.minuslog_transform = dtype_col.minuslog_transform;
       }
       //might be best to always copy the feature/edge/source array into the local to allow local sorting
       //shares feature/edge/source objects so does not use extra memory, but array and sort can be different
@@ -7018,6 +7047,13 @@ function reportElementCascadeEvent(reportElement, mode, value, value2) {
   if(mode == "dtype-user_modifiable") {
     var dtype = reportElement.datatypes[value];
     if(dtype) { dtype.user_modifiable = !dtype.user_modifiable; }
+  }
+  if(mode == "dtype-minuslog_transform") {
+    var dtype = reportElement.datatypes[value];
+    if(dtype) { dtype.minuslog_transform = !dtype.minuslog_transform; }
+    //reportsPostprocessElement(elementID);
+    reportElementToggleSubpanel(elementID, 'none');
+    reportsLoadElement(elementID); //need to reload
   }
   if(mode == "dtype-filter") {  
     var dtype = reportElement.datatypes[value];
@@ -11227,6 +11263,17 @@ function reportElementColumnsInterfaceRender(reportElement, columns_div, signalM
       tcheck.setAttribute("onclick", "reportElementEvent(\""+reportElement.elementID+"\", 'dtype-user_modifiable', \""+selected_dtype_col.datatype+"\", this.value);");                        
       var tspan = tdiv.appendChild(document.createElement('span'));
       tspan.innerHTML = "column user modifiable";
+      
+      //-log transform
+      if((selected_dtype_col.col_type == "weight") || (selected_dtype_col.col_type == "signal")) {          
+        tcheck = tdiv.appendChild(document.createElement('input'));
+        tcheck.setAttribute('style', "margin: 2px 1px 0px 15px;");
+        tcheck.setAttribute('type', "checkbox");
+        if(selected_dtype_col.minuslog_transform) { tcheck.setAttribute('checked', "checked"); }
+        tcheck.setAttribute("onclick", "reportElementEvent(\""+reportElement.elementID+"\", 'dtype-minuslog_transform', \""+selected_dtype_col.datatype+"\", this.value);");                        
+        tspan = tdiv.appendChild(document.createElement('span'));
+        tspan.innerHTML = "-log transform";
+      }
     }
  
     //description and description_tooltip
