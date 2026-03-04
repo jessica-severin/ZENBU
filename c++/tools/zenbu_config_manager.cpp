@@ -224,7 +224,7 @@ bool  get_cmdline_user() {
   free(config_text);
   close(fildes);
 
-  printf("user [%s] -> [%s]\n", email.c_str(), secret.c_str());
+  fprintf(stderr, "user [%s] -> [%s]\n", email.c_str(), secret.c_str());
 
   MQDB::Database *userDB = NULL;
   if(_userDB) { userDB = _userDB; }
