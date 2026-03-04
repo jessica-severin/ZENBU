@@ -1,4 +1,4 @@
-/*  $Id: ZDXstream.cpp,v 1.60 2025/04/21 05:14:19 severin Exp $ */
+/*  $Id: ZDXstream.cpp,v 1.62 2026/02/20 08:46:35 severin Exp $ */
 
 /*******
 
@@ -118,6 +118,10 @@ bool _zdx_zdxstream_stream_by_named_region_func(EEDB::SPStream* node, string ass
 void _zdx_zdxstream_stream_all_features_func(EEDB::SPStream* node) {
   ((EEDB::ZDX::ZDXstream*)node)->_stream_all_features();
 }
+bool _zdx_zdxstream_fetch_features_func(EEDB::SPStream* node, map<string, EEDB::Feature*> &fid_hash) {
+  return ((EEDB::ZDX::ZDXstream*)node)->_fetch_features(fid_hash);
+}
+
 void _zdx_zdxstream_xml_func(MQDB::DBObject *obj, string &xml_buffer) { 
   ((EEDB::ZDX::ZDXstream*)obj)->_xml(xml_buffer);
 }
@@ -156,6 +160,7 @@ void EEDB::ZDX::ZDXstream::init() {
   _funcptr_stream_by_named_region             = _zdx_zdxstream_stream_by_named_region_func;
   _funcptr_stream_features_by_metadata_search = _zdx_zdxstream_stream_features_by_metadata_search_func;
   _funcptr_stream_all_features                = _zdx_zdxstream_stream_all_features_func;
+  _funcptr_fetch_features                     = _zdx_zdxstream_fetch_features_func;
   _funcptr_stream_data_sources                = _zdx_zdxstream_stream_data_sources_func;
   _funcptr_reload_stream_data_sources         = _zdx_zdxstream_reload_stream_data_sources_func;
   _funcptr_stream_chromosomes                 = _zdx_zdxstream_stream_chromosomes_func;
@@ -725,6 +730,126 @@ void EEDB::ZDX::ZDXstream::_stream_all_features() {
 }
 
 
+bool  EEDB::ZDX::ZDXstream::_fetch_features(map<string, EEDB::Feature*> &fid_hash) {
+  //fprintf(stderr, "EEDB::ZDX::ZDXstream::_fetch_features\n");
+  if(!_zdxdb) { return false; }
+  if(fid_hash.empty()) { return true; }
+
+  const char* zdx_uuid = self_peer()->uuid();
+  if(zdx_uuid == NULL) { return false; }
+
+  struct timeval    starttime,endtime,difftime;
+  gettimeofday(&starttime, NULL);
+
+  _reload_stream_data_sources();
+  if(!_source_is_active) { return false; }
+
+  unsigned long found_count=0;
+
+  //get the unfetched fids matching my UUID
+  long int min_fid=0, max_fid=0;
+  map<long int, EEDB::Feature*> local_fids;
+  map<string, EEDB::Feature*>::iterator   it;
+  for(it = fid_hash.begin(); it != fid_hash.end(); it++) {
+    if((*it).second != NULL) { continue; }  //skip if feature already fetched
+
+    string   dbid = (*it).first;
+    string   uuid, objClass;
+    long int objID = -1;
+    unparse_eedb_id(dbid, uuid, objID, objClass);
+    //fprintf(stderr, "zdx %s check dbid %s => [%s] : %ld : %s\n", zdx_uuid, dbid.c_str(), uuid.c_str(), objID, objClass.c_str());
+
+    if(uuid.empty()) { continue; }
+    if(uuid != zdx_uuid) { continue; }
+    if(objClass != "Feature") { continue; }
+    
+    //fprintf(stderr, "zdx %s need to fetch missing %s\n", zdx_uuid, dbid.c_str());
+    local_fids[objID] = NULL;
+    if(max_fid==0) {
+      min_fid = objID;
+      max_fid = objID;
+    }
+    if(objID < min_fid) { min_fid = objID; }
+    if(objID > max_fid) { max_fid = objID; }
+
+
+    //inefficient, but it will work
+    EEDB::Feature *feature = fetch_feature_by_id(objID); 
+    if(feature) {
+      fid_hash[feature->db_id()] = feature;
+      feature->retain();
+      found_count++;
+      //fprintf(stderr, "%s", feature->simple_xml().c_str());
+      //fprintf(stderr, "zdx found %s\n", feature->db_id().c_str());
+    }
+    //else {
+    //  fprintf(stderr, "zdx unable to fetch %s\n", dbid.c_str());
+    //}
+  }
+  fprintf(stderr, "need to fetch %ld ids from peer[%s]\n", local_fids.size(), zdx_uuid);
+  if(local_fids.size() == 0) { return true; } //nothing new to fetch
+  fprintf(stderr, "feature_id min[%ld]  max[%ld]\n", min_fid, max_fid);
+
+
+  /*
+  
+  //_seek_to_datarow(min_fid);
+  //if(_data_line_ptr==NULL) { _close_files(); return false; } //problem;
+  //fprintf(stderr, "OK set stream to fid %ld\n", min_fid);
+
+  //skip ahead in the stream to first valid feature
+  EEDB::Feature *feature = NULL;
+  //feature = oscfileparser()->convert_dataline_to_feature(_data_line_ptr, _outmode, _expression_datatypes, _filter_exp_ids);
+
+  //if(!feature) { _close_files(); return false; }
+  feature->peer_uuid(_peer_uuid);
+  //fprintf(stderr, "first feature :: %s\n", feature->xml().c_str());
+
+  while(feature && (feature->primary_id() <= max_fid)) {
+    if(!_filter_source_ids[feature->feature_source()->db_id()]) {
+      //if(!_filter_source_ids.empty() && (_filter_source_ids.find(feature->feature_source()->db_id()) == _filter_source_ids.end())) {
+      //next_feature failed the _fsrc_filter_id test so move to next feature
+      feature->release();
+      feature = NULL;
+      //_prepare_next_line();
+      //feature = oscfileparser()->convert_dataline_to_feature(_data_line_ptr, _outmode, _expression_datatypes, _filter_exp_ids);
+      continue;
+    }
+    
+    map<string, EEDB::Feature*>::iterator  fid_it = fid_hash.find(feature->db_id());
+    if((fid_it != fid_hash.end()) && ((*fid_it).second == NULL)) { 
+      fid_hash[feature->db_id()] = feature;
+      feature->retain();
+      found_count++;
+      //fprintf(stderr, "%s", feature->simple_xml().c_str());
+      //fprintf(stderr, "found %s\n", feature->db_id().c_str());
+    }
+
+    feature->release();
+    feature = NULL;
+    //_prepare_next_line();
+    //feature = oscfileparser()->convert_dataline_to_feature(_data_line_ptr, _outmode, _expression_datatypes, _filter_exp_ids);
+  }
+  
+
+  //final cleanup
+  if(feature) { feature->release(); }
+  feature = NULL;
+  //_close_files();
+
+  if(local_fids.size() != found_count) { 
+    fprintf(stderr, "did not find all the features I was expecting %ld search != %ld found\n", local_fids.size(), found_count);
+    return false; 
+  }
+  */
+  
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  fprintf(stderr, "found matching %10ld features  %1.6f sec : ZDXstream::fetch_features [%s]\n", found_count, (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0, zdx_uuid);
+  return true;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 //  other streaming callback methods 
@@ -821,7 +946,8 @@ MQDB::DBObject*    EEDB::ZDX::ZDXstream::_next_in_stream() {
     }
     return obj;
   }
-  
+
+  const char* zdx_uuid = self_peer()->uuid();
   //streaming features via region query
   EEDB::ZDX::ZDXsegment *t_zseg;
   while(_zsegment != NULL) {
@@ -835,6 +961,12 @@ MQDB::DBObject*    EEDB::ZDX::ZDXstream::_next_in_stream() {
             continue;
           }
         }
+        string uuid;
+        string objClass="Feature";
+        long int objID = -1;                  
+        unparse_dbid(feature->db_id(), uuid, objID, objClass);        
+        feature->peer_uuid(zdx_uuid); //set the feature peer_uuid
+        feature->primary_id(objID); //reset the objID since the peer_uuid will clear the dbid
       }
       return obj;
     }

@@ -1,4 +1,4 @@
-/* $Id: ZDXstream.h,v 1.23 2025/04/21 05:14:19 severin Exp $ */
+/* $Id: ZDXstream.h,v 1.24 2026/02/19 05:32:20 severin Exp $ */
 
 /****
 NAME - EEDB::ZDX::ZDXstream
@@ -174,6 +174,7 @@ namespace EEDB {
       
       void               _stream_features_by_metadata_search(string filter_logic);
       void               _stream_all_features();
+      bool               _fetch_features(map<string, EEDB::Feature*> &fid_hash);
       bool               _stream_by_named_region(string assembly_name, string chrom_name, long int start, long int end);
       void               _stream_chromosomes(string assembly_name, string chrom_name);
       
