@@ -1,4 +1,4 @@
-/* $Id: zenbu_track_builder.cpp,v 1.78 2025/12/11 06:21:25 severin Exp $ */
+/* $Id: zenbu_track_builder.cpp,v 1.79 2026/02/19 05:35:10 severin Exp $ */
 
 /****
  
@@ -730,7 +730,7 @@ void show_zdx_status() {
     }
     
     double completed = EEDB::ZDX::ZDXsegment::calc_percent_completed(zdxdb, show);
-    if(show) { printf("%s\n", zdxdb->path().c_str()); }
+    printf("%s\n", zdxdb->path().c_str());
 
     printf("[%65s] %8.3f%% completed  %7ld segs %7ld remaining, [ %ld building ]\n", 
            hashkey.c_str(), completed*100.0, numsegs, numsegs-numbuilt, numclaimed);  
