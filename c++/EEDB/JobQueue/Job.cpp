@@ -1,4 +1,4 @@
-/*  $Id: Job.cpp,v 1.24 2018/08/10 09:20:28 severin Exp $ */
+/*  $Id: Job.cpp,v 1.25 2026/03/12 05:04:06 severin Exp $ */
 
 /*******
 
@@ -334,6 +334,9 @@ vector<MQDB::DBObject*>  EEDB::JobQueue::Job::fetch_all_by_user(EEDB::User *user
   //const char *sql = "SELECT * FROM job WHERE user_id=? AND status!='DONE' AND (UNIX_TIMESTAMP()-UNIX_TIMESTAMP(created))/(24*60*60)<=1.0 ORDER BY created";
   //const char *sql = "SELECT * FROM job WHERE user_id=? AND status!='DONE' AND (UNIX_TIMESTAMP()-UNIX_TIMESTAMP(completed))/(24*60*60)<=1.0 ORDER BY created";
   const char *sql = "SELECT * FROM job WHERE user_id=? AND (status in ('READY','BLOCKED','CLAIMED','RUN') OR (status='FAILED' and (UNIX_TIMESTAMP()-UNIX_TIMESTAMP(starttime))/(24*60*60)<=1.0)) ORDER BY created";
+  if(db->driver()=="sqlite") {
+    sql = "SELECT * FROM job WHERE user_id=? AND (status in ('READY','BLOCKED','CLAIMED','RUN') OR (status='FAILED' and (unixepoch('now')-unixepoch(starttime))/(24*60*60)<=1.0)) ORDER BY created";
+  }
   return MQDB::fetch_multiple(EEDB::JobQueue::Job::create, db, sql, "d", user->primary_id());
 }
 
