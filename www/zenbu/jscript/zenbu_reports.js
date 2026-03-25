@@ -4191,7 +4191,16 @@ function reportElementLoadSourceFeatures(reportElement) {
   reportElement.table_num_pages = 0;
   reportElement.table_page = 1;
 
-  var paramXML = "<zenbu_query><format>fullxml</format><mode>features</mode>";
+  var paramXML = "<zenbu_query><format>fullxml</format>";
+  if(reportElement.load_region) {
+    console.log("load "+reportElement.elementID+" with region ["+reportElement.load_region+"]");
+    paramXML += "<mode>region</mode>";
+    paramXML += "<loc>"+reportElement.load_region+"</loc>";
+    paramXML += "<source_outmode>full_feature</source_outmode>";
+    paramXML += "<nocache/>";
+  } else {
+    paramXML += "<mode>features</mode>";
+  }
   paramXML += "<source_ids>"+reportElement.source_ids+"</source_ids>";
   var filter="";
   if(reportElement.query_filter) { filter += reportElement.query_filter; }
@@ -4218,6 +4227,7 @@ function reportElementLoadSourceFeatures(reportElement) {
   xhrObj.xhr        = null; //not active yet
   xhrObj.paramXML   = paramXML;
   xhrObj.mode       = "search";  //eedb_search.cgi
+  if(reportElement.load_region) { xhrObj.mode = "region"; }  //eedb_region.cgi
   
   reportElement.loading = true;
   reportElement.load_retry = 0;
@@ -5299,34 +5309,41 @@ function reportElementTriggerCascade(reportElement, on_trigger) {
       reportsPostprocessElement(trigger.targetElement.elementID);
       reportsDrawElement(trigger.targetElement.elementID);
     }
-    if(trigger.action_mode == "select_location") {
-      if(datasource.selected_location) {
-        reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_location);
+    if((trigger.action_mode == "select_location") || (trigger.action_mode == "set_load_region")) {
+      //console.log("TRIGGER-CASCADE from element["+reportElement.elementID+"] datasource["+datasource.elementID+"] to["+trigger.targetElement.elementID+"] action["+trigger.action_mode+" - "+trigger.options+"]");
+      if(trigger.options == "current_region") {
+        //special mode for zenbugb. don't use datasource (which is track), use reportElement (which is the glyphsGB)
+        console.log("reportElementTriggerCascade reportElement("+reportElement.elementID+") "+trigger.action_mode + " current_region ["+reportElement.current_region+"]");
+        reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, reportElement.current_region);
+      }      
+      else if(datasource.selected_location) {
+        console.log(trigger.action_mode + " selected_location ["+datasource.selected_location+"]");
+        reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, datasource.selected_location);
       } 
       else if(trigger.options == "clear") {
-        reportElementCascadeEvent(trigger.targetElement, 'select_location', "");
+        reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, "");
       } 
       else if(trigger.options == "max_region") {
         if(datasource.max_region) {
-          reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.max_region);
+          reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, datasource.max_region);
         }
       } 
       else if(datasource.selected_feature) {
-        reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_feature.chromloc);
+        reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, datasource.selected_feature.chromloc);
       } 
       else if(datasource.selected_edge) {
         console.log("select_location with EDGE, use opt:"+trigger.options);
         switch(trigger.options) {
           case "left_feature":
             console.log("select_location with EDGE ["+trigger.options+"] : "+ datasource.selected_edge.feature1.chromloc);
-            reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_edge.feature1.chromloc);
+            reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, datasource.selected_edge.feature1.chromloc);
             break;
           case "right_feature":
             console.log("select_location with EDGE ["+trigger.options+"] : "+ datasource.selected_edge.feature2.chromloc);
-            reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_edge.feature2.chromloc);
+            reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, datasource.selected_edge.feature2.chromloc);
             break;
           default:
-            reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_edge.chromloc);
+            reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, datasource.selected_edge.chromloc);
             break;
         }
       }
@@ -6811,6 +6828,12 @@ function reportElementCascadeEvent(reportElement, mode, value, value2) {
     return true;
   }
   
+  if(mode == "set_load_region") { 
+    console.log(reportElement.elementID+" set_load_region ["+value+"]");
+    reportElement.load_region = value;
+    return true;
+  }
+
   //if(mode == "search_filter") {
   //  //search_data_filter
   //}
@@ -10782,7 +10805,7 @@ function reportElementCascadeTriggersInterface(reportElement) {
         select.style.fontSize = "10px";
         select.setAttribute("onchange", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'trigger_action_mode', '"+trig_idx+"', this.value);");
         
-        var opts1 = ["select", "select_location", "search_filter", "set_focus", "focus_load", "set_filter_features", "set_load_filter", "reset", "load", "postprocess"];
+        var opts1 = ["select", "select_location", "search_filter", "set_focus", "focus_load", "set_filter_features", "set_load_filter", "set_load_region", "reset", "load", "postprocess"];
         if(trigger.targetElement) {
           if(trigger.targetElement.element_type == "zenbugb") { opts1.push("set_view_config"); }
           if(trigger.targetElement.element_type == "cytoscape") { opts1.push("highlight"); }
@@ -10826,7 +10849,7 @@ function reportElementCascadeTriggersInterface(reportElement) {
       if(trigger.action_mode == "set_filter_features") {
         opts2 = ["clear", "selection", "subnetwork", "all_features"];
       }
-      if(trigger.action_mode=="select_location") {
+      if((trigger.action_mode=="select_location") || (trigger.action_mode=="set_load_region")) {
         if(datasourceElement.datasource_mode == "feature") { 
           opts2 = ["feature"];
         }
@@ -10834,6 +10857,7 @@ function reportElementCascadeTriggersInterface(reportElement) {
           opts2 = ["edge", "left_feature", "right_feature"];
         }
         opts2.push("max_region", "clear");
+        if(reportElement.element_type=="zenbugb") { opts2.push("current_region"); }
       }
       if(reportElement.element_type=="category" && 
          (trigger.action_mode == "search_filter" || trigger.action_mode == "set_load_filter")) {
