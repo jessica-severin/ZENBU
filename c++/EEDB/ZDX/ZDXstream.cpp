@@ -1,4 +1,4 @@
-/*  $Id: ZDXstream.cpp,v 1.62 2026/02/20 08:46:35 severin Exp $ */
+/*  $Id: ZDXstream.cpp,v 1.63 2026/03/24 07:09:35 severin Exp $ */
 
 /*******
 
@@ -947,7 +947,6 @@ MQDB::DBObject*    EEDB::ZDX::ZDXstream::_next_in_stream() {
     return obj;
   }
 
-  const char* zdx_uuid = self_peer()->uuid();
   //streaming features via region query
   EEDB::ZDX::ZDXsegment *t_zseg;
   while(_zsegment != NULL) {
@@ -963,10 +962,12 @@ MQDB::DBObject*    EEDB::ZDX::ZDXstream::_next_in_stream() {
         }
         string uuid;
         string objClass="Feature";
-        long int objID = -1;                  
-        unparse_dbid(feature->db_id(), uuid, objID, objClass);        
-        feature->peer_uuid(zdx_uuid); //set the feature peer_uuid
-        feature->primary_id(objID); //reset the objID since the peer_uuid will clear the dbid
+        long int objID = -1;
+        if(feature->feature_source()->peer_uuid()) {
+          unparse_dbid(feature->db_id(), uuid, objID, objClass);
+          feature->peer_uuid(feature->feature_source()->peer_uuid()); //set the feature peer_uuid to match it's feature_source
+          feature->primary_id(objID); //reset the objID since setting the peer_uuid will clear the dbid
+        }
       }
       return obj;
     }
