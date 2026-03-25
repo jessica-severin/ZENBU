@@ -586,9 +586,15 @@ function zenbuGBElement_trackLoadComplete() {
     if(t_height < 100) { t_height = 100; }
     master_div.style.height = t_height + "px";
   }
-  return;
   //callback function for this==ZenbuGenomeBrowser
-  //console.log("zenbuGBElement_trackLoadComplete load_count: "+ this.load_count);
+  //console.log("zenbuGBElement_trackLoadComplete("+this.elementID+") load_count: "+ this.load_count);
+  var reportElement = this.reportElement;
+  if(reportElement && (this.load_count==0)) {
+    current_report.active_cascades = {};  //start new cascade
+    reportElement.current_region = reportElement.glyphsGB.regionLocation();
+    console.log("zenbuGBElement_trackLoadComplete("+reportElement.elementID+") region("+reportElement.current_region+") finished. send load cascade");
+    reportElementTriggerCascade(reportElement, "load");
+  }
 //   var height = this.main_div.clientHeight;
 //   if(height<300) { height = 300; }
 //   //console.log("glyphsGB  height= "+height);
@@ -597,6 +603,7 @@ function zenbuGBElement_trackLoadComplete() {
 //   if(this.reportElement.main_div) {
 //     this.reportElement.main_div.style.height = height+30+"px";
 //   }
+  return;
 }
 
 
