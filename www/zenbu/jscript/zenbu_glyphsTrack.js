@@ -170,6 +170,7 @@ function ZenbuGlyphsTrack(glyphsGB, trackID) {
   
   this.feature_array = [];
   this.edge_array = [];
+  this.sources_array = []; //only for compatability with zenbu_gb_element wrapper
   this.experiments = new Object();
   this.datasources = new Object();
   this.datatypes = new Object();
