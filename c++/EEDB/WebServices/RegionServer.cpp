@@ -1,4 +1,4 @@
-/* $Id: RegionServer.cpp,v 1.275 2025/08/12 04:39:35 severin Exp $ */
+/* $Id: RegionServer.cpp,v 1.276 2026/06/18 05:37:20 severin Exp $ */
 
 /***
 
@@ -436,6 +436,7 @@ void EEDB::WebServices::RegionServer::process_xml_parameters() {
   _parameters["mode"] = "region";
   _parameters["source_outmode"] = "";
   _parameters["submode"] = "simple_feature";
+  EEDB::SPStreams::FederatedSourceStream::force_edge_region_chrom_match = false;
   
   if((node = root_node->first_node("authenticate")) != NULL) { hmac_authorize_user(); }
 
@@ -471,6 +472,7 @@ void EEDB::WebServices::RegionServer::process_xml_parameters() {
   if((node = root_node->first_node("expression_visualize")) != NULL) { _parameters["expression_visualize"] ="true"; }
   if((node = root_node->first_node("feature_limit_count")) != NULL) { _parameters["feature_limit_count"] = node->value(); }
   if((node = root_node->first_node("feature_restream")) != NULL) { _parameters["feature_restream"] = "true"; }
+  if((node = root_node->first_node("force_edge_region_chrom_match")) != NULL) { EEDB::SPStreams::FederatedSourceStream::force_edge_region_chrom_match = true; }
   
   if((node = root_node->first_node("track_title")) != NULL) { _parameters["track_title"] = node->value(); }
   if((node = root_node->first_node("savefile")) != NULL) { _parameters["savefile"] = node->value(); }
