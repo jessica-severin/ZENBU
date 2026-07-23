@@ -2026,6 +2026,7 @@ function prepareTrackXHR(trackID) {
     format = "fullxml";
   }
   paramXML += "<format>"+format+"</format>\n";
+  paramXML += "<force_edge_region_chrom_match>true</force_edge_region_chrom_match>\n";
   paramXML += "</zenbu_query>\n";
 
   //
@@ -10428,6 +10429,7 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
   if(param == "expfilter") {  newconfig.expfilter = value; }
   if(param == "datatype") {  newconfig.datatype = value; }
   if(param == "colorAlpha") {
+    if(!value) { value = 1.0; }
     if(value<0) { value = 0; }
     if(value>1.0) { value = 1.0; }
     newconfig.colorAlpha = value;
