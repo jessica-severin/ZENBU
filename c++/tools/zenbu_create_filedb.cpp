@@ -73,7 +73,7 @@ int main(int argc, char *argv[]) {
     if(arg == "-keywords")      { _parameters["keywords"] = argval; }
     if(arg == "-display_name")  { _parameters["display_name"] = argval; }
     if(arg == "-description")   { _parameters["description"] = argval; }
-    if(arg == "-desc")   { _parameters["description"] = argval; }
+    if(arg == "-desc")          { _parameters["description"] = argval; }
     if(arg == "-platform")      { _parameters["platform"] = argval; }
     if(arg == "-assembly")      { _parameters["genome_assembly"] = argval; }
     if(arg == "-asm")           { _parameters["genome_assembly"] = argval; }
@@ -87,6 +87,11 @@ int main(int argc, char *argv[]) {
     if(arg == "-single_tagmap") { _parameters["singletagmap_expression"] = "true"; }
     if(arg == "-GeNAS")         { _parameters["GeNAS"] = "true"; } //not implemented yet
     if(arg == "-LSA")           { _parameters["LSA"] = "true"; } //not implemented yet
+
+    if(arg == "-fsrc1")          { _parameters["featuresource1"] = argval; }
+    if(arg == "-fsrc2")          { _parameters["featuresource2"] = argval; }
+    if(arg == "-featuresource1") { _parameters["featuresource1"] = argval; }
+    if(arg == "-featuresource2") { _parameters["featuresource2"] = argval; }
   }
   
   string input_file = _parameters["_input_file"];
@@ -134,6 +139,8 @@ void usage() {
   printf("  -description <text>       : nice description for FeatureSourced and Experiments\n");
   printf("  -LSA                      : enable RIKEN OSC LSArchive synchronization\n");
   printf("  -GeNAS                    : GeNAS production file automation prequery\n");
+  printf("  -featuresource1 <dbid>    : zenbu ID for edge.featuresource1\n");
+  printf("  -featuresource2 <dbid>    : zenbu ID for edge.featuresource2\n");
   printf("zenbu_create_filedb v%s\n", EEDB::WebServices::WebBase::zenbu_version);
   
   exit(1);  

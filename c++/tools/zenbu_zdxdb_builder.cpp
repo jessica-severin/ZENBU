@@ -127,8 +127,6 @@ void usage() {
   printf("  -score_express <exptype>  : eedb:score column is mapped to expression of type <exptype>\n");
   printf("  -display_name <name>      : nice display name for FeatureSource and Experiments\n");
   printf("  -description <text>       : nice description for FeatureSourced and Experiments\n");
-  //printf("  -bamloc <mode>            : decide where BAM file is located (link, symlink, copy, share)\n");  
-  //printf("  -ignore_int_asm           : for BAM, ignore internal assembly and override with externally specified\n");
   printf("zenbu_zdxdb_builder v%s\n", EEDB::WebServices::WebBase::zenbu_version);
   
   exit(1);  
@@ -144,6 +142,7 @@ void build_zdxdb() {
     fprintf(stderr, "ERROR: no specified input file\n\n");
     usage();    
   }
+  string genome = _parameters["genome_assembly"];
 
   EEDB::Tools::ZDXBuilder *zdxbuilder = new EEDB::Tools::ZDXBuilder();
   map<string,string>::iterator  it;
@@ -155,6 +154,37 @@ void build_zdxdb() {
   //oscdb->set_parameter("build_dir","/tmp/");
   //oscdb->set_parameter("deploy_dir", _user_profile->user_directory());
   //oscdb->set_parameter("deploy_dir", _user_profile->user_directory());
+
+  /*
+  // make sure all the chroms are loaded into memory
+  EEDB::WebServices::RegionServer *webservice = new EEDB::WebServices::RegionServer();
+  webservice->parse_config_file("/etc/zenbu/zenbu.conf");
+  webservice->init_service_request();
+  webservice->postprocess_parameters();
+    
+  EEDB::Assembly *assembly = webservice->find_assembly(genome);
+  if(!assembly) {
+    fprintf(stderr, "failed to find genome [%s] by normal method, switching to full streaming\n", genome.c_str());
+    EEDB::SPStreams::FederatedSourceStream *asm_stream = webservice->superuser_federated_source_stream();
+    asm_stream->allow_full_federation_search(true);
+    asm_stream->set_peer_search_depth(2); //only search the seeds and registry layers
+    asm_stream->stream_chromosomes(genome, "");
+    while(MQDB::DBObject *obj = asm_stream->next_in_stream()) { 
+      if(!obj) { continue; }
+      fprintf(stderr, "%s", obj->xml().c_str());
+      if(obj->classname() == EEDB::Assembly::class_name) { 
+        assembly = (EEDB::Assembly*)obj;
+        if(assembly->assembly_name() != genome) {
+          fprintf(stderr, "problem asm_name not match [%s] != [%s]\n", genome.c_str(), assembly->assembly_name().c_str());
+          assembly = NULL;
+        } else {
+          fprintf(stderr, "found assembly %s [%s]\n", genome.c_str(), assembly->assembly_name().c_str());
+          break;
+        }
+      }
+    }
+  }
+  */
 
   EEDB::Peer *peer = zdxbuilder->create_zdx_for_file(input_file);
   if(peer) {

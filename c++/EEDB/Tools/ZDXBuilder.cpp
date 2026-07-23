@@ -1,4 +1,4 @@
-/* $Id: ZDXBuilder.cpp,v 1.3 2025/12/11 06:23:29 severin Exp $ */
+/* $Id: ZDXBuilder.cpp,v 1.4 2026/07/08 07:21:42 severin Exp $ */
 
 /***
 
@@ -503,6 +503,9 @@ EEDB::Peer*  EEDB::Tools::ZDXBuilder::_load_osc_file() {
   
   if(_parameters.find("display_name") == _parameters.end()) {    
     _parameters["display_name"] = _parameters["_build_filename"];
+  }
+  if(_parameters.find("description") == _parameters.end()) {
+    _parameters["description"] = _parameters["_build_filename"];
   }
   _parameters["orig_file"] = inpath;
   
