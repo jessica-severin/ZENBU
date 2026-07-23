@@ -74,11 +74,15 @@ function ZenbuChartElement(elementID) {
   this.boxpoints = 'all';
   this.boxpointpos = -1.5;
   this.separate_legend_groups = false;
+  this.box_group_sort_order = "alphabetical";
+  this.box_category_custom_style = null;
+  this.show_legend = false; //curently used in boxplot/violin
 
   this.category_datatype = "";
   this.category_selected_dtype = null;
   this.category_colors = {};  //category_colors[datatype].categories[ctgval].color : all category_colors to make interface more user friendly
   this.boxplot_group_datatype = "";
+  this.boxplot_label_datatype = ""; //if different from group_datatype then creates a double sub-grouping 
   this.hide_zero = true;
   this.category_method = "count";
   this.ctg_value_datatype = "";
@@ -117,7 +121,8 @@ function ZenbuChartElement(elementID) {
   this.configTernary            = zenbuChartElement_configTernary;
   this.configBoxPlot            = zenbuChartElement_configBoxPlot;
   this.configLegendGroupMode    = zenbuChartElement_configLegendGroupMode;
-  
+  this.boxGroupCustomStyleInterface = zenbuChartElement_boxGroupCustomStyleInterface;
+
   this.postprocessBubbleChart      = zenbuChartElement_postprocessBubbleChart;
   this.postprocessPlotly           = zenbuChartElement_postprocessPlotly
   this.postprocessBoxPlot          = zenbuChartElement_postprocessBoxPlot
@@ -154,6 +159,8 @@ function zenbuChartElement_initFromConfigDOM(elementDOM) {
   this.symetric_axis = false;
   this.category_datatype = "";
   this.boxplot_group_datatype = "";
+  this.boxplot_label_datatype = "";
+  this.show_legend = false;
   this.hide_zero = true;
   this.stacked = false;
   this.boxpoints = false;
@@ -168,6 +175,8 @@ function zenbuChartElement_initFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("legend_group_mode")) { this.legend_group_mode = elementDOM.getAttribute("legend_group_mode"); }
   if(elementDOM.getAttribute("category_datatype")) { this.category_datatype = elementDOM.getAttribute("category_datatype"); }
   if(elementDOM.getAttribute("boxplot_group_datatype")) { this.boxplot_group_datatype = elementDOM.getAttribute("boxplot_group_datatype"); }
+  if(elementDOM.getAttribute("boxplot_label_datatype")) { this.boxplot_label_datatype = elementDOM.getAttribute("boxplot_label_datatype"); }
+  if(elementDOM.getAttribute("show_legend") == "true") { this.show_legend = true; }
   if(elementDOM.getAttribute("hide_zero") == "true") { this.hide_zero = true; }
   if(elementDOM.getAttribute("colorspace")) { this.colorspace = elementDOM.getAttribute("colorspace"); }
   if(elementDOM.getAttribute("transparency")) { this.transparency = parseFloat(elementDOM.getAttribute("transparency")); }
@@ -188,6 +197,26 @@ function zenbuChartElement_initFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("radius_signal_invert")) { this.radius_signal_invert = elementDOM.getAttribute("radius_signal_invert"); }
   if(elementDOM.getAttribute("radius_signal_min")) { this.radius_signal_min = elementDOM.getAttribute("radius_signal_min"); }
   if(elementDOM.getAttribute("radius_signal_max")) { this.radius_signal_max = elementDOM.getAttribute("radius_signal_max"); }
+
+  if(elementDOM.getAttribute("box_group_sort_order")) { this.box_group_sort_order = elementDOM.getAttribute("box_group_sort_order"); }
+  this.box_category_custom_style = null;
+  var styleDOM = elementDOM.getElementsByTagName("box_category_custom_style")[0];
+  if(styleDOM) {
+    console.log("initConfig box_category_custom_style");
+    this.box_category_custom_style = {};
+    var ctgDOMs = styleDOM.getElementsByTagName("dtype_category");
+    for(var j=0; j<ctgDOMs.length; j++) {
+      var ctgDOM = ctgDOMs[j];
+      if(!ctgDOM) { continue; }
+      //box_category_custom_style[style_mode].categories[ctgval] = {ctg:ctgval, color:"", shape:"", size:"", label_inside:""};
+      var ctgval = ctgDOM.getAttribute("ctg");
+      var ctg_obj = {ctg:ctgval, custom_color:"#000000", custom_order:-1}
+      if(ctgDOM.getAttribute("color")) { ctg_obj.custom_color = ctgDOM.getAttribute("color"); }
+      if(ctgDOM.getAttribute("order")) { ctg_obj.custom_order = parseInt(ctgDOM.getAttribute("order")); }
+      console.log("box_category_custom_style :", ctg_obj);
+      this.box_category_custom_style[ctgval] = ctg_obj;
+    }
+  }
 
   var xaxisDOM = elementDOM.getElementsByTagName("chart_xaxis")[0];
   if(xaxisDOM) {
@@ -242,6 +271,29 @@ function zenbuChartElement_initFromConfigDOM(elementDOM) {
     if(this.legend_group_mode == "category_mdata") { this.chart_color_mode = "category_mdata"; }
   }
   
+  //backward compatability for violin/boxplot from old system to new system
+  if((this.display_type == "boxplot") || (this.display_type == "violin")) {
+    //old system the legend group would override the boxplot boxplot_group_datatype for grouping and the boxplot group would become the label
+    //new system defines these explitly and doesn't use the legend system (was confusing)
+    //   now the the boxplot_group_datatype is always the grouping 
+    //   and label is either the group category or alternately a different datatype (boxplot_label_datatype)
+    //so for backward compatability: if config was using the old system, then I need to swap the datatypes 
+    //   category_datatype -> boxplot_group_datatype
+    //   old boxplot_group_datatype -> boxplot_label_datatype
+    if(this.legend_group_mode == "category_mdata" && this.category_datatype) {
+      console.log("boxplot/violin need convert config to new boxplot_label_datatype system");
+      this.show_legend = true;
+      if(this.boxplot_group_datatype != this.category_datatype) {
+        console.log("boxplot/violin need convert config to new boxplot_label_datatype system");
+        this.boxplot_label_datatype = this.boxplot_group_datatype;
+        this.boxplot_group_datatype = this.category_datatype;
+      }
+    }
+    this.legend_group_mode = "focus_feature";
+    this.category_datatype = "";
+    if(this.boxplot_group_datatype == this.boxplot_label_datatype) { this.boxplot_label_datatype = ""; } //special same-as logic
+    if(this.boxplot_label_datatype != "") { this.show_legend = true; }
+  }
   return true;
 }
 
@@ -258,6 +310,8 @@ function zenbuChartElement_generateConfigDOM() {
   if(this.layout_type) { elementDOM.setAttribute("layout_type", this.layout_type); }
   if(this.category_datatype) { elementDOM.setAttribute("category_datatype", this.category_datatype); }
   if(this.boxplot_group_datatype) { elementDOM.setAttribute("boxplot_group_datatype", this.boxplot_group_datatype); }
+  if(this.boxplot_label_datatype) { elementDOM.setAttribute("boxplot_label_datatype", this.boxplot_label_datatype); }
+  if(this.show_legend) { elementDOM.setAttribute("show_legend", "true"); }
   if(this.hide_zero) { elementDOM.setAttribute("hide_zero", "true"); }
   if(this.colorspace) { elementDOM.setAttribute("colorspace", this.colorspace); }
   if(this.transparency != 1.0) { elementDOM.setAttribute("transparency", this.transparency); }
@@ -278,6 +332,20 @@ function zenbuChartElement_generateConfigDOM() {
   if(this.radius_signal_min) { elementDOM.setAttribute("radius_signal_min", this.radius_signal_min); }
   if(this.radius_signal_max) { elementDOM.setAttribute("radius_signal_max", this.radius_signal_max); }
   
+  if(this.box_group_sort_order) { elementDOM.setAttribute("box_group_sort_order", this.box_group_sort_order); }
+  if(this.box_category_custom_style) {
+    var styleDOM = doc.createElement("box_category_custom_style");
+    for(var ctg in this.box_category_custom_style) {
+      var custom_style = this.box_category_custom_style[ctg];
+      var ctgDOM = doc.createElement("dtype_category");
+      ctgDOM.setAttribute("ctg", ctg);
+      if(custom_style.custom_color) { ctgDOM.setAttribute("color", custom_style.custom_color); }
+      if(custom_style.custom_order)  { ctgDOM.setAttribute("order",  custom_style.custom_order); }
+      styleDOM.appendChild(ctgDOM);
+    }
+    elementDOM.appendChild(styleDOM);
+  }
+
   if(this.colorspace && this.colorspace == "category-colors" && this.category_selected_dtype) { 
     for(dtype in this.category_colors) {
       var dtype_obj = this.category_colors[dtype];
@@ -416,6 +484,8 @@ function zenbuChartElement_reconfigureParam(param, value, altvalue) {
   if(param == "legend_group_mode")  { this.newconfig.legend_group_mode = value; }  
   if(param == "category_datatype")  { this.newconfig.category_datatype = value; }
   if(param == "boxplot_group_datatype")  { this.newconfig.boxplot_group_datatype = value; }
+  if(param == "boxplot_label_datatype")  { this.newconfig.boxplot_label_datatype = value; }
+  if(param == "show_legend")        { this.newconfig.show_legend = value; }
   if(param == "hide_zero")          { this.newconfig.hide_zero = value; }
   if(param == "colorspace")         { this.newconfig.colorspace = value; }
   if(param == "bar_orientation")    { this.newconfig.bar_orientation = value; }
@@ -433,6 +503,26 @@ function zenbuChartElement_reconfigureParam(param, value, altvalue) {
     if(this.newconfig.boxpointpos < -2) { this.newconfig.boxpointpos = -2; }
     if(this.newconfig.boxpointpos > 2) { this.newconfig.boxpointpos = 2; }
     return true;
+  }
+  if(param == "box_group_sort_order") { this.newconfig.box_group_sort_order = value; }
+  if(param == "box_ctg_custom_color") {
+    if(!value) { value = "#0000A0"; }
+    if(value.charAt(0) != "#") { value = "#"+value; }
+    var custom_style = this.box_category_custom_style[altvalue];
+    if(custom_style) {
+      console.log("found custom_style");
+      custom_style.custom_color = value;
+      console.log("box_category_custom_style ["+altvalue+"] new custom_color = " + custom_style.custom_color);
+    }
+  }
+  if(param == "box_ctg_custom_order") {
+    var custom_style = this.box_category_custom_style[altvalue];
+    if(custom_style) {
+      console.log("found custom_style");
+      if(parseInt(value) < custom_style.custom_order) { custom_style.custom_order = parseInt(value) - 0.5; }
+      else { custom_style.custom_order = parseInt(value) + 0.5; }
+      console.log("box_category_custom_style ["+altvalue+"] new custom_order = " + custom_style.custom_order);
+    }
   }
 
   if(param == "signal_columns_div_visible") {
@@ -495,8 +585,11 @@ function zenbuChartElement_reconfigureParam(param, value, altvalue) {
   if(param == "accept-reconfig") {
     var reload = this.newconfig.needReload;
     if(this.newconfig.hide_zero !== undefined) { this.hide_zero = this.newconfig.hide_zero; }
+    if(this.newconfig.show_legend !== undefined) { this.show_legend = this.newconfig.show_legend; }
     if(this.newconfig.category_datatype !== undefined) { this.category_datatype = this.newconfig.category_datatype; reload=true; }
     if(this.newconfig.boxplot_group_datatype !== undefined) { this.boxplot_group_datatype = this.newconfig.boxplot_group_datatype; reload=true; }
+    if(this.newconfig.box_group_sort_order !== undefined) { this.box_group_sort_order = this.newconfig.box_group_sort_order; }    
+    if(this.newconfig.boxplot_label_datatype !== undefined) { this.boxplot_label_datatype = this.newconfig.boxplot_label_datatype; reload=true; }
     if(this.newconfig.colorspace !== undefined) { this.colorspace = this.newconfig.colorspace; reload=true; }
     if(this.newconfig.focus_feature_mode !== undefined) { this.focus_feature_mode = this.newconfig.focus_feature_mode; reload=true; }
     if(this.newconfig.legend_group_mode !== undefined) { this.legend_group_mode = this.newconfig.legend_group_mode; reload=true; }
@@ -2108,7 +2201,7 @@ function zenbuChartElement_postprocessBoxPlot() {
     return;
   }
 
-  var boxgroup_dtype = this.datatypes[this.boxplot_group_datatype];
+  var boxgroup_dtype = datasourceElement.datatypes[this.boxplot_group_datatype];
   if(!boxgroup_dtype) {
     console.log("boxplot has no boxgroup datatype so can't process");
     return;
@@ -2116,80 +2209,77 @@ function zenbuChartElement_postprocessBoxPlot() {
   console.log("boxplot  value:"+value_dtype.datatype+"  group:"+boxgroup_dtype.datatype);
 
   //make the plotly box datasets
-  var primary_data = new Object;
-  var filtered_data = new Object;
   var category_data_hash = new Object; //hash of data-objs
 
-  //make the dataset categories
-  primary_data = new Object;
-  primary_data.x = [];
-  primary_data.y = [];
-  primary_data.zenbuid = "both";
-  primary_data.name = boxgroup_dtype.title
-  //primary_data.backgroundColor = "#F8A12A"; //FF0000
-  //primary_data.hoverBackgroundColor = "#F8A12A";
-  //primary_data.text = new Array;
-  primary_data.type = display_type;
-  primary_data.orientation = "v";
-  primary_data.boxpoints = this.boxpoints;
-  primary_data.jitter = 0.3;
-  primary_data.pointpos = this.boxpointpos;
-  //primary_data.mode = "markers";
-  //primary_data.marker = { size: [], opacity: 0.8, 
-  //                      color: [],
-  //                      line: { width: 0.5, color: 'rgba(217, 217, 217, 0.14)' }
-  //                    }
+  var grouping_datatype = this.boxplot_group_datatype;
+  var grouping_dtype_col = boxgroup_dtype;
+  var axis_label_dtype_col = boxgroup_dtype;
+  if(this.boxplot_label_datatype) {
+    console.log("using boxplot_label_datatype [", this.boxplot_label_datatype, "] datatype");
+    var t_dtype_col = datasourceElement.datatypes[this.boxplot_label_datatype];
+    if(t_dtype_col) { axis_label_dtype_col = t_dtype_col; }
+  }
+    
+  if(grouping_dtype_col) {
+    //make sure all the categories are precalculated
+    if(this.box_group_sort_order=="values" && value_dtype) {
+      //recalculate the category value to be mean for sorting
+      reportElement_process_dtype_category(datasourceElement, grouping_dtype_col, "mean", value_dtype.datatype);
+    } else {
+      //console.log("chart [", this.elementID ,"] postprocessBoxPlot needs to call reportElement_process_dtype_category");
+      reportElement_process_dtype_category(datasourceElement, grouping_dtype_col, "", "");
+    }
 
-  filtered_data = new Object;
-  filtered_data.x = [];
-  filtered_data.y = [];
-  filtered_data.zenbuid = "neither";
-  filtered_data.name = "filtered out";
-  //filtered_data.backgroundColor = "#808080";
-  //filtered_data.hoverBackgroundColor = "#808080";
-  //filtered_data.text = new Array;
-  filtered_data.type = display_type;
-  filtered_data.orientation = "v";
-  filtered_data.boxpoints = this.boxpoints;
-  filtered_data.jitter = 0.3;
-  filtered_data.pointpos = this.boxpointpos;
-  //filtered_data.mode = "markers";
-  //filtered_data.marker = { size: [], opacity: 0.8, 
-  //                          color: [],
-  //                          line: { width: 0.5, color: 'rgba(217, 217, 217, 0.14)' } 
-  //                        }
+    var categories = grouping_dtype_col.categories;
 
-  if((this.legend_group_mode == "category_mdata") && this.category_datatype && this.category_selected_dtype) {
-    var categories = this.category_selected_dtype.categories;
-    var idx1=0;
+    var ctg_array = new Array();
     for(var ctg in categories) {
       var ctg_obj = categories[ctg];
+      ctg_array.push(ctg_obj);
+      ctg_obj.custom_order = -1;
+      if(this.box_category_custom_style && this.box_category_custom_style[ctg_obj.ctg]) {
+        ctg_obj.custom_order = this.box_category_custom_style[ctg_obj.ctg].custom_order;
+      }
+    }
+    console.log("boxplot ", ctg_array.length, " categories");
+    //these sort functions are defined externally in zenbu_category_element.js so just reuse here
+    if(this.box_group_sort_order=="alphabetical") {
+      ctg_array.sort(category_name_sort_func);
+    }
+    if(this.box_group_sort_order=="custom") {
+      ctg_array.sort(category_custom_order_sort_func);
+    }
+    if(this.box_group_sort_order=="values") {
+      ctg_array.sort(category_value_sort_func);
+    }
+      
+    for(var i=0; i<ctg_array.length; i++) {
+      var ctg_obj = ctg_array[i];
       //{ctg:ctgval, count:0, value:null, filtered:false}; }
 
-      console.log("plotly boxplot create category: "+ctg_obj.ctg);
-      var color = zenbuIndexColorSpace(this.colorspace, idx1++);  //Spectral_bp_11  Set2_bp_8  Set3_bp_11
-      
+      //console.log("plotly boxplot create category: "+ctg_obj.ctg);
+      //var color = zenbuIndexColorSpace("Dark2_bp_8", i);  //Spectral_bp_11  Set2_bp_8  Set3_bp_11 Dark2_bp_8 Paired_bp_12
+      //var hex_color = color.getCSSHexadecimalRGB();
+      var hex_color = null; //use default plotly dataset colors
+      if((this.box_group_sort_order=="custom") && this.box_category_custom_style && (this.box_category_custom_style[ctg_obj.ctg])) {
+        hex_color = this.box_category_custom_style[ctg_obj.ctg].custom_color;
+      }
+
       dataset = new Object;
       dataset.x = [];
       dataset.y = [];
       dataset.zenbuid = "category_"+ctg_obj.ctg;
       dataset.category = ctg_obj.ctg;
       dataset.name = ctg_obj.ctg;
+      if(hex_color) { dataset.line = { color: hex_color }; }
       //dataset.backgroundColor = color.getCSSHexadecimalRGB();
       //dataset.hoverBackgroundColor = color.getCSSHexadecimalRGB();
-      //dataset.text = new Array;
-      //dataset.customdata = new Array;
       dataset.type = display_type; //"violin";
       dataset.orientation = "v";
-      dataset.boxpoints = this.boxpoints;
-      dataset.jitter = 0.3;
+      if(display_type == "violin") { dataset.points = this.boxpoints; dataset.boxpoints = true; }
+      if(display_type == "box") { dataset.boxpoints = this.boxpoints; }
+      dataset.jitter = 1.0;
       dataset.pointpos = this.boxpointpos;
-      //dataset.mode = "markers";
-      //dataset.marker = { size: [], opacity: 0.8, 
-      //                    color: [],
-      //                    //line: { width: 0.5, color: 'rgba(217, 217, 217, 0.14)' } 
-      //                    line: { width: 0.5, color: 'rgba(128, 128, 128, 0.14)' } 
-      //                  }
 
       category_data_hash[ctg_obj.ctg] = dataset;
       this.chart_data.datasets.push(dataset);
@@ -2244,7 +2334,6 @@ function zenbuChartElement_postprocessBoxPlot() {
   for(var obj_idx=0; obj_idx<object_count; obj_idx++) {
     var feature = object_array[obj_idx];
     if(!feature) { continue; }
-    //if(!feature.expression_hash) { continue; }
     //if(datasourceElement.search_data_filter && this.show_only_search_matches && !feature.search_match) { continue; }
 
     current_point = new Object;
@@ -2260,7 +2349,7 @@ function zenbuChartElement_postprocessBoxPlot() {
     if(feature.search_match) { current_point.search_match = true; }  
   
     // boxgroup/label
-    var boxgroup = zenbu_object_dtypecol_value(feature, boxgroup_dtype, "first");  //return first (single) value
+    var boxgroup = zenbu_object_dtypecol_value(feature, axis_label_dtype_col, "first");  //return first (single) value
     current_point.x = boxgroup;
 
     // boxplot value (y) (pulled from xaxis.dataype)      
@@ -2279,58 +2368,20 @@ function zenbuChartElement_postprocessBoxPlot() {
     if(signal < this.xaxis.min_value) { this.xaxis.min_value = signal; }
     //console.log("aso1 signal ["+signal+"]");
 
-    
+    ctg = zenbuChartElement_get_category(grouping_datatype, feature);
     if(feature.filter_valid) { 
-      if(this.legend_group_mode == "focus_feature") { //aka default
-        primary_data.x.push(current_point.x); 
-        primary_data.y.push(current_point.y); 
-        //primary_data.text.push(current_point.label); 
-        //primary_data.customdata.push(feature);
-        //primary_data.marker.size.push(current_point.r);
-        //primary_data.marker.color.push(primary_data.backgroundColor); 
-        feature.plotly_dset_name = primary_data.zenbuid;
-        feature.plotly_dset_fidx = primary_data.x.length -1;
+      if(category_data_hash[ctg]) { 
+        var dset = category_data_hash[ctg];
+        dset.x.push(current_point.x);
+        dset.y.push(current_point.y);
+        feature.plotly_dset_name = dset.zenbuid;
+        feature.plotly_dset_fidx = dset.x.length -1;
       }
-      if(this.legend_group_mode == "category_mdata") {
-        ctg = zenbuChartElement_get_category(this.category_datatype, feature);
-        if(category_data_hash[ctg]) { 
-          var dset = category_data_hash[ctg];
-          dset.x.push(current_point.x);
-          dset.y.push(current_point.y);
-          //dset.text.push(current_point.label);
-          //dset.customdata.push(feature);
-          //dset.marker.size.push(current_point.r);
-          //dset.marker.color.push(dset.backgroundColor); 
-          feature.plotly_dset_name = dset.zenbuid;
-          feature.plotly_dset_fidx = dset.x.length -1;
-        }
-        else { 
-          filtered_data.x.push(current_point.x);
-          filtered_data.y.push(current_point.y);
-          //filtered_data.text.push(current_point.label);
-          //filtered_data.customdata.push(feature);
-          //filtered_data.marker.size.push(current_point.r);
-          //filtered_data.marker.color.push(filtered_data.backgroundColor); 
-          feature.plotly_dset_name = filtered_data.zenbuid;
-          feature.plotly_dset_fidx = filtered_data.x.length -1;
-        }
-      }
-    } 
-    else { 
-      filtered_data.x.push(current_point.x);
-      filtered_data.y.push(current_point.y);
-      //filtered_data.text.push(current_point.label);
-      //filtered_data.customdata.push(feature);
-      //filtered_data.marker.size.push(current_point.r);
-      //filtered_data.marker.color.push(filtered_data.backgroundColor); 
-      feature.plotly_dset_name = filtered_data.zenbuid;
-      feature.plotly_dset_fidx = filtered_data.x.length -1;
+    } else {
+      //do I do anything with filtered values now with the new system?
     }
     point_count++;
   }
-
-  if(primary_data.x.length > 0)  { this.chart_data.datasets.push(primary_data); }
-  if(filtered_data.x.length > 0 && this.show_filtered) { this.chart_data.datasets.push(filtered_data); }
 
   if(this.bar_orientation == "horizontal") {
     //by default it builds the datasets with the x as the box groups so flip if in horizontal mode
@@ -2341,16 +2392,6 @@ function zenbuChartElement_postprocessBoxPlot() {
       data.orientation = 'h';
     });
   }
-  
-  
-//   this.chart_point_count = point_count;
-//   if(this.yaxis.symetric) {
-//     var tval1 = Math.abs(this.yaxis.min_value);
-//     var tval2 = Math.abs(this.yaxis.max_value);
-//     if(tval1 > tval2) { tval2 = tval1; }
-//     this.yaxis.min_value = -tval2;
-//     this.yaxis.max_value = tval2;
-//   }
 
   var t1 = performance.now();
   var logmsg = "zenbuChartElement_postprocessPlotly ["+this.elementID+"] "+point_count+" points total, ";
@@ -3901,6 +3942,7 @@ function zenbuChartElement_drawPlotlyBoxPlot() {
   
   var layout = {
     //title: 'Grouped vertical Box Plot',
+    showlegend: this.show_legend,
     yaxis: {
       title: '',
       zeroline: true
@@ -3908,12 +3950,19 @@ function zenbuChartElement_drawPlotlyBoxPlot() {
   };
   if(this.title) { layout.title = this.title; }
   
-  if(this.legend_group_mode == "category_mdata") {
-    //could allow more options here
-    if(this.display_type == "boxplot") { layout.boxmode = "group"; }
-    if(this.display_type == "violin" && this.separate_legend_groups) { layout.violinmode = "group"; }
+  if(this.display_type == "violin") {
+    layout.violingap = 0.1;
+    layout.violingroupgap = 0.1;
+    layout.violinmode = "overlay";
   }
 
+  if(this.boxplot_label_datatype &&  (this.boxplot_label_datatype != this.boxplot_group_datatype)) {
+    //could allow more options here
+    if(this.display_type == "boxplot") { layout.boxmode = "group"; }
+    if(this.display_type == "violin") { layout.violinmode = "group"; }
+  }
+  
+  
   var value_dtype = this.datatypes[this.xaxis.datatype];
   if(value_dtype) { layout.yaxis.title = value_dtype.title; }
   
@@ -3927,6 +3976,10 @@ function zenbuChartElement_drawPlotlyBoxPlot() {
     layout.xaxis = layout.yaxis;
     if(!old_xaxis) { delete layout.yaxis; }
     else { layout.yaxis = old_xaxis; }
+    if(!layout.yaxis) {
+      layout.yaxis = { title: '', autorange: '', zeroline: true};
+    }
+    layout.yaxis.autorange = "reversed";
   }
 
   Plotly.newPlot(plot_div, this.chart_data.datasets, layout);  
@@ -4098,7 +4151,6 @@ function zenbuChartElement_configSubpanel() {
   }
   if((display_type=="boxplot") || (display_type == "violin")) { 
     this.configBoxPlot(datasourceElement);
-    this.configLegendGroupMode(datasourceElement);
   }
   if((display_type=="scatter3D") || (display_type=="ternary")) { 
     this.configLegendGroupMode(datasourceElement); //legend mode at bottom
@@ -5500,9 +5552,53 @@ function zenbuChartElement_configBoxPlot(datasourceElement) {
     tspan2.innerHTML = val1;
   }
   
+  //==== signal value axis  ----------
+  //will use the xaxis for configuration since we only need one signal axis
+  //will use the bar_orientation to decide how to draw
+  
+  // datatype select -------------
+  //var columns_div = zenbuChartElement_signalColumnsInterface(this, boxConfigDiv);
+  
+  tdiv2  = boxConfigDiv.appendChild(document.createElement('div'));
+  tdiv2.setAttribute('style', "margin-top: 3px;");
+  var tspan = tdiv2.appendChild(document.createElement('span'));
+  tspan.style.marginRight = "3px";
+  tspan.innerHTML = "values datatype:";
+  var dtypeSelect = tdiv2.appendChild(document.createElement('select'));
+  dtypeSelect.setAttribute('name', "datatype");
+  dtypeSelect.className = "dropdown";  
+  dtypeSelect.style.fontSize = "10px";
+  //dtypeSelect.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'xaxis_datatype', this.value); return false");
+  dtypeSelect.setAttribute("onchange", "reportElementEvent(\""+ this.elementID +"\", 'xaxis_datatype', this.value); return false");
+  dtypeSelect.setAttribute("onselect", "reportElementEvent(\""+ this.elementID +"\", 'xaxis_datatype', this.value); return false");
+
+  var option = dtypeSelect.appendChild(document.createElement('option'));
+  option.setAttribute("value", "");
+  option.innerHTML = "please select";
+  option.selected = "selected"; //default have this selected unless a datatype is active
+  var xaxis_datatype = this.xaxis.datatype;
+  if(this.newconfig && this.newconfig.xaxis_datatype != undefined) { xaxis_datatype = this.newconfig.xaxis_datatype; }
+  for(var dtype in this.datatypes) {
+    var dtype_col = this.datatypes[dtype];
+    if(!dtype_col) { continue; }
+    if((dtype_col.col_type != "weight") && (dtype_col.col_type != "signal")) { continue; }
+    //if(!dtype_col.signal_active) { continue; }
+    var option = dtypeSelect.appendChild(document.createElement('option'));
+    option.setAttribute("value", dtype_col.datatype);
+    if(xaxis_datatype == dtype) { 
+      option.setAttribute("selected", "selected"); 
+    }
+    var label =  dtype_col.title;
+    if(dtype_col.title != dtype_col.datatype) {
+      label +=  " ["+ dtype_col.datatype +"]";
+    }
+    option.innerHTML = label;
+  }
+
+  
   // primary box grouping via datatype selection --------------------------
   var tdiv2 = boxConfigDiv.appendChild(document.createElement("div"));
-  tdiv2.setAttribute('style', "margin-top: 5px;");
+  tdiv2.setAttribute('style', "margin-top: 3px;");
   var span1 = tdiv2.appendChild(document.createElement('span'));
   span1.setAttribute('style', "margin: 2px 1px 2px 0px;");
   span1.innerHTML = "box grouping datatype: ";
@@ -5534,6 +5630,48 @@ function zenbuChartElement_configBoxPlot(datasourceElement) {
       select.appendChild(option);
     }
   }
+
+  //alt label datatype selector
+  var tdiv2 = boxConfigDiv.appendChild(document.createElement("div"));
+  tdiv2.setAttribute('style', "margin-top: 3px;");
+  var span1 = tdiv2.appendChild(document.createElement('span'));
+  span1.setAttribute('style', "margin: 2px 1px 2px 0px;");
+  span1.innerHTML = "axis label datatype: ";
+  var select_label = tdiv2.appendChild(document.createElement('select'));
+  select_label.className = "dropdown";
+  select_label.style.fontSize = "10px";
+  select_label.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'boxplot_label_datatype', this.value);");
+  var option = select_label.appendChild(document.createElement('option'));
+  option.setAttribute("value", "");
+  option.innerHTML = "same as group";
+  option.setAttribute("selected", "selected");
+  
+  var boxplot_label_datatype = this.boxplot_label_datatype;
+  if(this.newconfig && this.newconfig.boxplot_label_datatype != undefined) { boxplot_label_datatype = this.newconfig.boxplot_label_datatype; }
+  this.dtype_columns.sort(reports_column_order_sort_func);
+  var columns = this.dtype_columns;
+  for(var i=0; i<columns.length; i++) {
+    var dtype_col = columns[i];
+    if(!dtype_col) { continue; }
+
+    if(dtype_col.datatype == boxplot_group_datatype) { continue; }  //skip since special "same as"
+
+    var option = document.createElement('option');
+    option.setAttribute("style", "font-size:10px;");
+    if(dtype_col.visible) { option.style.color = "blue"; }
+
+    option.setAttribute("value", dtype_col.datatype);
+    
+    var label =  dtype_col.title;
+    if(dtype_col.title != dtype_col.datatype) { label +=  " ["+ dtype_col.datatype +"]"; }
+    option.innerHTML = label;
+
+    if(dtype_col.col_type == "mdata") {
+      if(dtype_col.datatype == boxplot_label_datatype) { option.setAttribute("selected", "selected"); }
+      select_label.appendChild(option);
+    }
+  }
+
   
   var bar_order = this.bar_order;
   if(this.newconfig && this.newconfig.bar_order != undefined) { bar_order = this.newconfig.bar_order; }
@@ -5620,259 +5758,187 @@ function zenbuChartElement_configBoxPlot(datasourceElement) {
   }
   
   // show_filtered
+  // tdiv2  = boxConfigDiv.appendChild(document.createElement('div'));
+  // tdiv2.style.margin = "0px 0px 3px 10px";
+  // tcheck = tdiv2.appendChild(document.createElement('input'));
+  // tcheck.setAttribute('style', "margin: 2px 2px 0px 0px;");
+  // tcheck.setAttribute('type', "checkbox");
+  // if(show_filtered) { tcheck.setAttribute('checked', "checked"); }
+  // tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'show_filtered', this.checked);");
+  // tspan2 = tdiv2.appendChild(document.createElement('span'));
+  // tspan2.innerHTML = "show filtered out group";
+
+  // show_legend
+  var show_legend = this.show_legend;
+  if(this.newconfig && this.newconfig.show_legend != undefined) { show_legend = this.newconfig.show_legend; }
   tdiv2  = boxConfigDiv.appendChild(document.createElement('div'));
   tdiv2.style.margin = "0px 0px 3px 10px";
   tcheck = tdiv2.appendChild(document.createElement('input'));
   tcheck.setAttribute('style', "margin: 2px 2px 0px 0px;");
   tcheck.setAttribute('type', "checkbox");
-  if(show_filtered) { tcheck.setAttribute('checked', "checked"); }
-  tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'show_filtered', this.checked);");
+  if(show_legend) { tcheck.setAttribute('checked', "checked"); }
+  tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'show_legend', this.checked);");
   tspan2 = tdiv2.appendChild(document.createElement('span'));
-  tspan2.innerHTML = "show filtered out group";
-
-
-  //==== signal value axis  ----------
-  //will use the xaxis for configuration since we only need one signal axis
-  //will use the bar_orientation to decide how to draw
-  
-  // datatype select -------------
-  //var columns_div = zenbuChartElement_signalColumnsInterface(this, boxConfigDiv);
-  
-  tdiv2  = boxConfigDiv.appendChild(document.createElement('div'));
-  var tspan = tdiv2.appendChild(document.createElement('span'));
-  tspan.style.marginRight = "3px";
-  tspan.innerHTML = "values datatype:";
-  var dtypeSelect = tdiv2.appendChild(document.createElement('select'));
-  dtypeSelect.setAttribute('name', "datatype");
-  dtypeSelect.className = "dropdown";  
-  dtypeSelect.style.fontSize = "10px";
-  //dtypeSelect.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'xaxis_datatype', this.value); return false");
-  dtypeSelect.setAttribute("onchange", "reportElementEvent(\""+ this.elementID +"\", 'xaxis_datatype', this.value); return false");
-  dtypeSelect.setAttribute("onselect", "reportElementEvent(\""+ this.elementID +"\", 'xaxis_datatype', this.value); return false");
-
-  var option = dtypeSelect.appendChild(document.createElement('option'));
-  option.setAttribute("value", "");
-  option.innerHTML = "please select";
-  option.selected = "selected"; //default have this selected unless a datatype is active
-  var xaxis_datatype = this.xaxis.datatype;
-  if(this.newconfig && this.newconfig.xaxis_datatype != undefined) { xaxis_datatype = this.newconfig.xaxis_datatype; }
-  for(var dtype in this.datatypes) {
-    var dtype_col = this.datatypes[dtype];
-    if(!dtype_col) { continue; }
-    if((dtype_col.col_type != "weight") && (dtype_col.col_type != "signal")) { continue; }
-    //if(!dtype_col.signal_active) { continue; }
-    var option = dtypeSelect.appendChild(document.createElement('option'));
-    option.setAttribute("value", dtype_col.datatype);
-    if(xaxis_datatype == dtype) { 
-      option.setAttribute("selected", "selected"); 
-    }
-    var label =  dtype_col.title;
-    if(dtype_col.title != dtype_col.datatype) {
-      label +=  " ["+ dtype_col.datatype +"]";
-    }
-    option.innerHTML = label;
+  tspan2.innerHTML = "show legend";
+  if(boxplot_label_datatype != "") {
+    tcheck.setAttribute('checked', "checked");
+    tcheck.disabled = true;
+    if(this.newconfig) { this.newconfig.show_legend = true; }
   }
 
+  //================================================
+  // box group sort order
+  //================================================
+  var box_group_sort_order = this.box_group_sort_order;
+  if(this.newconfig && this.newconfig.box_group_sort_order != undefined) { box_group_sort_order = this.newconfig.box_group_sort_order; }
+  tdiv2  = boxConfigDiv.appendChild(document.createElement('div'));
+  var tspan = tdiv2.appendChild(document.createElement('span'));
+  tspan.setAttribute('style', "margin: 0px 5px 0px 10px; ");
+  tspan.innerHTML = "box grouping sort order: ";
+
+  radio2 = tdiv2.appendChild(document.createElement('input'));
+  radio2.setAttribute("type", "radio");
+  radio2.setAttribute("name", this.elementID + "_filterbar_sort_order");
+  radio2.setAttribute("value", "alphabetical");
+  if(box_group_sort_order == "alphabetical") { radio2.setAttribute('checked', "checked"); }
+  radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'box_group_sort_order', this.value);");
+  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2.innerHTML = "alphabetical";
+
+  radio1 = tdiv2.appendChild(document.createElement('input'));
+  radio1.setAttribute("type", "radio");
+  radio1.setAttribute("name", this.elementID + "_filterbar_sort_order");
+  radio1.setAttribute("value", "values");
+  if(box_group_sort_order == "values") { radio1.setAttribute('checked', "checked"); }
+  radio1.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'box_group_sort_order', this.value);");
+  tspan1 = tdiv2.appendChild(document.createElement('span'));
+  tspan1.innerHTML = "values";
+
+  radio2 = tdiv2.appendChild(document.createElement('input'));
+  radio2.setAttribute("type", "radio");
+  radio2.setAttribute("name", this.elementID + "_filterbar_sort_order");
+  radio2.setAttribute("value", "custom");
+  if(box_group_sort_order == "custom") { radio2.setAttribute('checked', "checked"); }
+  radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'box_group_sort_order', this.value);");
+  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2.innerHTML = "custom";
+
+  if(box_group_sort_order == "custom") {
+    this.boxGroupCustomStyleInterface();
+  }
+  //else { this.configLegendGroupMode(datasourceElement); }
+  //this.configLegendGroupMode(datasourceElement);
   
-  //add a color spectrum picker
-  //tdiv2  = boxConfigDiv.appendChild(document.createElement('div'));
-  //tdiv2.setAttribute('style', "margin: 0px 2px 5px 5px;");
-  //tdiv2.appendChild(reportElementColorSpaceOptions(this));
+}
 
 
-  // other options ----------------
-  // tdiv2  = boxConfigDiv.appendChild(document.createElement('div'));
-  // tdiv2.style.marginLeft = "10px";
-  // tcheck = tdiv2.appendChild(document.createElement('input'));
-  // tcheck.setAttribute('style', "margin: 2px 2px 0px 0px;");
-  // tcheck.setAttribute('type', "checkbox");
-  // var val1 = this.xaxis.fixedscale;
-  // if(this.newconfig && this.newconfig.xaxis_fixedscale != undefined) { val1 = this.newconfig.xaxis_fixedscale; }
-  // if(val1) { tcheck.setAttribute('checked', "checked"); }
-  // tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'xaxis_fixedscale', this.checked);");
-  // tspan2 = tdiv2.appendChild(document.createElement('span'));
-  // tspan2.innerHTML = "fixed scale";
-  // 
-  // tcheck = tdiv2.appendChild(document.createElement('input'));
-  // tcheck.setAttribute('style', "margin: 2px 2px 0px 5px;");
-  // tcheck.setAttribute('type', "checkbox");
-  // var val1 = this.xaxis.symetric;
-  // if(this.newconfig && this.newconfig.xaxis_symetric != undefined) { val1 = this.newconfig.xaxis_symetric; }
-  // if(val1) { tcheck.setAttribute('checked', "checked"); }
-  // tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'xaxis_symetric', this.checked);");
-  // tspan2 = tdiv2.appendChild(document.createElement('span'));
-  // tspan2.innerHTML = "symetric +/- scaling";
-  // 
-  // tcheck = tdiv2.appendChild(document.createElement('input'));
-  // tcheck.setAttribute('style', "margin: 2px 2px 0px 5px;");
-  // tcheck.setAttribute('type', "checkbox");
-  // var val1 = this.xaxis.log;
-  // if(this.newconfig && this.newconfig.xaxis_log != undefined) { val1 = this.newconfig.xaxis_log; }
-  // if(val1) { tcheck.setAttribute('checked', "checked"); }
-  // tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'xaxis_log', this.checked);");
-  // tspan2 = tdiv2.appendChild(document.createElement('span'));
-  // tspan2.innerHTML = "log scale";  
-  // 
-  // //hide_zero
-  // tcheck = tdiv2.appendChild(document.createElement('input'));
-  // tcheck.setAttribute('style', "margin: 2px 2px 0px 5px;");
-  // tcheck.setAttribute('type', "checkbox");
-  // var val1 = this.hide_zero;
-  // if(this.newconfig && this.newconfig.hide_zero != undefined) { val1 = this.newconfig.hide_zero; }
-  // if(val1) { tcheck.setAttribute('checked', "checked"); }
-  // tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'hide_zero', this.checked);");
-  // tspan2 = tdiv2.appendChild(document.createElement('span'));
-  // tspan2.innerHTML = "hide zeros";
+function zenbuChartElement_boxGroupCustomStyleInterface() {
+  var configdiv = this.config_options_div;
+  if(!configdiv) { return; }
+
+  var elementID = this.elementID;
+  var datasourceElement = this.datasource();
+
+  if(!this.boxGroupCustomStyleDiv) {
+    this.boxGroupCustomStyleDiv = document.createElement('div');
+  }
+  var boxGroupCustomStyleDiv = this.boxGroupCustomStyleDiv;
+  boxGroupCustomStyleDiv.setAttribute('style', "margin-left:15px; width:100%;");
+  boxGroupCustomStyleDiv.innerHTML = "";
+  //boxGroupCustomStyleDiv.appendChild(document.createElement('hr'));
+
+  configdiv.appendChild(boxGroupCustomStyleDiv);
+
+  //prepare the ctg_array from boxplot_group_datatype
+  var category_datatype = this.boxplot_group_datatype;
+  if(this.newconfig && this.newconfig.boxplot_group_datatype != undefined) { category_datatype = this.newconfig.boxplot_group_datatype; }
+
+  var columns = datasourceElement.dtype_columns;
+  var selected_dtype = null;
+  for(var i=0; i<columns.length; i++) {
+    var dtype_col = columns[i];
+    if(!dtype_col) { continue; }
+    if(dtype_col.datatype == category_datatype) { selected_dtype = dtype_col; break; }
+  }
+  if(!selected_dtype) { return; }
+  //console.log("boxGroupCustomStyleInterface : ", selected_dtype);
   
-  
-  //
-  // chart_color_mode
-  //
-  // var chart_color_mode = this.chart_color_mode;
-  // if(this.newconfig && this.newconfig.chart_color_mode != undefined) { chart_color_mode = this.newconfig.chart_color_mode; }
-  // 
-  // var hr1 = configdiv.appendChild(document.createElement('hr'));
-  // hr1.style.borderTop = "1px solid #afafaf";
-  // hr1.style.width = "95%";
-  // 
-  // tdiv2  = configdiv.appendChild(document.createElement('div'));
-  // var tspan = tdiv2.appendChild(document.createElement('span'));
-  // tspan.setAttribute('style', "margin: 0px 0px 0px 5px; ");
-  // tspan.innerHTML = "coloring mode: ";
-  // 
-  // //console.log("chart_color_mode : "+chart_color_mode);
-  // radio1 = tdiv2.appendChild(document.createElement('input'));
-  // radio1.setAttribute("type", "radio");
-  // radio1.setAttribute("name", this.elementID + "_color_mode_radio");
-  // radio1.setAttribute("value", "default");
-  // if(chart_color_mode == "default") { radio1.setAttribute('checked', "checked"); }
-  // radio1.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'chart_color_mode', this.value);");
-  // tspan = tdiv2.appendChild(document.createElement('span'));
-  // tspan.innerHTML = "default";
-  // 
-  // radio2 = tdiv2.appendChild(document.createElement('input'));
-  // radio2.setAttribute("type", "radio");
-  // radio1.setAttribute("name", this.elementID + "_color_mode_radio");
-  // radio2.setAttribute("value", "fixed_color");
-  // if(chart_color_mode == "fixed_color") { radio2.setAttribute('checked', "checked"); }
-  // radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'chart_color_mode', this.value);");
-  // tspan = tdiv2.appendChild(document.createElement('span'));
-  // tspan.innerHTML = "fixed color";
-  // 
-  // radio2 = tdiv2.appendChild(document.createElement('input'));
-  // radio2.setAttribute("type", "radio");
-  // radio1.setAttribute("name", this.elementID + "_color_mode_radio");
-  // radio2.setAttribute("value", "signal");
-  // if(chart_color_mode == "signal") { radio2.setAttribute('checked', "checked"); }
-  // radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'chart_color_mode', this.value);");
-  // tspan = tdiv2.appendChild(document.createElement('span'));
-  // tspan.innerHTML = "signal";
-  // 
-  // radio2 = tdiv2.appendChild(document.createElement('input'));
-  // radio2.setAttribute("type", "radio");
-  // radio1.setAttribute("name", this.elementID + "_color_mode_radio");
-  // radio2.setAttribute("value", "category_mdata");
-  // if(chart_color_mode == "category_mdata") { radio2.setAttribute('checked', "checked"); }
-  // radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'chart_color_mode', this.value);");
-  // tspan = tdiv2.appendChild(document.createElement('span'));
-  // tspan.innerHTML = "legend categories"; 
-  // var msg = "<div style='text-align:left; padding:3px;'>a metadata column is used to create categories which are mapped to different legend-groups for plotting.</div>";
-  // radio2.setAttribute("onmouseover", "eedbMessageTooltip(\""+msg+"\",280);");
-  // radio2.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-  // tspan2.setAttribute("onmouseover", "eedbMessageTooltip(\""+msg+"\",280);");
-  // tspan2.setAttribute("onmouseout", "eedbClearSearchTooltip();");
-  // 
-  // 
-  // var color_options_div = configdiv.appendChild(document.createElement('div'));
-  // color_options_div.setAttribute('style', "margin-top:2px;");
-  // 
-  // if(chart_color_mode == "fixed_color") { 
-  //   var fixed_color = this.fixed_color;
-  //   if(this.newconfig && this.newconfig.fixed_color != undefined) { fixed_color = this.newconfig.fixed_color; }
-  //   tspan2 = color_options_div.appendChild(document.createElement('span'));
-  //   tspan2.setAttribute('style', "margin: 1px 4px 1px 10px; font-size:10px; font-family:arial,helvetica,sans-serif; ");
-  //   tspan2.innerHTML = "fixed color:";
-  //   
-  //   var colorInput = color_options_div.appendChild(document.createElement('input'));
-  //   colorInput.setAttribute('value', fixed_color);
-  //   colorInput.setAttribute('size', "7");
-  //   colorInput.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'fixed_color', this.value);");
-  //   
-  //   if(this.fixed_color_picker) { this.fixed_color_picker.hidePicker(); } //hide old picker
-  //   this.fixed_color_picker = new jscolor.color(colorInput);
-  //   color_options_div.appendChild(colorInput);
-  // }
-  // 
-  // if(chart_color_mode == "signal" || chart_color_mode=="category_mdata") {
-  //   //signal_datatype select
-  //   var tdiv  = color_options_div.appendChild(document.createElement('span'));
-  //   tdiv.setAttribute('style', "margin: 3px 1px 0px 10px;");
-  //   var tspan = tdiv.appendChild(document.createElement('span'));
-  //   tspan.innerHTML = "datatype: ";
-  //   if(chart_color_mode == "category_mdata") { tspan.innerHTML = "category column: "; }
-  //   var dtypeSelect = tdiv.appendChild(document.createElement('select'));
-  //   dtypeSelect.setAttribute('name', "datatype");
-  //   dtypeSelect.className = "dropdown";
-  //   dtypeSelect.style.fontSize = "10px";
-  //   //dtypeSelect.setAttribute('style', "margin: 1px 0px 1px 0px; font-size:10px; font-family:arial,helvetica,sans-serif; ");
-  // 
-  //   var signal_datatype = this.signal_datatype;
-  //   if(this.newconfig && this.newconfig.signal_datatype != undefined) { signal_datatype = this.newconfig.signal_datatype; }
-  //   if(chart_color_mode == "signal") {
-  //     dtypeSelect.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'signal_datatype', this.value); return false");
-  //     dtypeSelect.setAttribute("onselect", "reportElementReconfigParam(\""+ this.elementID +"\", 'signal_datatype', this.value); return false");
-  //   }
-  //   if(chart_color_mode=="category_mdata") {
-  //     dtypeSelect.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'category_datatype', this.value); return false");
-  //     dtypeSelect.setAttribute("onselect", "reportElementReconfigParam(\""+ this.elementID +"\", 'category_datatype', this.value); return false");
-  //     signal_datatype = this.category_datatype;
-  //     if(this.newconfig && this.newconfig.category_datatype != undefined) { signal_datatype = this.newconfig.category_datatype; }
-  //   }    
-  //   var option = dtypeSelect.appendChild(document.createElement('option'));
-  //   option.setAttribute("value", "");
-  //   option.setAttribute("selected", "selected");
-  //   option.innerHTML = "please select datatype";
-  // 
-  //   var columns = datasourceElement.dtype_columns;
-  //   columns.sort(reports_column_order_sort_func);
-  //   for(var i=0; i<columns.length; i++) {
-  //     var dtype_col = columns[i];
-  //     // for(var dtype in datasourceElement.datatypes) {
-  //     //   var dtype_col = datasourceElement.datatypes[dtype];
-  //     if(!dtype_col) { continue; }
-  //     if((chart_color_mode == "signal") && (dtype_col.col_type != "weight") && (dtype_col.col_type != "signal")) { continue; }
-  //     if((chart_color_mode == "category_mdata") && (dtype_col.col_type != "mdata")) { continue; }
-  //     var option = dtypeSelect.appendChild(document.createElement('option'));
-  //     option.setAttribute("value", dtype_col.datatype);
-  //     if(signal_datatype == dtype_col.datatype) { option.setAttribute("selected", "selected"); }
-  //     option.setAttribute("style", "font-size:10px;");
-  //     if(dtype_col.visible) { option.style.color = "blue"; }
-  //     var label =  dtype_col.title;
-  //     if(dtype_col.title != dtype_col.datatype) { label +=  " ["+ dtype_col.datatype +"]"; }
-  //     option.innerHTML = label;
-  //   }
-  //   
-  //   //add a color spectrum picker
-  //   var uniqID = this.elementID+"_signalCSI";
-  //   var signalCSI = this.signalCSI;
-  //   if(!signalCSI) {
-  //     signalCSI = zenbuColorSpaceInterface(uniqID);
-  //     signalCSI.elementID = this.elementID;
-  //     signalCSI.colorspace = this.signal_colorspace;
-  //     signalCSI.single_color = this.fixed_color;
-  //     signalCSI.enableScaling = true;
-  //     signalCSI.min_signal = this.signal_min;
-  //     signalCSI.max_signal = this.signal_max;
-  //     signalCSI.logscale = this.signal_logscale;
-  //     signalCSI.invert = this.signal_invert;
-  //     signalCSI.callOutFunction = zenbuChartElement_signal_CSI_callback;
-  //     this.signalCSI = signalCSI;
-  //   }
-  //   if(chart_color_mode == "category_mdata") { signalCSI.enableScaling=false; } else { signalCSI.enableScaling=true; }
-  //   zenbuColorSpaceInterfaceUpdate(uniqID);
-  //   signalCSI.style.marginLeft = "10px";
-  //   color_options_div.appendChild(signalCSI);
-  // }
+  if(!selected_dtype.categories) {
+    console.log("chart [", elementID ,"] config need to call reportElement_process_dtype_category");
+    reportElement_process_dtype_category(datasourceElement, selected_dtype, "", "");
+  }
+  var categories = selected_dtype.categories;
+
+  if(!this.box_category_custom_style) { this.box_category_custom_style = {}; }
+
+  var ctg_array = new Array();
+  var ctg_values = Object.keys(categories);
+  ctg_values.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  for(var i=0; i<ctg_values.length; i++) {
+    var ctg = ctg_values[i];
+    var ctg_obj = categories[ctg];
+    ctg_array.push(ctg_obj);
+    if(!this.box_category_custom_style[ctg_obj.ctg]) {
+      console.log("box_category_custom_style ["+ctg_obj.ctg+"] missing");
+      this.box_category_custom_style[ctg_obj.ctg] = {};
+      this.box_category_custom_style[ctg_obj.ctg].custom_order = ctg_array.length;
+      this.box_category_custom_style[ctg_obj.ctg].custom_color = "#ADD8E6";
+    }
+    ctg_obj.custom_order = this.box_category_custom_style[ctg_obj.ctg].custom_order;
+  }
+  ctg_array.sort(category_custom_order_sort_func);
+  for(var idx1=0; idx1<ctg_array.length; idx1++) {
+    var ctg_obj = ctg_array[idx1];
+    this.box_category_custom_style[ctg_obj.ctg].custom_order = idx1+1;
+  }
+
+  //----------
+  var labelDiv = boxGroupCustomStyleDiv.appendChild(document.createElement('div'));
+  labelDiv.setAttribute("style", "font-size:12px; font-family:arial,helvetica,sans-serif;");
+  var span1 = labelDiv.appendChild(document.createElement('span'));
+  span1.setAttribute("style", "font-size:12px; margin-right:7px; font-family:arial,helvetica,sans-serif; font-weight:bold;");
+  span1.innerHTML ="box grouping custom category styling :";
+
+  // show details of interface
+  var table1 = boxGroupCustomStyleDiv.appendChild(document.createElement('table'));
+  for(var ctg_idx=0; ctg_idx<ctg_array.length; ctg_idx++){
+    var ctg_obj = ctg_array[ctg_idx];
+    if(!ctg_obj) { continue; }
+
+    var custom_style = this.box_category_custom_style[ctg_obj.ctg];
+    if(!custom_style) { continue; } //shouldn't happen since defined above
+
+    //console.log("trigger "+this.elementID+" ["+trig_idx+"] on["+trigger.on_trigger+"]  action["+trigger.action_mode+" - "+trigger.options+"]");
+    //if(!trigger.targetElement) { trigger.targetElement = current_report.elements[trigger.targetElementID]; }
+    //if(!trigger.targetElement) { continue; }
+
+    var tr1 = table1.appendChild(document.createElement('tr'));
+
+    var td1 = tr1.appendChild(document.createElement('td'));
+    var span1 = td1.appendChild(document.createElement('span'));
+    span1.style = "margin-left:10px; font-style:italic; padding-right:5px;";
+    span1.innerHTML = ctg_obj.ctg;
+
+    var td2 = tr1.appendChild(document.createElement('td'));
+    td2.style = "padding-right:5px;";
+    var input = td2.appendChild(document.createElement('input'));
+    input.setAttribute('size', "3");
+    input.setAttribute('type', "text");
+    input.setAttribute('value', custom_style.custom_order);
+    input.setAttribute("onkeydown", "if(event.keyCode==13) { reportElementReconfigParam(\""+ this.elementID +"\", 'box_ctg_custom_order', this.value, '"+  ctg_obj.ctg +"'); }");
+    input.setAttribute("onblur", "reportElementReconfigParam(\""+ this.elementID +"\", 'box_ctg_custom_order', this.value, '"+  ctg_obj.ctg +"');");
+
+    var td3 = tr1.appendChild(document.createElement('td'));
+    var colorInput = td3.appendChild(document.createElement('input'));
+    colorInput.setAttribute('value', custom_style.custom_color);
+    colorInput.setAttribute('size', "7");
+    colorInput.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'box_ctg_custom_color', this.value, '"+  ctg_obj.ctg +"');");
+    if(custom_style.fixed_color_picker) { custom_style.fixed_color_picker.hidePicker(); } //hide old picker
+    custom_style.fixed_color_picker = new jscolor.color(colorInput);
+    td3.appendChild(colorInput);
+  }
+
+  return boxGroupCustomStyleDiv;
 }
 
 
