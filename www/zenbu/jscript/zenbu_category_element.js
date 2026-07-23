@@ -59,7 +59,9 @@ function ZenbuCategoryElement(elementID) {
   this.ctg_value_datatype = "";
   this.colorspace = "Set3_bp_12";
   this.selected_dtype = null;
-  
+  this.sort_order = "count";
+  this.category_custom_style = null;
+
   //methods
   this.initFromConfigDOM  = zenbuCategoryElement_initFromConfigDOM;  //pass a ConfigDOM object
   this.generateConfigDOM  = zenbuCategoryElement_generateConfigDOM;  //returns a ConfigDOM object
@@ -79,7 +81,9 @@ function ZenbuCategoryElement(elementID) {
   //this.drawBarChart     = zenbuCategoryElement_drawBarChart;
 
   this.customWidget     = zenbuCategoryElement_createCustomWidget;
-  
+
+  this.customStyleInterface = zenbuCategoryElement_customStyleInterface;
+
   return this;
 }
 
@@ -98,29 +102,64 @@ function zenbuCategoryElement_initFromConfigDOM(elementDOM) {
   this.radio_list = false;
   if(elementDOM.getAttribute("category_datatype")) { this.category_datatype = elementDOM.getAttribute("category_datatype"); }
   if(elementDOM.getAttribute("display_type"))      { this.display_type = elementDOM.getAttribute("display_type"); }
+  if(elementDOM.getAttribute("sort_order"))        { this.sort_order = elementDOM.getAttribute("sort_order"); }
   if(elementDOM.getAttribute("colorspace"))        { this.colorspace = elementDOM.getAttribute("colorspace"); }
   if(elementDOM.getAttribute("radio_list")=="true") { this.radio_list = true; }
 
   if(elementDOM.getAttribute("show_filter_bars")=="false") { this.show_filter_bars = false; } else { this.show_filter_bars = true; }
   if(elementDOM.getAttribute("show_percent_bars")=="true") { this.show_percent_bars = true; } else { this.show_percent_bars = false; }
   if(elementDOM.getAttribute("filter_bar_ratio")) { this.filter_bar_ratio = parseFloat(elementDOM.getAttribute("filter_bar_ratio")); }
+
+  this.category_custom_style = null;
+  var styleDOM = elementDOM.getElementsByTagName("category_custom_style")[0];
+  if(styleDOM) {
+    console.log("initConfig category_custom_style");
+    this.category_custom_style = {};
+    var ctgDOMs = styleDOM.getElementsByTagName("dtype_category");
+    for(var j=0; j<ctgDOMs.length; j++) {
+      var ctgDOM = ctgDOMs[j];
+      if(!ctgDOM) { continue; }
+      //category_custom_style[style_mode].categories[ctgval] = {ctg:ctgval, color:"", shape:"", size:"", label_inside:""};
+      var ctgval = ctgDOM.getAttribute("ctg");
+      var ctg_obj = {ctg:ctgval, custom_color:"#000000", custom_order:-1}
+      if(ctgDOM.getAttribute("color")) { ctg_obj.custom_color = ctgDOM.getAttribute("color"); }
+      if(ctgDOM.getAttribute("order")) { ctg_obj.custom_order = parseInt(ctgDOM.getAttribute("order")); }
+      console.log("category_custom_style :", ctg_obj);
+      this.category_custom_style[ctgval] = ctg_obj;
+    }
+  }
+
   return true;
 }
 
 
 function zenbuCategoryElement_generateConfigDOM() {
-  //TODO: need to figure this out, not currently using
+  var doc = document.implementation.createDocument("", "", null);
   var elementDOM = reportsGenerateElementDOM(this);  //superclass method eventually
 
   elementDOM.setAttribute("display_type", this.display_type);
   if(this.category_datatype) { elementDOM.setAttribute("category_datatype", this.category_datatype); }
   if(this.category_method) { elementDOM.setAttribute("category_method", this.category_method); }
+  if(this.sort_order) { elementDOM.setAttribute("sort_order", this.sort_order); }
   if(this.ctg_value_datatype) { elementDOM.setAttribute("ctg_value_datatype", this.ctg_value_datatype); }
   if(this.colorspace) { elementDOM.setAttribute("colorspace", this.colorspace); }
   if(this.radio_list) { elementDOM.setAttribute("radio_list", "true"); }
   elementDOM.setAttribute("filter_bar_ratio", this.filter_bar_ratio);
   if(this.show_filter_bars) { elementDOM.setAttribute("show_filter_bars", "true"); } else { elementDOM.setAttribute("show_filter_bars", "false"); }
   if(this.show_percent_bars) { elementDOM.setAttribute("show_percent_bars", "true"); } else { elementDOM.setAttribute("show_percent_bars", "false"); }
+
+  if(this.category_custom_style) {
+    var styleDOM = doc.createElement("category_custom_style");
+    for(var ctg in this.category_custom_style) {
+      var custom_style = this.category_custom_style[ctg];
+      var ctgDOM = doc.createElement("dtype_category");
+      ctgDOM.setAttribute("ctg", ctg);
+      if(custom_style.custom_color) { ctgDOM.setAttribute("color", custom_style.custom_color); }
+      if(custom_style.custom_order)  { ctgDOM.setAttribute("order",  custom_style.custom_order); }
+      styleDOM.appendChild(ctgDOM);
+    }
+    elementDOM.appendChild(styleDOM);
+  }
 
   return elementDOM;
 }
@@ -253,10 +292,50 @@ function zenbuCategoryElement_elementEvent(mode, value, value2) {
 function zenbuCategoryElement_reconfigureParam(param, value, altvalue) {
   if(!this.newconfig) { return; }
   //TODO: eventually a superclass method here, but for now a hybrid function=>obj.method approach
-  
+
+  var datasourceElement = this.datasource();
+
+  function clone_category_custom_style() {
+    if(!this.category_custom_style) { return; }
+    if(this.newconfig.category_custom_style) { return; }
+    this.newconfig.category_custom_style = {};
+    for(var ctg in this.category_custom_style) {
+      var custom_style = zenbu_object_clone(this.category_custom_style[ctg]);
+      this.newconfig.category_custom_style[ctg] = custom_style;
+    }
+    console.log("cloned category_custom_style to newconfig");
+  }
+    
   //category
-  if(param == "category_datatype") { this.newconfig.category_datatype = value; }
+  if(param == "category_datatype") { 
+    this.newconfig.category_datatype = value;
+    //make sure categories are calculated for new datatype
+    var dtype_col = datasourceElement.datatypes[value];
+    if(dtype_col && !dtype_col.categories) {
+      reportElement_process_dtype_category(datasourceElement, dtype_col, "", "");
+    }
+    //create clean slate for new customization
+    this.newconfig.category_custom_style = {};
+    //add in new categories   
+    for(var ctg in dtype_col.categories) {
+      var ctg_obj = dtype_col.categories[ctg];
+      if(!this.newconfig.category_custom_style[ctg_obj.ctg]) {
+        console.log("category_custom_style ["+ctg_obj.ctg+"] missing");
+        var custom_style = { ctg:ctg_obj.ctg, custom_order:-1, custom_color:"#ADD8E6"};
+        this.newconfig.category_custom_style[ctg_obj.ctg] = custom_style;
+      }
+    }
+    //name sort since new
+    var ctg_array = Object.values(this.newconfig.category_custom_style)
+    ctg_array.sort(category_name_sort_func);
+    for(var idx1=0; idx1<ctg_array.length; idx1++) {
+      var ctg_obj = ctg_array[idx1];
+      ctg_obj.custom_order = idx1+1;
+    }
+  }
+  
   if(param == "display_type") { this.newconfig.display_type = value; }
+  if(param == "sort_order") { this.newconfig.sort_order = value; }
   if(param == "hide_zero") { this.newconfig.hide_zero = value; }
   if(param == "radio_list") { this.newconfig.radio_list = value; }
   if(param == "show_filter_bars") { this.newconfig.show_filter_bars = value; }
@@ -264,16 +343,50 @@ function zenbuCategoryElement_reconfigureParam(param, value, altvalue) {
   if(param == "filter_bar_ratio") { this.newconfig.filter_bar_ratio = value; return true; }
   if(param == "colorspace") { this.newconfig.colorspace = value; }
 
+  if(param == "ctg_custom_color") {
+    clone_category_custom_style.call(this);    
+    if(!value) { value = "#0000A0"; }
+    if(value.charAt(0) != "#") { value = "#"+value; }
+    var custom_style = this.newconfig.category_custom_style[altvalue];
+    if(custom_style) {
+      console.log("found custom_style");
+      custom_style.custom_color = value;
+      console.log("category_custom_style ["+altvalue+"] new custom_color = " + custom_style.custom_color);
+    }
+  }
+  if(param == "ctg_custom_order") {
+    clone_category_custom_style.call(this);    
+    var custom_style = this.newconfig.category_custom_style[altvalue];
+    if(custom_style) {
+      console.log("found custom_style");
+      if(parseInt(value) < custom_style.custom_order) { custom_style.custom_order = parseInt(value) - 0.5; }
+      else { custom_style.custom_order = parseInt(value) + 0.5; }
+      console.log("category_custom_style ["+altvalue+"] new custom_order = " + custom_style.custom_order);
+      
+      var ctg_array = Object.values(this.newconfig.category_custom_style)
+      ctg_array.sort(category_custom_order_sort_func);
+      for(var idx1=0; idx1<ctg_array.length; idx1++) {
+        var ctg_obj = ctg_array[idx1];
+        ctg_obj.custom_order = idx1+1;
+      }
+    }
+  }
+
   if(param == "accept-reconfig") {
     //this.needReload=true;
-    if(this.newconfig.category_datatype !== undefined)   { this.category_datatype = this.newconfig.category_datatype; }
+    if(this.newconfig.category_datatype !== undefined) {
+      this.category_datatype = this.newconfig.category_datatype;
+    }
     if(this.newconfig.display_type !== undefined)        { this.display_type = this.newconfig.display_type; }
+    if(this.newconfig.sort_order !== undefined)          { this.sort_order = this.newconfig.sort_order; }
     if(this.newconfig.hide_zero !== undefined)           { this.hide_zero = this.newconfig.hide_zero; }
     if(this.newconfig.radio_list !== undefined)          { this.radio_list = this.newconfig.radio_list; }
     if(this.newconfig.show_filter_bars !== undefined)    { this.show_filter_bars = this.newconfig.show_filter_bars; }
     if(this.newconfig.show_percent_bars !== undefined)   { this.show_percent_bars = this.newconfig.show_percent_bars; }
     if(this.newconfig.filter_bar_ratio !== undefined)    { this.filter_bar_ratio = this.newconfig.filter_bar_ratio; }
     if(this.newconfig.colorspace !== undefined)          { this.colorspace = this.newconfig.colorspace; }
+
+    if(this.newconfig.category_custom_style !== undefined) { this.category_custom_style = this.newconfig.category_custom_style; }    
   }
 }
 
@@ -722,6 +835,46 @@ function zenbuCategoryElement_configSubpanel() {
     tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ this.elementID +"\", 'show_percent_bars', this.checked);");
     tspan2 = tdiv2.appendChild(document.createElement('span'));
     tspan2.innerHTML = "percentage bars";
+
+    //sort order
+    var sort_order = this.sort_order;
+    if(this.newconfig && this.newconfig.sort_order != undefined) { sort_order = this.newconfig.sort_order; }
+    tdiv2  = configdiv.appendChild(document.createElement('div'));
+    var tspan = tdiv2.appendChild(document.createElement('span'));
+    tspan.setAttribute('style', "margin: 0px 5px 0px 5px; ");
+    tspan.innerHTML = "sort order: ";
+
+    radio1 = tdiv2.appendChild(document.createElement('input'));
+    radio1.setAttribute("type", "radio");
+    radio1.setAttribute("name", this.elementID + "_filterbar_sort_order");
+    radio1.setAttribute("value", "count");
+    if(sort_order == "count") { radio1.setAttribute('checked', "checked"); }
+    radio1.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'sort_order', this.value);");
+    tspan1 = tdiv2.appendChild(document.createElement('span'));
+    tspan1.innerHTML = "count";
+
+    radio2 = tdiv2.appendChild(document.createElement('input'));
+    radio2.setAttribute("type", "radio");
+    radio2.setAttribute("name", this.elementID + "_filterbar_sort_order");
+    radio2.setAttribute("value", "alphabetical");
+    if(sort_order == "alphabetical") { radio2.setAttribute('checked', "checked"); }
+    radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'sort_order', this.value);");
+    tspan2 = tdiv2.appendChild(document.createElement('span'));
+    tspan2.innerHTML = "alphabetical";
+
+    radio2 = tdiv2.appendChild(document.createElement('input'));
+    radio2.setAttribute("type", "radio");
+    radio2.setAttribute("name", this.elementID + "_filterbar_sort_order");
+    radio2.setAttribute("value", "custom");
+    if(sort_order == "custom") { radio2.setAttribute('checked', "checked"); }
+    radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'sort_order', this.value);");
+    tspan2 = tdiv2.appendChild(document.createElement('span'));
+    tspan2.innerHTML = "custom";
+
+    if(sort_order == "custom") {
+      this.customStyleInterface();
+    }
+
   }
   
   
@@ -771,6 +924,109 @@ function zenbuCategoryElement_configSubpanel() {
   }
 
   configdiv.appendChild(document.createElement('hr'));
+}
+
+
+function zenbuCategoryElement_customStyleInterface() {
+  var configdiv = this.config_options_div;
+  if(!configdiv) { return; }
+
+  var elementID = this.elementID;
+  var datasourceElement = this.datasource();
+
+  if(!this.customStyleDiv) {
+    this.customStyleDiv = document.createElement('div');
+  }
+  var customStyleDiv = this.customStyleDiv;
+  customStyleDiv.setAttribute('style', "width:100%;");
+  customStyleDiv.innerHTML = "";
+  //customStyleDiv.appendChild(document.createElement('hr'));
+
+  configdiv.appendChild(customStyleDiv);
+
+  //prepare the ctg_array
+  var category_datatype = this.category_datatype;
+  if(this.newconfig && this.newconfig.category_datatype != undefined) { category_datatype = this.newconfig.category_datatype; }
+
+  var columns = datasourceElement.dtype_columns;
+  var selected_dtype = null;
+  for(var i=0; i<columns.length; i++) {
+    var dtype_col = columns[i];
+    if(!dtype_col) { continue; }
+    if(dtype_col.datatype == category_datatype) { selected_dtype = dtype_col; break; }
+  }
+  if(!selected_dtype) { return; }
+
+  if(!selected_dtype.categories) { selected_dtype.categories = new Object(); }
+  var categories = selected_dtype.categories;
+
+  if(!this.category_custom_style) { this.category_custom_style = {}; }
+  var category_custom_style = this.category_custom_style;
+  if(this.newconfig && this.newconfig.category_custom_style !== undefined) { category_custom_style = this.newconfig.category_custom_style; }
+
+  //add in missing categories, -1 sorts at end
+  for(var ctg in categories) {
+    var ctg_obj = categories[ctg];
+    if(!category_custom_style[ctg_obj.ctg]) {
+      console.log("category_custom_style ["+ctg_obj.ctg+"] missing");
+      var custom_style = { ctg:ctg_obj.ctg, custom_order:-1, custom_color:"#ADD8E6"};
+      category_custom_style[ctg_obj.ctg] = custom_style;
+    }
+  }
+  var ctg_array = Object.values(category_custom_style)
+  ctg_array.sort(category_custom_order_sort_func);
+  for(var idx1=0; idx1<ctg_array.length; idx1++) {
+    var ctg_obj = ctg_array[idx1];
+    category_custom_style[ctg_obj.ctg].custom_order = idx1+1;
+  }
+
+  //----------
+  var labelDiv = customStyleDiv.appendChild(document.createElement('div'));
+  labelDiv.setAttribute("style", "font-size:12px; font-family:arial,helvetica,sans-serif;");
+  var span1 = labelDiv.appendChild(document.createElement('span'));
+  span1.setAttribute("style", "font-size:12px; margin-right:7px; font-family:arial,helvetica,sans-serif; font-weight:bold;");
+  span1.innerHTML ="custom category styling :";
+
+  // show details of interface
+  var table1 = customStyleDiv.appendChild(document.createElement('table'));
+  for(var ctg_idx=0; ctg_idx<ctg_array.length; ctg_idx++){
+    var ctg_obj = ctg_array[ctg_idx];
+    if(!ctg_obj) { continue; }
+
+    var custom_style = category_custom_style[ctg_obj.ctg];
+    if(!custom_style) { continue; } //shouldn't happen since defined above
+
+    //console.log("trigger "+this.elementID+" ["+trig_idx+"] on["+trigger.on_trigger+"]  action["+trigger.action_mode+" - "+trigger.options+"]");
+    //if(!trigger.targetElement) { trigger.targetElement = current_report.elements[trigger.targetElementID]; }
+    //if(!trigger.targetElement) { continue; }
+
+    var tr1 = table1.appendChild(document.createElement('tr'));
+
+    var td1 = tr1.appendChild(document.createElement('td'));
+    var span1 = td1.appendChild(document.createElement('span'));
+    span1.style = "margin-left:10px; font-style:italic; padding-right:5px;";
+    span1.innerHTML = ctg_obj.ctg;
+
+    var td2 = tr1.appendChild(document.createElement('td'));
+    td2.style = "padding-right:5px;";
+    var input = td2.appendChild(document.createElement('input'));
+    input.setAttribute('size', "3");
+    input.setAttribute('type', "text");
+    input.setAttribute('value', custom_style.custom_order);
+    input.setAttribute("onkeydown", "if(event.keyCode==13) { reportElementReconfigParam(\""+ this.elementID +"\", 'ctg_custom_order', this.value, '"+  ctg_obj.ctg +"'); }");
+    //input.setAttribute("onblur", "reportElementReconfigParam(\""+ this.elementID +"\", 'ctg_custom_order', this.value, '"+  ctg_obj.ctg +"');");
+
+    var td3 = tr1.appendChild(document.createElement('td'));
+    var colorInput = td3.appendChild(document.createElement('input'));
+    colorInput.setAttribute('value', custom_style.custom_color);
+    colorInput.setAttribute('size', "7");
+    colorInput.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'ctg_custom_color', this.value, '"+  ctg_obj.ctg +"');");
+    if(custom_style.fixed_color_picker) { custom_style.fixed_color_picker.hidePicker(); } //hide old picker
+    custom_style.fixed_color_picker = new jscolor.color(colorInput);
+    td3.appendChild(colorInput);
+  }
+
+  return customStyleDiv;
 }
 
 //=================================================================================
@@ -841,9 +1097,18 @@ function zenbuCategoryElement_drawFilterList() {
     tdiv.innerHTML = selected_dtype.title;
   }
 
+  //recalc 
+  if(this.ctg_value_datatype) {
+    reportElement_process_dtype_category(datasourceElement, selected_dtype, this.category_method, this.ctg_value_datatype);
+  }
+
   //scan the datasource column for all the different categories, count up and display
-  if(!selected_dtype.categories) { selected_dtype.categories = new Object(); }
+  if(!selected_dtype.categories) { 
+    reportElement_process_dtype_category(datasourceElement, selected_dtype, "", "");
+    //selected_dtype.categories = new Object();
+  }
   var categories = selected_dtype.categories;
+
 
   /*
   //clear the old counts
@@ -922,6 +1187,7 @@ function zenbuCategoryElement_drawFilterList() {
   */
   
   var max_cnt=0;
+  var max_value = null;
   var total_cnt =0;
   var ctg_array = new Array();
   for(var ctg in categories) {
@@ -929,14 +1195,31 @@ function zenbuCategoryElement_drawFilterList() {
     total_cnt += ctg_obj.count + ctg_obj.hidden_count;
     if(ctg_obj.count>max_cnt) { max_cnt=ctg_obj.count; }
     if(ctg_obj.hidden_count>max_cnt) { max_cnt=ctg_obj.hidden_count; }
+    
+    var t_value = ctg_obj.value;
+    //if(this.category_method == "mean") { t_value = ctg_obj.value / ctg_obj.count; }
+    if((max_value===null) || (t_value > max_value)) { max_value = t_value; }
+    
     //console.log("category ["+ctg_obj.ctg+"] cnt="+ctg_obj.count);
     ctg_array.push(ctg_obj);
+    ctg_obj.custom_order = -1;
+    if(this.category_custom_style && this.category_custom_style[ctg_obj.ctg]) {
+      ctg_obj.custom_order = this.category_custom_style[ctg_obj.ctg].custom_order;
+    }
   }
 
-  switch(this.category_method) {
-    case "count": ctg_array.sort(category_count_sort_func); break;
-    case "mean":  ctg_array.sort(category_mean_sort_func);  break;
-    default:      ctg_array.sort(category_value_sort_func); break;
+  if(this.sort_order=="alphabetical") {
+    ctg_array.sort(category_name_sort_func);
+  }
+  if(this.sort_order=="custom") {
+    ctg_array.sort(category_custom_order_sort_func);
+  }
+  if(this.sort_order=="count") {
+    switch(this.category_method) {
+      case "count": ctg_array.sort(category_count_sort_func); break;
+      case "mean":  ctg_array.sort(category_mean_sort_func);  break;
+      default:      ctg_array.sort(category_value_sort_func); break;
+    }
   }
   
   var content_width = 100;
@@ -989,18 +1272,40 @@ function zenbuCategoryElement_drawFilterList() {
       tdiv.style.backgroundColor = "#F0F0F0";   //"E8E8E8";
     }
 
+    var custom_color = null;
+    if((this.sort_order=="custom") && this.category_custom_style && (this.category_custom_style[ctg_obj.ctg])) {
+      custom_color = this.category_custom_style[ctg_obj.ctg].custom_color;
+    }
+
     var tspan1 = tdiv.appendChild(document.createElement('span'));
     tspan1.setAttribute('style', "display:inline-block; margin-left:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;");
     //tspan1.style.width = ((content_width-30)/2)+"px";
     tspan1.style.width = (content_width - bar_width)+"px";
     tspan1.innerHTML = ctg_obj.ctg;
-    if(selected_dtype.filtered) { tspan1.style.fontWeight = "bold"; }
+    if(!selected_dtype.filtered || ctg_obj.filtered) { tspan1.style.fontWeight = "bold"; }
+    if(custom_color) { tspan1.style.color = custom_color; }
 
     var tspan2 = tdiv.appendChild(document.createElement('span'));
     tspan2.setAttribute('style', "display:inline-block; position:relative; margin-left:2px; border-radius:7px; height:14px; font-size:10px;");
     //tspan2.style.backgroundColor = "lightgray";
-    var ctg_count = ctg_obj.count;
-    if(ctg_obj.count==0 && ctg_obj.hidden_count>0) { ctg_count = ctg_obj.hidden_count; }
+    
+    var ctg_value = 0;
+    var value_max = null;
+    if(this.category_method=="count") {
+      ctg_value = ctg_obj.count;
+      if(ctg_obj.count==0 && ctg_obj.hidden_count>0) { ctg_value = ctg_obj.hidden_count; }
+      value_max = max_cnt;
+    // } else if(this.category_method=="mean") {
+    //   ctg_value = ctg_obj.value / ctg_obj.count;
+    //   if(ctg_value) { ctg_value = ctg_value.toFixed(2); }
+    //   value_max = max_value;
+    } else {
+      ctg_value = ctg_obj.value;
+      if(ctg_value) { ctg_value = ctg_value.toFixed(2); }
+      value_max = max_value;
+    }
+    if(value_max === null) { value_max = 1; } //to avoid divide by zero error
+    
     if(this.show_filter_bars) {
       if(this.show_percent_bars) { tspan2.style.backgroundColor = "lightgray"; }
       //('style', "display:inline-block; position:relative; margin-left:2px; background-color:lightgray; border-radius:7px; height:14px; font-size:10px;");
@@ -1008,11 +1313,13 @@ function zenbuCategoryElement_drawFilterList() {
       tspan2.style.width = (bar_width)+"px";
       //var varwidth = ((content_width-30)/2)*(ctg_count/max_cnt);
       //var varwidth = ((content_width-30)/2)*(ctg_count/total_cnt);
-      var varwidth = bar_width*(ctg_count/max_cnt);
-      if(this.show_percent_bars) { varwidth = bar_width*(ctg_count/total_cnt); }
+      var varwidth = bar_width*(ctg_value/value_max);
+      if(this.show_percent_bars) { varwidth = bar_width*(ctg_value/value_max); }
+      //if(this.show_percent_bars) { varwidth = bar_width*(ctg_value/total_cnt); }
       tspan3 = tspan2.appendChild(document.createElement('span'));
       var bckcolor = "lightblue";
       if(ctg_obj.filtered) { bckcolor = "#a7f1a7"; }
+      if(custom_color) { bckcolor = custom_color+"A0"; }  //RRGGBBAA last AA (A0) is alpha
       tspan3.setAttribute('style', "display:inline-block; position:absolute; background-color:"+bckcolor+"; border-radius:7px; height:14px; right:0px; top:0px;");
       if(varwidth>12) { tspan3.style.width = parseInt(varwidth)+"px"; }
       else {
@@ -1025,7 +1332,8 @@ function zenbuCategoryElement_drawFilterList() {
     }
     tspan4 = tspan2.appendChild(document.createElement('span'));
     tspan4.setAttribute('style', "display:inline-block; position:absolute; text-align:right; left:0px; top:1px; white-space:nowrap;");
-    tspan4.appendChild(document.createTextNode(ctg_count));
+    //tspan4.appendChild(document.createTextNode(ctg_count));
+    tspan4.appendChild(document.createTextNode(ctg_value));
     //tspan4.style.width = parseInt((content_width-30)/2)+"px";
     tspan4.style.width = parseInt(bar_width-4)+"px";
   }
@@ -1262,6 +1570,29 @@ function reportsCategoryChartClickEvent(event, eventItems) {
 // helper functions
 //
 //=================================================================================
+
+function category_name_sort_func(a,b) {
+  if(!a) { return 1; }
+  if(!b) { return -1; }
+  if(b.ctg.toLowerCase() < a.ctg.toLowerCase()) { return 1; }
+  if(b.ctg.toLowerCase() > a.ctg.toLowerCase()) { return -1; }
+  return 0;
+}
+
+function category_custom_order_sort_func(a,b) {
+  if(!a) { return 1; }
+  if(!b) { return -1; }
+  if(a.custom_order <= 0 && b.custom_order > 0) { return 1; }
+  if(b.custom_order <= 0 && a.custom_order > 0) { return -1; }
+  if(b.custom_order < a.custom_order) { return 1; }
+  if(b.custom_order > a.custom_order) { return -1; }
+  if((a.custom_order < 0) && (b.custom_order<0)) {
+    //if custom_order is -1 (new item) then default to name sort
+    if(b.ctg.toLowerCase() < a.ctg.toLowerCase()) { return 1; }
+    if(b.ctg.toLowerCase() > a.ctg.toLowerCase()) { return -1; }
+  }
+  return 0;
+}
 
 function category_count_sort_func(a,b) {
   if(!a) { return 1; }
