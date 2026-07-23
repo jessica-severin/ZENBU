@@ -63,6 +63,14 @@ function ZenbuCircosElement(elementID) {
   this.widget_search = true;
   this.widget_filter = true;
   
+  this.edge_color_mode = "match_chrom";
+  this.fixed_color = "#808080";
+  this.signal_colorspace = "fire1";
+  this.signal_logscale = false;
+  this.signal_min = 0;
+  this.signal_max = "auto";
+  this.signal_datatype = "";
+
   //methods
   this.initFromConfigDOM  = zenbuCircosElement_initFromConfigDOM;  //pass a ConfigDOM object
   this.generateConfigDOM  = zenbuCircosElement_generateConfigDOM;  //returns a ConfigDOM object
@@ -102,7 +110,9 @@ function zenbuCircosElement_initFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("show_only_connected_chroms") == "true") { this.show_only_connected_chroms = true; }
   if(elementDOM.getAttribute("show_mini_chroms") == "true") { this.show_mini_chroms = true; }
   if(elementDOM.getAttribute("focus_chrom_percent")) {  this.focus_chrom_percent = parseFloat(elementDOM.getAttribute("focus_chrom_percent")); }
-
+  if(elementDOM.getAttribute("edge_color_mode")) {  this.edge_color_mode = elementDOM.getAttribute("edge_color_mode"); }
+  if(elementDOM.getAttribute("fixed_color")) {  this.fixed_color = elementDOM.getAttribute("fixed_color"); }
+  if(elementDOM.getAttribute("signal_datatype")) { this.signal_datatype = elementDOM.getAttribute("signal_datatype"); }
   return true;
 }
 
@@ -116,7 +126,9 @@ function zenbuCircosElement_generateConfigDOM() {
   if(this.show_only_connected_chroms) { elementDOM.setAttribute("show_only_connected_chroms", "true"); }
   if(this.show_mini_chroms) { elementDOM.setAttribute("show_mini_chroms", "true"); }
   if(this.focus_chrom_percent) { elementDOM.setAttribute("focus_chrom_percent", this.focus_chrom_percent); }
-
+  if(this.edge_color_mode) { elementDOM.setAttribute("edge_color_mode", this.edge_color_mode); }
+  if(this.fixed_color) { elementDOM.setAttribute("fixed_color", this.fixed_color); }
+  if(this.signal_datatype) { elementDOM.setAttribute("signal_datatype", this.signal_datatype); }
   return elementDOM;
 }
 
@@ -158,6 +170,14 @@ function zenbuCircosElement_reconfigureParam(param, value, altvalue) {
     this.newconfig.focus_chrom_percent = value; 
   } 
   
+  if(param == "signal_datatype") { this.newconfig.signal_datatype = value; }
+  if(param == "edge_color_mode") { this.newconfig.edge_color_mode = value; }
+  if(param == "fixed_color") {
+    if(!value) { value = "#808080"; }
+    if(value.charAt(0) != "#") { value = "#"+value; }
+    this.newconfig.fixed_color = value;
+  }
+  
   if(param == "accept-reconfig") {
     if(this.newconfig.assembly_name !== undefined) { 
       this.assembly_name = this.newconfig.assembly_name; 
@@ -173,6 +193,18 @@ function zenbuCircosElement_reconfigureParam(param, value, altvalue) {
     if(this.newconfig.focus_chrom_percent !== undefined) { 
       this.focus_chrom_percent = this.newconfig.focus_chrom_percent; 
     }
+    
+    if(this.newconfig.edge_color_mode !== undefined) { this.edge_color_mode = this.newconfig.edge_color_mode; }
+    if(this.newconfig.fixed_color !== undefined) { this.fixed_color = this.newconfig.fixed_color; }
+    if(this.newconfig.signal_datatype !== undefined) { this.signal_datatype = this.newconfig.signal_datatype; }
+    if(this.signalCSI) {
+      if(this.signalCSI.newconfig.colorspace != undefined) { this.signal_colorspace = this.signalCSI.newconfig.colorspace; }
+      if(this.signalCSI.newconfig.min_signal != undefined) { this.signal_min = this.signalCSI.newconfig.min_signal; }
+      if(this.signalCSI.newconfig.max_signal != undefined) { this.signal_max = this.signalCSI.newconfig.max_signal; }
+      if(this.signalCSI.newconfig.logscale != undefined)   { this.signal_logscale = this.signalCSI.newconfig.logscale; }
+      this.signalCSI = null; //clear
+    }
+
   }
 }
 
@@ -529,6 +561,7 @@ function zenbuCircosElement_draw() {
       
       chrom.arc_start = arc_start;
       chrom.arc_end   = arc_end;
+      chrom.color     = color;
       
       arc1 = createArc(width/2.0, height/2.0, radius-10, arc_start, arc_end, color.getCSSHexadecimalRGB());
       arc1.id = createUUID(); //unique UUID for this arc so we can use it as a textpath
@@ -661,15 +694,43 @@ function zenbuCircosElement_renderEdges(svg) {
              "C", point_f2.x, point_f2.y, width/2.0, height/2.0, point_f1.x, point_f1.y
             ];
 
+    var color = "#808080";
+    if(this.edge_color_mode == "match_chrom" && chrom1.color) { color = chrom1.color.getCSSHexadecimalRGB(); }
+    if(this.edge_color_mode == "fixed_color") { color = this.fixed_color; }
+    if(this.edge_color_mode == "signal") {
+      var signal_dtype = datasourceElement.datatypes[this.signal_datatype];
+      if(signal_dtype) {
+        console.log("renderCircosEdges signal_dtype dtype:"+signal_dtype.datatype+" minval:"+signal_dtype.min_val+" maxval:"+signal_dtype.max_val);
+        
+        var color_signal = zenbu_object_dtypecol_value(edge, signal_dtype, "first"); //return first (single) value
+        if(color_signal!="") {  
+          //colorscore (cr) is 0..1 scaled signal
+          if(color_signal!=0 && this.signal_logscale) { color_signal = Math.log10(color_signal); }
+          var cs = (color_signal - signal_dtype.min_val) / (signal_dtype.max_val - signal_dtype.min_val);
+          var t_color = zenbuScoreColorSpace(this.signal_colorspace, cs, 
+                                          false, //leave discrete false
+                                          false, //this.signal_logscale,
+                                          this.signal_invert);
+          //var t_color = zenbuScoreColorSpace(this.signal_colorspace, cs, false, this.signal_logscale); //leave discrete false
+          color = t_color.getCSSHexadecimalRGB();
+        }
+      }
+    }
+    if(this.selected_edge && (edge.id == this.selected_edge.id)) {
+      color = "rgba(255,0,225,0.9)";
+    }
+    
     var line1 = svg.appendChild(document.createElementNS(svgNS,'path'));
     line1.setAttributeNS(null, 'd', d.join(" "));
-    line1.setAttributeNS(null, 'stroke', "#808080");
+    //line1.setAttributeNS(null, 'stroke', "#808080");
+    line1.setAttributeNS(null, 'stroke', color);
     line1.setAttributeNS(null, 'stroke-width', "1px");
     //line1.setAttributeNS(null, 'fill', "red");
     line1.setAttributeNS(null, 'fill', "transparent");
     
     if(this.selected_edge && (edge.id == this.selected_edge.id)) {
-      line1.setAttributeNS(null, 'stroke', "rgba(255,0,225,0.9)");
+      //line1.setAttributeNS(null, 'stroke', "rgba(255,0,225,0.9)");
+      line1.setAttributeNS(null, 'stroke', color);
       line1.setAttributeNS(null, 'stroke-width', "5px");
     }
 
@@ -836,9 +897,9 @@ function zenbuCircosElement_configSubpanel() {
   tdiv2.setAttribute('style', "margin-top: 10px;");
   tdiv2.appendChild(reportElementColorSpaceOptions(this));
   
-  configdiv.appendChild(document.createElement('hr'));
   
   tdiv2  = configdiv.appendChild(document.createElement('div'));
+  tdiv2.setAttribute('style', "margin-top: 5px;");
   tcheck = tdiv2.appendChild(document.createElement('input'));
   tcheck.setAttribute('style', "margin: 0px 1px 0px 5px;");
   tcheck.setAttribute('type', "checkbox");
@@ -883,6 +944,111 @@ function zenbuCircosElement_configSubpanel() {
   input.setAttribute('value', val1);
   input.setAttribute("onchange", "reportElementReconfigParam(\""+this.elementID+"\", 'focus_chrom_percent', this.value);");
 
+  configdiv.appendChild(document.createElement('hr'));
+
+  //
+  //edge_color_mode
+  //
+  var edge_color_mode = this.edge_color_mode;
+  if(this.newconfig && this.newconfig.edge_color_mode != undefined) { edge_color_mode = this.newconfig.edge_color_mode; }
+
+  tdiv2  = configdiv.appendChild(document.createElement('div'));
+  var tspan = tdiv2.appendChild(document.createElement('span'));
+  tspan.setAttribute('style', "margin: 0px 0px 0px 5px; ");
+  tspan.innerHTML = "coloring mode: ";
+
+  //console.log("edge_color_mode : "+edge_color_mode);
+  radio1 = tdiv2.appendChild(document.createElement('input'));
+  radio1.setAttribute("type", "radio");
+  radio1.setAttribute("name", this.elementID + "_edge_color_mode");
+  radio1.setAttribute("value", "match_chrom");
+  if(edge_color_mode == "match_chrom") { radio1.setAttribute('checked', "checked"); }
+  radio1.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'edge_color_mode', this.value);");
+  tspan = tdiv2.appendChild(document.createElement('span'));
+  tspan.innerHTML = "match chrom1 color";
+  
+  radio2 = tdiv2.appendChild(document.createElement('input'));
+  radio2.setAttribute("type", "radio");
+  radio1.setAttribute("name", this.elementID + "_edge_color_mode");
+  radio2.setAttribute("value", "fixed_color");
+  if(edge_color_mode == "fixed_color") { radio2.setAttribute('checked', "checked"); }
+  radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'edge_color_mode', this.value);");
+  tspan = tdiv2.appendChild(document.createElement('span'));
+  tspan.innerHTML = "fixed color";
+  
+  radio2 = tdiv2.appendChild(document.createElement('input'));
+  radio2.setAttribute("type", "radio");
+  radio1.setAttribute("name", this.elementID + "_edge_color_mode");
+  radio2.setAttribute("value", "signal");
+  if(edge_color_mode == "signal") { radio2.setAttribute('checked', "checked"); }
+  radio2.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'edge_color_mode', this.value);");
+  tspan = tdiv2.appendChild(document.createElement('span'));
+  tspan.innerHTML = "signal";
+
+  var color_options_div = configdiv.appendChild(document.createElement('div'));
+  color_options_div.setAttribute('style', "margin-top:2px;");
+
+  if(edge_color_mode == "fixed_color") { 
+    var fixed_color = this.fixed_color;
+    if(this.newconfig && this.newconfig.fixed_color != undefined) { fixed_color = this.newconfig.fixed_color; }
+    tspan2 = color_options_div.appendChild(document.createElement('span'));
+    tspan2.setAttribute('style', "margin: 1px 4px 1px 0px; font-size:10px; font-family:arial,helvetica,sans-serif; ");
+    tspan2.innerHTML = "fixed color:";
+    var colorInput = color_options_div.appendChild(document.createElement('input'));
+    colorInput.setAttribute('value', fixed_color);
+    colorInput.setAttribute('size', "7");
+    colorInput.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'fixed_color', this.value);");
+    colorInput.color = new jscolor.color(colorInput);
+    color_options_div.appendChild(colorInput);
+  }
+
+  if(edge_color_mode == "signal") { 
+    //signal_datatype select
+    var tdiv  = color_options_div.appendChild(document.createElement('span'));
+    tdiv.setAttribute('style', "margin: 3px 1px 0px 10px;");
+    var tspan = tdiv.appendChild(document.createElement('span'));
+    tspan.innerHTML = "datatype: ";
+    var dtypeSelect = tdiv.appendChild(document.createElement('select'));
+    dtypeSelect.setAttribute('name', "datatype");
+    dtypeSelect.className = "dropdown";
+    dtypeSelect.style.fontSize = "10px";
+    //dtypeSelect.setAttribute('style', "margin: 1px 0px 1px 0px; font-size:10px; font-family:arial,helvetica,sans-serif; ");
+    dtypeSelect.setAttribute("onchange", "reportElementReconfigParam(\""+ this.elementID +"\", 'signal_datatype', this.value); return false");
+    dtypeSelect.setAttribute("onselect", "reportElementReconfigParam(\""+ this.elementID +"\", 'signal_datatype', this.value); return false");
+    var val1 = this.signal_datatype;
+    if(this.newconfig && this.newconfig.signal_datatype != undefined) { val1 = this.newconfig.signal_datatype; }
+    var option = dtypeSelect.appendChild(document.createElement('option'));
+    option.setAttribute("value", "");
+    option.setAttribute("selected", "selected");
+    option.innerHTML = "please select datatype";
+    for(var dtype in datasourceElement.datatypes) {
+      var dtype_col = datasourceElement.datatypes[dtype];
+      if(!dtype_col) { continue; }
+      if((dtype_col.col_type != "weight") && (dtype_col.col_type != "signal")) { continue; }
+      var option = dtypeSelect.appendChild(document.createElement('option'));
+      option.setAttribute("value", dtype_col.datatype);
+      if(val1 == dtype) { option.setAttribute("selected", "selected"); }
+      option.innerHTML = dtype_col.title;
+    }
+
+    //add a color spectrum picker
+    var uniqID = this.elementID+"_signalCSI";
+    var signalCSI = this.signalCSI;
+    if(!signalCSI) {
+      signalCSI = zenbuColorSpaceInterface(uniqID);
+      signalCSI.elementID = this.elementID;
+      signalCSI.colorspace = this.signal_colorspace;
+      signalCSI.enableScaling = true;
+      signalCSI.min_signal = this.signal_min;
+      signalCSI.max_signal = this.signal_max;
+      signalCSI.logscale = this.signal_logscale;
+      signalCSI.callOutFunction = zenbuGenomeWideElement_signal_CSI_callback;
+      this.signalCSI = signalCSI;
+    }
+    zenbuColorSpaceInterfaceUpdate(uniqID);
+    color_options_div.appendChild(signalCSI);
+  }
+  
   configdiv.appendChild(document.createElement('hr'));
 
   return configdiv;
