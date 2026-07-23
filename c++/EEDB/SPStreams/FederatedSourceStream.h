@@ -1,5 +1,5 @@
 
-/* $Id: FederatedSourceStream.h,v 1.25 2025/03/06 01:37:29 severin Exp $ */
+/* $Id: FederatedSourceStream.h,v 1.26 2026/06/18 05:37:20 severin Exp $ */
 
 /***
 
@@ -74,6 +74,7 @@ namespace SPStreams {
 class FederatedSourceStream : public EEDB::SPStream {
   public:  //global class level
     static const char*  class_name;
+    static bool         force_edge_region_chrom_match;  //true for genome browsers which can only display data on the same chromosome. false for circos/genomewide visualization
 
   public:
     FederatedSourceStream();                // constructor
@@ -130,6 +131,7 @@ class FederatedSourceStream : public EEDB::SPStream {
     map<string, EEDB::Feature*>  _edge_feature_id_hash; //prefetch when region query
     void                         _clear_edge_feature_hash();
     void                         _fetch_dependent_edges();
+    string                       _region_chrom_name;
 
 
     vector<EEDB::Peer*>    _get_peers();

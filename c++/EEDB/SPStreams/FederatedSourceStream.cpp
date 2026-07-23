@@ -1,4 +1,4 @@
-/* $Id: FederatedSourceStream.cpp,v 1.94 2025/03/06 01:37:29 severin Exp $ */
+/* $Id: FederatedSourceStream.cpp,v 1.96 2026/06/18 05:37:20 severin Exp $ */
 
 /***
 
@@ -59,6 +59,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <iostream>
 #include <string>
 #include <stdarg.h>
+#include <sys/time.h>
 #include <rapidxml.hpp>  //rapidxml must be include before boost
 #include <boost/algorithm/string.hpp>
 #include <EEDB/Experiment.h>
@@ -78,6 +79,7 @@ using namespace std;
 using namespace MQDB;
 
 const char*  EEDB::SPStreams::FederatedSourceStream::class_name = "EEDB::SPStreams::FederatedSourceStream";
+bool         EEDB::SPStreams::FederatedSourceStream::force_edge_region_chrom_match = false;
 
 //call out functions
 void _spstream_federatedsourcestream_delete_func(MQDB::DBObject *obj) { 
@@ -616,6 +618,7 @@ MQDB::DBObject* EEDB::SPStreams::FederatedSourceStream::_fetch_object_by_id(stri
 
 
 bool EEDB::SPStreams::FederatedSourceStream::_stream_by_named_region(string assembly_name, string chrom_name, long int start, long int end) {
+  _region_chrom_name = chrom_name;
   _region_start = start;
   _region_end   = end;
   _clear_edge_feature_hash();
@@ -624,6 +627,9 @@ bool EEDB::SPStreams::FederatedSourceStream::_stream_by_named_region(string asse
   if(stream == NULL) { return false; }
 
   if(_has_edge_source) {
+    struct timeval    starttime,endtime,difftime;
+    gettimeofday(&starttime, NULL);
+
     //need to do the magic prefetch, edge, loop code here
     fprintf(stderr, "FederatedSourceStream stream_by_named_region %s::%s:%ld..%ld with EdgeSource\n", 
             assembly_name.c_str(), chrom_name.c_str(), start, end);
@@ -639,12 +645,16 @@ bool EEDB::SPStreams::FederatedSourceStream::_stream_by_named_region(string asse
       }
       obj->release();
     }
-    fprintf(stderr, "FederatedSourceStream _stream_by_named_region prefetch %ld features for EdgeSource\n", _edge_feature_id_hash.size());
+    fprintf(stderr, "FederatedSourceStream _stream_by_named_region (_has_edge_source) prefetch %ld features\n", _edge_feature_id_hash.size());
     
     _fetch_dependent_edges();
     
     //finally clear the _edge_feature_id_hash since they have been attached to the edges
     _clear_edge_feature_hash();
+
+    gettimeofday(&endtime, NULL);
+    timersub(&endtime, &starttime, &difftime);
+    fprintf(stderr, "FederatedSourceStream _stream_by_named_region (_has_edge_source) setup completed %1.6fsec\n", (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
     return true;
   }
 
@@ -764,22 +774,38 @@ void  EEDB::SPStreams::FederatedSourceStream::_fetch_dependent_edges() {
   // }
 
   //transfer edges from edge_buffer to StreamBuffer
+  long mismatch_chrom_edge_count = 0;
+  long edge_count = 0;
   for(it3 = edge_buffer.begin(); it3!=edge_buffer.end(); it3++) {
     if(!(*it3)) { continue; }
     EEDB::Edge* edge = *it3;
+    bool mismatch_chrom = false;
     //add missing features from _edge_feature_id_hash
     if(!edge->feature1()) {
       EEDB::Feature *f1 = _edge_feature_id_hash[edge->feature1_dbid()];
       if(f1) { edge->feature1(f1); }
+      if(f1 && f1->chrom_name()!=_region_chrom_name) { mismatch_chrom=true; }
     }
     if(!edge->feature2()) {
       EEDB::Feature *f2 = _edge_feature_id_hash[edge->feature2_dbid()];
       if(f2) { edge->feature2(f2); }
+      if(f2 && f2->chrom_name()!=_region_chrom_name) { mismatch_chrom=true; }
     }
+    edge_count++;
+    if(mismatch_chrom) { mismatch_chrom_edge_count++; }
+    if(force_edge_region_chrom_match && mismatch_chrom) { continue; }
     
     edge->retain();  //do I need to retain here?
     stream_buffer->add_object(edge);
   }
+  fprintf(stderr, "_fetch_dependent_edges : %ld total edges,  %ld mismatch_chrom\n", edge_count, mismatch_chrom_edge_count);
+
+  //clear the edge_buffer since transferred to stream_buffer
+  for(it3 = edge_buffer.begin(); it3!=edge_buffer.end(); it3++) {
+    if(!(*it3)) { continue; }
+    (*it3)->release();
+  }
+  edge_buffer.clear();
 
   stream_buffer->region_sort();
   
