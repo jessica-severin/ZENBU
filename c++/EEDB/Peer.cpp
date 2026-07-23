@@ -1,4 +1,4 @@
-/* $Id: Peer.cpp,v 1.158 2025/12/02 23:35:52 severin Exp $ */
+/* $Id: Peer.cpp,v 1.160 2026/07/08 06:19:20 severin Exp $ */
 
 /***
 
@@ -146,7 +146,7 @@ EEDB::Peer*  EEDB::Peer::new_from_url(string url) {
       EEDB::SPStreams::OSCFileDB *oscdb = (EEDB::SPStreams::OSCFileDB*)(peer->source_stream());
       peer->set_uuid(oscdb->peer()->uuid());
       peer->alias(oscdb->peer()->alias());
-      peer->db_url(oscdb->peer()->db_url());
+      //if(!oscdb->peer()->db_url().empty()) { peer->db_url(oscdb->peer()->db_url()); }
       return peer; 
     }
     delete peer;
@@ -160,7 +160,7 @@ EEDB::Peer*  EEDB::Peer::new_from_url(string url) {
       EEDB::SPStreams::BAMDB *bamdb = (EEDB::SPStreams::BAMDB*)(peer->source_stream());
       peer->set_uuid(bamdb->peer()->uuid());
       peer->alias(bamdb->peer()->alias());
-      peer->db_url(bamdb->db_url());
+      //if(!bamdb->db_url().empty()) { peer->db_url(bamdb->db_url()); }
       return peer; 
     }
     delete peer;
@@ -174,7 +174,7 @@ EEDB::Peer*  EEDB::Peer::new_from_url(string url) {
       EEDB::ZDX::ZDXstream *zdxstream = (EEDB::ZDX::ZDXstream*)(peer->source_stream());
       peer->set_uuid(zdxstream->self_peer()->uuid());
       peer->alias(zdxstream->self_peer()->alias());
-      peer->db_url(zdxstream->self_peer()->db_url());
+      //if(peer->db_url().empty() && !zdxstream->self_peer()->db_url().empty()) { peer->db_url(zdxstream->self_peer()->db_url()); }
       return peer; 
     }
     delete peer;
