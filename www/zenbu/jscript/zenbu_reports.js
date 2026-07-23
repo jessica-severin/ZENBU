@@ -3971,12 +3971,13 @@ function reportElement_process_dtype_category(datasourceElement, selected_dtype,
       var signal = 0;
       if(ctg_value_datatype) {
         var ctg_value_datatype = ctg_value_datatype;
-        ctg_value_datatype = ctg_value_datatype.replace(/^f1\./, '');
-        ctg_value_datatype = ctg_value_datatype.replace(/^f2\./, '');
 
         var sig_feature = null;
         if(edge && (/^f1\./.test(ctg_value_datatype))) { sig_feature = edge.feature1;}
         if(edge && (/^f2\./.test(ctg_value_datatype))) { sig_feature = edge.feature2;}
+
+        ctg_value_datatype = ctg_value_datatype.replace(/^f1\./, '');
+        ctg_value_datatype = ctg_value_datatype.replace(/^f2\./, '');
 
         if(sig_feature && sig_feature.expression_hash && 
            sig_feature.expression_hash[ctg_value_datatype] && 
@@ -4118,7 +4119,7 @@ function reportElement_process_dtype_category(datasourceElement, selected_dtype,
     if(category_method=="count") { ctg_obj.value = ctg_obj.count; }
     if(category_method=="mean")  { 
       ctg_obj.mean_sum = ctg_obj.value;
-      ctg_obj.value = ctg_obj.value/ctg_obj.count;
+      ctg_obj.value = ctg_obj.value/(ctg_obj.count + ctg_obj.hidden_count);
     }
     ctg_cnt++;
     ctg_names += ctg_obj.ctg+" ";
@@ -4136,8 +4137,8 @@ function zenbu_update_dtype_category(dtype_col, ctgval, filter_valid, category_m
   if(!ctgval) { return; }
   if(!categories[ctgval]) { categories[ctgval] = {ctg:ctgval, count:0, hidden_count:0, value:null, filtered:false}; }
 
-  if(!filter_valid) { categories[ctgval].hidden_count++; return; }
-  categories[ctgval].count++;
+  if(!filter_valid) { categories[ctgval].hidden_count++; }
+  else { categories[ctgval].count++; }
   
   if(category_method=="count") { return; }
   if(signal==null) { return; }
