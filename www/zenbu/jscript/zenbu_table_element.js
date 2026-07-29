@@ -756,6 +756,20 @@ function zenbuTableElement_draw() {
         a1.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'hyperlink_trigger', '"+t_object.id+"', '"+datatype+"');");
         a1.setAttribute("onclick", "return false;");
         a1.innerHTML = dtype_col.title;
+      } else if(t_object && (dtype_col.col_type == "location")) {
+        if(datatype == "location_link" || datatype == "location_string") {
+          var a1 = td.appendChild(document.createElement('a'));
+          a1.setAttribute("target", "top");
+          a1.setAttribute("href", "#");
+          //a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select_location', '"+t_object.id+"');");
+          a1.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select_location', '"+t_object.chromloc+"');");
+          a1.setAttribute("onclick", "return false;");
+          if(datatype == "location_link") { a1.innerHTML = dtype_col.title; }
+          else { a1.innerHTML = t_object.chromloc; }
+        } else {
+          var val = zenbu_object_dtypecol_value(t_object, dtype_col, "first");
+          if(val) { td.innerHTML = val; }
+        }
       }
     }
   }
@@ -1188,7 +1202,46 @@ function  zenbuTableElement_tableSortFunc() {
     if(sort_rev) { res = -1 * res; }
     return res;
   }
-  
+
+  var feature_location_func = function(a,b) {
+    var res =0;
+    if(!a) { return 1; }
+    if(!b) { return -1; }
+    if(search_match_to_top) {
+      if(a.search_match && !b.search_match) { return -1; }
+      if(!a.search_match && b.search_match) { return 1; }
+    }
+    if(colname.match(/^f1\./)) { a = a.feature1; b = b.feature1; }
+    if(colname.match(/^f2\./)) { a = a.feature2; b = b.feature2; }
+    if(!a) { return 1; }
+    if(!b) { return -1; }
+    if(a.chrom && !b.chrom) { return -1; }
+    if(!a.chrom && b.chrom) { return 1; }
+    if(a.chrom && b.chrom) {
+      var chr_a =  parseInt(a.chrom.replace(/^chr/, ''));
+      var chr_b =  parseInt(b.chrom.replace(/^chr/, ''));
+      //first check for chrX chrY chrM or others
+      if(isNaN(chr_a) && isNaN(chr_b)) { 
+        if(a.chrom < b.chrom) { res = -1; }
+        if(a.chrom > b.chrom) { res = 1; }
+      } 
+      else if(isNaN(chr_a) || isNaN(chr_b)) {
+        //one of them is not a chr#
+        if(isNaN(chr_a)) { res = 1; } 
+        if(isNaN(chr_b)) { res = -1; }
+      }      
+      if(res==0 && chr_a < chr_b) { res = -1; }
+      if(res==0 && chr_a > chr_b) { res = 1; }
+    }
+    //chrom same so next chrom_start
+    if(res==0 && a.start < b.start) { res = -1; }
+    if(res==0 && a.start > b.start) { res = 1; }
+    if(res==0 && a.end < b.end) { res = -1; }
+    if(res==0 && a.end > b.end) { res = 1; }
+    if(sort_rev) { res = -1 * res; }
+    return res;
+  }
+
   var feature_mdata_func = function(a,b) {
     var res =0;
     if(!a) { return 1; }
@@ -1358,7 +1411,7 @@ function  zenbuTableElement_tableSortFunc() {
   }
 
   if(!this) { return name_func; }
-  
+
   if((datasourceElement.datasource_mode == "feature") || (datasourceElement.datasource_mode == "source")) {
     if(datatype == "name") { return name_func; }
     
@@ -1373,7 +1426,10 @@ function  zenbuTableElement_tableSortFunc() {
     if(dtype_col.col_type == "signal") {
       return feature_expression_func;
     }
-    
+    if(dtype_col.col_type == "location") {
+      return feature_location_func;
+    }
+
     return name_func;
   }
   
@@ -1397,6 +1453,10 @@ function  zenbuTableElement_tableSortFunc() {
       //console.log("return edge_weight_func");
       return edge_weight_func;
     }
+    if(dtype_col.col_type == "location") {
+      return feature_location_func;
+    }
+
     return edge_name_func;
   }
   
