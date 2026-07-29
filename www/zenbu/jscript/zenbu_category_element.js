@@ -431,7 +431,7 @@ function zenbuCategoryElement_postprocess() {
   }
   if(!selected_dtype) { return; }
   //console.log("selected_dtype type["+selected_dtype.datatype+"]  title["+selected_dtype.title+"]")
-  if(selected_dtype.col_type != "mdata") { return; } //might loosen this in the future
+  if(selected_dtype.col_type != "mdata" && selected_dtype.col_type != "location") { return; } //might loosen this in the future
 
   //scan the datasource column for all the different categories, count up and display
   if(!selected_dtype.categories) {
@@ -492,6 +492,10 @@ function zenbuCategoryElement_postprocess() {
       update_category(dtype_col, object.source.name, false, "create_only");
     } else if(datatype == "location_string") {
       update_category(dtype_col, object.chromloc, false, "create_only");
+    } else if(datatype == "chrom_name") {
+      update_category(dtype_col, object.chrom, false, "create_only");
+    } else if(datatype == "chrom_strand") {
+      update_category(dtype_col, object.strand, false, "create_only");
     } else if(object.mdata && object.mdata[datatype]) {
       var value_array = object.mdata[datatype];
       for(var idx1=0; idx1<value_array.length; idx1++) {
@@ -578,6 +582,10 @@ function zenbuCategoryElement_postprocess() {
         } else if(datatype == "location_string") {
           //console.log("check t_feature "+t_feature.name+" -- location_string");
           update_category(selected_dtype, t_feature.chromloc, filtered, this.category_method, signal);
+        } else if(datatype == "chrom_name") {
+          update_category(selected_dtype, t_feature.chrom, filtered, this.category_method, signal);
+        } else if(datatype == "chrom_strand") {
+          update_category(selected_dtype, t_feature.strand, filtered, this.category_method, signal);
         } else  if(datatype == "name") {
           update_category(selected_dtype, t_feature.name, filtered, this.category_method, signal);
         } else if(t_feature.mdata && t_feature.mdata[datatype]) {
@@ -597,6 +605,10 @@ function zenbuCategoryElement_postprocess() {
           update_category(selected_dtype, edge.source.name, filtered, this.category_method, signal);
         } else if(datatype == "location_string") {
           update_category(selected_dtype, edge.chromloc, filtered, this.category_method, signal);
+        } else if(datatype == "chrom_name") {
+          update_category(selected_dtype, edge.chrom, filtered, this.category_method, signal);
+        } else if(datatype == "chrom_strand") {
+          update_category(selected_dtype, edge.strand, filtered, this.category_method, signal);
         } else if(edge.mdata && edge.mdata[datatype]) {
           var value_array = edge.mdata[datatype];
           for(var idx1=0; idx1<value_array.length; idx1++) {
@@ -642,6 +654,10 @@ function zenbuCategoryElement_postprocess() {
       } else if(datatype == "location_string") {
         //console.log("check feature "+feature.name+" -- location_string");
         update_category(selected_dtype, feature.chromloc, feature.filter_valid, this.category_method, signal);
+      } else if(datatype == "chrom_name") {
+        update_category(selected_dtype, feature.chrom, feature.filter_valid, this.category_method, signal);
+      } else if(datatype == "chrom_strand") {
+        update_category(selected_dtype, feature.strand, feature.filter_valid, this.category_method, signal);
       } else  if(datatype == "name") {
         update_category(selected_dtype, feature.name, feature.filter_valid, this.category_method, signal);
       } else if(feature.mdata && feature.mdata[datatype]) {
@@ -909,7 +925,12 @@ function zenbuCategoryElement_configSubpanel() {
       if(dtype_col.col_type == "mdata") {
         if(dtype_col.datatype == category_datatype) { option.setAttribute("selected", "selected"); }
         select.appendChild(option);
-      } else if(select2) {
+      }
+      if(dtype_col.col_type == "location" && (dtype_col.datatype.match(/chrom_name$/) || dtype_col.datatype.match(/chrom_strand$/))) {
+        if(dtype_col.datatype == category_datatype) { option.setAttribute("selected", "selected"); }
+        select.appendChild(option);
+      }
+      if(select2 && (dtype_col.col_type == "signal" || dtype_col.col_type == "weight")) {
         if(dtype_col.datatype == ctg_value_datatype) { option.setAttribute("selected", "selected"); }
         select2.appendChild(option);
       }
