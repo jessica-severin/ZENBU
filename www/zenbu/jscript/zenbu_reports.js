@@ -1024,6 +1024,10 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
     if(colDOM.getAttribute("colnum")) { t_col.colnum = parseInt(colDOM.getAttribute("colnum")); }
     if(colDOM.getAttribute("signal_order")) { t_col.signal_order = parseInt(colDOM.getAttribute("signal_order")); }
     if(colDOM.getAttribute("col_type")) { t_col.col_type = colDOM.getAttribute("col_type"); }
+    //backward compatibility to convert location columns to new col_type
+    if(datatype.match(/location_string$/) || datatype.match(/location_link$/) ||
+       datatype.match(/chrom_name$/) || datatype.match(/chrom_start$/) ||
+       datatype.match(/chrom_end$/) || datatype.match(/chrom_strand$/)) { t_col.col_type = "location";}
 
     if(colDOM.getAttribute("user_modifiable") == "true") { t_col.user_modifiable = true; } else { t_col.user_modifiable = false; }
     if(colDOM.getAttribute("minuslog_transform") == "true") { t_col.minuslog_transform = true; } else { t_col.minuslog_transform = false; }
@@ -1045,7 +1049,7 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
     if(colDOM.getAttribute("highlight_color")) { t_col.highlight_color = colDOM.getAttribute("highlight_color"); }
     if(colDOM.getAttribute("description")) { t_col.description = colDOM.getAttribute("description"); }
     
-    if(t_col.filtered && (t_col.col_type == "mdata")) {
+    if(t_col.filtered && (t_col.col_type == "mdata" || t_col.col_type == "location")) {
       //parse categories for mdata filters
       var ctgDOMs = colDOM.getElementsByTagName("md_category");
       for(var k=0; k<ctgDOMs.length; k++) {
@@ -1318,7 +1322,7 @@ function reportsGenerateElementDOM(reportElement) {
       if(dtype_col.highlight_color) { colDoc.setAttribute("highlight_color", dtype_col.highlight_color); }
       if(dtype_col.description) { colDoc.setAttribute("description", dtype_col.description); }
 
-      if(dtype_col.filtered && (dtype_col.col_type == "mdata") && dtype_col.categories) {
+      if(dtype_col.filtered && (dtype_col.col_type == "mdata" || dtype_col.col_type == "location") && dtype_col.categories) {
         //need to save categories for mdata filters
         for(var ctg in dtype_col.categories) {
           var ctg_obj = dtype_col.categories[ctg];
@@ -3203,14 +3207,22 @@ function reportsParseElementData(reportElement, xhrObj) {
       reportElementAddDatatypeColumn(reportElement, "f1.name", "name");
       reportElementAddDatatypeColumn(reportElement, "f1.category", "category");
       reportElementAddDatatypeColumn(reportElement, "f1.source_name", "source_name");
-      reportElementAddDatatypeColumn(reportElement, "f1.location_link", "location");
-      reportElementAddDatatypeColumn(reportElement, "f1.location_string", "location");
-      
+      reportElementAddDatatypeColumn(reportElement, "f1.location_link", "location", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f1.location_string", "location", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f1.chrom_name", "chrom_name", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f1.chrom_start", "chrom_start", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f1.chrom_end", "chrom_end", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f1.chrom_strand", "chrom_strand", false, "location");
+
       reportElementAddDatatypeColumn(reportElement, "f2.name", "name");
       reportElementAddDatatypeColumn(reportElement, "f2.category", "category");
       reportElementAddDatatypeColumn(reportElement, "f2.source_name", "source_name");
-      reportElementAddDatatypeColumn(reportElement, "f2.location_link", "location");
-      reportElementAddDatatypeColumn(reportElement, "f2.location_string", "location");
+      reportElementAddDatatypeColumn(reportElement, "f2.location_link", "location", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f2.location_string", "location", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f2.chrom_name", "chrom_name", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f2.chrom_start", "chrom_start", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f2.chrom_end", "chrom_end", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f2.chrom_strand", "chrom_strand", false, "location");
     }
   }
 
@@ -3259,8 +3271,12 @@ function reportsParseElementData(reportElement, xhrObj) {
         dtype_source_name = reportElementAddDatatypeColumn(reportElement, "source_name", "source_name"); 
       }
       if(!dtype_location_string && feature.chromloc) {
-        dtype_location_link = reportElementAddDatatypeColumn(reportElement, "location_link", "location");
-        dtype_location_string = reportElementAddDatatypeColumn(reportElement, "location_string", "location"); 
+        dtype_location_link = reportElementAddDatatypeColumn(reportElement, "location_link", "location", false, "location");
+        dtype_location_string = reportElementAddDatatypeColumn(reportElement, "location_string", "location", false, "location");
+        reportElementAddDatatypeColumn(reportElement, "chrom_name", "chrom_name", false, "location");
+        reportElementAddDatatypeColumn(reportElement, "chrom_start", "chrom_start", false, "location");
+        reportElementAddDatatypeColumn(reportElement, "chrom_end", "chrom_end", false, "location");
+        reportElementAddDatatypeColumn(reportElement, "chrom_strand", "chrom_strand", false, "location");
       }
       for(var tag in feature.mdata) { //new common mdata[].array system
         if(tag=="keyword") { continue; }
@@ -3475,7 +3491,7 @@ function reportsParseElementData(reportElement, xhrObj) {
 }
 
 
-function reportElementAddDatatypeColumn(reportElement, dtype, title, visible) {
+function reportElementAddDatatypeColumn(reportElement, dtype, title, visible, col_type) {
   if(!reportElement) { return; }
 
   if(reportElement.element_type == "treelist") {
@@ -3506,6 +3522,7 @@ function reportElementAddDatatypeColumn(reportElement, dtype, title, visible) {
     dtype_col.description = "";
     
     if(visible) { dtype_col.visible = true; }
+    if(col_type) { dtype_col.col_type = col_type; }
 
     reportElement.datatypes[dtype] = dtype_col;
     reportElement.dtype_columns.push(dtype_col);
@@ -3675,7 +3692,7 @@ function reportElementCheckCategoryFilters(reportElement, object) {
     var dtype_col = reportElement.datatypes[dtype];
     if(!dtype_col) { continue; }
     if(!dtype_col.filtered) { continue; }
-    if(dtype_col.col_type != "mdata") { continue; }
+    if(dtype_col.col_type != "mdata" && dtype_col.col_type != "location") { continue; }
     if(!dtype_col.categories) { continue; }
 
     if(!reportsObjectCheckCategoryFilters(object, dtype_col)) {
@@ -3697,7 +3714,7 @@ function reportsObjectCheckCategoryFilters(object, dtype_col) {
   //perform positive OR selection on different categories of this dtype,
 
   if(!dtype_col.filtered) { return true; }
-  if(dtype_col.col_type != "mdata") { return true; }
+  if(dtype_col.col_type != "mdata" && dtype_col.col_type != "location") { return true; }
   if(!dtype_col.categories) { return true; }
   //console.log("reportsObjectCheckCategoryFilters "+dtype_col.datatype+" has categories");
 
@@ -3729,6 +3746,15 @@ function reportsObjectCheckCategoryFilters(object, dtype_col) {
       val = object.category;
     }
   }
+  if(dtype_col.col_type == "location") {
+    if(datatype == "chrom_name") {
+      val = object.chrom;
+    }
+    if(datatype == "chrom_strand") {
+      val = object.strand;
+    }
+  }
+      
   if(val) {
     var ctg_obj = dtype_col.categories[val];
     if(ctg_obj && ctg_obj.filtered) {
@@ -3910,8 +3936,9 @@ function reportElement_process_dtype_category(datasourceElement, selected_dtype,
   if(!datasourceElement) { return; }
   if(!selected_dtype) { return; }
   //console.log("selected_dtype type["+selected_dtype.datatype+"]  title["+selected_dtype.title+"]")
-  if(selected_dtype.col_type != "mdata") { return; } //might loosen this in the future
+  if(selected_dtype.col_type != "mdata" && selected_dtype.col_type != "location") { return; } //might loosen this in the future
   if(!datasourceElement.dtype_columns) { return; }
+  var starttime = new Date();
 
   //scan the datasource column for all the different categories, count up and display
   if(!selected_dtype.categories) {
@@ -4000,6 +4027,12 @@ function reportElement_process_dtype_category(datasourceElement, selected_dtype,
         } else if(datatype == "location_string") {
           //console.log("check t_feature "+t_feature.name+" -- location_string");
           zenbu_update_dtype_category(selected_dtype, t_feature.chromloc, filtered, category_method, signal);
+        } else if(datatype == "chrom_name") {
+          //console.log("check t_feature "+t_feature.name+" -- chrom_name");
+          zenbu_update_dtype_category(selected_dtype, t_feature.chrom, filtered, category_method, signal);
+        } else if(datatype == "chrom_strand") {
+          //console.log("check t_feature "+t_feature.name+" -- chrom_strand");
+          zenbu_update_dtype_category(selected_dtype, t_feature.strand, filtered, category_method, signal);
         } else  if(datatype == "name") {
           zenbu_update_dtype_category(selected_dtype, t_feature.name, filtered, category_method, signal);
         } else if(t_feature.mdata && t_feature.mdata[datatype]) {
@@ -4062,6 +4095,10 @@ function reportElement_process_dtype_category(datasourceElement, selected_dtype,
       } else if(datatype == "location_string") {
         //console.log("check feature "+feature.name+" -- location_string");
         zenbu_update_dtype_category(selected_dtype, feature.chromloc, feature.filter_valid, category_method, signal);
+      } else if(datatype == "chrom_name") {
+        zenbu_update_dtype_category(selected_dtype, feature.chrom, feature.filter_valid, category_method, signal);
+      } else if(datatype == "chrom_strand") {
+        zenbu_update_dtype_category(selected_dtype, feature.strand, feature.filter_valid, category_method, signal);
       } else  if(datatype == "name") {
         zenbu_update_dtype_category(selected_dtype, feature.name, feature.filter_valid, category_method, signal);
       } else if(feature.mdata && feature.mdata[datatype]) {
@@ -4125,7 +4162,9 @@ function reportElement_process_dtype_category(datasourceElement, selected_dtype,
     ctg_names += ctg_obj.ctg+" ";
     //console.log("dtype["+selected_dtype.datatype+"]  category ["+ctg_obj.ctg+"] cnt="+ctg_obj.count+" hidden_count="+ctg_obj.hidden_count);
   }
-  console.log(datasourceElement.elementID+" dtype["+selected_dtype.datatype+"] has "+ctg_cnt+" categories: "+ctg_names);
+  var endtime = new Date();
+  var runtime = (endtime.getTime() - starttime.getTime());
+  console.log("reportElement_process_dtype_category ", datasourceElement.elementID+" dtype["+selected_dtype.datatype+"] has "+ctg_cnt+" categories: "+ctg_names+" "+(runtime)+"msec");
 }
 
 
@@ -10546,9 +10585,24 @@ function zenbuReports_hoverInfo(reportElement, object) {
       } else if(datatype == "location_string") {
         val = t_feature.chromloc;
       }
-      if(val) { tspan.innerHTML = val; }      
+      if(val) { tspan.innerHTML = val; }
     }
-    
+    else if(t_feature && dtype_col.col_type == "location") {
+      var val = "";
+      if(datatype == "location_string" || datatype == "location_link") {
+        val = t_feature.chromloc;
+      } else if(datatype == "chrom_name") {
+        val = t_feature.chrom;
+      } else if(datatype == "chrom_start") {
+        val = t_feature.start;
+      } else if(datatype == "chrom_end") {
+        val = t_feature.end;
+      } else if(datatype == "chrom_strand") {
+        val = t_feature.strand;
+      }
+      if(val) { tspan.innerHTML = val; }
+    }
+
     if(tspan.innerHTML) { divFrame.appendChild(tdiv); }
     firstRow = false;
   }
@@ -10621,10 +10675,23 @@ function zenbu_object_dtypecol_value(object, dtype_col, mode) {
       val = t_feature.source.category;
     } else if(t_feature.source && (datatype == "source_name")) {
       val = t_feature.source.name;
-    } else if(datatype == "location_string") {
-      val = t_feature.chromloc;
     }
     if(val) { value = val; }      
+  }
+  else if(t_feature && dtype_col.col_type == "location") {
+    var val = "";
+    if(datatype == "location_string" || datatype == "location_link") {
+      val = t_feature.chromloc;
+    } else if(datatype == "chrom_name") {
+      val = t_feature.chrom;
+    } else if(datatype == "chrom_start") {
+      val = t_feature.start;
+    } else if(datatype == "chrom_end") {
+      val = t_feature.end;
+    } else if(datatype == "chrom_strand") {
+      val = t_feature.strand;
+    }
+    if(val) { value = val; }
   }
   
   return value;
