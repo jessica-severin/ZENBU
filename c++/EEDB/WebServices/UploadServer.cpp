@@ -1,4 +1,4 @@
-/* $Id: UploadServer.cpp,v 1.58 2026/03/12 05:15:22 severin Exp $ */
+/* $Id: UploadServer.cpp,v 1.59 2026/08/20 05:13:47 severin Exp $ */
 
 /***
 
@@ -82,6 +82,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <EEDB/SPStreams/RemoteServerStream.h>
 #include <EEDB/SPStreams/OSCFileDB.h>
 #include <EEDB/SPStreams/BAMDB.h>
+#include <EEDB/SPStreams/BigWigDB.h>
 #include <EEDB/JobQueue/Job.h>
 #include <EEDB/WebServices/UploadServer.h>
 

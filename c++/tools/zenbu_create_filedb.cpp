@@ -32,6 +32,7 @@
 #include <EEDB/SPStreams/TemplateCluster.h>
 #include <EEDB/SPStreams/OSCFileDB.h>
 #include <EEDB/SPStreams/BAMDB.h>
+#include <EEDB/SPStreams/BigWigDB.h>
 #include <EEDB/Tools/OSCFileParser.h>
 #include <EEDB/User.h>
 #include <EEDB/Collaboration.h>
@@ -47,7 +48,8 @@ using namespace MQDB;
 map<string,string>        _parameters;
 
 void build_oscdb();
-void build_bamdbdb();
+void build_bigwigdb();
+void build_bamdb();
 void usage();
 void preprocess_bam_file();
 
@@ -58,6 +60,8 @@ int main(int argc, char *argv[]) {
   for(int argi=1; argi<argc; argi++) {
     if(argv[argi][0] != '-') { continue; }
     string arg = argv[argi];
+    
+    if(arg == "-help" || arg == "-h") { usage(); }
 
     string argval;
     while((argi+1<argc) and (argv[argi+1][0] != '-')) {
@@ -83,10 +87,12 @@ int main(int argc, char *argv[]) {
     if(arg == "-bamloc")        { _parameters["_bam_loc"] = argval; }
     if(arg == "-owner")         { _parameters["owner_identity"] = argval; }
     if(arg == "-owner_openid")  { _parameters["owner_openid"] = argval; }
+    if(arg == "-bigwig_strand") { _parameters["bigwig:strand"] = argval; }
         
     if(arg == "-single_tagmap") { _parameters["singletagmap_expression"] = "true"; }
     if(arg == "-GeNAS")         { _parameters["GeNAS"] = "true"; } //not implemented yet
     if(arg == "-LSA")           { _parameters["LSA"] = "true"; } //not implemented yet
+    if(arg == "-v")             { _parameters["verbose"] = "true"; }
 
     if(arg == "-fsrc1")          { _parameters["featuresource1"] = argval; }
     if(arg == "-fsrc2")          { _parameters["featuresource2"] = argval; }
@@ -107,7 +113,9 @@ int main(int argc, char *argv[]) {
   }
   printf("filetype [%s]\n", filetype.c_str());
   if(filetype == "bam") {
-    build_bamdbdb();
+    build_bamdb();
+  } else if(filetype == "bigwig") {
+    build_bigwigdb();
   } else {
     build_oscdb();
   }
@@ -122,7 +130,8 @@ int main(int argc, char *argv[]) {
 
 void usage() {
   printf("zenbu_create_filedb [options]\n");
-  printf("  -help                     : printf(this help\n");
+  printf("  -help                     : show this help\n");
+  printf("  -v                        : verbose run messages\n");
   printf("  -file <path>              : path to a OSCFile to be used for creating database\n");
   printf("  -builddir <path>          : path to local directory where file building takes place\n");
   printf("  -deploydir <path>         : final directory where oscdb is copied back to when completed\n");
@@ -141,6 +150,7 @@ void usage() {
   printf("  -GeNAS                    : GeNAS production file automation prequery\n");
   printf("  -featuresource1 <dbid>    : zenbu ID for edge.featuresource1\n");
   printf("  -featuresource2 <dbid>    : zenbu ID for edge.featuresource2\n");
+  printf("  -bigwig_strand <strand>   : set the strand for bigwig file\n");
   printf("zenbu_create_filedb v%s\n", EEDB::WebServices::WebBase::zenbu_version);
   
   exit(1);  
@@ -200,8 +210,42 @@ void build_oscdb() {
 }
 
 
+void build_bigwigdb() {
+  struct timeval           starttime,endtime,difftime;  
+  gettimeofday(&starttime, NULL);
+  fprintf(stderr, "build_bigwigdb\n");
+  
+  string input_file = _parameters["_input_file"];
+  if(input_file.empty()) {
+    fprintf(stderr, "ERROR: no specified input file\n\n");
+    usage();    
+  }
 
-void build_bamdbdb() {
+  EEDB::SPStreams::BigWigDB *bigwigdb = new EEDB::SPStreams::BigWigDB();
+  map<string,string>::iterator  it;
+  for(it=_parameters.begin(); it!=_parameters.end(); it++) {
+    printf("  parameter : <%s>%s</>\n", (*it).first.c_str(), (*it).second.c_str());
+    bigwigdb->set_parameter((*it).first, (*it).second);
+  }
+
+  //bigwigdb->set_parameter("build_dir","/tmp/");
+  //bigwigdb->set_parameter("deploy_dir", _user_profile->user_directory());
+  //bigwigdb->set_parameter("deploy_dir", _user_profile->user_directory());
+
+  string oscpath = bigwigdb->create_new(input_file);
+  printf("bigwigdb url : %s\n", oscpath.c_str());
+  
+  if(_parameters["test_stream"] == "true") {
+    //bigwigdb->test_stream();
+  }
+  
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("build time %1.6f sec \n", (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);  
+}
+
+
+void build_bamdb() {
   struct timeval           starttime,endtime,difftime;  
   gettimeofday(&starttime, NULL);
   

@@ -1,4 +1,4 @@
-/* $Id: User.cpp,v 1.80 2018/08/13 03:36:20 severin Exp $ */
+/* $Id: User.cpp,v 1.81 2026/08/20 05:15:00 severin Exp $ */
 
 /***
 
@@ -67,6 +67,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <EEDB/SPStreams/FederatedSourceStream.h>
 #include <EEDB/SPStreams/OSCFileDB.h>
 #include <EEDB/SPStreams/BAMDB.h>
+#include <EEDB/SPStreams/BigWigDB.h>
 
 using namespace std;
 using namespace MQDB;
@@ -534,6 +535,9 @@ EEDB::User*  EEDB::User::merge_user_profiles(EEDB::User *user1, EEDB::User *user
     } else if(peer->driver() == "bamdb") {
       EEDB::SPStreams::BAMDB *bamdb = (EEDB::SPStreams::BAMDB*)peer->source_stream();
       bamdb->save_xmldb();
+    } else if(peer->driver() == "bigwigdb") {
+      EEDB::SPStreams::BigWigDB *bigwigdb = (EEDB::SPStreams::BigWigDB*)peer->source_stream();
+      bigwigdb->save_xmldb();
     }
 
     // maybe delete peer from slave registry
@@ -598,6 +602,9 @@ bool  EEDB::User::update_upload_ownership() {
     } else if(peer->driver() == "bamdb") {
       EEDB::SPStreams::BAMDB *bamdb = (EEDB::SPStreams::BAMDB*)peer->source_stream();
       bamdb->save_xmldb();
+    } else if(peer->driver() == "bigwigdb") {
+      EEDB::SPStreams::BigWigDB *bigwigdb = (EEDB::SPStreams::BigWigDB*)peer->source_stream();
+      bigwigdb->save_xmldb();
     }    
   }
     

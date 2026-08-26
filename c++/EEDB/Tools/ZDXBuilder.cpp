@@ -1,4 +1,4 @@
-/* $Id: ZDXBuilder.cpp,v 1.4 2026/07/08 07:21:42 severin Exp $ */
+/* $Id: ZDXBuilder.cpp,v 1.5 2026/08/20 05:13:47 severin Exp $ */
 
 /***
 
@@ -88,6 +88,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <EEDB/SPStreams/MultiMergeStream.h>
 #include <EEDB/SPStreams/OSCFileDB.h>
 #include <EEDB/SPStreams/BAMDB.h>
+#include <EEDB/SPStreams/BigWigDB.h>
 #include <EEDB/Tools/ZDXBuilder.h>
 //#include <EEDB/WebServices/RegionServer.h>
 #include <lz4/lz4.h>

@@ -75,6 +75,8 @@ sub process_url_request {
     if($cgi->param('assembly')) { $self->{'assembly'} = $cgi->param('assembly'); }
     if($cgi->param('platform')) { $self->{'platform'} = $cgi->param('platform'); }
     if($cgi->param('datatype')) { $self->{'datatype'} = $cgi->param('datatype'); }
+    if($cgi->param('wigstrand')) { $self->{'bigwig:strand'} = $cgi->param('wigstrand'); }
+    if($cgi->param('bigwig:strand')) { $self->{'bigwig:strand'} = $cgi->param('bigwig:strand'); }
     if($cgi->param('bedscore_expression')) { $self->{'bedscore_expression'} = $cgi->param('bedscore_expression'); }
     if($cgi->param('singletagmap_expression')) { $self->{'singletagmap_expression'} = $cgi->param('singletagmap_expression'); }
     if($cgi->param('build_feature_name_index')) { 
@@ -422,6 +424,7 @@ sub  write_upload_xmlinfo {
   if($self->{"singletagmap_expression"}) { printf(XMLFILE "    <singletagmap_expression>%s</singletagmap_expression>\n", $self->{"singletagmap_expression"}); }
   if($self->{"build_feature_name_index"}) { printf(XMLFILE "    <build_feature_name_index>%s</build_feature_name_index>\n", $self->{"build_feature_name_index"}); }
   if($self->{"taxon_id"})                { printf(XMLFILE "    <taxon_id>%s</taxon_id>\n", $self->{"taxon_id"}); }
+  if($self->{"bigwig:strand"})           { printf(XMLFILE "    <bigwig:strand>%s</bigwig:strand>\n", $self->{"bigwig:strand"}); }
   if($self->{"upload_genome_name"})      { 
     printf(XMLFILE "    <upload_genome_name>%s</upload_genome_name>\n", $self->{"upload_genome_name"}); 
   }

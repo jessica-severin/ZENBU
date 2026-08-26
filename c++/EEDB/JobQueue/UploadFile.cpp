@@ -1,4 +1,4 @@
-/* $Id: UploadFile.cpp,v 1.48 2024/12/03 05:36:14 severin Exp $ */
+/* $Id: UploadFile.cpp,v 1.49 2026/08/21 09:54:09 severin Exp $ */
 
 /***
 
@@ -88,6 +88,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <EEDB/SPStreams/MultiMergeStream.h>
 #include <EEDB/SPStreams/OSCFileDB.h>
 #include <EEDB/SPStreams/BAMDB.h>
+#include <EEDB/SPStreams/BigWigDB.h>
 #include <EEDB/JobQueue/Job.h>
 #include <EEDB/JobQueue/UploadFile.h>
 #include <EEDB/SPStreams/RemoteServerStream.h>  //for curl function
@@ -232,6 +233,40 @@ bool  EEDB::JobQueue::UploadFile::process_upload_job(long job_id) {
     peer->store(user_reg->peer_database());
     upload_peer = peer;
   }
+  else if(_upload_parameters["filetype"]  == "bigwig") {
+    //BigWigDB
+    EEDB::SPStreams::BigWigDB *bigwigdb = new EEDB::SPStreams::BigWigDB();
+    for(param_it = _upload_parameters.begin(); param_it != _upload_parameters.end(); param_it++) {
+      if((*param_it).first == "_inputfile") { continue; }
+      bigwigdb->set_parameter((*param_it).first, (*param_it).second);
+    }
+    bigwigdb->set_parameter("owner_identity", _current_job->user()->email_identity());
+
+    string url = bigwigdb->create_new(file);
+    if(url.empty()) {
+      _current_job->metadataset()->remove_metadata_like("upload_error", "");
+      _current_job->metadataset()->add_tag_data("upload_error", "problem uploading BAM file");
+      _current_job->update_metadata();
+      return false;
+    }
+    if(url.find("ERROR")!=std::string::npos) {
+      url.erase(0, 6);
+      _current_job->metadataset()->remove_metadata_like("upload_error", "");
+      _current_job->metadataset()->add_tag_data("upload_error", url);
+      _current_job->update_metadata();
+      return false;
+    }
+    fprintf(stderr, "new bigwigdb url [%s]\n", url.c_str());
+
+    //registry new oscdb peer into user registry
+    EEDB::Peer *user_reg = _current_job->user()->user_registry();
+
+    EEDB::Peer *peer = bigwigdb->peer();
+    peer->db_url(url);  //set peer db_url to full URL location
+    fprintf(stderr, "%s\n", peer->xml().c_str());
+    peer->store(user_reg->peer_database());
+    upload_peer = peer;
+  }
   else if((_upload_parameters["filetype"]  == "fasta") || (_upload_parameters["filetype"]  == "fa") ||
           (_upload_parameters["filetype"]  == "fas") ||
           (_upload_parameters["filetype"]  == "fasta.tar") || (_upload_parameters["filetype"]  == "fa.tar")) {
@@ -353,7 +388,7 @@ bool  EEDB::JobQueue::UploadFile::process_upload_job(long job_id) {
 
 bool EEDB::JobQueue::UploadFile::read_upload_xmlinfo(string xmlfile) {
   int                      fildes;
-  off_t                    cfg_len;
+  size_t                   cfg_len;  //off_t can be signed and negative, but I am only using to get file size
   char*                    config_text;
   rapidxml::xml_document<> doc;
   rapidxml::xml_node<>     *node, *root_node, *section_node;

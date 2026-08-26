@@ -1,4 +1,4 @@
-/* $Id: zenbutools.cpp,v 1.25 2024/07/31 00:47:56 severin Exp $ */
+/* $Id: zenbutools.cpp,v 1.26 2026/08/20 06:55:10 severin Exp $ */
 
 /****
  
@@ -99,6 +99,7 @@
 #include <EEDB/SPStreams/TemplateCluster.h>
 #include <EEDB/SPStreams/OSCFileDB.h>
 #include <EEDB/SPStreams/BAMDB.h>
+#include <EEDB/SPStreams/BigWigDB.h>
 #include <EEDB/SPStreams/RemoteServerStream.h>
 #include <EEDB/Tools/OSCFileParser.h>
 #include <EEDB/Tools/RemoteUserTool.h>
@@ -162,6 +163,7 @@ void  output_buffer_send(bool check);
 bool build_file(string input_file);
 void build_oscdb(string input_file);
 void build_bamdbdb(string input_file);
+void build_bigwigdb(string input_file);
 
 int main(int argc, char *argv[]) {
 
@@ -244,6 +246,7 @@ int main(int argc, char *argv[]) {
     if(arg == "-score_express") { _parameters["score_as_expression"] = argvals[0]; }
 
     if(arg == "-url")           { _parameters["_url"] = argvals[0]; }
+    if(arg == "-noremote")      { _parameters["_url"] = ""; }
     
     if(arg == "-assembly")      { _parameters["assembly_name"] = argvals[0]; }
     if(arg == "-asm")           { _parameters["assembly_name"] = argvals[0]; }
@@ -292,8 +295,8 @@ int main(int argc, char *argv[]) {
   }
 
   if(_parameters.find("_url") == _parameters.end()) {
-    printf("\nERROR: must specify -url to remote ZENBU system\n\n");
-    usage(); 
+    printf("\nWARN: no -url to remote ZENBU system. using only local data files\n\n");
+    //usage(); 
   }
   if(_verbose) {  printf("zenbu URL: %s\n", _parameters["_url"].c_str()); }
 
@@ -325,7 +328,7 @@ int main(int argc, char *argv[]) {
   map<string,string>::iterator param;  
   for(param = _parameters.begin(); param != _parameters.end(); param++) {
     webservice->set_parameter((*param).first, (*param).second);
-    printf("param %s : (%s)\n", (*param).first.c_str(), (*param).second.c_str());
+    if(_verbose) { printf("param %s : (%s)\n", (*param).first.c_str(), (*param).second.c_str()); }
   }
   
   if(_parameters.find("collab") != _parameters.end()) {
@@ -341,7 +344,7 @@ int main(int argc, char *argv[]) {
   
    
   //
-  // prepare/build local file into oscdb/bamdb for integration into scripting system
+  // prepare/build local file into oscdb/bamdb/bigwigdb for integration into scripting system
   //
   vector<string>::iterator file_it;
 
@@ -382,6 +385,7 @@ void usage() {
   printf("  -fsrc                         : data sources query for only FeatureSources\n");
   printf("  -peers <uuids>                : peers query with optional list of peer uuids\n");
   printf("  -source_ids <uuids>           : sources query with optional list of source uuids\n");
+  printf("  -region <location>            : stream features from location (asm::chr:start-end format) for configured peer/source_ids\n");
   printf("  -id <zenbu_id>                : fetch specific object\n");
   printf("  -config <uuid>                : fetch specific configuration\n");
   printf("  -file <path>                  : local file to be registered for processing\n");
@@ -399,7 +403,7 @@ void usage() {
   //printf("    -edgef1 <source_uuid>       : for edge file, link edgef1 to this data source (uuid)\n");
   //printf("    -edgef2 <source_uuid>       : for edge file, link edgef2 to this data source (uuid)\n");
   //printf("    -allow_duplicates           : do not perform the duplicate-uploads checks\n");
-  printf("  -script <path                 : file containing ZENBU processing script\n");
+  printf("  -script <path>                : file containing ZENBU processing script\n");
   printf("  -verbose                      : verbose\n");
 
   printf("zenbutools v%s\n", EEDB::WebServices::WebBase::zenbu_version);
@@ -488,6 +492,8 @@ bool  verify_remote_user() {
   //might also need to cache peers, but for now try to do without caching
   rapidxml::xml_document<>       doc;
   rapidxml::xml_node<>           *root_node;
+  
+  if(_parameters["_url"].empty()) { return true; }
   
   CURL *curl = curl_easy_init();
   if(!curl) { return false; }
@@ -704,9 +710,8 @@ void parse_location() {
 
 
 void list_datasources() {
-
   if(_parameters.find("format") == _parameters.end()) { _parameters["format"] = "list"; }
-
+  
   map<string, EEDB::Peer*>  peer_map;
   long exp_count=0;
   long fsrc_count=0;
@@ -715,8 +720,20 @@ void list_datasources() {
     webservice->set_parameter("collab", _parameters["collab"]);
     webservice->postprocess_parameters();
   }
-  //EEDB::SPStream *stream = webservice->source_stream();
   EEDB::SPStream *stream = webservice->region_stream();
+  if(_parameters["_url"].empty()) { stream = webservice->source_stream(); }
+
+  // // peers
+  // stream->stream_peers();
+  // while(MQDB::DBObject* obj = stream->next_in_stream()) { 
+  //   if(!obj) { continue; }
+  //   EEDB::Peer *peer = (EEDB::Peer*)obj;
+  //   if(!(peer->is_valid())) { continue; }
+  //   peer_map[peer->uuid()] = peer;
+  //   //my_uploads[peer->uuid()].clear();
+  //   //peer_source_count[peer->uuid()] = 0;
+  // }  
+  // //printf("%ld peers\n", my_uploads.size());  
 
   // sources
   string source_type = "";
@@ -944,7 +961,7 @@ void stream_chrom_region(EEDB::SPStream *stream, string chrom) {
     //MQDB::unparse_dbid(source->db_id(), uuid, objID, objClass);
     //printf("        uuid: %s\n", uuid.c_str());
     //EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
-    //printf("%60s   %s\n", source->db_id().c_str(),source->display_name().c_str());
+    printf("source: %60s   %s\n", source->db_id().c_str(),source->display_name().c_str());
   }
 
   string format = _parameters["format"];
@@ -1332,6 +1349,7 @@ bool build_file(string input_file) {
   
   _parameters["_build_type"] = "oscdb";
   if(extension=="bam") { _parameters["_build_type"] = "bamdb"; }
+  if(extension=="bigwig") { _parameters["_build_type"] = "bigwigdb"; }
   
   string dbpath;
   
@@ -1356,7 +1374,7 @@ bool build_file(string input_file) {
   bool dbvalid = false;
   struct stat stbuf;
   if((stat(dbpath.c_str(), &stbuf) == 0) && (_parameters["_rebuild"] != "true")) { 
-    printf("db exists: ");
+    printf("dbpath exists: ");
     
     switch (stbuf.st_mode & S_IFMT) {
       case S_IFBLK:  printf("block device\n");            break;
@@ -1375,6 +1393,7 @@ bool build_file(string input_file) {
       if(t_peer->is_valid()) {
         fprintf(stderr, "peer is valid: %s\n", t_peer->uuid());
         if(_registry_db) {
+          fprintf(stderr, "store into local registry: %s\n", _registry_db->url().c_str());
           t_peer->store(_registry_db); //just in case
         }
         dbvalid = true;
@@ -1411,6 +1430,9 @@ bool build_file(string input_file) {
 
   if(_parameters["_build_type"] == "bamdb") {
     build_bamdbdb(input_file);
+  }
+  if(_parameters["_build_type"] == "bigwigdb") {
+    build_bigwigdb(input_file);
   }
   if(_parameters["_build_type"] == "oscdb") {
     build_oscdb(input_file);
@@ -1535,6 +1557,34 @@ void build_bamdbdb(string input_file) {
 }
 
 
-
+void build_bigwigdb(std::string input_file) {
+  //fprintf(stderr, "build BigWigDB\n");
+  struct timeval           starttime,endtime,difftime;  
+  gettimeofday(&starttime, NULL);
+  
+  if(input_file.empty()) {
+    fprintf(stderr, "ERROR: no specified input file\n\n");
+    usage();    
+  }
+  
+  EEDB::SPStreams::BigWigDB *bigwigdb = new EEDB::SPStreams::BigWigDB();
+  map<string,string>::iterator  it;
+  for(it=_parameters.begin(); it!=_parameters.end(); it++) {
+    //printf("  parameter : <%s>%s</>\n", (*it).first.c_str(), (*it).second.c_str());
+    bigwigdb->set_parameter((*it).first, (*it).second);
+  }
+  
+  string builddir = _parameters["_build_dir"];
+  if(!builddir.empty()) {
+    bigwigdb->set_parameter("build_dir",builddir);
+  }
+  
+  string url = bigwigdb->create_new(input_file);
+  printf("bigwigdb url : %s\n", url.c_str());
+    
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("build time %1.6f sec \n", (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+}
 
 

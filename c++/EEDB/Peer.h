@@ -1,4 +1,4 @@
-/* $Id: Peer.h,v 1.40 2023/12/14 06:52:53 severin Exp $ */
+/* $Id: Peer.h,v 1.41 2026/08/20 05:15:00 severin Exp $ */
 
 /***
 
@@ -185,6 +185,7 @@ class Peer : public MQDB::MappedQuery {
     bool       _connect_via_mqdb();
     bool       _connect_via_oscdb();
     bool       _connect_via_bamdb();
+    bool       _connect_via_bigwigdb();
     bool       _connect_via_remote_stream();
     bool       _connect_via_zdx();
 

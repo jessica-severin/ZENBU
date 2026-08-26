@@ -1,4 +1,4 @@
-/* $Id: Peer.cpp,v 1.160 2026/07/08 06:19:20 severin Exp $ */
+/* $Id: Peer.cpp,v 1.161 2026/08/20 05:15:00 severin Exp $ */
 
 /***
 
@@ -59,6 +59,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <MQDB/MappedQuery.h>
 #include <EEDB/SPStreams/OSCFileDB.h>
 #include <EEDB/SPStreams/BAMDB.h>
+#include <EEDB/SPStreams/BigWigDB.h>
 #include <EEDB/SPStreams/RemoteServerStream.h>
 #include <EEDB/Peer.h>
 
@@ -161,6 +162,20 @@ EEDB::Peer*  EEDB::Peer::new_from_url(string url) {
       peer->set_uuid(bamdb->peer()->uuid());
       peer->alias(bamdb->peer()->alias());
       //if(!bamdb->db_url().empty()) { peer->db_url(bamdb->db_url()); }
+      return peer; 
+    }
+    delete peer;
+    return NULL;
+  }
+  else if(t_driver == string("bigwigdb")) {
+    peer = new EEDB::Peer();
+    peer->_db_url = url;
+    if(peer->_connect_via_bigwigdb()) { 
+      //need to transfer all values from internal peer to external peer
+      EEDB::SPStreams::BigWigDB *bigwigdb = (EEDB::SPStreams::BigWigDB*)(peer->source_stream());
+      peer->set_uuid(bigwigdb->peer()->uuid());
+      peer->alias(bigwigdb->peer()->alias());
+      //if(!bigwigdb->db_url().empty()) { peer->db_url(bigwigdb->db_url()); }
       return peer; 
     }
     delete peer;
@@ -432,6 +447,10 @@ long  EEDB::Peer::source_file_size() {
     EEDB::SPStreams::BAMDB *bamdb = (EEDB::SPStreams::BAMDB*)source_stream();
     return bamdb->source_file_size();
   }   
+  if(_driver == "bigwigdb") {
+    EEDB::SPStreams::BigWigDB *bigwigdb = (EEDB::SPStreams::BigWigDB*)source_stream();
+    return bigwigdb->source_file_size();
+  }   
   return 0;
 }
 
@@ -443,6 +462,10 @@ string  EEDB::Peer::source_md5sum() {
   if(_driver == "bamdb") {
     EEDB::SPStreams::BAMDB *bamdb = (EEDB::SPStreams::BAMDB*)source_stream();
     return bamdb->source_md5sum();
+  }   
+  if(_driver == "bigwigdb") {
+    EEDB::SPStreams::BigWigDB *bigwigdb = (EEDB::SPStreams::BigWigDB*)source_stream();
+    return bigwigdb->source_md5sum();
   }   
   return 0;
 }
@@ -677,6 +700,7 @@ void EEDB::Peer::_connect_to_source_stream() {
 
   if(_driver == "oscdb" and _connect_via_oscdb()) { return; }
   if(_driver == "bamdb" and _connect_via_bamdb()) { return; }
+  if(_driver == "bigwigdb" and _connect_via_bigwigdb()) { return; }
   if(((_driver == "mysql") or (_driver == "sqlite")) and _connect_via_mqdb()) { return; }  
   if(((_driver == "http") or (_driver == "https") or (_driver == "zenbu")) and _connect_via_remote_stream()) { return; }  
   if(_driver == "zdx") { if(_connect_via_zdx()) { return; } else { /*fprintf(stderr, "zdx FAILED INIT [%s] %s\n", _peer_uuid, _db_url.c_str());*/ } }
@@ -782,6 +806,40 @@ bool EEDB::Peer::_connect_via_bamdb() {
   _driver                 = "bamdb";
   
   if(_db_url != bamdb->peer()->db_url()) {
+    //fprintf(stderr, "warning: peer[%s] internal db_url [%s] does not match external db_url [%s]\n", 
+    //        _peer_uuid, oscdb->peer()->db_url().c_str(), _db_url.c_str());
+  }          
+  
+  return true;
+}
+
+
+bool EEDB::Peer::_connect_via_bigwigdb() {
+  if(_database_is_valid == 0) { return false; }  //previously tested and failed
+  size_t p1 = _db_url.find("://");
+  if(p1==string::npos) { return false; }  
+  string t_driver = boost::algorithm::to_lower_copy(_db_url.substr(0, p1));
+  if(t_driver != string("bigwigdb")) { return false; }
+  
+  if(_source_stream != NULL) { return true; } //already connected
+  
+  EEDB::SPStreams::BigWigDB *bigwigdb = EEDB::SPStreams::BigWigDB::new_from_url(_db_url);
+  if(bigwigdb == NULL) { return false; }
+  
+  //test internal peer
+  if((bigwigdb->peer() == NULL) ||
+     (bigwigdb->peer()->uuid() == NULL) ||
+     (_peer_uuid != NULL && strcmp(bigwigdb->peer()->uuid(), _peer_uuid) != 0)) {
+    _database_is_valid = 0;
+    fprintf(stderr, "BigWigDB peer_uuid mismatch external[%s] internal[%s]\n", _peer_uuid, bigwigdb->peer()->uuid());
+    return false; 
+  }  
+    
+  _source_stream          = bigwigdb;
+  _database_is_valid      = 1;
+  _driver                 = "bigwigdb";
+  
+  if(_db_url != bigwigdb->peer()->db_url()) {
     //fprintf(stderr, "warning: peer[%s] internal db_url [%s] does not match external db_url [%s]\n", 
     //        _peer_uuid, oscdb->peer()->db_url().c_str(), _db_url.c_str());
   }          
@@ -904,6 +962,7 @@ bool EEDB::Peer::_multipeer_neighbor_search(map<string, EEDB::Peer*> &uuid_peers
   //no need to search inside an oscdb or bamdb for additional peers
   if(driver() == string("oscdb")) { return false; }
   if(driver() == string("bamdb")) { return false; }
+  if(driver() == string("bigwigdb")) { return false; }
   if(_is_remote) { return false; }
 
   //test next layer down
@@ -928,6 +987,7 @@ bool EEDB::Peer::_multipeer_network_search(map<string, EEDB::Peer*> &uuid_peers,
   //no need to search inside an oscdb or bamdb for additional peers
   if(driver() == string("oscdb")) { return false; }
   if(driver() == string("bamdb")) { return false; }
+  if(driver() == string("bigwigdb")) { return false; }
   if(_is_remote) { return false; }
   //fprintf(stderr, "  driver [%s]\n", driver().c_str());
 
@@ -1019,6 +1079,7 @@ void EEDB::Peer::all_network_peers(int max_depth, map<string, EEDB::Peer*> &uuid
   //no need to search inside an oscdb or bamdb for additional peers
   if(driver() == string("oscdb")) { return; }
   if(driver() == string("bamdb")) { return; }
+  if(driver() == string("bigwigdb")) { return; }
   if(driver() == string("zdx")) { return; }
   if(_is_remote) { return; }
 

@@ -20,7 +20,7 @@ SRCS_C = Assembly.cpp Chrom.cpp ChromChunk.cpp \
          SPStreams/ObjectCount.cpp SPStreams/Proxy.cpp SPStreams/TemplateFilter.cpp SPStreams/FeatureLengthFilter.cpp \
          SPStreams/CutoffFilter.cpp SPStreams/CalcFeatureSignificance.cpp SPStreams/IDFilter.cpp \
          SPStreams/NormalizePerMillion.cpp SPStreams/CalcInterSubfeatures.cpp SPStreams/StreamSubfeatures.cpp \
-         SPStreams/UniqueFeature.cpp SPStreams/ResizeFeatures.cpp SPStreams/ZenDB.cpp SPStreams/BAMDB.cpp \
+         SPStreams/UniqueFeature.cpp SPStreams/ResizeFeatures.cpp SPStreams/ZenDB.cpp SPStreams/BAMDB.cpp SPStreams/BigWigDB.cpp \
          SPStreams/ExpressionDatatypeFilter.cpp SPStreams/Paraclu.cpp SPStreams/NeighborCutoff.cpp \
          SPStreams/MakeStrandless.cpp SPStreams/TopHits.cpp SPStreams/NormalizeRPKM.cpp SPStreams/DevNull.cpp \
          SPStreams/StreamTKs.cpp SPStreams/NormalizeByFactor.cpp SPStreams/FeatureRename.cpp \

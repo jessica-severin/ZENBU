@@ -856,10 +856,12 @@ function eedbUserNewUploadPanel() {
 
   var tdiv,tdiv2,tcheck,tspan1,tspan2;
 
+  //bedscore
   bedscore_div = express_options.appendChild(document.createElement('div'));
   bedscore_div.id = "eedb_user_upload_bedscore_div";
   bedscore_div.setAttribute("style", "display:none;");
   tcheck = bedscore_div.appendChild(document.createElement('input'));
+  tcheck.id  = "eedb_user_upload_bedscore_check";
   tcheck.setAttribute('style', "margin: 0px 1px 0px 0px;");
   tcheck.setAttribute('name', "bedscore_expression");
   tcheck.setAttribute('type', "checkbox");
@@ -878,13 +880,17 @@ function eedbUserNewUploadPanel() {
   input1.setAttribute("type", "text");
   input1.setAttribute("name", "datatype");
   input1.setAttribute("size", "20");
-  input1.setAttribute("value", userview.upload.datatype);
-  input1.setAttribute("onkeypress", "eedbUserReconfigParam('upload-datatype', this.value);");
+  //input1.setAttribute("value", userview.upload.datatype);
+  //input1.setAttribute("onkeyup", "eedbUserReconfigParam('upload-datatype', this.value);");
+  input1.setAttribute("onkeyup", "if(event.keyCode==13) { eedbUserReconfigParam('upload-datatype-enter', this.value); } else { eedbUserReconfigParam('upload-datatype', this.value); }");
+  input1.setAttribute("onchange", "eedbUserReconfigParam('upload-datatype-enter', this.value);");
+
   tspan2 = tdiv2.appendChild(document.createElement('span'));
   tspan2.setAttribute("style", "margin-left:5px;");
   tspan2.innerHTML = "(eg: tagcount, norm, raw, tpm, rle, score, pvalue....)";
 
   tdiv = express_options.appendChild(document.createElement('div'));
+  tdiv.id = "eedb_user_upload_singletagmap_div";
   tcheck = tdiv.appendChild(document.createElement('input'));
   tcheck.setAttribute('style', "margin: 0px 1px 0px 0px;");
   tcheck.setAttribute('name', "singletagmap_expression");
@@ -896,6 +902,50 @@ function eedbUserNewUploadPanel() {
   tdiv2 = tdiv.appendChild(document.createElement('div'));
   tdiv2.setAttribute("style", "margin-left:20px;");
   tdiv2.innerHTML = "Count each line of file as expression of 1 tagcount (no correction for 'multi-mapping' locations).";
+
+  //--------  bigwig\bedgraph has no strand so we need to set as metadata at upload
+  wigstrand_div = form.appendChild(document.createElement('div'));
+  wigstrand_div.id = "eedb_user_upload_wigstrand_div";
+  wigstrand_div.setAttribute("style", "display:none;");  //default to hidden, only show for bigwig/bedgraph
+
+  tspan2 = wigstrand_div.appendChild(document.createElement('span'));
+  tspan2.innerHTML = "wig file strand : ";
+
+  var radio1 = wigstrand_div.appendChild(document.createElement('input'));
+  radio1.setAttribute("type", "radio");
+  radio1.setAttribute("id", "upload_wigstrand_radio_strandless");
+  radio1.setAttribute("name", "wigstrand");
+  radio1.setAttribute("value", "strandless");
+  radio1.setAttribute("onchange", "eedbUserReconfigParam('upload-wigstrand', this.value);");
+  if(userview.upload.wigstrand == "strandless") { radio1.setAttribute("checked", "checked"); }
+  label1 = wigstrand_div.appendChild(document.createElement('label'));
+  label1.setAttribute("for", "upload_wigstrand_radio_strandless");
+  label1.innerHTML = "strandless";
+
+  var radio2 = wigstrand_div.appendChild(document.createElement('input'));
+  radio2.setAttribute("style", "margin-left:10px;");
+  radio2.setAttribute("type", "radio");
+  radio2.setAttribute("id", "upload_wigstrand_radio_forward");
+  radio2.setAttribute("name", "wigstrand");
+  radio2.setAttribute("value", "forward");
+  if(userview.upload.wigstrand == "forward") { radio2.setAttribute("checked", "checked"); }
+  radio2.setAttribute("onchange", "eedbUserReconfigParam('upload-wigstrand', this.value);");
+  label2 = wigstrand_div.appendChild(document.createElement('label'));
+  label2.setAttribute("for", "upload_wigstrand_radio_forward");
+  label2.innerHTML = "forward";
+
+  var radio3 = wigstrand_div.appendChild(document.createElement('input'));
+  radio3.setAttribute("style", "margin-left:10px;");
+  radio3.setAttribute("type", "radio");
+  radio3.setAttribute("id", "upload_wigstrand_radio_reverse");
+  radio3.setAttribute("name", "wigstrand");
+  radio3.setAttribute("value", "reverse");
+  if(userview.upload.wigstrand == "reverse") { radio3.setAttribute("checked", "checked"); }
+  radio3.setAttribute("onchange", "eedbUserReconfigParam('upload-wigstrand', this.value);");
+  label3 = wigstrand_div.appendChild(document.createElement('label'));
+  label3.setAttribute("for", "upload_wigstrand_radio_reverse");
+  label3.innerHTML = "reverse";
+
 
   //--------  name index options : still buggy for bed files 
   name_index_options = form.appendChild(document.createElement('div'));
@@ -956,7 +1006,7 @@ function eedbUserNewUploadPanel() {
   input1.setAttribute("type", "text");
   input1.setAttribute("name", "display_name");
   input1.setAttribute("size", "50");
-  input1.setAttribute("onkeypress", "eedbUserReconfigParam('upload-display_name', this.value);");
+  input1.setAttribute("onkeyup", "eedbUserReconfigParam('upload-display_name', this.value);");
 
 
   div1 = namedesc_div.appendChild(document.createElement('div'));
@@ -969,7 +1019,7 @@ function eedbUserNewUploadPanel() {
   text1.setAttribute("style", "max-width:650px; min-width:650px; min-height:100px;");
   text1.setAttribute("rows", "6");
   text1.setAttribute("name", "description");
-  text1.setAttribute("onchange", "eedbUserReconfigParam('upload-description', this.value);");
+  text1.setAttribute("onkeyup", "eedbUserReconfigParam('upload-description', this.value);");
 
   //-------- genome options --------
   genome_div = form.appendChild(document.createElement('div'));
@@ -1072,8 +1122,12 @@ function eedbUserNewUploadPanelRefresh() {
   var genome_options   = document.getElementById("eedb_user_upload_genome_div");
   var edge_options     = document.getElementById("eedb_user_upload_node_edge_options");
   var datatype_div     = document.getElementById("eedb_user_upload_datatype_div");
+  var bedscore_check   = document.getElementById("eedb_user_upload_bedscore_check");
   var datatype_input   = document.getElementById("eedb_user_upload_datatype");
   var name_index_options   = document.getElementById("eedb_user_upload_name_index_options");
+  var singletagmap_div     = document.getElementById("eedb_user_upload_singletagmap_div");
+  var wigstrand_div        = document.getElementById("eedb_user_upload_wigstrand_div");
+
 
   express_options.setAttribute("style", "display:none;");
   namedesc_options.setAttribute("style", "display:none;");
@@ -1081,6 +1135,7 @@ function eedbUserNewUploadPanelRefresh() {
   genome_options.setAttribute("style", "display:none;");
   edge_options.setAttribute("style", "display:none;");
   name_index_options.setAttribute("style", "display:none;");
+  wigstrand_div.setAttribute("style", "display:none;");
 
   if(userview.upload.file_format) { 
     if(userview.upload.file_format == "GENOME") {
@@ -1096,15 +1151,37 @@ function eedbUserNewUploadPanelRefresh() {
         express_options.setAttribute("style", "margin:3px 0px 0px 15px; display:block;");
         bedscore_options.setAttribute("style", "display:none;");
         datatype_div.setAttribute("style", "display:none;");
+        bedscore_check.setAttribute("checked", "");
 
         if((userview.upload.file_format == "BED") || (userview.upload.file_format == "OSC")) {
           bedscore_options.setAttribute("style", "display:block;");
-          if(userview.upload.bedscore_express) { datatype_div.setAttribute("style", "margin-left:15px; display:block;"); } 
-          else { datatype_div.setAttribute("style", "display:none;"); }
+          if(userview.upload.bedscore_express) { 
+            datatype_div.setAttribute("style", "margin-left:15px; display:block;");
+            bedscore_check.setAttribute("checked", "checked");
+          } 
+          else { 
+            datatype_div.setAttribute("style", "display:none;");
+          }
           datatype_input.setAttribute("value", userview.upload.datatype);
         }
         if((userview.upload.file_format == "BED") || (userview.upload.file_format == "GFF")) {
           name_index_options.setAttribute("style", "margin:3px 0px 0px 15px; display:block;");
+        }
+        if(userview.upload.file_format == "BEDGRAPH" || userview.upload.file_format == "BIGWIG") {
+          bedscore_check.checked = true;
+          //bedscore_check.setAttribute("disabled", "disabled");
+          bedscore_check.setAttribute("style", "margin: 0px 1px 0px 0px; pointer-events: none; opacity: 0.5; accent-color: gray;");
+          datatype_input.setAttribute("value", userview.upload.datatype);
+          //express_options.setAttribute("style", "display:none;");
+          express_options.setAttribute("style", "margin:3px 0px 0px 15px; display:block;");
+          bedscore_options.setAttribute("style", "display:block;");
+          datatype_div.setAttribute("style", "margin-left:15px; display:block;");
+          name_index_options.setAttribute("style", "display:none;");
+          singletagmap_div.setAttribute("style", "display:none;");
+          wigstrand_div.setAttribute("style", "margin:3px 0px 0px 15px; display:block;");
+          if(userview.upload.wigstrand == "strandless") { document.getElementById("upload_wigstrand_radio_strandless").checked = true; }
+          if(userview.upload.wigstrand == "forward") { document.getElementById("upload_wigstrand_radio_forward").checked = true; }
+          if(userview.upload.wigstrand == "reverse") { document.getElementById("upload_wigstrand_radio_reverse").checked = true; }
         }
       }
     }
@@ -1121,6 +1198,7 @@ function eedbUserNewUploadPanelRefresh() {
 
     var radio1 = tdiv.appendChild(document.createElement('input'));
     radio1.setAttribute("type", "radio");
+    radio1.setAttribute("name", "upload-edge-mode-radio");
     radio1.setAttribute("value", "node");
     radio1.setAttribute("onchange", "eedbUserReconfigParam('upload-edge-mode', this.value);");
     if(userview.upload.edgemode == "node") { radio1.setAttribute("checked", "checked"); }
@@ -1130,6 +1208,7 @@ function eedbUserNewUploadPanelRefresh() {
     var radio2 = tdiv.appendChild(document.createElement('input'));
     radio2.setAttribute("style", "margin-left:20px;");
     radio2.setAttribute("type", "radio");
+    radio2.setAttribute("name", "upload-edge-mode-radio");
     radio2.setAttribute("value", "edge");
     if(userview.upload.edgemode == "edge") { radio2.setAttribute("checked", "checked"); }
     radio2.setAttribute("onchange", "eedbUserReconfigParam('upload-edge-mode', this.value);");
@@ -3946,6 +4025,7 @@ function eedbUserCreateOthers() {
 
 
 function eedbUserReconfigParam(param, value) {
+  console.log("eedbUserReconfigParam "+param+" value="+value);
   if(param == "platform") {  
     userview.filters.platform = value; 
     //userview.current_view_index = 0;
@@ -3978,10 +4058,16 @@ function eedbUserReconfigParam(param, value) {
       var mymatch = /^(.+)\.(\w+)$/.exec(name);
       if(mymatch && (mymatch.length == 3)) {
         var ext = mymatch[2];
-        if((ext=="bed") || (ext=="sam") || (ext=="osc") ||
+        if((ext=="bed") || (ext=="bedgraph") || (ext=="bigwig") || (ext=="sam") || (ext=="osc") ||
            (ext=="bam") || (ext=="gff") || (ext=="gff2") || (ext=="gff3") || (ext=="gtf")) {
              userview.upload.file_format = ext.toUpperCase();
              name = mymatch[1];
+             if(ext=="bedgraph" || ext=="bigwig") {
+               //userview.upload.file_format = "BED";
+               userview.upload.bedscore_express = true;
+               userview.upload.datatype = "score";
+               userview.upload.wigstrand = "strandless";
+             }
         }
         if((ext=="fasta") || (ext=="fa") || (ext=="fas")) {
           userview.upload.file_format = "GENOME";
@@ -4021,6 +4107,10 @@ function eedbUserReconfigParam(param, value) {
     userview.upload.singletagmap_express = value;
     eedbUserNewUploadPanelRefresh();
   }
+  if(param == "upload-wigstrand") {
+    userview.upload.wigstrand = value;
+    eedbUserNewUploadPanelRefresh();
+  }
   if(param == "build_feature_name_index") {  
     userview.upload.build_feature_name_index = value;
     eedbUserNewUploadPanelRefresh();
@@ -4033,11 +4123,23 @@ function eedbUserReconfigParam(param, value) {
     userview.upload.description  = value;
     eedbUserNewUploadPanelRefresh();
   }
-  if(param == "upload-datatype") {  
+  if(param == "upload-datatype") {
+    if(value=="") {
+      value = "score";
+      console.log("upload-datatype empty : default to score");
+    }
     userview.upload.datatype  = value;
     eedbUserNewUploadPanelRefresh();
   }
-  if(param == "upload-genome_name") {  
+  if(param == "upload-datatype-enter") {
+    if(userview.upload.datatype == "") {
+      userview.upload.datatype = "score";
+    }
+    eedbUserNewUploadPanelRefresh();
+    document.getElementById('eedb_user_upload_datatype').value = userview.upload.datatype;
+    document.getElementById('eedb_user_upload_datatype').blur();
+  }
+  if(param == "upload-genome_name") {
     userview.upload.genome_name  = value;
     userview.upload.display_name  = value;
     eedbUserNewUploadPanelRefresh();
