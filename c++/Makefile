@@ -42,7 +42,10 @@ lz4:
 libBigWig:
 	if [ ! -d libBigWig ] ; then git clone https://github.com/dpryan79/libBigWig.git ; fi
 	$(MAKE) -C libBigWig
-#	$(MAKE) -C libBigWig install
+
+libBigWigInstall:
+	if [ ! -d libBigWig ] ; then git clone https://github.com/dpryan79/libBigWig.git ; fi
+	$(MAKE) -C libBigWig install
 
 mqdb:
 	$(MAKE) -C MQDB
