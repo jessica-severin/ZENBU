@@ -7,7 +7,7 @@ CPPFLAGS = -O3 -I./ -I../ -I/usr/local/include -I/usr/include/mariadb/ -I/usr/lo
            -I../rapidxml-1.13/ -I../samtools-1.5/ -I../samtools-1.5/htslib-1.5/
 
 LIBFLAGS = -L../EEDB -L../MQDB -L../ZDX -L../lz4 -L../samtools-1.5 -L../samtools-1.5/htslib-1.5 -L/usr/lib64/mysql -L/usr/local/lib -L/usr/local/mysql/lib 
-LIBS = -lm -leedb -lmqdb -lzdx -llz4 -lmariadb -lfcgi -lsqlite3 -lz -lbam -lhts -lcurl -lssl -lcrypto -lpthread -llzma -lbz2
+LIBS = -lm -leedb -lmqdb -lzdx -llz4 -lmariadb -lfcgi -lsqlite3 -lz -lbam -lhts -lcurl -lssl -lcrypto -lpthread -llzma -lbz2 -lBigWig
 SRCS_C = eedb_search.cpp eedb_region.cpp eedb_config_server.cpp eedb_upload.cpp
 SRCS   = $(SRCS_C)
 OBJS   = $(SRCS_C:.cpp=.o)
