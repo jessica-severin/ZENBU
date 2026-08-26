@@ -1,4 +1,4 @@
-/* $Id: OSCFileDB.cpp,v 1.286 2026/02/18 02:57:26 severin Exp $ */
+/* $Id: OSCFileDB.cpp,v 1.288 2026/08/21 00:13:07 severin Exp $ */
 
 /***
 
@@ -2105,9 +2105,20 @@ bool  EEDB::SPStreams::OSCFileDB::_create_oscdb_dir() {
   } else {
     _oscdb_dir = filepath + ".oscdb";
   }
-  if(mkdir(_oscdb_dir.c_str(), 0000755)== -1) {
+  if(mkdir(_oscdb_dir.c_str(), 0000775)== -1) {
     if(errno != EEXIST) { return false; }  //already existing is OK, otherwise error
   }
+ 
+  chmod(_oscdb_dir.c_str(), 0775);
+ 
+  string cmd = string("chown -R apache:apache ") + _oscdb_dir;
+  fprintf(stderr, "%s\n", cmd.c_str());
+  system(cmd.c_str());
+  
+  cmd = string("chown -R www-data:www-data ") + _oscdb_dir;
+  fprintf(stderr, "%s\n", cmd.c_str());
+  system(cmd.c_str());
+
   return true;  
 }
 
