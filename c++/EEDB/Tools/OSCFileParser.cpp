@@ -1,4 +1,4 @@
-/* $Id: OSCFileParser.cpp,v 1.231 2026/02/18 03:01:46 severin Exp $ */
+/* $Id: OSCFileParser.cpp,v 1.232 2026/08/13 08:25:20 severin Exp $ */
 
 /***
 
@@ -804,6 +804,7 @@ bool  EEDB::Tools::OSCFileParser::init_from_file(string filename) {
     if(extension.empty()) { return false; }
     _parameters["filetype"] = extension;
   }
+  if(_parameters["filetype"].find("bed") == 0) { _parameters["filetype"] = "bed"; }
   //fprintf(stderr, "  filetype [%s]\n", _parameters["filetype"].c_str());
   
   // post processing
