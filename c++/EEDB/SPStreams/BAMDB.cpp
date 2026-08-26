@@ -1,4 +1,4 @@
-/* $Id: BAMDB.cpp,v 1.75 2024/10/03 03:40:49 severin Exp $ */
+/* $Id: BAMDB.cpp,v 1.76 2026/08/21 00:04:09 severin Exp $ */
 
 /***
 
@@ -1219,6 +1219,8 @@ EEDB::Feature* EEDB::SPStreams::BAMDB::convert_align_to_feature(bam1_t *al, samf
     //else if (x == 'I' || x == 'i' || x == 'f' || x == 'F') return 4;
     //else return 0;
     
+    char   buffer[2048];
+    //string aux_str;
     unsigned int i = 0;
     int8_t   val1;
     uint8_t  val1u;
@@ -1238,17 +1240,25 @@ EEDB::Feature* EEDB::SPStreams::BAMDB::convert_align_to_feature(bam1_t *al, samf
       memset(tag, 0, 4);
       memcpy(tag, aux+i, 2);
       unsigned char type = *(aux+i+2);
-      //printf("%.2s:%c:",tag, type);
+      //printf("%.2s:%c:\n",tag, type);
+      //sprintf(buffer, "%.2s:%c:",tag, type);
+      //aux_str += buffer;
       i += 3;
 
       switch (type) {
         //I think it is a 1byte integer, it's not listed in the SAM documents
         case 'c': 
           memcpy(&val1,(aux+i),1);
+          sprintf(buffer, "%d",val1);
+          feature->metadataset()->add_tag_data((char*)tag, buffer);
+          //fprintf(stderr, "aux %s:%c:%d\n", tag, type, val1);
           i++;
           break;
         case 'C': 
           memcpy(&val1u,(aux+i),1);
+          sprintf(buffer, "%d",val1u);
+          feature->metadataset()->add_tag_data((char*)tag, buffer);
+          //fprintf(stderr, "aux %s:%c:%d\n", tag, type, val1u);
           //printf("%d", val1u);
           i++;
           break;
@@ -1264,12 +1274,18 @@ EEDB::Feature* EEDB::SPStreams::BAMDB::convert_align_to_feature(bam1_t *al, samf
           break;
 
         case 'i': //int32, 4 byte int
-          memcpy(&val3,(aux+i),4); 
+          memcpy(&val3,(aux+i),4);
+          sprintf(buffer, "%d",val3);
+          feature->metadataset()->add_tag_data((char*)tag, buffer);
+          //fprintf(stderr, "aux %s:i: %d\n", tag, val3);
           i+=4; 
           break;
         case 'I': //uint32_t
           memcpy(&val3u,(aux+i),4); 
+          sprintf(buffer, "%d",val3u);
+          feature->metadataset()->add_tag_data((char*)tag, buffer);
           i+=4;
+          //fprintf(stderr, "aux %s:I: %d\n", tag, val3u);
           //printf("%d", val3);
           break;
 
@@ -1348,6 +1364,7 @@ EEDB::Feature* EEDB::SPStreams::BAMDB::convert_align_to_feature(bam1_t *al, samf
           i++; //to move past \0
           //printf("%s", val_str.c_str());
           feature->metadataset()->add_tag_data((char*)tag, val_str);
+          //fprintf(stderr, "aux %s:Z: %s\n", tag, val_str.c_str());
           break;
        
         default:
