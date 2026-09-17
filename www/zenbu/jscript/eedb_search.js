@@ -1448,6 +1448,14 @@ function eedbParsePeerData(xmlPeer, peer) {
   peer.uuid         = xmlPeer.getAttribute("uuid");
   peer.alias        = xmlPeer.getAttribute("alias");
   peer.db_url       = xmlPeer.getAttribute("db_url");
+  peer.driver       = "";
+  if(peer.db_url) {
+    var idx1 = peer.db_url.indexOf("://");
+    if(idx1 >0) { 
+      peer.driver = peer.db_url.substring(0,idx1).toLowerCase();
+    }
+  }
+  //console.log("eedbParsePeerData: uuid:", peer.uuid, "  db_url:", peer.db_url, "  driver:", peer.driver);
   return peer;
 }
 
