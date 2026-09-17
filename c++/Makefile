@@ -42,6 +42,7 @@ lz4:
 libBigWig:
 	if [ ! -d libBigWig ] ; then git clone https://github.com/dpryan79/libBigWig.git ; fi
 	$(MAKE) -C libBigWig
+	ldconfig
 
 libBigWigInstall:
 	if [ ! -d libBigWig ] ; then git clone https://github.com/dpryan79/libBigWig.git ; fi
