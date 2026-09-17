@@ -10538,6 +10538,10 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
   }
   if(param == "exprbin_strandless") { 
     newconfig.exprbin_strandless = value;
+    if(value==true && !glyphTrack.newconfig.posStrandColor && glyphTrack.posStrandColor == "#008000") { 
+      glyphTrack.newconfig.posStrandColor = "#2598E6";
+      zenbuReconfigureTrackPanel(glyphTrack);
+    }
   }
   if(param == "exprbin_add_count") { 
     newconfig.exprbin_add_count = value;
@@ -10692,6 +10696,12 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
         newconfig.exprbin_strandless = true;
         newconfig.exprbin_subfeatures = true;
         newconfig.overlap_mode = "height";
+      }
+      if(glyphTrack.newconfig.bigwig_init) {
+        newconfig.exprbin_strandless = true;
+        newconfig.exprbin_subfeatures = false;
+        newconfig.overlap_mode = "height";
+        newconfig.binning = "max";
       }
       reconfigureStreamParams(glyphTrack);
       needReload=1; 
@@ -10980,7 +10990,8 @@ function reconfigTrackParam(trackID, param, value, altvalue) {
     //if(glyphTrack.signalCSI) { glyphTrack.signalCSI.newconfig = new Object(); } //clear
     //zenbuColorSpaceSetUserColor(glyphTrack.signal_user_color);
     glyphTrack.newconfig = undefined;
-    glyphTrack.DSI.newconfig = new Object;
+    //glyphTrack.DSI.newconfig = new Object;
+    glyphTrack.DSI = null; //clear so it rebuilds
     gLyphsTrackToggleSubpanel(glyphTrack.trackID, 'none');
     //gLyphsDrawTrack(trackID);
   }
@@ -11838,8 +11849,9 @@ function zenbuReconfigureTrackPanel(glyphTrack) {
     glyphTrack.DSI.trackID = glyphTrack.trackID;
     glyphTrack.DSI.source_ids = glyphTrack.source_ids;
     glyphTrack.DSI.collaboration_filter = "all"; //might change to a save state
+    glyphTrack.DSI.edit_datasource_query = false;  //start up not in edit mode
   }
-  glyphTrack.DSI.edit_datasource_query = false;  //start up not in edit mode
+  //glyphTrack.DSI.edit_datasource_query = false;  //start up not in edit mode
   if(!glyphTrack.DSI.source_ids) { 
     glyphTrack.DSI.edit_datasource_query = true; 
     glyphTrack.reconfig_div.style.left = (trackRect.right + window.scrollX - 765) +"px; ";
@@ -12036,20 +12048,39 @@ function gLyphsTrackDSIUpdate(uniqID, mode) {
 
   if(mode=="select_source") {
     if(glyphTrack.newconfig === undefined) { glyphTrack.newconfig = new Object; }
-    if(!glyphTrack.title && !glyphTrack.newconfig.title) {
-      var new_title = "";
-      var sources_hash = zenbuDSI.newconfig.sources_hash;
-      for(var srcid in sources_hash) {
-        var source = sources_hash[srcid];
-        if(!source) { continue; }
-        if(source.selected) {
-          if(new_title == "") { new_title = source.name; }
-        }
+    var new_title = "";
+    var drivers = {};
+    var sources_hash = zenbuDSI.newconfig.sources_hash;
+    for(var srcid in sources_hash) {
+      var source = sources_hash[srcid];
+      if(!source) { continue; }
+      if(source.selected) {
+        if(new_title == "") { new_title = source.name; }
+        if(source.peer) { drivers[source.peer.driver] = source.peer.driver; }
       }
+    }
+    if(!glyphTrack.title && !glyphTrack.newconfig.title) {
       if(new_title) { glyphTrack.newconfig.title = new_title; }
       //reconfigTrackParam(glyphTrack.trackID, 'title', new_title);
       zenbuReconfigureTrackPanel(glyphTrack);
     }
+
+    //special "helper" logic for bigwig files since they are pre-binned
+    //if using binning script then need to default to height, max, standless
+    console.log("gLyphsTrackDSIUpdate  drivers:", drivers);
+    if(drivers["bigwigdb"] && !glyphTrack.newconfig.bigwig_init) {
+      glyphTrack.newconfig.bigwig_init = true; //so it only does it once
+      glyphTrack.newconfig.exprbin_strandless = true;
+      glyphTrack.newconfig.exprbin_subfeatures = false;
+      glyphTrack.newconfig.overlap_mode = "height";
+      glyphTrack.newconfig.binning = "max";
+      if(!glyphTrack.newconfig.posStrandColor && glyphTrack.posStrandColor == "#008000") { 
+        glyphTrack.newconfig.posStrandColor = "#2598E6";
+      }
+      reconfigureStreamParams(glyphTrack);
+      zenbuReconfigureTrackPanel(glyphTrack);
+    }
+    
     reconfigTrackParam(glyphTrack.trackID, 'source_ids', zenbuDSI.newconfig.source_ids);
     createDatatypeSelect(glyphTrack.trackID); //refresh
   } else if(mode=="upload_filename") {
@@ -12887,6 +12918,9 @@ function createBinningSelect(trackID) {
   var glyphTrack = glyphsTrack_global_track_hash[trackID];
   if(glyphTrack == null) { return; }
 
+  var config_binning = glyphTrack.binning;
+  if(glyphTrack.newconfig && glyphTrack.newconfig.binning) { config_binning = glyphTrack.newconfig.binning; }
+
   var binningSelect = document.createElement('select');
   binningSelect.className = "dropdown";
   binningSelect.setAttributeNS(null, "onchange", "reconfigTrackParam(\""+ trackID+"\", 'binning', this.value);");
@@ -12897,7 +12931,7 @@ function createBinningSelect(trackID) {
 
     var option = document.createElement('option');
     option.setAttributeNS(null, "value", binning);
-    if(binning == glyphTrack.binning) {
+    if(binning == config_binning) {
       option.setAttributeNS(null, "selected", "selected");
     }
     option.innerHTML = binning;
