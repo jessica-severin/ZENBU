@@ -863,7 +863,8 @@ function zenbuDatasourceInterfaceSubmitSearch(uniqID, filter) {
 function zenbuDatasourceInterfaceParseSearchResponse(uniqID) {
   var zenbuDSI = zenbuDatasourceInterface_hash[uniqID];
   if(!zenbuDSI) { return; }
-
+  //console.log("zenbuDatasourceInterfaceParseSearchResponse : ", uniqID);
+  
   var sourcesXMLHttp = zenbuDSI.sourcesXMLHttp;
   if(sourcesXMLHttp == null) { return; }
   if(sourcesXMLHttp.responseXML == null) { return; }
@@ -882,7 +883,19 @@ function zenbuDatasourceInterfaceParseSearchResponse(uniqID) {
   if(zenbuDSI.newconfig && zenbuDSI.newconfig.datasource_mode != undefined) { datasource_mode = zenbuDSI.newconfig.datasource_mode; }
 
   var sources_hash = zenbuDSI.newconfig.sources_hash;
+  if(!zenbuDSI.newconfig.peers_hash) { zenbuDSI.newconfig.peers_hash = new Object; }
+  var peers_hash = zenbuDSI.newconfig.peers_hash;
   
+  var xmlPeers = xmlDoc.getElementsByTagName("peer");
+  for(var i=0; i<xmlPeers.length; i++) {
+    var xmlPeer = xmlPeers[i];
+    var peerUUID = xmlPeer.getAttribute("uuid");
+    if(!peers_hash[peerUUID]) {
+      peer = eedbParsePeerData(xmlPeer);
+      peers_hash[peerUUID] = peer;
+    }
+  }
+
   var xmlExperiments = xmlDoc.getElementsByTagName("experiment");
   for(i=0; i<xmlExperiments.length; i++) {
     var xmlSource = xmlExperiments[i];
@@ -891,6 +904,7 @@ function zenbuDatasourceInterfaceParseSearchResponse(uniqID) {
       source = eedbParseExperimentData(xmlSource);
       sources_hash[srcID] = source;
       source.selected = false;
+      if(peers_hash[source.uuid]) { source.peer = peers_hash[source.uuid]; }
     }
   }
   var xmlFeatureSources = xmlDoc.getElementsByTagName("featuresource");
@@ -901,6 +915,7 @@ function zenbuDatasourceInterfaceParseSearchResponse(uniqID) {
       source = eedbParseFeatureSourceData(xmlSource);
       sources_hash[srcID] = source;
       source.selected = false;
+      if(peers_hash[source.uuid]) { source.peer = peers_hash[source.uuid]; }
     }
   }
   if(datasource_mode != "feature") { //don't parse EdgeSource if in feature/experiment mode
@@ -912,6 +927,7 @@ function zenbuDatasourceInterfaceParseSearchResponse(uniqID) {
         source = eedbParseEdgeSourceXML(xmlSource);
         sources_hash[srcID] = source;
         source.selected = false;
+        if(peers_hash[source.uuid]) { source.peer = peers_hash[source.uuid]; }
       }
     }
   }

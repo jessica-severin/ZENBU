@@ -1,4 +1,4 @@
-/* $Id: MetaSearch.cpp,v 1.102 2023/05/29 04:18:07 severin Exp $ */
+/* $Id: MetaSearch.cpp,v 1.104 2026/03/04 04:12:37 severin Exp $ */
 
 /***
 
@@ -1314,6 +1314,9 @@ void EEDB::WebServices::MetaSearch::show_expression_datatypes() {
     if(source->classname() == EEDB::FeatureSource::class_name) {
       datatypes = ((EEDB::FeatureSource*)source)->expression_datatypes();
     }
+    if(source->classname() == EEDB::EdgeSource::class_name) {
+      datatypes = ((EEDB::EdgeSource*)source)->expression_datatypes();
+    }
 
     map<string, EEDB::Datatype*>::iterator it;
     for(it=datatypes.begin(); it!=datatypes.end(); it++) {
@@ -1937,12 +1940,12 @@ void EEDB::WebServices::MetaSearch::show_edges() {
       
       //if edges include new features, add to the _feature_id_hash
       if(_feature_id_hash.find(edge->feature1_dbid()) == _feature_id_hash.end()) {
-        //fprintf(stderr, "add edge feature %s\n", edge->feature1_dbid().c_str());
+        //fprintf(stderr, "add edge feature1 %s\n", edge->feature1_dbid().c_str());
         _feature_id_hash[edge->feature1_dbid()] = NULL;
         features_changed = true;
       }
       if(_feature_id_hash.find(edge->feature2_dbid()) == _feature_id_hash.end()) {
-        //fprintf(stderr, "add edge feature %s\n", edge->feature2_dbid().c_str());
+        //fprintf(stderr, "add edge feature2 %s\n", edge->feature2_dbid().c_str());
         _feature_id_hash[edge->feature2_dbid()] = NULL;
         features_changed = true;
       }

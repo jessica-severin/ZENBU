@@ -1,5 +1,5 @@
 
-/* $Id: ZenDB.h,v 1.7 2013/04/08 07:36:16 severin Exp $ */
+/* $Id: ZenDB.h,v 1.8 2023/12/13 05:39:10 severin Exp $ */
 
 /***
 
@@ -112,6 +112,7 @@ class ZenDB : public EEDB::SPStreams::SourceStream {
     bool                                 _initialized;
     string                               _db_type;
     bool                                 _load_source_metadata;
+    bool                                 _verbose;
   
     EEDB::Assembly*                      _default_assembly;
     EEDB::FeatureSource*                 _primary_source;

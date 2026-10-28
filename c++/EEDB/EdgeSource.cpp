@@ -1,4 +1,4 @@
-/*  $Id: EdgeSource.cpp,v 1.76 2021/05/22 01:41:25 severin Exp $ */
+/*  $Id: EdgeSource.cpp,v 1.78 2025/07/11 07:24:00 severin Exp $ */
 
 /***
 NAME - EEDB::EdgeSource
@@ -80,6 +80,9 @@ void _eedb_edgesource_simple_xml_func(MQDB::DBObject *obj, string &xml_buffer) {
 void _eedb_edgesource_mdata_xml_func(MQDB::DBObject *obj, string &xml_buffer, map<string,bool> tags) {
   ((EEDB::EdgeSource*)obj)->_mdata_xml(xml_buffer, tags);
 }
+string _eedb_edgesource_display_desc_func(MQDB::DBObject *obj) { 
+  return ((EEDB::EdgeSource*)obj)->_display_desc();
+}
 
 
 EEDB::EdgeSource::EdgeSource() {
@@ -97,6 +100,7 @@ void EEDB::EdgeSource::init() {
   _funcptr_xml               = _eedb_edgesource_xml_func;
   _funcptr_simple_xml        = _eedb_edgesource_simple_xml_func;
   _funcptr_mdata_xml         = _eedb_edgesource_mdata_xml_func;
+  _funcptr_display_desc      = _eedb_edgesource_display_desc_func;
 
   _edge_count     = -1;
   _create_date    = 0;
@@ -120,7 +124,7 @@ void EEDB::EdgeSource::display_info() {
 }
 
 
-string EEDB::EdgeSource::display_desc() {
+string EEDB::EdgeSource::_display_desc() {
   char buffer[2048];
   snprintf(buffer, 2040,"EdgeSource(%s) %s : %s : %s",
                     db_id().c_str(),
@@ -184,6 +188,11 @@ void EEDB::EdgeSource::_xml(string &xml_buffer) {
 
   EEDB::MetadataSet *mdset = metadataset();
   if(mdset!=NULL) { mdset->xml(xml_buffer); }
+
+  map<string, EEDB::Datatype*>::iterator it;
+  for(it=_datatypes.begin(); it!=_datatypes.end(); it++) {
+    (*it).second->xml(xml_buffer);
+  }
 
   _xml_end(xml_buffer);
 }
@@ -252,6 +261,16 @@ EEDB::EdgeSource::EdgeSource(void *xml_node) {
       node = node->next_sibling("symbol");
     }    
   }
+  
+  // datatypes
+  if((node = root_node->first_node("datatype")) != NULL) {
+    while(node) {
+      EEDB::Datatype *dtype = EEDB::Datatype::from_xml(node);
+      if(dtype) { add_datatype(dtype); }
+      node = node->next_sibling("datatype");
+    }    
+  }
+
   
   parse_metadata_into_attributes();  
 }

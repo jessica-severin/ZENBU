@@ -36,6 +36,7 @@ function ZenbuTableElement(elementID) {
   //create empty, uninitialized Category report-element object
   //console.log("create ZenbuTableElement");
   this.element_type = "table";
+  this.loading_custom_draw = true;
   if(!elementID) { elementID = this.element_type + (newElementID++); }
   this.elementID = elementID;
   
@@ -70,6 +71,9 @@ function ZenbuTableElement(elementID) {
   //internal methods
   this.pagingInterface    = zenbuTableElement_pagingInterface
   this.tableSortFunc     = zenbuTableElement_tableSortFunc;
+  
+  if(current_report) { current_report.elements[this.elementID] = this; }
+
   return this;
 }
 
@@ -358,12 +362,19 @@ function zenbuTableElement_showSelections() {
 //==========  Table draw =======================================================================
 
 function zenbuTableElement_draw() {
-  if(this.loading) { return; }
-
+  //if(this.loading) { return; }
+  
   var datasourceElement = this.datasource();
 
   var main_div =  this.main_div;
   if(!main_div) { return; }
+
+  if(datasourceElement.loading) {
+    var load_info = main_div.appendChild(document.createElement('span'));
+    load_info.setAttribute('style', "font-size:11px; ;margin-left:15px;");
+    load_info.innerHTML = "loading...";
+    return;
+  }
 
   //resize to pagesize logic
   if(this.resized) {
@@ -421,6 +432,8 @@ function zenbuTableElement_draw() {
 
   var thead = table.appendChild(document.createElement('thead'));
   var tr = thead.appendChild(document.createElement('tr'));
+  //tr.style.cursor = "pointer";
+  tr.style.cursor = "default";
 
   for(var i=0; i<columns.length; i++) {
     var dtype_col = columns[i];
@@ -436,6 +449,11 @@ function zenbuTableElement_draw() {
     if(this.sort_col == dtype_col.datatype) {
       //if(this.sort_reverse) { th.innerHTML += "&#11167;"; } else { th.innerHTML += "&#11165;"; } //dart arrow
       if(this.sort_reverse) { th.innerHTML += "&#9660;"; } else { th.innerHTML += "&#9650;"; } //triangle
+    }
+    
+    if(dtype_col.description) {
+      th.onmouseover= function(dtc) { return function() { eedbMessageTooltip(dtc.description, 200, 'left'); };}(dtype_col);
+      th.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
     }
 
     //th.setAttribute("ondblclick", "reportElementColumnsInterface((\""+this.elementID+"\");");
@@ -572,17 +590,17 @@ function zenbuTableElement_draw() {
 
     //in google Chrome, can not mix onclick and onmouseover, so must use onmousedown instead
     if(feature) {
-      tr.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select', '"+ feature.id+"');");
+      tr.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select', '"+ feature.id+"');");
       tr.setAttribute("onmouseover", "zenbuTableElement_hoverInfo('"+this.elementID+"', 'feature', '"+feature.id+"');");
       tr.setAttribute("onmouseout", "eedbClearSearchTooltip();");
     }
     if(edge) {
-      tr.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select', '"+ edge.id+"');");
+      tr.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select', '"+ edge.id+"');");
       tr.setAttribute("onmouseover", "zenbuTableElement_hoverInfo('"+this.elementID+"', 'edge', '"+edge.id+"');");
       tr.setAttribute("onmouseout", "eedbClearSearchTooltip();");
     }
     if(source) {
-      tr.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select', '"+ source.id+"');");
+      tr.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select', '"+ source.id+"');");
       tr.setAttribute("onmouseover", "zenbuTableElement_hoverInfo('"+this.elementID+"', 'source', '"+source.id+"');");
       tr.setAttribute("onmouseout", "eedbClearSearchTooltip();");
     }
@@ -635,6 +653,7 @@ function zenbuTableElement_draw() {
       if(column_count==0) { td.setAttribute("style", "white-space:nowrap;"); }
       if(this.grid_lines) { td.style.border = "1px solid gray"; }
       td.colnum = column_count++;
+      td.style.cursor = "default";
 
       if(select_row && dtype_col.highlight_color) { 
         td.style.background = dtype_col.highlight_color; 
@@ -725,7 +744,7 @@ function zenbuTableElement_draw() {
           a1.setAttribute("target", "top");
           a1.setAttribute("href", "#");
           //a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select_location', '"+t_object.id+"');");
-          a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select_location', '"+t_object.chromloc+"');");
+          a1.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select_location', '"+t_object.chromloc+"');");
           a1.setAttribute("onclick", "return false;");
           if(datatype == "location_link") { a1.innerHTML = dtype_col.title; }
           else { a1.innerHTML = t_object.chromloc; }
@@ -734,9 +753,23 @@ function zenbuTableElement_draw() {
         var a1 = td.appendChild(document.createElement('a'));
         a1.setAttribute("target", "top");
         a1.setAttribute("href", "#"+datatype);
-        a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'hyperlink_trigger', '"+t_object.id+"', '"+datatype+"');");
+        a1.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'hyperlink_trigger', '"+t_object.id+"', '"+datatype+"');");
         a1.setAttribute("onclick", "return false;");
         a1.innerHTML = dtype_col.title;
+      } else if(t_object && (dtype_col.col_type == "location")) {
+        if(datatype == "location_link" || datatype == "location_string") {
+          var a1 = td.appendChild(document.createElement('a'));
+          a1.setAttribute("target", "top");
+          a1.setAttribute("href", "#");
+          //a1.setAttribute("onmousedown", "reportElementEvent(\""+this.elementID+"\", 'select_location', '"+t_object.id+"');");
+          a1.setAttribute("onmousedown", "reportElementEvent(\""+datasourceElement.elementID+"\", 'select_location', '"+t_object.chromloc+"');");
+          a1.setAttribute("onclick", "return false;");
+          if(datatype == "location_link") { a1.innerHTML = dtype_col.title; }
+          else { a1.innerHTML = t_object.chromloc; }
+        } else {
+          var val = zenbu_object_dtypecol_value(t_object, dtype_col, "first");
+          if(val) { td.innerHTML = val; }
+        }
       }
     }
   }
@@ -864,7 +897,7 @@ function zenbuTableElement_pagingInterface() {
   
   var content_width = this.content_width;
   
-  //interface changes at content_width: 750 700 670 630 570 500 400 320 300 250
+  //interface changes at content_width: 750 700 670 630 570 500 450 400 320 250
   
   //var num_pages = Math.ceil(this.filter_count / Math.floor(this.table_page_size));
   //this.table_num_pages = num_pages;
@@ -897,7 +930,7 @@ function zenbuTableElement_pagingInterface() {
   else if(content_width<750) { tspan.innerHTML = "<< previous"; }
   else { tspan.innerHTML = "<< previous page"; }
   
-  if(content_width>=300) {
+  if(content_width>=500) {
     var tspan2 = pagingSpan.appendChild(document.createElement('span'));
     tspan2.setAttribute('style', "margin-left: 5px; font-weight:bold; display:inline-block;");
     if(content_width<670) { tspan2.innerHTML = "page"; } else { tspan2.innerHTML = "| Page: "; }
@@ -907,22 +940,22 @@ function zenbuTableElement_pagingInterface() {
   var end_page = 10;
   if(content_width<700) { end_page=8; }
   if(content_width<630) { end_page=6; }
-  if(content_width<500) { end_page=0; }
+  if(content_width<400) { end_page=0; }
   
   if(page >= Math.ceil(end_page*0.7)) {
     var span2 = pagingSpan.appendChild(document.createElement('a'));
-    span2.setAttribute('style', "margin-left: 4px; color:purple; text-decoration:underline; display:inline-block; min-width:20px;");
-    if(content_width<320) { span2.style.minWidth = "10px"; }
+    span2.setAttribute('style', "margin-left: 4px; color:purple; text-decoration:underline; display:inline-block; min-width:10px;");
     span2.setAttribute('href', "./");
     span2.setAttribute("onclick", "reportElementEvent(\""+this.elementID+"\", 'page', \"1\"); return false");
     span2.innerHTML = 1;
     
     var span2 = pagingSpan.appendChild(document.createElement('span'));
     span2.setAttribute('style', "margin-left: 2px; display:inline-block; min-width:20px;");
-    if(content_width<320) { span2.style.marginLeft = "0px"; span2.style.minWidth = "12px"; }
+    if(content_width<450) { span2.style.minWidth = "10px"; }
+    span2.style.textAlign = "center";
     span2.innerHTML = "...";
     
-    if(content_width<500) {
+    if(content_width<400) {
       start_page = page;
       end_page = 0;
     } else if(content_width<630) {
@@ -941,15 +974,18 @@ function zenbuTableElement_pagingInterface() {
     var span2 = pagingSpan.appendChild(document.createElement('a'));
     span2.setAttribute('style', "margin-left: 4px; color:purple; text-decoration:underline; display:inline-block; min-width:20px;");
     if(j == page) { span2.setAttribute('style', "margin-left: 4px; color:black; font-weight:bold; display:inline-block; min-width:20px;"); }
+    if(content_width<450) { span2.style.minWidth = "10px"; }
+    span2.style.textAlign = "center";
     span2.setAttribute('href', "./");
     span2.setAttribute("onclick", "reportElementEvent(\""+this.elementID+"\", 'page', \"" +j+ "\"); return false");
     span2.innerHTML = j;
   }
   if(j<=this.table_num_pages) {
-    if((content_width>=500) && (j+1<this.table_num_pages)) {
+    if((content_width>=400) && (j+1<this.table_num_pages)) {
       var span2 = pagingSpan.appendChild(document.createElement('span'));
       span2.setAttribute('style', "margin-left: 4px; display:inline-block; min-width:20px;");
-      if(content_width<320) { span2.style.marginLeft = "0px"; span2.style.minWidth = "10px"; }
+      if(content_width<450) { span2.style.minWidth = "10px"; }
+      span2.style.textAlign = "center";
       span2.innerHTML = "...";
     }
     if(j+1 == this.table_num_pages) {
@@ -963,6 +999,7 @@ function zenbuTableElement_pagingInterface() {
     span2 = pagingSpan.appendChild(document.createElement('a'));
     span2.setAttribute('href', "./");
     span2.setAttribute('style', "margin-left: 4px; color:purple; text-decoration:underline; display:inline-block; min-width:20px;");
+    span2.style.textAlign = "center";
     span2.setAttribute("onclick", "reportElementEvent(\""+this.elementID+"\", 'page', \"" +this.table_num_pages+ "\"); return false");
     span2.innerHTML = this.table_num_pages;
   }
@@ -981,18 +1018,19 @@ function zenbuTableElement_pagingInterface() {
   else if(content_width<750) { tspan4.innerHTML = "next >>"; }
   else { tspan4.innerHTML = "next page >>"; }
   
+  var span3 = pagingSpan.appendChild(document.createElement('span'));
+  span3.setAttribute('style', "margin-left: 5px; ");
   if(content_width>=250) {
-    var span3 = pagingSpan.appendChild(document.createElement('span'));
-    span3.setAttribute('style', "margin-left: 15px; ");
     var tspan = span3.appendChild(document.createElement('span'));
     tspan.innerHTML = "page: ";
-    var input = span3.appendChild(document.createElement('input'));
-    input.setAttribute("style", "font-size:12px; width:35px; padding: 1px 2px; margin: 3px 0px; box-sizing: border-box; border: 1px solid gray; border-radius: 4px;");
-    input.setAttribute('type', "text");
-    input.setAttribute('value', this.table_page);
-    input.setAttribute("onchange", "reportElementEvent(\""+this.elementID+"\", 'page', this.value); return false;");
   }
-  if(content_width>=400) {
+  var input = span3.appendChild(document.createElement('input'));
+  input.setAttribute("style", "font-size:12px; width:35px; padding: 1px 2px; margin: 3px 0px; box-sizing: border-box; border: 1px solid gray; border-radius: 4px;");
+  input.setAttribute('type', "text");
+  input.setAttribute('value', this.table_page);
+  input.setAttribute("onchange", "reportElementEvent(\""+this.elementID+"\", 'page', this.value); return false;");
+
+  if(content_width>=320) {
     var span3 = pagingSpan.appendChild(document.createElement('span'));
     span3.setAttribute('style', "margin-left: 5px; ");
     var tspan = span3.appendChild(document.createElement('span'));
@@ -1164,7 +1202,46 @@ function  zenbuTableElement_tableSortFunc() {
     if(sort_rev) { res = -1 * res; }
     return res;
   }
-  
+
+  var feature_location_func = function(a,b) {
+    var res =0;
+    if(!a) { return 1; }
+    if(!b) { return -1; }
+    if(search_match_to_top) {
+      if(a.search_match && !b.search_match) { return -1; }
+      if(!a.search_match && b.search_match) { return 1; }
+    }
+    if(colname.match(/^f1\./)) { a = a.feature1; b = b.feature1; }
+    if(colname.match(/^f2\./)) { a = a.feature2; b = b.feature2; }
+    if(!a) { return 1; }
+    if(!b) { return -1; }
+    if(a.chrom && !b.chrom) { return -1; }
+    if(!a.chrom && b.chrom) { return 1; }
+    if(a.chrom && b.chrom) {
+      var chr_a =  parseInt(a.chrom.replace(/^chr/, ''));
+      var chr_b =  parseInt(b.chrom.replace(/^chr/, ''));
+      //first check for chrX chrY chrM or others
+      if(isNaN(chr_a) && isNaN(chr_b)) { 
+        if(a.chrom < b.chrom) { res = -1; }
+        if(a.chrom > b.chrom) { res = 1; }
+      } 
+      else if(isNaN(chr_a) || isNaN(chr_b)) {
+        //one of them is not a chr#
+        if(isNaN(chr_a)) { res = 1; } 
+        if(isNaN(chr_b)) { res = -1; }
+      }      
+      if(res==0 && chr_a < chr_b) { res = -1; }
+      if(res==0 && chr_a > chr_b) { res = 1; }
+    }
+    //chrom same so next chrom_start
+    if(res==0 && a.start < b.start) { res = -1; }
+    if(res==0 && a.start > b.start) { res = 1; }
+    if(res==0 && a.end < b.end) { res = -1; }
+    if(res==0 && a.end > b.end) { res = 1; }
+    if(sort_rev) { res = -1 * res; }
+    return res;
+  }
+
   var feature_mdata_func = function(a,b) {
     var res =0;
     if(!a) { return 1; }
@@ -1334,7 +1411,7 @@ function  zenbuTableElement_tableSortFunc() {
   }
 
   if(!this) { return name_func; }
-  
+
   if((datasourceElement.datasource_mode == "feature") || (datasourceElement.datasource_mode == "source")) {
     if(datatype == "name") { return name_func; }
     
@@ -1349,7 +1426,10 @@ function  zenbuTableElement_tableSortFunc() {
     if(dtype_col.col_type == "signal") {
       return feature_expression_func;
     }
-    
+    if(dtype_col.col_type == "location") {
+      return feature_location_func;
+    }
+
     return name_func;
   }
   
@@ -1373,6 +1453,10 @@ function  zenbuTableElement_tableSortFunc() {
       //console.log("return edge_weight_func");
       return edge_weight_func;
     }
+    if(dtype_col.col_type == "location") {
+      return feature_location_func;
+    }
+
     return edge_name_func;
   }
   

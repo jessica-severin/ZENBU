@@ -10135,7 +10135,7 @@ function gLyphsDrawBox(start, end, strand) {
   if(strand == '-') { g2.setAttributeNS(null, 'style', 'fill: purple;'); }
   g2.appendChild(block);
   return g2;
-  return block;
+  //return block;
 }
 
 function gLyphsDrawLine(start, end, strand) {

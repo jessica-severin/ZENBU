@@ -1,5 +1,5 @@
 
-/* $Id: BAMDB.h,v 1.25 2016/06/20 06:35:15 severin Exp $ */
+/* $Id: BAMDB.h,v 1.27 2024/10/03 03:40:49 severin Exp $ */
 
 /***
 
@@ -94,6 +94,7 @@ class BAMDB : public EEDB::SPStreams::ZenDB {
     // public API for tools
     bool                calc_total_counts();
     long long           q3_count();
+    long long           q10_count();
     long long           q20_count();
     long long           q40_count();
     long long           total_count();
@@ -103,6 +104,10 @@ class BAMDB : public EEDB::SPStreams::ZenDB {
     string              source_md5sum();
     bool                path_to_bam_file(string &path, string &filename);
 
+    EEDB::Feature*      convert_align_to_feature(bam1_t *alignment, samfile_t* bamfp);
+    void                add_metadata(bool value)    { _add_metadata = value; }
+    void                add_subfeatures(bool value) { _add_subfeatures = value; }
+    void                add_expression(bool value)  { _add_expression = value; }
 
   //internal API below
   protected:    
@@ -120,6 +125,7 @@ class BAMDB : public EEDB::SPStreams::ZenDB {
     bool                   _add_metadata;
     EEDB::Experiment*      _primary_experiment;
     long long              _q3_count;
+    long long              _q10_count;
     long long              _q20_count;
     long long              _q40_count;
     long long              _unaligned_count;
@@ -140,7 +146,6 @@ class BAMDB : public EEDB::SPStreams::ZenDB {
     bool               _stream_by_named_region(string assembly_name, string chrom_name, long int start, long int end);
   
   private:
-    EEDB::Feature*     _convert_to_feature(bam1_t *alignment);
     EEDB::Feature*     _next_feature();
   
 

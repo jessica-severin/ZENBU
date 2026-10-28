@@ -1,4 +1,4 @@
-/* $Id: OSCFileParser.cpp,v 1.227 2022/02/02 10:40:59 severin Exp $ */
+/* $Id: OSCFileParser.cpp,v 1.232 2026/08/13 08:25:20 severin Exp $ */
 
 /***
 
@@ -804,6 +804,7 @@ bool  EEDB::Tools::OSCFileParser::init_from_file(string filename) {
     if(extension.empty()) { return false; }
     _parameters["filetype"] = extension;
   }
+  if(_parameters["filetype"].find("bed") == 0) { _parameters["filetype"] = "bed"; }
   //fprintf(stderr, "  filetype [%s]\n", _parameters["filetype"].c_str());
   
   // post processing
@@ -906,7 +907,9 @@ bool  EEDB::Tools::OSCFileParser::init_from_oscheader_file(string path) {
         primary_feature_source()->add_datatype(colobj->datatype);
       }
       if(_coordinate_system == EDGES) {
-        primary_edge_source()->add_datatype(colobj->datatype);
+        if((colobj->colname != "edgef1_name") && (colobj->colname!= "edgef2_name")) {
+          primary_edge_source()->add_datatype(colobj->datatype);
+        }
       }
       //primary_feature_source()->add_datatype(colobj->datatype);
       //primary_feature_source()->metadataset()->add_tag_symbol("eedb:expression_datatype", colobj->datatype->type() + "_pm");
@@ -1546,6 +1549,7 @@ void  EEDB::Tools::OSCFileParser::_process_column(OSC_column *colobj) {
 
     if(colobj->colname == "eedb:sam_flag")     { colobj->oscnamespace = METADATA; _idx_sam_flag = i; }
     if(colobj->colname == "eedb:sam_cigar")    { colobj->oscnamespace = METADATA; _idx_cigar = i; }
+    if(colobj->colname == "sam:cigar")         { colobj->oscnamespace = METADATA; _idx_cigar = i; }
     if(colobj->colname == "eedb:sam_opt")      { colobj->oscnamespace = METADATA; _idx_sam_opt = i; }
 
     if(colobj->colname == "eedb:ctg_cigar")    { colobj->oscnamespace = GENOMIC; _idx_ctg_cigar = i; }
@@ -1557,6 +1561,7 @@ void  EEDB::Tools::OSCFileParser::_process_column(OSC_column *colobj) {
     if(colobj->colname == "edgef2_name")       { colobj->oscnamespace = EDGE; _idx_edge_f2 = i; }
     if(colobj->colname == "edgef1_id")         { colobj->oscnamespace = EDGE; _idx_edge_f1 = i; }
     if(colobj->colname == "edgef2_id")         { colobj->oscnamespace = EDGE; _idx_edge_f2 = i; }
+    if(colobj->colname == "edge_dir")          { colobj->oscnamespace = EDGE; }
 
     //
     // expression namespace
@@ -1684,6 +1689,7 @@ void  EEDB::Tools::OSCFileParser::postprocess_columns() {
     
     if(colobj->colname == "eedb:sam_flag")         { _idx_sam_flag = i; }
     if(colobj->colname == "eedb:sam_cigar")        { _idx_cigar = i; }
+    if(colobj->colname == "sam:cigar")             { _idx_cigar = i; }
     if(colobj->colname == "eedb:sam_opt")          { _idx_sam_opt = i; }
 
     if(colobj->colname == "eedb:ctg_cigar")        { _idx_ctg_cigar = i; }
@@ -2582,7 +2588,7 @@ EEDB::Edge*    EEDB::Tools::OSCFileParser::convert_segmented_columns_to_edge() {
   EEDB::Edge *edge = EEDB::Edge::realloc();
 
   edge->edge_source(primary_edge_source());
-  edge->direction('+');
+  //edge->direction('+');
   
   //create all internal data structures so that lazyload is not triggered later
   edge->metadataset(); 
@@ -2660,13 +2666,17 @@ EEDB::Edge*    EEDB::Tools::OSCFileParser::convert_segmented_columns_to_edge() {
     //printf("%s", feature2->simple_xml().c_str());
   }
 
-  //edge_weights
+  //edge_weights. edge_dir
   for(int i=0; i < (int)_columns.size(); i++) {
     EEDB::Tools::OSC_column *colobj = &(_columns[i]);
     if(colobj->oscnamespace != EEDB::Tools::EDGE) { continue; }
-    if(colobj->colname != "edge_weight") { continue; }
-    string datatype = colobj->datatype->type();
-    edge->add_edgeweight(primary_edge_source(), datatype, strtod(colobj->data, NULL));
+    if(colobj->colname == "edge_weight") { 
+      string datatype = colobj->datatype->type();
+      edge->add_edgeweight(primary_edge_source(), datatype, strtod(colobj->data, NULL));
+    }
+    if(colobj->colname == "edge_dir" && colobj->data != NULL && colobj->data[0] != '\0') { 
+      edge->direction(colobj->data[0]);
+    }
   }   
 
   // metadata
@@ -3186,7 +3196,7 @@ string  EEDB::Tools::OSCFileParser::sort_input_file() {
       //create chrom outfile
       string tpath = builddir + chrname;
       //fprintf(stderr, "create chr_outfile [%s]\n", tpath.c_str());
-      chrfd = open(tpath.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+      chrfd = open(tpath.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0664);
       chrom_outfiles[chrname] = chrfd;
       chroms[chrname] = feature->chrom();
     } else {
@@ -3208,7 +3218,7 @@ string  EEDB::Tools::OSCFileParser::sort_input_file() {
   timersub(&endtime, &starttime, &difftime);
   rate = (double)count / ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
   fprintf(stderr, "%10ld features  %13.2f obj/sec\n", count, rate);
-  
+  fprintf(stderr, "%ld chrom_outfiles\n", chrom_outfiles.size());
   //close files
   gzclose(gz);
   map<string, int>::iterator chr_it;
@@ -3216,7 +3226,23 @@ string  EEDB::Tools::OSCFileParser::sort_input_file() {
     close((*chr_it).second);
     //maybe do something else here since we know all the chromosomes in the file now
   }
-  
+
+  /* possible single sort option
+  //sort -k1 -k4rn -k5n -k7n 
+  string sort_cmd = "sort ";
+  snprintf(buffer, 8190, " -k%d ", chrom_idx+1);
+  sort_cmd += buffer;
+  snprintf(buffer, 8190, " -k%dn ", start_idx+1);
+  sort_cmd += buffer;
+  if(end_idx != -1) { 
+    snprintf(buffer, 8190, "-k%drn ", end_idx+1);
+    sort_cmd += buffer;
+  }
+  if(strand_idx != -1) { 
+    snprintf(buffer, 8190, "-k%dn ", strand_idx+1);
+    sort_cmd += buffer;
+  }
+  */
 
   string sort_cmd;
   snprintf(buffer, 8190, "sort -n -k%d ", start_idx+1);
@@ -3236,7 +3262,7 @@ string  EEDB::Tools::OSCFileParser::sort_input_file() {
   sort_path += ".sort";
   unlink(sort_path.c_str());
   fprintf(stderr, "merging sorts into [%s]\n", sort_path.c_str());
-  int sort_fd = open(sort_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+  int sort_fd = open(sort_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0664);
   
   //sort chromosomes by chrom_length for merging
   //$starttime = time();  //reset timer
@@ -3248,21 +3274,23 @@ string  EEDB::Tools::OSCFileParser::sort_input_file() {
     chrom_list.push_back((*chr_it2).second);
   }
   chrom_list.sort(chrom_length_sort_func);
+  fprintf(stderr, "chrom_list %ld\n", chrom_list.size());
   
   for(chr_it3=chrom_list.begin(); chr_it3!=chrom_list.end(); chr_it3++) {
-    fprintf(stderr, "sort chrom [%s]\n", (*chr_it3)->chrom_name().c_str());
+    //fprintf(stderr, "sort chrom [%s]\n", (*chr_it3)->chrom_name().c_str());
     
     string chrfile     = builddir + (*chr_it3)->chrom_name();
     string sortchrfile = chrfile+".sort";
         
     string cmd = sort_cmd;
     cmd += chrfile +" > " + sortchrfile;
-    fprintf(stderr, "\t%s\n", cmd.c_str());
+    //fprintf(stderr, "\t%s\n", cmd.c_str());
     system(cmd.c_str());
     
     //concat into main file
     char readbuf[65535];
     FILE *chrfp = fopen(sortchrfile.c_str(), "r");
+    if(!chrfp) { fprintf(stderr, "failed to open : %s\n", sortchrfile.c_str()); }
     while(fgets(readbuf, 65530, chrfp) != NULL) {
       linebuffer = readbuf;
       write(sort_fd, linebuffer.c_str(), linebuffer.length());      

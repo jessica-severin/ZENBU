@@ -1,4 +1,4 @@
-/* $Id: StreamBuffer.cpp,v 1.6 2015/02/05 06:18:08 severin Exp $ */
+/* $Id: StreamBuffer.cpp,v 1.7 2025/03/05 06:44:52 severin Exp $ */
 
 /***
 
@@ -58,6 +58,8 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <boost/algorithm/string.hpp>
 #include <EEDB/Experiment.h>
 #include <EEDB/Symbol.h>
+#include <EEDB/Feature.h>
+#include <EEDB/Edge.h>
 #include <EEDB/SPStream.h>
 #include <EEDB/SPStreams/StreamBuffer.h>
 
@@ -143,6 +145,61 @@ void  EEDB::SPStreams::StreamBuffer::release_objects() {
     }
   }
   _object_buffer.clear();
+}
+
+
+bool _streambuffer_region_sort_func (MQDB::DBObject *a, MQDB::DBObject *b) { 
+  if(a == NULL) { return false; }
+  if(b == NULL) { return true; }
+
+  string f1_chrom, f2_chrom;  //TODO I need to figure out what to do when different chromosomes
+  long f1_start=-1,  f2_start=-1;
+  long f1_end=-1,  f2_end=-1;
+  
+  if(a->classname() == EEDB::Feature::class_name) {
+    EEDB::Feature *f1 = (EEDB::Feature*)a;
+    //f1_chrom = f1->chrom_name();
+    f1_start = f1->chrom_start();
+    f1_end   = f1->chrom_end();
+  }
+  if(b->classname() == EEDB::Feature::class_name) {
+    EEDB::Feature *f2 = (EEDB::Feature*)b;
+    //f2_chrom = f2->chrom_name();
+    f2_start = f2->chrom_start();
+    f2_end   = f2->chrom_end();
+  }
+
+  if(a->classname() == EEDB::Edge::class_name) {
+    EEDB::Edge *e1 = (EEDB::Edge*)a;
+    //EEDB::Feature *f1 = e1->feature1();
+    //EEDB::Feature *f2 = e1->feature2();
+    //f1_chrom = e1->chrom_name();
+    f1_start = e1->chrom_start();
+    f1_end   = e1->chrom_end();
+  }
+
+  if(b->classname() == EEDB::Edge::class_name) {
+    EEDB::Edge *e2 = (EEDB::Edge*)b;
+    //EEDB::Feature *f1 = e2->feature1();
+    //EEDB::Feature *f2 = e2->feature2();
+    //f2_chrom = e2->chrom_name();
+    f2_start = e2->chrom_start();
+    f2_end   = e2->chrom_end();
+  }
+  
+  //this -1 code should push all non Feature/Edge to the end of the sort
+  if(f1_start == -1) { return false; }
+  if(f2_start == -1) { return true; }  
+  if(f1_start < f2_start) { return true; }
+  if((f1_start == f2_start) && (f1_end < f2_end)) { return true; }
+  
+  return false;
+}
+
+
+void  EEDB::SPStreams::StreamBuffer::region_sort() {
+  //convenience method to sort mix of Features and Edges
+  sort(_object_buffer.begin(), _object_buffer.end(), _streambuffer_region_sort_func);
 }
 
 ////////////////////////////////////////////////////////////////////////////

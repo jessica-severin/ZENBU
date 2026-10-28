@@ -1,4 +1,4 @@
-/* $Id: SPStream.h,v 1.34 2020/03/02 08:26:32 severin Exp $ */
+/* $Id: SPStream.h,v 1.35 2025/02/27 04:49:21 severin Exp $ */
 
 /***
 
@@ -83,6 +83,8 @@ class SPStream : public MQDB::DBObject {
 
     EEDB::SPStream*  source_stream();
     void             source_stream(EEDB::SPStream* value);
+    EEDB::SPStream*  stream_head(); //returns the SPStream module at the head of the stream chain
+
     //sub outstream
 
     MQDB::DBObject*  next_in_stream();

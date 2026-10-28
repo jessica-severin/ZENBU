@@ -1,5 +1,5 @@
 
-/* $Id: FederatedSourceStream.h,v 1.23 2015/01/22 05:01:11 severin Exp $ */
+/* $Id: FederatedSourceStream.h,v 1.26 2026/06/18 05:37:20 severin Exp $ */
 
 /***
 
@@ -74,6 +74,7 @@ namespace SPStreams {
 class FederatedSourceStream : public EEDB::SPStream {
   public:  //global class level
     static const char*  class_name;
+    static bool         force_edge_region_chrom_match;  //true for genome browsers which can only display data on the same chromosome. false for circos/genomewide visualization
 
   public:
     FederatedSourceStream();                // constructor
@@ -91,6 +92,7 @@ class FederatedSourceStream : public EEDB::SPStream {
 
     void    add_seed_peer(EEDB::Peer* peer);
     void    clear_seed_peers();
+    bool    has_seed_peers();
     void    set_peer_search_depth(int value);
     
     void    add_peer_id_filter(string id);
@@ -116,6 +118,7 @@ class FederatedSourceStream : public EEDB::SPStream {
     bool                         _clone_peers_on_build;
     vector<EEDB::Peer*>          _cloned_peers;
     bool                         _allow_full_federation_search;
+    bool                         _has_edge_source;
     map<string, bool>            _filter_source_ids;
     map<string, bool>            _filter_object_ids;
     map<string, bool>            _filter_peer_ids;
@@ -124,6 +127,12 @@ class FederatedSourceStream : public EEDB::SPStream {
     int                          _peer_search_depth;
     string                       _sourcestream_output;
     map<string, EEDB::Datatype*> _expression_datatypes;
+    
+    map<string, EEDB::Feature*>  _edge_feature_id_hash; //prefetch when region query
+    void                         _clear_edge_feature_hash();
+    void                         _fetch_dependent_edges();
+    string                       _region_chrom_name;
+
 
     vector<EEDB::Peer*>    _get_peers();
     EEDB::Peer*            _find_peer(string uuid);
@@ -142,6 +151,7 @@ class FederatedSourceStream : public EEDB::SPStream {
     void               _disconnect_stream();
 
     void               _xml(string &xml_buffer);
+    bool               _stream_by_named_region(string assembly_name, string chrom_name, long int start, long int end);
 
 };
 

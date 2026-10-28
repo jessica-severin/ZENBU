@@ -57,8 +57,9 @@
 #include <EEDB/SPStreams/FeatureLengthFilter.h>
 #include <EEDB/SPStreams/EdgeLengthFilter.h>
 #include <EEDB/SPStreams/DevNull.h>
-#include <EEDB/SPStreams/DumbBellToEdge.h>
+#include <EEDB/SPStreams/SubfeaturesToEdges.h>
 #include <EEDB/SPStreams/MergeEdges.h>
+#include <EEDB/SPStreams/GapFilterAnnotate.h>
 
 #include <EEDB/Tools/OSCFileParser.h>
 #include <EEDB/Tools/LSArchiveImport.h>
@@ -129,6 +130,7 @@ void test_oscdb5(vector<EEDB::Peer*> seedpeers);
 void test_region_server();
 void test_region_server2();
 void test_region_server3();
+void test_region_server4();
 void test_search_server();
 void upgrade_oscdbs(vector<EEDB::Peer*> seedpeers);
 void upgrade_oscdbs_v2();
@@ -185,6 +187,7 @@ void test_metasearch_server();
 void test_pair_reads();
 void get_all_data();
 void test_dumbell_to_edge();
+void test_paris_gap_analysis();
 
 EEDB::User* get_cmdline_user();
 
@@ -225,10 +228,13 @@ int main() {
   printf("weight %ld bytes\n", sizeof(*weight));
   printf("expression %ld bytes\n", sizeof(*expr));
 
+  test_paris_gap_analysis(); exit(0);
+  
   //test_edge_oscfile_read3(); exit(0);
   //test_multimode_feature_edge_oscfile_build(); exit(0);
 
-//  get_all_data(); exit(0);
+  //get_all_data(); exit(0);
+  //test_region_server4(); exit(0);
 
   //test_dumbell_to_edge(); exit(0);
 
@@ -2580,7 +2586,6 @@ void test_region(vector<EEDB::Peer*> seedpeers) {
   //fstream->add_source_id_filter("C9A7628C-B1CC-4B93-9E55-E7D99A12B7AA::59:::FeatureSource");
   //fstream->add_source_id_filter("2ACDA3DC-0704-11DF-8E68-ECCE0B50B70F::5:::FeatureSource");
   //fstream->add_source_id_filter("CC9536FC-405D-11DF-9869-91394B1E0442::9:::FeatureSource");
-  //
   fstream->add_source_id_filter("1B075EE8-620E-4DE1-B005-54C5D20B5875::2:::Experiment");
 
   printf("  -- peers\n");
@@ -6313,6 +6318,76 @@ void test_region_server3() {
 }
 
 
+void test_region_server4() {
+  struct timeval                        starttime,endtime,difftime;
+  double                                last_update = 0.0;
+  EEDB::WebServices::RegionServer      *webservice = new EEDB::WebServices::RegionServer();
+
+  gettimeofday(&starttime, NULL);
+
+  printf("\n== test_region_server4\n");
+  webservice->parse_config_file("/etc/zenbu/zenbu.conf");
+
+  gettimeofday(&endtime, NULL); timersub(&endtime, &starttime, &difftime);
+  printf("  after parse %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+
+  string post_data="<zenbu_query> <track_title>FRAM WC1 10merged gap1Filter sorted</track_title> <view_uuid>0M6oU6vJKR1p1e4OVqwY9B</view_uuid> <source_ids>D890A56D-3F99-47A2-B178-72D1E9A76BB2::2:::Experiment</source_ids> <exptype>tpm</exptype> <asm>hg38</asm> <loc>chr10:102400829..102466332</loc> <mode>region</mode> <source_outmode>full_feature</source_outmode> <display_width>1905</display_width> <format>fullxml</format> </zenbu_query>";
+
+  webservice->init_service_request();
+
+  MQDB::Database *userdb = webservice->userDB();
+  EEDB::User *user = EEDB::User::fetch_by_email(userdb, "jessica.severin@gmail.com");
+  //EEDB::User *user = EEDB::User::fetch_by_email(userdb, "jessica.severin@riken.jp");
+  fprintf(stderr, "%s\n", user->xml().c_str());
+  webservice->set_user_profile(user);
+
+  webservice->set_post_data(post_data);
+  webservice->process_xml_parameters();
+  webservice->postprocess_parameters();
+
+  //webservice->execute_request();
+  //gettimeofday(&endtime, NULL); timersub(&endtime, &starttime, &difftime);
+  //printf("  after execute_request %1.6f msec \n", (double)difftime.tv_sec*1000.0 + ((double)difftime.tv_usec)/1000.0);
+
+  //EEDB::SPStream *stream = webservice->source_stream();
+  EEDB::SPStream *stream = webservice->region_stream();
+  //samtools view bamdb.bam chr10:102400829-102466332 | grep D00670:367:HYKJ5BCX2:1:2203:14129:3340
+  //samtools view bamdb.bam chr10:102400829-102466332 | grep D00670:367:HYKJ5BCX2:1:1114:15689:23660
+
+  printf("== read features\n");
+  gettimeofday(&starttime, NULL);
+  long count=0;
+  stream->stream_clear();
+  stream->stream_by_named_region("hg38","chr10", 102400829,102466332);
+  printf("  after stream_by_named_region\n");
+  while(EEDB::Feature *feature = (EEDB::Feature*)stream->next_in_stream()) { 
+    if(!feature) { continue; }
+    
+    if(feature->primary_name() == "D00670:367:HYKJ5BCX2:1:1115:15036:87850") {
+    //if(feature->primary_name() == "D00670:367:HYKJ5BCX2:1:1114:15689:23660") {
+    //if(feature->primary_name() == "D00670:367:HYKJ5BCX2:1:2203:14129:3340") {
+      printf("%s\n", feature->xml().c_str());
+      break;
+    }
+    //printf("%s\n", feature->xml().c_str());
+    count++;    
+    
+    gettimeofday(&endtime, NULL);
+    timersub(&endtime, &starttime, &difftime);
+    double runtime = (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0;
+    if(runtime > last_update + 1.0) {
+      //printf("%ld in %1.6f sec \n", count, (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+      printf("%1.3f obj/sec [%ld obj]\n", count / runtime, count);
+      last_update = runtime;
+    }
+    feature->release();
+  }
+
+  webservice->disconnect();
+  //sleep(100);
+}
+
+
 bool zdx_patch_assembly() {
   struct timeval      starttime,endtime,difftime;
   long                count=0;
@@ -8597,7 +8672,7 @@ void test_dumbell_to_edge() {
   mod1->min_length(1000000);
   stream = mod1;
 
-  EEDB::SPStreams::DumbBellToEdge *mod = new EEDB::SPStreams::DumbBellToEdge();
+  EEDB::SPStreams::SubfeaturesToEdges *mod = new EEDB::SPStreams::SubfeaturesToEdges();
   mod->source_stream(stream);
   mod->transfer_expression(true);
   stream = mod;
@@ -8816,4 +8891,146 @@ void test_dumbell_to_edge() {
   printf("%1.6f sec\n", ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
   */
 }
+
+
+void test_paris_gap_analysis() {
+  //
+  // testing the new AppendExpression module to dynamic creation of experiment mirroring FeatureSource and adding expression on demand
+  //
+  fprintf(stderr, "\n======= test_paris_gap_analysis\n");
+
+  struct timeval                        starttime,endtime,difftime;
+  double                                last_update = 0.0;
+  EEDB::SPStream                        *stream = NULL;
+  EEDB::WebServices::RegionServer       *webservice = new EEDB::WebServices::RegionServer();
+  
+  webservice->parse_config_file("/etc/zenbu/zenbu.conf");
+  webservice->init_service_request();
+
+  MQDB::Database *userdb = webservice->userDB();
+  EEDB::User *user = EEDB::User::fetch_by_email(userdb, "jessica.severin@gmail.com");
+  fprintf(stderr, "%s\n", user->xml().c_str());
+  webservice->set_user_profile(user);
+
+   //<source name="Set18-8 Neuron rep2 ATTGGC gaptypes gap1" id="8764A208-CFCB-48F5-BDB8-7D64A2395967::2:::Experiment" />
+   //<source name="Set18-8 Neuron rep1 CACTGT gaptypes gap1" id="6AB7ABAF-C639-4C51-B7F2-C6CA1E953B94::2:::Experiment" />   
+  webservice->set_parameter("nocache", "true");
+  webservice->set_parameter("source_ids", "8764A208-CFCB-48F5-BDB8-7D64A2395967::2:::Experiment,6AB7ABAF-C639-4C51-B7F2-C6CA1E953B94::2:::Experiment");
+  webservice->set_parameter("exptype", "tagcount");
+  webservice->set_parameter("source_outmode", "full_feature");
+  webservice->set_parameter("asm", "hg38");
+
+  webservice->postprocess_parameters();
+  
+  stream = webservice->region_stream();
+
+  //   <source name="table5pENSTpCAT_transcript" category="transcript" id="1297913E-40DE-4162-9F01-2C84759D998E::3:::FeatureSource" />
+  EEDB::SPStreams::FederatedSourceStream *transcript_stream = webservice->secured_federated_source_stream();
+  transcript_stream->add_source_id_filter("1297913E-40DE-4162-9F01-2C84759D998E::3:::FeatureSource");
+  transcript_stream->set_sourcestream_output("full_feature");
+
+  EEDB::SPStreams::GapFilterAnnotate *mod1 = new EEDB::SPStreams::GapFilterAnnotate();
+  mod1->side_stream(transcript_stream);
+  mod1->min_gap_length(4);
+  mod1->overlap_distance(5);
+  mod1->add_annotation_mdtype("gene_name");
+  mod1->skip_unannotated(true);
+  mod1->source_stream(stream);
+  stream = mod1;
+
+  //EEDB::SPStreams::EdgeLengthFilter *mod2 = new EEDB::SPStreams::EdgeLengthFilter();
+  //mod2->source_stream(stream);
+  //mod2->min_length(310000);
+  //stream = mod2;
+
+  printf("%s\n", stream->xml().c_str());
+
+  long count=0;
+  gettimeofday(&starttime, NULL);
+  
+  map<string, EEDB::Peer*>    t_peers;
+  map<string, EEDB::Peer*>::iterator  it2;
+
+  printf("\n============= initial stream sources and peers\n");
+  count=0;
+  stream->stream_data_sources("");
+  while(EEDB::DataSource *source = (EEDB::DataSource*)stream->next_in_stream()) {
+    printf("%s", source->simple_xml().c_str());
+    count++;
+    string uuid = source->peer_uuid();
+    EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
+    if(peer) { t_peers[uuid] = peer; }
+  }
+  printf("%ld sources\n", count);
+  
+  count=0;
+  for(it2 = t_peers.begin(); it2 != t_peers.end(); it2++) {
+    printf("%s\n", (*it2).second->xml().c_str());
+    count++;
+  }  
+  printf("%ld peers\n", count);
+
+
+  printf("\n\n========= read objects\n");
+  gettimeofday(&starttime, NULL);
+  count=0;
+  stream->stream_clear();
+  stream->stream_by_named_region("hg38", "chr7", 5526285, 5531464); //ACTB
+  printf("after stream_by_named_region\n");
+  
+  long obj_count=0;
+  while(MQDB::DBObject *obj = stream->next_in_stream()) { 
+    if(!obj) { continue; }
+    
+    //printf("%s", obj->xml().c_str());
+    obj_count++;    
+
+    gettimeofday(&endtime, NULL);
+    timersub(&endtime, &starttime, &difftime);
+    double runtime = (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0;
+
+    string loc;
+    if(obj->classname() == EEDB::Feature::class_name) { 
+      EEDB::Feature *feature = (EEDB::Feature*)obj;
+      loc = feature->chrom_location().c_str();
+    }
+
+    if(runtime > last_update + 0.5) {
+      //printf("%ld in %1.6f sec \n", obj_count, (double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0);
+      printf("%1.3f obj/sec [%ld obj] %s\n", obj_count / runtime, obj_count, loc.c_str());
+      last_update = runtime;
+      //printf("%s\n", obj->xml().c_str());
+    }
+
+    obj->release();
+  }
+
+  /*
+  //printf("\n============= end stream sources and peers\n");
+  t_peers.clear();;
+  count=0;
+  stream->stream_data_sources("");
+  while(EEDB::DataSource *source = (EEDB::DataSource*)stream->next_in_stream()) {
+    printf("%s", source->xml().c_str());
+    count++;
+    string uuid = source->peer_uuid();
+    EEDB::Peer *peer = EEDB::Peer::check_cache(uuid);
+    if(peer) { t_peers[uuid] = peer; }
+  }
+  //printf("%ld sources\n", count);
+  
+  count=0;
+  for(it2 = t_peers.begin(); it2 != t_peers.end(); it2++) {
+    printf("%s\n", (*it2).second->xml().c_str());
+    count++;
+  }  
+  //printf("%ld peers\n", count);
+  */
+
+  gettimeofday(&endtime, NULL);
+  timersub(&endtime, &starttime, &difftime);
+  printf("final : %1.3f obj/sec [%ld obj in %1.6f sec]\n", obj_count /((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0),
+                                                   obj_count , ((double)difftime.tv_sec + ((double)difftime.tv_usec)/1000000.0));
+}
+
 

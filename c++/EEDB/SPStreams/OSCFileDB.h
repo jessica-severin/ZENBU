@@ -1,5 +1,5 @@
 
-/* $Id: OSCFileDB.h,v 1.56 2020/03/02 08:49:26 severin Exp $ */
+/* $Id: OSCFileDB.h,v 1.57 2025/02/19 10:07:27 severin Exp $ */
 
 /***
 
@@ -166,6 +166,7 @@ class OSCFileDB : public EEDB::SPStreams::SourceStream {
     bool               _create_edge_osc_filedb();
     bool               _build_edge_indexes();
     map<string, vector<EEDB::Feature*> > _load_edgelink_feature_hash(EEDB::FeatureSource* fsrc, string link_key);
+    map<string, vector<long> >           _load_edgelink_featureid_hash(EEDB::FeatureSource* fsrc, string link_key);
 
   public:  //public for now for development
     bool               _seek_to_datarow(long int obj_id);

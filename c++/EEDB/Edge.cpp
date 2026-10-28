@@ -1,4 +1,4 @@
-/* $Id: Edge.cpp,v 1.100 2021/06/29 02:00:00 severin Exp $ */
+/* $Id: Edge.cpp,v 1.101 2026/08/20 23:50:06 severin Exp $ */
 
 /***
 
@@ -569,6 +569,7 @@ void  EEDB::Edge::feature1(EEDB::Feature* obj) {
   if(_feature1 != NULL) { _feature1->release(); }
   _feature1 = obj;
   _feature1_id = -1;
+  _feature1_dbid = "";
   if(_feature1 != NULL) { _feature1->retain(); }
 }
 
@@ -585,6 +586,7 @@ void  EEDB::Edge::feature2(EEDB::Feature* obj) {
   if(_feature2 != NULL) { _feature2->release(); }
   _feature2 = obj;
   _feature2_id = -1;
+  _feature2_dbid = "";
   if(_feature2 != NULL) { _feature2->retain(); }
 }
 
@@ -906,7 +908,7 @@ void  EEDB::Edge::merge_edges(vector<EEDB::Edge*> &edges) {
 
 
 /*
-# $Id: Edge.cpp,v 1.100 2021/06/29 02:00:00 severin Exp $
+# $Id: Edge.cpp,v 1.101 2026/08/20 23:50:06 severin Exp $
 =head1 NAME - EEDB::Edge
 
 =head1 SYNOPSIS

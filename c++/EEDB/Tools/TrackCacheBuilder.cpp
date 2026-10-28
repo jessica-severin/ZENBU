@@ -1,4 +1,4 @@
-/* $Id: TrackCacheBuilder.cpp,v 1.224 2019/07/31 06:59:15 severin Exp $ */
+/* $Id: TrackCacheBuilder.cpp,v 1.225 2024/10/08 02:42:47 severin Exp $ */
 
 /***
 
@@ -100,14 +100,19 @@ using namespace MQDB;
 const char* EEDB::Tools::TrackCacheBuilder::class_name = "EEDB::Tools::TrackCacheBuilder";
 bool        EEDB::Tools::TrackCacheBuilder::building_segments = false;
 
-void check_over_memory() {
+void check_over_memory(long memlimit) {
   double vm_usage, resident_set;
+  if(memlimit==0) { memlimit = 4*1024*1024; } //4GB old limit
   MQDB::process_mem_usage(vm_usage, resident_set);
   //fprintf(stderr, "process_mem_usage %1.3fMB res\n", resident_set/1024.0);
-  if(resident_set > 4*1024*1024) { //4GB
+  if(resident_set > memlimit) { //4GB
     fprintf(stderr, "self destruct, using %f MB memory\n", resident_set/1024.0);
     throw(17);
   }
+}
+
+void check_over_memory() {
+  check_over_memory(16*1024*1024); //16GB
 }
 
 

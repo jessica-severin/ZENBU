@@ -1,4 +1,4 @@
-/* $Id: ZenDB.cpp,v 1.31 2021/05/22 01:43:18 severin Exp $ */
+/* $Id: ZenDB.cpp,v 1.33 2026/02/18 02:57:26 severin Exp $ */
 
 /***
 
@@ -184,7 +184,7 @@ void EEDB::SPStreams::ZenDB::init() {
   
   _version = 0;  //1=oscheader/sqlite version, 2=xml/cidx version
   _modify_time = 0;
-
+  _verbose = false;
 }
 
 string EEDB::SPStreams::ZenDB::_display_desc() {
@@ -224,7 +224,7 @@ string  EEDB::SPStreams::ZenDB::_create_new(string filepath) {
   
   //last step write out the XML setup
   string xml_path = _zendb_dir + "/"+_db_type+".xml";
-  int xmlfd = open(xml_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+  int xmlfd = open(xml_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0664);
   if(xmlfd == -1) { 
     fprintf(stderr, "zendb can't open xml file [%s]\n", xml_path.c_str()); 
     return ""; //error
@@ -763,7 +763,11 @@ void  EEDB::SPStreams::ZenDB::set_parameter(string tag, string value) {
 
   if(tag == "build_dir")            { tag = "_build_dir"; }
   if(tag == "deploy_dir")           { tag = "_deploy_dir"; }
+  if(tag == "verbose")              { tag = "_verbose"; }
   
+  if(tag == "_verbose") {
+    if(value == "false") { _verbose = false; } else { _verbose = true; }
+  }
   _parameters[tag] = value;
 }
 
@@ -808,7 +812,7 @@ bool  EEDB::SPStreams::ZenDB::_save_xml() {
   //write out the XML setup
   _parameters["filetype"].clear();
   string xml_path = _zendb_dir + "/"+_db_type+".xml";
-  int xmlfd = open(xml_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+  int xmlfd = open(xml_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0664);
   if(xmlfd == -1) { 
     fprintf(stderr, "zendb can't open xml file [%s]\n", xml_path.c_str()); 
     return false; //error

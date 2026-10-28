@@ -10,7 +10,7 @@ SRCS_C =
 SRCS   = $(SRCS_C)
 OBJS   = $(SRCS_C:.cpp=.o)
 
-all:	samtools	
+all:	samtools libBigWig
 	$(MAKE) -C lz4
 	$(MAKE) -C MQDB
 	$(MAKE) -C ZDX
@@ -21,6 +21,8 @@ all:	samtools
 clean:
 	rm -f *.o zenbu_test
 	rm -rf samtools-1.5
+	rm -rf libBigWig
+	rm -f include/zenbu/*/*.h include/zenbu/*/*/*.h
 	$(MAKE) -C lz4 clean
 	$(MAKE) -C EEDB clean
 	$(MAKE) -C MQDB clean
@@ -34,6 +36,48 @@ samtools:
 	if [ ! -d samtools-1.5 ] ; then  tar xjf samtools-1.5.tar.bz2 ; fi
 	$(MAKE) -C samtools-1.5
 
+lz4:
+	$(MAKE) -C lz4
+
+libBigWig:
+	if [ ! -d libBigWig ] ; then git clone https://github.com/dpryan79/libBigWig.git ; fi
+	$(MAKE) -C libBigWig
+	ldconfig
+
+libBigWigInstall:
+	if [ ! -d libBigWig ] ; then git clone https://github.com/dpryan79/libBigWig.git ; fi
+	$(MAKE) -C libBigWig install
+
+mqdb:
+	$(MAKE) -C MQDB
+
+zdx:
+	$(MAKE) -C ZDX
+
+eedb:
+	$(MAKE) -C EEDB
+
+
 cleanobj :
 	rm *.o
+
+includedir: 
+	cp MQDB/*.h include/zenbu/MQDB/
+	cp ZDX/*.h include/zenbu/ZDX/
+	cp EEDB/*.h include/zenbu/EEDB/
+	cp EEDB/JobQueue/*.h include/zenbu/EEDB/JobQueue/
+	cp EEDB/SPStreams/*.h include/zenbu/EEDB/SPStreams/
+	cp EEDB/Tools/*.h include/zenbu/EEDB/Tools/
+	cp EEDB/WebServices/*.h include/zenbu/EEDB/WebServices/
+	cp EEDB/ZDX/*.h include/zenbu/EEDB/ZDX
+	chmod -R +r include
+
+libzenbu:	samtools libBigWig lz4 mqdb zdx eedb includedir
+	ar sr libzenbu.a MQDB/*.o ZDX/*.o EEDB/*.o EEDB/JobQueue/*.o EEDB/SPStreams/*.o EEDB/Tools/*.o EEDB/WebServices/*.o EEDB/ZDX/*.o 
+	chmod -R +r include
+	cp -f libzenbu.a /usr/local/lib/
+	cp -f lz4/liblz4.a /usr/local/lib/
+	cp -frp include/zenbu /usr/local/include/
+
+
 

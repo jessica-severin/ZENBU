@@ -1,4 +1,4 @@
-/*  $Id: TrackCache.cpp,v 1.83 2022/07/15 11:31:30 severin Exp $ */
+/*  $Id: TrackCache.cpp,v 1.84 2026/02/18 04:11:27 severin Exp $ */
 
 /*******
 
@@ -542,6 +542,15 @@ EEDB::ZDX::ZDXstream*  EEDB::TrackCache::zdxstream() {
 
 
   _zdxstream = EEDB::ZDX::ZDXstream::create_new(_cache_file);
+
+  string cmd = string("chown -R apache:apache ") + _cache_file;
+  fprintf(stderr, "%s\n", cmd.c_str());
+  system(cmd.c_str());
+
+  cmd = string("chown -R www-data:www-data ") + _cache_file;
+  fprintf(stderr, "%s\n", cmd.c_str());
+  system(cmd.c_str());
+
   return _zdxstream;  
 }
 

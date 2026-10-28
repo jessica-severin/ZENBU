@@ -2,8 +2,6 @@
 /AddLinkedMetadata.h/1.1/Tue Jul 30 09:41:24 2019//
 /AppendExpression.cpp/1.4/Tue Jul 30 09:41:24 2019//
 /AppendExpression.h/1.3/Tue Jul 30 09:41:24 2019//
-/BAMDB.cpp/1.70/Mon Jul 25 07:37:10 2022//
-/BAMDB.h/1.25/Tue Jul 30 09:41:24 2019//
 /CAGECorrection.cpp/1.2/Tue Jul 30 09:41:24 2019//
 /CAGECorrection.h/1.1/Tue Jul 30 09:41:24 2019//
 /CachePoint.cpp/1.14/Tue Jul 30 09:41:24 2019//
@@ -12,8 +10,6 @@
 /CalcFeatureSignificance.h/1.4/Tue Jul 30 09:41:24 2019//
 /CalcInterSubfeatures.cpp/1.7/Tue Jul 30 09:41:24 2019//
 /CalcInterSubfeatures.h/1.2/Tue Jul 30 09:41:24 2019//
-/CutoffFilter.cpp/1.12/Tue Jul 30 09:41:24 2019//
-/CutoffFilter.h/1.7/Tue Jul 30 09:41:24 2019//
 /DBStream.cpp/1.5/Tue Jul 30 09:41:24 2019//
 /DBStream.h/1.4/Tue Jul 30 09:41:24 2019//
 /DemultiplexSource.cpp/1.5/Wed Jun  7 06:55:17 2023//
@@ -32,10 +28,6 @@
 /FeatureEmitter.h/1.17/Tue Jul 30 09:41:24 2019//
 /FeatureLengthFilter.cpp/1.11/Mon Jul 25 07:37:10 2022//
 /FeatureLengthFilter.h/1.4/Mon Jul 25 07:37:10 2022//
-/FeatureRename.cpp/1.7/Tue Jul 30 09:41:24 2019//
-/FeatureRename.h/1.3/Tue Jul 30 09:41:24 2019//
-/FederatedSourceStream.cpp/1.92/Mon Jul 25 07:37:10 2022//
-/FederatedSourceStream.h/1.23/Tue Jul 30 09:41:24 2019//
 /FilterSubfeatures.cpp/1.3/Tue Jul 30 09:41:24 2019//
 /FilterSubfeatures.h/1.3/Tue Jul 30 09:41:24 2019//
 /FlipStrand.cpp/1.3/Tue Jul 30 09:41:24 2019//
@@ -53,8 +45,6 @@
 /MergeEdges.h/1.2/Mon Jul 25 07:37:10 2022//
 /MergeStreams.cpp/1.54/Mon Jul 25 07:37:10 2022//
 /MergeStreams.h/1.13/Tue Jul 30 09:41:24 2019//
-/MetadataFilter.cpp/1.8/Tue Jul 30 09:41:24 2019//
-/MetadataFilter.h/1.3/Tue Jul 30 09:41:24 2019//
 /MetadataManipulate.cpp/1.2/Tue Jul 30 09:41:24 2019//
 /MetadataManipulate.h/1.2/Tue Jul 30 09:41:24 2019//
 /MultiMergeStream.cpp/1.35/Mon Jul 25 07:37:10 2022//
@@ -67,8 +57,6 @@
 /NormalizePerMillion.h/1.2/Tue Jul 30 09:41:24 2019//
 /NormalizeRPKM.cpp/1.6/Tue Jul 30 09:41:24 2019//
 /NormalizeRPKM.h/1.3/Tue Jul 30 09:41:24 2019//
-/OSCFileDB.cpp/1.282/Mon Jul 25 07:37:10 2022//
-/OSCFileDB.h/1.56/Mon Jul 25 07:37:10 2022//
 /ObjectCount.cpp/1.8/Wed Jul 31 06:59:33 2019//
 /ObjectCount.h/1.4/Tue Jul 30 09:41:24 2019//
 /OverlapAnnotate.cpp/1.7/Tue Jul 30 09:41:24 2019//
@@ -97,8 +85,6 @@
 /SourceStream.h/1.32/Mon Jul 25 07:37:10 2022//
 /StrandFilter.cpp/1.1/Tue Jul 30 09:41:25 2019//
 /StrandFilter.h/1.1/Tue Jul 30 09:41:25 2019//
-/StreamBuffer.cpp/1.6/Tue Jul 30 09:41:25 2019//
-/StreamBuffer.h/1.5/Tue Jul 30 09:41:25 2019//
 /StreamSubfeatures.cpp/1.17/Tue Jul 30 09:41:25 2019//
 /StreamSubfeatures.h/1.9/Tue Jul 30 09:41:25 2019//
 /StreamTKs.cpp/1.9/Tue Jul 30 09:41:25 2019//
@@ -111,6 +97,28 @@
 /TopHits.h/1.2/Tue Jul 30 09:41:25 2019//
 /UniqueFeature.cpp/1.13/Tue Jul 30 09:41:25 2019//
 /UniqueFeature.h/1.8/Tue Jul 30 09:41:25 2019//
-/ZenDB.cpp/1.31/Mon Jul 25 07:37:10 2022//
-/ZenDB.h/1.7/Tue Jul 30 09:41:25 2019//
+/GapFilterAnnotate.cpp/1.5/Mon Mar 11 08:00:10 2024//
+/GapFilterAnnotate.h/1.3/Mon Mar 11 08:00:10 2024//
+/SamFlagFilter.cpp/1.1/Wed Dec 13 05:37:04 2023//
+/SamFlagFilter.h/1.1/Wed Dec 13 05:37:04 2023//
+/ZenDB.cpp/1.32/Mon Jun 10 03:34:12 2024//
+/ZenDB.h/1.8/Mon Jun 10 03:34:12 2024//
+/SubfeaturesToEdges.cpp/1.8/Thu Jul 20 07:18:26 2023//
+/SubfeaturesToEdges.h/1.7/Thu Jul 20 07:18:26 2023//
+/BAMDB.cpp/1.75/Fri Oct  4 03:53:48 2024//
+/BAMDB.h/1.27/Fri Oct  4 03:53:48 2024//
+/Limiter.cpp/1.1/Thu Aug  8 08:16:42 2024//
+/Limiter.h/1.1/Thu Aug  8 08:16:42 2024//
+/MetadataFilter.cpp/1.9/Fri Oct  4 03:53:48 2024//
+/MetadataFilter.h/1.4/Fri Oct  4 03:53:48 2024//
+/CutoffFilter.cpp/1.13/Wed Dec 11 04:55:01 2024//
+/CutoffFilter.h/1.8/Wed Dec 11 04:55:01 2024//
+/FeatureRename.cpp/1.8/Tue Sep  9 06:12:43 2025//
+/FeatureRename.h/1.4/Tue Sep  9 06:12:43 2025//
+/FederatedSourceStream.cpp/1.94/Tue Sep  9 06:12:43 2025//
+/FederatedSourceStream.h/1.25/Tue Sep  9 06:12:43 2025//
+/OSCFileDB.cpp/1.285/Tue Sep  9 06:12:43 2025//
+/OSCFileDB.h/1.57/Tue Sep  9 06:12:43 2025//
+/StreamBuffer.cpp/1.7/Tue Sep  9 06:12:43 2025//
+/StreamBuffer.h/1.6/Tue Sep  9 06:12:43 2025//
 D

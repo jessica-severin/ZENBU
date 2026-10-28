@@ -1,4 +1,4 @@
-/* $Id: FeatureRename.h,v 1.3 2017/10/24 07:18:49 severin Exp $ */
+/* $Id: FeatureRename.h,v 1.4 2025/07/30 08:56:29 severin Exp $ */
 
 /***
 
@@ -81,6 +81,7 @@ class FeatureRename : public EEDB::SPStream {
     bool               _source_name;
     bool               _location_name;
     string             _mdkey_format;
+    string             _mdata_source; //feature,featuresource where the metadata should be pulled from
 
     string             _nameFromMetadataKeys(EEDB::Feature *feature);
 

@@ -1,4 +1,4 @@
-/* $Id: Feature.cpp,v 1.322 2023/07/20 02:47:56 severin Exp $ */
+/* $Id: Feature.cpp,v 1.323 2024/09/09 07:32:04 severin Exp $ */
 
 /***
 
@@ -492,11 +492,11 @@ void EEDB::Feature::_xml_start(string &xml_buffer) {
   xml_buffer.append(" >");
   
   //change XML from version 1.xxx this is better and faster
-  if(chrom())          { xml_buffer+="\n"; _chrom->simple_xml(xml_buffer); }
+  if(chrom())          { xml_buffer+="\n  "; _chrom->simple_xml(xml_buffer); }
 
   //for now I need to leave this in. the jscript is still not
   //smart enough to efficiently connect external featuresources 2012-05-29
-  if(feature_source()) { xml_buffer+="\n"; _feature_source->simple_xml(xml_buffer); }
+  if(feature_source()) { xml_buffer+="\n  "; _feature_source->simple_xml(xml_buffer); }
 }
 
 

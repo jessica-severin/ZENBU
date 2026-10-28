@@ -1,4 +1,4 @@
-/* $Id: CutoffFilter.cpp,v 1.12 2018/11/16 07:54:45 severin Exp $ */
+/* $Id: CutoffFilter.cpp,v 1.13 2024/10/18 05:13:49 severin Exp $ */
 
 /***
 
@@ -194,13 +194,29 @@ MQDB::DBObject* EEDB::SPStreams::CutoffFilter::_next_in_stream() {
   MQDB::DBObject *obj;
   while((obj = _source_stream->next_in_stream()) != NULL) {
 
-    //non-feature objects are just passed through this module      
-    if(obj->classname() != EEDB::Feature::class_name) {
+    if(obj->classname() == EEDB::Feature::class_name) {
+      EEDB::Feature *feature = (EEDB::Feature*)obj;
+      if(_filter_feature(feature)) { return obj; }
+    }
+    else if(obj->classname() == EEDB::Edge::class_name) {
+      EEDB::Edge *edge = (EEDB::Edge*)obj;
+      if(_filter_edge(edge)) { return obj; }
+    } else {
+      //non-feature/edge objects are just passed through this module      
       return obj;
     }
     
-    EEDB::Feature *feature = (EEDB::Feature*)obj;
-    
+    //failed to pass filter so release and continue
+    obj->release();
+  }
+
+  // input stream is empty so done
+  return NULL;
+}
+
+
+bool  EEDB::SPStreams::CutoffFilter::_filter_feature(EEDB::Feature* feature) {
+    if(!feature) { return false; }
     bool ok=true;
     if(_filter_mode == EXPERIMENT) {
       //filter on experiment expression. apply to the experiment/expression by zero-out the expression value
@@ -232,14 +248,41 @@ MQDB::DBObject* EEDB::SPStreams::CutoffFilter::_next_in_stream() {
       if(_apply_max_cutoff && (feature->significance() > _max_cutoff)) { ok=false; }
     }
     
-    if(ok) { return feature; }
+    return ok;
+}
     
-    //continue
-    obj->release();
-  }
 
-  // input stream is empty so done
-  return NULL;
+bool  EEDB::SPStreams::CutoffFilter::_filter_edge(EEDB::Edge* edge) {
+  if(!edge) { return false; }
+  bool ok=true;
+  //filter on edge edgeweight
+  ok=true;
+  if(_filter_by_experiment) {
+    //filter on experiment edgeweight. at least one experiment/weight must be OK
+    vector<EEDB::EdgeWeight*>  weights = edge->edgeweight_array();
+    for(unsigned int i=0; i<weights.size(); i++) {
+      //maybe do a datatype filter here
+      ok=true;
+      double expr = weights[i]->weight();        
+      if(_apply_min_cutoff && expr < _min_cutoff) { ok=false; }
+      if(_apply_max_cutoff && expr > _max_cutoff) { ok=false; }
+      if(ok) { break; }  //found first valid experiment/edgeweight so features is OK
+    }
+  }
+  if(!_filter_by_experiment) {
+    //filter on edge total_weight, first need to calculate as simple sum
+    vector<EEDB::EdgeWeight*>  weights = edge->edgeweight_array();
+    double weight_total = 0;
+    for(unsigned int i=0; i<weights.size(); i++) {
+      double expr = weights[i]->weight();
+      weight_total += expr;
+    }
+    ok=true;
+    if(_apply_min_cutoff && (weight_total < _min_cutoff)) { ok=false; }
+    if(_apply_max_cutoff && (weight_total > _max_cutoff)) { ok=false; }
+  }
+  
+  return ok;
 }
 
 

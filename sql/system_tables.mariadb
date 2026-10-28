@@ -274,7 +274,7 @@ CREATE TABLE IF NOT EXISTS `configuration` (
   `user_id`          int(11) default -1,
   `uuid`             char(64) NOT NULL default '',
   `fixed_id`         varchar(128),
-  `config_type`      enum('VIEW','TRACK','SCRIPT','AUTOSAVE') NOT NULL default 'VIEW',
+  `config_type`      enum('VIEW','TRACK','SCRIPT','AUTOSAVE','REPORT') NOT NULL default 'VIEW',
   `collaboration_id` int(11) default -1,
   `access_count`     int(11)  NOT NULL default 1,
   `create_date`      datetime default NULL,

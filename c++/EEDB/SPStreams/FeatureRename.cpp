@@ -1,4 +1,4 @@
-/* $Id: FeatureRename.cpp,v 1.7 2018/09/20 06:21:51 severin Exp $ */
+/* $Id: FeatureRename.cpp,v 1.8 2025/07/30 08:56:29 severin Exp $ */
 
 /***
 
@@ -111,6 +111,7 @@ void EEDB::SPStreams::FeatureRename::init() {
 
   _source_name   = true;
   _location_name = false;
+  _mdata_source  = "feature";
 }
 
 
@@ -129,6 +130,7 @@ void EEDB::SPStreams::FeatureRename::_xml(string &xml_buffer) {
   if(!_mdkey_format.empty()) {
     xml_buffer += "<mdkey_format>" +_mdkey_format+ "</mdkey_format>";
   }
+  xml_buffer += "<mdata_source>"+_mdata_source+"</mdata_source>";
   
   _xml_end(xml_buffer);  //from superclass
 }
@@ -153,6 +155,10 @@ EEDB::SPStreams::FeatureRename::FeatureRename(void *xml_node) {
 
   if((node = root_node->first_node("mdkey_format")) != NULL) {
     _mdkey_format = node->value();
+  }
+  if((node = root_node->first_node("mdata_source")) != NULL) {
+    _mdata_source = node->value();
+    fprintf(stderr, "FeatureRename using mdata_source: %s\n", _mdata_source.c_str());
   }
 }
 
@@ -190,7 +196,11 @@ MQDB::DBObject* EEDB::SPStreams::FeatureRename::_next_in_stream() {
         name += feature->chrom_location();
       }
       
-      if(!name.empty()) { feature->primary_name(name); }
+      if(!name.empty()) { 
+        //fprintf(stderr, "change feature name: %s\n", name.c_str());
+        feature->metadataset()->remove_metadata_like("eedb:display_name", "");
+        feature->primary_name(name);
+      }
       
       return feature;
 
@@ -208,8 +218,13 @@ string EEDB::SPStreams::FeatureRename::_nameFromMetadataKeys(EEDB::Feature *feat
   string name = feature->primary_name(); //set default
   if(_mdkey_format.empty()) { return name; }  //return the old primary_name (no change)
 
-  if(feature->metadataset()->count() ==0 ) { return name; }
   EEDB::MetadataSet *mdset = feature->metadataset();
+  if(_mdata_source=="featuresource") { 
+    mdset = feature->feature_source()->metadataset();
+    //fprintf(stderr, "%s\n", mdset->xml().c_str());
+  }
+  if(!mdset) { return name; }
+  if(mdset->count() ==0 ) { return name; }
   
   //finite state machine parser
   name = "";
@@ -242,6 +257,7 @@ string EEDB::SPStreams::FeatureRename::_nameFromMetadataKeys(EEDB::Feature *feat
             if(!md1) { continue; }
             if(!name.empty()) { name += " "; }
             name += md1->data();
+            //fprintf(stderr, "mdkey[%s] value[%s]\n", mdkey.c_str(), md1->data().c_str());
           }
         }
         mdkey = "";
@@ -253,6 +269,7 @@ string EEDB::SPStreams::FeatureRename::_nameFromMetadataKeys(EEDB::Feature *feat
         if(c1=='\"') {
           if(!name.empty()) { name += " "; }
           name += mdkey;
+          //fprintf(stderr, "quoted string [%s]\n", mdkey.c_str());
           mdkey = "";
           pos++;
           state = 1;
@@ -267,7 +284,7 @@ string EEDB::SPStreams::FeatureRename::_nameFromMetadataKeys(EEDB::Feature *feat
         break;
     }
   }
-  
+  //fprintf(stderr, "new md name: %s\n", name.c_str());
   //feature->primary_name(name);
   return name;
 }

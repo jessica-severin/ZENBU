@@ -1,4 +1,4 @@
-/* $Id: CutoffFilter.h,v 1.7 2018/11/16 07:54:45 severin Exp $ */
+/* $Id: CutoffFilter.h,v 1.8 2024/10/18 05:13:49 severin Exp $ */
 
 /***
 
@@ -58,6 +58,8 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <string>
 #include <vector>
 #include <EEDB/SPStream.h>
+#include <EEDB/Feature.h>
+#include <EEDB/Edge.h>
 
 using namespace std;
 using namespace MQDB;
@@ -88,7 +90,10 @@ class CutoffFilter : public EEDB::SPStream {
     bool             _apply_min_cutoff;
     bool             _apply_max_cutoff;
     bool             _filter_by_experiment;
-    enum { FEATURE, EXPERIMENT} _filter_mode;
+    enum { FEATURE, EDGE, EXPERIMENT} _filter_mode;
+    
+    bool             _filter_edge(EEDB::Edge* edge);
+    bool             _filter_feature(EEDB::Feature* feature);
     
 
   //used for callback functions, should not be considered open API

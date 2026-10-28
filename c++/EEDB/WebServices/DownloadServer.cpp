@@ -1,4 +1,4 @@
-/* $Id: DownloadServer.cpp,v 1.3 2019/07/31 06:59:15 severin Exp $ */
+/* $Id: DownloadServer.cpp,v 1.4 2026/08/20 05:13:47 severin Exp $ */
 
 /***
 
@@ -80,6 +80,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <EEDB/SPStreams/MultiMergeStream.h>
 #include <EEDB/SPStreams/OSCFileDB.h>
 #include <EEDB/SPStreams/BAMDB.h>
+#include <EEDB/SPStreams/BigWigDB.h>
 #include <EEDB/ZDX/ZDXstream.h>
 #include <EEDB/WebServices/DownloadServer.h>
 
@@ -417,6 +418,15 @@ void EEDB::WebServices::DownloadServer::download_single_file() {
       bamdb->path_to_bam_file(local_path, filename);
       filesize = bamdb->source_file_size();
       md5sum = bamdb->source_md5sum();
+      //printf("%s\n", primary_source->xml().c_str());
+    }
+    else if(sourcestream->classname() == EEDB::SPStreams::BigWigDB::class_name) {
+      EEDB::SPStreams::BigWigDB *bigwigdb = (EEDB::SPStreams::BigWigDB*)sourcestream;
+      //printf("<note>peer is BigWigDB</note>\n");
+      primary_source = bigwigdb->experiment();
+      bigwigdb->path_to_bigwig_file(local_path, filename);
+      filesize = bigwigdb->source_file_size();
+      md5sum = bigwigdb->source_md5sum();
       //printf("%s\n", primary_source->xml().c_str());
     }
     else if(sourcestream->classname() == EEDB::ZDX::ZDXstream::class_name) {

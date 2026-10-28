@@ -1,4 +1,4 @@
-/* $Id: RegionServer.h,v 1.57 2019/03/26 07:05:39 severin Exp $ */
+/* $Id: RegionServer.h,v 1.58 2024/09/09 07:25:57 severin Exp $ */
 
 /***
 
@@ -166,6 +166,7 @@ namespace WebServices {
     vector<string>                     _get_track_uuid_datasource_ids(string track_uuid);
     EEDB::SPStream*                    _append_expression_histogram_binning(EEDB::SPStream *stream);
     void                               _direct_show_region();
+    void                               _show_dependent_edges(EEDB::SPStream* stream, map<string, EEDB::Feature*> fid_hash);
     bool                               _trackcache_show_region();
     bool                               _build_trackcache_chroms();
     string                             _generate_configXML(EEDB::SPStream* script_stream);

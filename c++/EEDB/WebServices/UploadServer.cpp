@@ -1,4 +1,4 @@
-/* $Id: UploadServer.cpp,v 1.57 2022/04/08 02:03:18 severin Exp $ */
+/* $Id: UploadServer.cpp,v 1.59 2026/08/20 05:13:47 severin Exp $ */
 
 /***
 
@@ -82,6 +82,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <EEDB/SPStreams/RemoteServerStream.h>
 #include <EEDB/SPStreams/OSCFileDB.h>
 #include <EEDB/SPStreams/BAMDB.h>
+#include <EEDB/SPStreams/BigWigDB.h>
 #include <EEDB/JobQueue/Job.h>
 #include <EEDB/WebServices/UploadServer.h>
 
@@ -923,6 +924,9 @@ void  EEDB::WebServices::UploadServer::clear_failed_jobs() {
     }
     
     const char* sql ="update job set starttime=0 where status='FAILED' and (UNIX_TIMESTAMP()-UNIX_TIMESTAMP(starttime))/(24*60*60)<=1.0 and user_id=?";
+    if(_userDB->driver()=="sqlite") {
+      sql = "update job set starttime=0 where status='FAILED' and (unixepoch('now')-unixepoch(starttime))/(24*60*60)<=1.0 and user_id=?";
+    }
     _userDB->do_sql(sql, "d", _user_profile->primary_id());
 
   }

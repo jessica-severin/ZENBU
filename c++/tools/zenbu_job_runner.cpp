@@ -1,4 +1,4 @@
-/* $Id: zenbu_job_runner.cpp,v 1.19 2018/09/20 06:00:59 severin Exp $ */
+/* $Id: zenbu_job_runner.cpp,v 1.21 2026/03/12 05:52:48 severin Exp $ */
 
 /****
  
@@ -228,6 +228,9 @@ void  run_job_from_queue() {
   long job_id = jobXML.i_int;
   
   sql = "UPDATE job SET status='RUN', host=?, process_id=?, starttime=NOW() WHERE job_id=?";
+  if(userDB->driver()=="sqlite") {
+    sql = "UPDATE job SET status='RUN', host=?, process_id=?, starttime=datetime('now') WHERE job_id=?";
+  }
   userDB->do_sql(sql, "sdd", host, pid, job_id);
   
   bool rtn=false;
@@ -246,9 +249,15 @@ void  run_job_from_queue() {
   
   if(rtn) {
     sql = "UPDATE job SET status='DONE', completed=NOW(), runtime=UNIX_TIMESTAMP()-UNIX_TIMESTAMP(starttime) WHERE job_id=?";
+    if(userDB->driver()=="sqlite") {
+      sql = "UPDATE job SET status='DONE', completed=datetime('now'), runtime=unixepoch('now')-unixepoch(starttime) WHERE job_id=?";
+    }
     userDB->do_sql(sql, "d", job_id);
   } else {
     sql = "UPDATE job SET status='FAILED', completed=NOW() WHERE job_id=?";
+    if(userDB->driver()=="sqlite") {
+      sql = "UPDATE job SET status='FAILED', completed=datetime('now') WHERE job_id=?";
+    }
     userDB->do_sql(sql, "d", job_id);
   }
   
@@ -270,6 +279,9 @@ void  run_job_id(long job_id) {
 
   //forces job to reset and run
   const char *sql = "UPDATE job SET job_claim=?, status='RUN', host=?, process_id=?, starttime=NOW() WHERE job_id=?";
+  if(userDB->driver()=="sqlite") {
+    sql = "UPDATE job SET job_claim=?, status='RUN', host=?, process_id=?, starttime=datetime('now') WHERE job_id=?";
+  }
   userDB->do_sql(sql, "ssdd", claim_uuid.c_str(), host, pid, job_id);
     
   bool rtn=false;
@@ -288,6 +300,9 @@ void  run_job_id(long job_id) {
   
   if(rtn) {
     sql = "UPDATE job SET status='DONE', completed=NOW(), runtime=UNIX_TIMESTAMP()-UNIX_TIMESTAMP(starttime) WHERE job_id=?";
+    if(userDB->driver()=="sqlite") {
+      sql = "UPDATE job SET status='DONE', completed=datetime('now'), runtime=unixepoch('now')-unixepoch(starttime) WHERE job_id=?";
+    }
     userDB->do_sql(sql, "d", job_id);
   } else {
     sql = "UPDATE job SET status='FAILED' WHERE job_id=?";
@@ -326,6 +341,9 @@ void reset_zombie_jobs() {
     stmt = userDB->prepare_fetch_sql(sql, "d", jobid);
   } else {
     sql = "select job_id, host, process_id, starttime from (select *, (UNIX_TIMESTAMP() - UNIX_TIMESTAMP(starttime)) tm from job where host=? and status =\"RUN\")t where tm > 60*5;";
+    if(userDB->driver()=="sqlite") {
+      sql = "select job_id, host, process_id, starttime from (select *, (unixepoch('now')-unixepoch(starttime)) tm from job where host=? and status ='RUN')t where tm > 60*5;";
+    }
     stmt = userDB->prepare_fetch_sql(sql, "s", host);
   }
   //void *stmt = userDB->prepare_fetch_sql(sql, "s", host);
@@ -379,6 +397,9 @@ void reset_zombie_jobs() {
     if((value.type == MQDB::INT) && (value.i_int >=5)) { 
       fprintf(stderr, "job [%ld] retry exceeded max (%ld >= 5), FAILING\n",  jobID, value.i_int);
       sql = "UPDATE job SET status='FAILED', completed=NOW() WHERE job_id=?";
+      if(userDB->driver()=="sqlite") {
+        sql = "UPDATE job SET status='FAILED', completed=datetime('now') WHERE job_id=?";
+      }
       userDB->do_sql(sql, "d", jobID);
     } else {
       sql = "UPDATE job SET status='READY', job_claim='', retry_count=retry_count+1 where job_id=?";

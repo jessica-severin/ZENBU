@@ -1,4 +1,4 @@
-/* $Id: UserSystem.cpp,v 1.126 2023/02/17 07:21:27 severin Exp $ */
+/* $Id: UserSystem.cpp,v 1.128 2026/08/20 05:13:47 severin Exp $ */
 
 /***
 
@@ -83,6 +83,7 @@ The rest of the documentation details each of the object methods. Internal metho
 #include <EEDB/SPStreams/Proxy.h>
 #include <EEDB/SPStreams/OSCFileDB.h>
 #include <EEDB/SPStreams/BAMDB.h>
+#include <EEDB/SPStreams/BigWigDB.h>
 #include <EEDB/TrackRequest.h>
 #include <EEDB/TrackCache.h>
 #include <EEDB/WebServices/UserSystem.h>
@@ -866,7 +867,6 @@ void  EEDB::WebServices::UserSystem::send_password_reset_email() {
   string email = _parameters["profile_email"];
   EEDB::User *user = EEDB::User::fetch_by_email(_userDB, email);
   if(!user) {
-    user->release();
     _processing_error = "user not found";
     return show_user();
   }
@@ -1924,6 +1924,10 @@ void EEDB::WebServices::UserSystem::source_search_edit_metadata() {
       EEDB::SPStreams::BAMDB *bamdb = (EEDB::SPStreams::BAMDB*)sourcestream;
       if(!bamdb->save_xmldb()) { fprintf(stderr, "BAMDB save error\n"); }
     }
+    else if(sourcestream->classname() == EEDB::SPStreams::BigWigDB::class_name) {
+      EEDB::SPStreams::BigWigDB *bigwigdb = (EEDB::SPStreams::BigWigDB*)sourcestream;
+      if(!bigwigdb->save_xmldb()) { fprintf(stderr, "BigWigDB save error\n"); }
+    }
     else if(sourcestream->classname() == EEDB::ZDX::ZDXstream::class_name) {
       EEDB::ZDX::ZDXstream *zdxstream = (EEDB::ZDX::ZDXstream*)sourcestream;
       if(!zdxstream->write_source_section()) { fprintf(stderr, "ZDXDB save error\n"); }
@@ -2077,6 +2081,10 @@ void EEDB::WebServices::UserSystem::save_mdata_edits(MQDB::DBObject *obj) {
   else if(sourcestream->classname() == EEDB::SPStreams::BAMDB::class_name) {
     EEDB::SPStreams::BAMDB *bamdb = (EEDB::SPStreams::BAMDB*)sourcestream;
     if(bamdb->save_xmldb()) { return; }
+  }
+  else if(sourcestream->classname() == EEDB::SPStreams::BigWigDB::class_name) {
+    EEDB::SPStreams::BigWigDB *bigwigdb = (EEDB::SPStreams::BigWigDB*)sourcestream;
+    if(bigwigdb->save_xmldb()) { return; }
   }
   else if(sourcestream->classname() == EEDB::ZDX::ZDXstream::class_name) {
     EEDB::ZDX::ZDXstream *zdxstream = (EEDB::ZDX::ZDXstream*)sourcestream;

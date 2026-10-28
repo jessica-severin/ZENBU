@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
   }
   peer = EEDB::Peer::new_from_url(_parameters["db_url"]);
   if(!peer) {
-    printf("\nERROR: unable to connect to peer [%s]!!\n\n", _parameters["db_url"].c_str());
+    printf("\nERROR: unable to connect to url [%s]!!\n\n", _parameters["db_url"].c_str());
     usage(); 
   }
   if(_new_peer) {
@@ -148,6 +148,7 @@ int main(int argc, char *argv[]) {
     relocate_peer(peer);
   }
   if(!peer->is_valid()) {
+    printf("peer::\n   %s\n", peer->xml().c_str());
     fprintf(stderr, "\nERROR: peer [%s] is not valid\n", peer->db_url().c_str());
     printf("must make new internal peer ( -newpeer ) before can register!!\n\n");
     usage();     

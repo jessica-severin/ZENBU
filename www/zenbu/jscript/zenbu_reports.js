@@ -269,6 +269,8 @@ function reportsParseURL(urlConfig) {
   //location, and then reconfigures the view.  But it does not execute a reload/redraw
 
   //if(!urlConfig && zenbu_embedded_view) { return; }
+  if(reportsInitParams.disableURL) { return; }
+
   console.log("reportsParseURL ["+urlConfig+"]")
   if(!urlConfig) {
     reportsLoadPageFromConfig(null); //null will cause a clean reset
@@ -355,6 +357,7 @@ function reportsHandleHistoryChange() {
 
 function reportsChangeDhtmlHistoryLocation() {
   //if(zenbu_embedded_view) { return; }
+  if(reportsInitParams.disableURL) { return; }
   var urlID = current_report.configUUID;
   if(current_report.config_fixed_id) { urlID = current_report.config_fixed_id;}
   var newurl = "#"+urlID;
@@ -882,6 +885,7 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
   reportElement.title_prefix = "";  
   reportElement.title_load_filter = false;
   reportElement.title_focus_feature = false;
+  reportElement.description_tooltip = false;
   //reportElement.resetable = false;
   
   if(elementDOM.getAttribute("main_div_id")) {  reportElement.main_div_id = elementDOM.getAttribute("main_div_id"); }
@@ -889,6 +893,7 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("title_prefix")) {  reportElement.title_prefix = elementDOM.getAttribute("title_prefix"); }
   if(elementDOM.getAttribute("title_focus_feature") == "true") { reportElement.title_focus_feature = true; }
   if(elementDOM.getAttribute("title_load_filter") == "true") { reportElement.title_load_filter = true; }
+  if(elementDOM.getAttribute("description_tooltip") == "true") { reportElement.description_tooltip = true; }
 
   if(elementDOM.getAttribute("datasource_mode")) {  reportElement.datasource_mode = elementDOM.getAttribute("datasource_mode"); }
   if(elementDOM.getAttribute("datasource_submode")) {  reportElement.datasource_submode = elementDOM.getAttribute("datasource_submode"); }
@@ -932,6 +937,9 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("content_width")) {  reportElement.content_width = parseInt(elementDOM.getAttribute("content_width")); }
   if(elementDOM.getAttribute("content_height")) {  reportElement.content_height = parseInt(elementDOM.getAttribute("content_height")); }
   if(elementDOM.getAttribute("auto_content_height") == "true") { reportElement.auto_content_height = true; }
+  
+  //if(reportElement.layout_xpos<0) { reportElement.layout_xpos=0; }
+  //if(reportElement.layout_ypos<0) { reportElement.layout_ypos=0; }
 
   if(elementDOM.getAttribute("assembly_name")) { reportElement.assembly_name = elementDOM.getAttribute("assembly_name"); }
 
@@ -942,6 +950,11 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
   if(elementDOM.getAttribute("signal_invert")) { reportElement.signal_invert = elementDOM.getAttribute("signal_invert"); }
   if(elementDOM.getAttribute("signal_min")) { reportElement.signal_min = elementDOM.getAttribute("signal_min"); }
   if(elementDOM.getAttribute("signal_max")) { reportElement.signal_max = elementDOM.getAttribute("signal_max"); }
+
+  var desc = elementDOM.getElementsByTagName("description")[0];
+  if(desc) {
+    reportElement.description = desc.firstChild.nodeValue;
+  }
 
   //general subclass method
   if(reportElement.initFromConfigDOM) {
@@ -1011,8 +1024,13 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
     if(colDOM.getAttribute("colnum")) { t_col.colnum = parseInt(colDOM.getAttribute("colnum")); }
     if(colDOM.getAttribute("signal_order")) { t_col.signal_order = parseInt(colDOM.getAttribute("signal_order")); }
     if(colDOM.getAttribute("col_type")) { t_col.col_type = colDOM.getAttribute("col_type"); }
+    //backward compatibility to convert location columns to new col_type
+    if(datatype.match(/location_string$/) || datatype.match(/location_link$/) ||
+       datatype.match(/chrom_name$/) || datatype.match(/chrom_start$/) ||
+       datatype.match(/chrom_end$/) || datatype.match(/chrom_strand$/)) { t_col.col_type = "location";}
 
     if(colDOM.getAttribute("user_modifiable") == "true") { t_col.user_modifiable = true; } else { t_col.user_modifiable = false; }
+    if(colDOM.getAttribute("minuslog_transform") == "true") { t_col.minuslog_transform = true; } else { t_col.minuslog_transform = false; }
     if(colDOM.getAttribute("visible") == "true") { t_col.visible = true; } else { t_col.visible = false; }
     if(colDOM.getAttribute("filtered") == "true") { t_col.filtered = true; } else { t_col.filtered = false; }
     if(colDOM.getAttribute("filter_abs") == "true") { t_col.filter_abs = true; } else { t_col.filter_abs = false; }
@@ -1029,8 +1047,9 @@ function reportsCreateElementFromConfigDOM(elementDOM) {
       if(t_col.filter_max != "max") { t_col.filter_max = parseFloat(t_col.filter_max); }
     }
     if(colDOM.getAttribute("highlight_color")) { t_col.highlight_color = colDOM.getAttribute("highlight_color"); }
+    if(colDOM.getAttribute("description")) { t_col.description = colDOM.getAttribute("description"); }
     
-    if(t_col.filtered && (t_col.col_type == "mdata")) {
+    if(t_col.filtered && (t_col.col_type == "mdata" || t_col.col_type == "location")) {
       //parse categories for mdata filters
       var ctgDOMs = colDOM.getElementsByTagName("md_category");
       for(var k=0; k<ctgDOMs.length; k++) {
@@ -1214,7 +1233,8 @@ function reportsGenerateElementDOM(reportElement) {
   if(reportElement.title_prefix) { elementDOM.setAttribute("title_prefix", reportElement.title_prefix); }
   if(reportElement.title_focus_feature) { elementDOM.setAttribute("title_focus_feature", "true"); }
   if(reportElement.title_load_filter) { elementDOM.setAttribute("title_load_filter", "true"); }
-  
+  if(reportElement.description_tooltip) { elementDOM.setAttribute("description_tooltip", "true"); }
+    
   if(reportElement.datasource_mode) { elementDOM.setAttribute("datasource_mode", reportElement.datasource_mode); } //feature, edge, shared_element
   if(reportElement.datasource_submode) { elementDOM.setAttribute("datasource_submode", reportElement.datasource_submode); } //feature, edge, shared_element
   if(reportElement.datasourceElementID) { elementDOM.setAttribute("datasourceElementID", reportElement.datasourceElementID); }  //for shared_element mode
@@ -1270,6 +1290,11 @@ function reportsGenerateElementDOM(reportElement) {
   if(reportElement.signal_min) { elementDOM.setAttribute("signal_min", reportElement.signal_min); }
   if(reportElement.signal_max) { elementDOM.setAttribute("signal_max", reportElement.signal_max); }
 
+  if(reportElement.description) {
+    var desc = elementDOM.appendChild(doc.createElement("description"));
+    desc.appendChild(doc.createTextNode(reportElement.description));
+  }
+
   //dtype_columns
   if(reportElement.datatypes) {
     for(var dtype in reportElement.datatypes) {
@@ -1291,11 +1316,13 @@ function reportsGenerateElementDOM(reportElement) {
       if(dtype_col.filtered) { colDoc.setAttribute("filtered", "true"); }
       if(dtype_col.filter_abs) { colDoc.setAttribute("filter_abs", "true"); }
       if(dtype_col.user_modifiable) { colDoc.setAttribute("user_modifiable", "true"); }
+      if(dtype_col.minuslog_transform) { colDoc.setAttribute("minuslog_transform", "true"); }
       if(dtype_col.signal_active) { colDoc.setAttribute("signal_active", "true"); }
       
       if(dtype_col.highlight_color) { colDoc.setAttribute("highlight_color", dtype_col.highlight_color); }
+      if(dtype_col.description) { colDoc.setAttribute("description", dtype_col.description); }
 
-      if(dtype_col.filtered && (dtype_col.col_type == "mdata") && dtype_col.categories) {
+      if(dtype_col.filtered && (dtype_col.col_type == "mdata" || dtype_col.col_type == "location") && dtype_col.categories) {
         //need to save categories for mdata filters
         for(var ctg in dtype_col.categories) {
           var ctg_obj = dtype_col.categories[ctg];
@@ -2951,6 +2978,7 @@ function reportsSendElementXHR(xhrObj) {
   //xhr.setRequestHeader("Content-length", xhrObj.paramXML.length);
   //xhr.setRequestHeader("Content-encoding", "x-compress, x-gzip, gzip");
   //xhr.setRequestHeader("Connection", "close");
+  //console.log(xhrObj.paramXML);
   xhr.send(xhrObj.paramXML);
 }
 
@@ -3155,8 +3183,18 @@ function reportsParseElementData(reportElement, xhrObj) {
     }
   }
   
+  //pull the top level feature/edges into arrays. don't use the getElementsByTagName since it also pulls internal objects
+  var features = [];
+  var edges = [];
+  var children = xmlDoc.childNodes;
+  for (var i = 0; i < children.length; i++) {
+    var objectXML = children[i];
+    if(objectXML.tagName == "feature") { features.push(objectXML); }
+    if(objectXML.tagName == "edge") { edges.push(objectXML);; }
+  }
+  
   //read the features
-  var features = xmlDoc.getElementsByTagName("feature");
+  //var features = xmlDoc.getElementsByTagName("feature");
   var dtype_score = null;
   var dtype_name = null;
   var dtype_category = null;
@@ -3169,14 +3207,22 @@ function reportsParseElementData(reportElement, xhrObj) {
       reportElementAddDatatypeColumn(reportElement, "f1.name", "name");
       reportElementAddDatatypeColumn(reportElement, "f1.category", "category");
       reportElementAddDatatypeColumn(reportElement, "f1.source_name", "source_name");
-      reportElementAddDatatypeColumn(reportElement, "f1.location_link", "location");
-      reportElementAddDatatypeColumn(reportElement, "f1.location_string", "location");
-      
+      reportElementAddDatatypeColumn(reportElement, "f1.location_link", "location", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f1.location_string", "location", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f1.chrom_name", "chrom_name", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f1.chrom_start", "chrom_start", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f1.chrom_end", "chrom_end", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f1.chrom_strand", "chrom_strand", false, "location");
+
       reportElementAddDatatypeColumn(reportElement, "f2.name", "name");
       reportElementAddDatatypeColumn(reportElement, "f2.category", "category");
       reportElementAddDatatypeColumn(reportElement, "f2.source_name", "source_name");
-      reportElementAddDatatypeColumn(reportElement, "f2.location_link", "location");
-      reportElementAddDatatypeColumn(reportElement, "f2.location_string", "location");
+      reportElementAddDatatypeColumn(reportElement, "f2.location_link", "location", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f2.location_string", "location", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f2.chrom_name", "chrom_name", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f2.chrom_start", "chrom_start", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f2.chrom_end", "chrom_end", false, "location");
+      reportElementAddDatatypeColumn(reportElement, "f2.chrom_strand", "chrom_strand", false, "location");
     }
   }
 
@@ -3185,7 +3231,7 @@ function reportsParseElementData(reportElement, xhrObj) {
     var feature = eedbParseFeatureFullXML(featureDOM);
     if(!feature) { continue; }
     feature.filter_valid = true;
-    feature.search_match = false;
+    feature.search_match = true;
     feature.f1_edge_count = 0;
     feature.f2_edge_count = 0;
 
@@ -3225,8 +3271,12 @@ function reportsParseElementData(reportElement, xhrObj) {
         dtype_source_name = reportElementAddDatatypeColumn(reportElement, "source_name", "source_name"); 
       }
       if(!dtype_location_string && feature.chromloc) {
-        dtype_location_link = reportElementAddDatatypeColumn(reportElement, "location_link", "location");
-        dtype_location_string = reportElementAddDatatypeColumn(reportElement, "location_string", "location"); 
+        dtype_location_link = reportElementAddDatatypeColumn(reportElement, "location_link", "location", false, "location");
+        dtype_location_string = reportElementAddDatatypeColumn(reportElement, "location_string", "location", false, "location");
+        reportElementAddDatatypeColumn(reportElement, "chrom_name", "chrom_name", false, "location");
+        reportElementAddDatatypeColumn(reportElement, "chrom_start", "chrom_start", false, "location");
+        reportElementAddDatatypeColumn(reportElement, "chrom_end", "chrom_end", false, "location");
+        reportElementAddDatatypeColumn(reportElement, "chrom_strand", "chrom_strand", false, "location");
       }
       for(var tag in feature.mdata) { //new common mdata[].array system
         if(tag=="keyword") { continue; }
@@ -3238,6 +3288,10 @@ function reportsParseElementData(reportElement, xhrObj) {
         if(!dtype_score) {
           dtype_score = reportElementAddDatatypeColumn(reportElement, "bedscore", "bedscore");
           dtype_score.col_type = "signal";
+        }
+        if(dtype_score.minuslog_transform) {
+          //if(!feature.score_orig) { feature.score_orig = feature.score; }
+          if(feature.score != 0) { feature.score = -1 * Math.log10(feature.score); }
         }
         if((dtype_score.min_val == 0) && (dtype_score.max_val == 0)) {
           dtype_score.min_val = feature.score;
@@ -3255,6 +3309,10 @@ function reportsParseElementData(reportElement, xhrObj) {
           if(!dtype) { continue; }
           var dtype_col = reportElementAddDatatypeColumn(reportElement, dtype, dtype);
           dtype_col.col_type = "signal";
+          if(dtype_col.minuslog_transform) {
+            //if(!expr.total_orig) { expr.total_orig = expr.total; }
+            if(expr.total != 0) { expr.total = -1 * Math.log10(expr.total); }
+          }
           //console.log("feature_expression "+dtype+" total="+expr.total);
           if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
             dtype_col.min_val = expr.total;
@@ -3286,12 +3344,12 @@ function reportsParseElementData(reportElement, xhrObj) {
   //document.getElementById("message").innerHTML += " read "+ reportElement.sources_array.length +" sources,";
 
   //read the edges
-  var edges = xmlDoc.getElementsByTagName("edge");
+  //var edges = xmlDoc.getElementsByTagName("edge");
   for(var i=0; i<edges.length; i++) {
     var edgeDOM  = edges[i];
     var edge     = eedbParseEdgeXML(edgeDOM);
     edge.filter_valid = true;
-    edge.search_match = false;
+    edge.search_match = true;
     //connect datasource and features
     if(reportElement.datasources[edge.source_id]) { 
       edge.source = reportElement.datasources[edge.source_id];
@@ -3314,6 +3372,10 @@ function reportsParseElementData(reportElement, xhrObj) {
           var dtype = "f1."+expr.datatype;
           var dtype_col = reportElementAddDatatypeColumn(reportElement, dtype, expr.datatype);
           dtype_col.col_type = "signal";
+          if(dtype_col.minuslog_transform) {
+            //if(!expr.total_orig) { expr.total_orig = expr.total; }
+            if(expr.total != 0) { expr.total = -1 * Math.log10(expr.total); }
+          }          
           if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
             dtype_col.min_val = expr.total;
             dtype_col.max_val = expr.total;
@@ -3342,6 +3404,10 @@ function reportsParseElementData(reportElement, xhrObj) {
           var dtype = "f2."+expr.datatype;
           var dtype_col = reportElementAddDatatypeColumn(reportElement, dtype, expr.datatype);
           dtype_col.col_type = "signal";
+          if(dtype_col.minuslog_transform) {
+            //if(!expr.total_orig) { expr.total_orig = expr.total; }
+            if(expr.total != 0) { expr.total = -1 * Math.log10(expr.total); }
+          }          
           if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
             dtype_col.min_val = expr.total;
             dtype_col.max_val = expr.total;
@@ -3357,12 +3423,20 @@ function reportsParseElementData(reportElement, xhrObj) {
       if(!weights) { continue; }
       var dtype_col = reportElementAddDatatypeColumn(reportElement, dtype, dtype);
       dtype_col.col_type = "weight";
-      if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
-        dtype_col.min_val = weights[0].weight;
-        dtype_col.max_val = weights[0].weight;
-      }
+      // if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
+      //   dtype_col.min_val = weights[0].weight;
+      //   dtype_col.max_val = weights[0].weight;
+      // }
       for(var j=0; j<weights.length; j++) {
+        if(dtype_col.minuslog_transform) {
+          //if(!weights[j].weight_orig) { weights[j].weight_orig = weights[j].weight; }
+          if(weights[j].weight != 0) { weights[j].weight = -1 * Math.log10(weights[j].weight); }
+        }
         var w1 = weights[j].weight;
+        if((dtype_col.min_val == 0) && (dtype_col.max_val == 0)) {
+          dtype_col.min_val = w1;
+          dtype_col.max_val = w1;
+        }
         if(w1 < dtype_col.min_val) { dtype_col.min_val = w1; }
         if(w1 > dtype_col.max_val) { dtype_col.max_val = w1; }
       }
@@ -3417,7 +3491,7 @@ function reportsParseElementData(reportElement, xhrObj) {
 }
 
 
-function reportElementAddDatatypeColumn(reportElement, dtype, title, visible) {
+function reportElementAddDatatypeColumn(reportElement, dtype, title, visible, col_type) {
   if(!reportElement) { return; }
 
   if(reportElement.element_type == "treelist") {
@@ -3437,6 +3511,7 @@ function reportElementAddDatatypeColumn(reportElement, dtype, title, visible) {
     dtype_col.col_type = "mdata";
     dtype_col.visible = false;
     dtype_col.user_modifiable = false;    
+    dtype_col.minuslog_transform = false;    
     dtype_col.filtered = false;
     dtype_col.filter_abs = false;
     dtype_col.filter_min = "min";
@@ -3444,8 +3519,10 @@ function reportElementAddDatatypeColumn(reportElement, dtype, title, visible) {
     dtype_col.min_val = 0;
     dtype_col.max_val = 0;
     dtype_col.highlight_color = "";  //default is #EBEBEB" but leave empty unless different from default
+    dtype_col.description = "";
     
     if(visible) { dtype_col.visible = true; }
+    if(col_type) { dtype_col.col_type = col_type; }
 
     reportElement.datatypes[dtype] = dtype_col;
     reportElement.dtype_columns.push(dtype_col);
@@ -3602,6 +3679,10 @@ function reportElementCheckCategoryFilters(reportElement, object) {
   if(!reportElement) { return false; }
   if(!object) { return false; }
 
+  //changed search_match so it defaults to true and only set to false when search-filter fails
+  //now I can easily alter the categories and counts to show only those from the search_match results
+  if(!object.search_match) { return false; }
+
   //performs a combination of logic.
   //within same datatype, multiple categories are treated as OR
   //between different datatypes, filter is treated as AND
@@ -3611,7 +3692,7 @@ function reportElementCheckCategoryFilters(reportElement, object) {
     var dtype_col = reportElement.datatypes[dtype];
     if(!dtype_col) { continue; }
     if(!dtype_col.filtered) { continue; }
-    if(dtype_col.col_type != "mdata") { continue; }
+    if(dtype_col.col_type != "mdata" && dtype_col.col_type != "location") { continue; }
     if(!dtype_col.categories) { continue; }
 
     if(!reportsObjectCheckCategoryFilters(object, dtype_col)) {
@@ -3633,22 +3714,10 @@ function reportsObjectCheckCategoryFilters(object, dtype_col) {
   //perform positive OR selection on different categories of this dtype,
 
   if(!dtype_col.filtered) { return true; }
-  if(dtype_col.col_type != "mdata") { return true; }
+  if(dtype_col.col_type != "mdata" && dtype_col.col_type != "location") { return true; }
   if(!dtype_col.categories) { return true; }
   //console.log("reportsObjectCheckCategoryFilters "+dtype_col.datatype+" has categories");
 
-  //perform class specific tests if datatype is not generic mdata
-  //if(dtype_col.datatype == "name") {
-  //  val = object.name;
-  //}
-  //if((object.classname == "Experiment") || (object.classname == "FeatureSource") || (object.classname == "EdgeSource")) {
-  //   if(dtype_col.datatype == "category") {
-  //    val = object.category;
-  //  }
-  //}
-  //if(object.classname == "Feature") { }
-  //if(object.classname == "Edge") { }
-  //if(object.classname == "Configuration") { }
   if(object.classname == "Edge") {
     var t_feature = null;
     if(/^f1\./.test(dtype_col.datatype)) { t_feature = object.feature1;}
@@ -3663,6 +3732,35 @@ function reportsObjectCheckCategoryFilters(object, dtype_col) {
   var datatype = dtype_col.datatype;
   datatype = datatype.replace(/^f1\./, '');
   datatype = datatype.replace(/^f2\./, '');
+
+  //perform class specific tests if datatype is not generic mdata
+  var val = "";
+  if(datatype == "name") {
+    val = object.name;
+  }
+  if(datatype == "category") {
+    if((object.classname == "Feature" || object.classname == "Edge") && object.source && object.source.category) { 
+      val = object.source.category;
+    }
+    if((object.classname == "Experiment") || (object.classname == "FeatureSource") || (object.classname == "EdgeSource")) {
+      val = object.category;
+    }
+  }
+  if(dtype_col.col_type == "location") {
+    if(datatype == "chrom_name") {
+      val = object.chrom;
+    }
+    if(datatype == "chrom_strand") {
+      val = object.strand;
+    }
+  }
+      
+  if(val) {
+    var ctg_obj = dtype_col.categories[val];
+    if(ctg_obj && ctg_obj.filtered) {
+      return true;
+    }
+  }
 
   //this is one of the filtered dtypes, must pass this category test in order to continue checking next dtype
   if(!object.mdata || !object.mdata[datatype]) {
@@ -3691,6 +3789,7 @@ function reportsObjectCheckCategoryFilters(object, dtype_col) {
 
 function reportElementSearchTestObject(feature, filter) {
   feature.search_match = false;
+  if(!filter) { feature.search_match = true; }
   if(feature.name && (feature.name.toLowerCase().indexOf(filter) != -1)) {
     feature.search_match = true;
     return;
@@ -3752,15 +3851,15 @@ function reportElementSearchData(elementID) {
 
   for(var k=0; k<feature_count; k++) {
     var feature = datasourceElement.feature_array[k];
-    if(feature) { feature.search_match = false; }
+    if(feature) { feature.search_match = true; }
   }
   for(var k=0; k<edge_count; k++) {
     var edge = datasourceElement.edge_array[k];
-    if(edge) { edge.search_match = false; }
+    if(edge) { edge.search_match = true; }
   }
   for(var k=0; k<source_count; k++) {
     var source = datasourceElement.sources_array[k];
-    if(source) { source.search_match = false; }
+    if(source) { source.search_match = true; }
   }
 
   var endtime = new Date();
@@ -3837,8 +3936,9 @@ function reportElement_process_dtype_category(datasourceElement, selected_dtype,
   if(!datasourceElement) { return; }
   if(!selected_dtype) { return; }
   //console.log("selected_dtype type["+selected_dtype.datatype+"]  title["+selected_dtype.title+"]")
-  if(selected_dtype.col_type != "mdata") { return; } //might loosen this in the future
+  if(selected_dtype.col_type != "mdata" && selected_dtype.col_type != "location") { return; } //might loosen this in the future
   if(!datasourceElement.dtype_columns) { return; }
+  var starttime = new Date();
 
   //scan the datasource column for all the different categories, count up and display
   if(!selected_dtype.categories) {
@@ -3898,12 +3998,13 @@ function reportElement_process_dtype_category(datasourceElement, selected_dtype,
       var signal = 0;
       if(ctg_value_datatype) {
         var ctg_value_datatype = ctg_value_datatype;
-        ctg_value_datatype = ctg_value_datatype.replace(/^f1\./, '');
-        ctg_value_datatype = ctg_value_datatype.replace(/^f2\./, '');
 
         var sig_feature = null;
         if(edge && (/^f1\./.test(ctg_value_datatype))) { sig_feature = edge.feature1;}
         if(edge && (/^f2\./.test(ctg_value_datatype))) { sig_feature = edge.feature2;}
+
+        ctg_value_datatype = ctg_value_datatype.replace(/^f1\./, '');
+        ctg_value_datatype = ctg_value_datatype.replace(/^f2\./, '');
 
         if(sig_feature && sig_feature.expression_hash && 
            sig_feature.expression_hash[ctg_value_datatype] && 
@@ -3926,6 +4027,12 @@ function reportElement_process_dtype_category(datasourceElement, selected_dtype,
         } else if(datatype == "location_string") {
           //console.log("check t_feature "+t_feature.name+" -- location_string");
           zenbu_update_dtype_category(selected_dtype, t_feature.chromloc, filtered, category_method, signal);
+        } else if(datatype == "chrom_name") {
+          //console.log("check t_feature "+t_feature.name+" -- chrom_name");
+          zenbu_update_dtype_category(selected_dtype, t_feature.chrom, filtered, category_method, signal);
+        } else if(datatype == "chrom_strand") {
+          //console.log("check t_feature "+t_feature.name+" -- chrom_strand");
+          zenbu_update_dtype_category(selected_dtype, t_feature.strand, filtered, category_method, signal);
         } else  if(datatype == "name") {
           zenbu_update_dtype_category(selected_dtype, t_feature.name, filtered, category_method, signal);
         } else if(t_feature.mdata && t_feature.mdata[datatype]) {
@@ -3988,6 +4095,10 @@ function reportElement_process_dtype_category(datasourceElement, selected_dtype,
       } else if(datatype == "location_string") {
         //console.log("check feature "+feature.name+" -- location_string");
         zenbu_update_dtype_category(selected_dtype, feature.chromloc, feature.filter_valid, category_method, signal);
+      } else if(datatype == "chrom_name") {
+        zenbu_update_dtype_category(selected_dtype, feature.chrom, feature.filter_valid, category_method, signal);
+      } else if(datatype == "chrom_strand") {
+        zenbu_update_dtype_category(selected_dtype, feature.strand, feature.filter_valid, category_method, signal);
       } else  if(datatype == "name") {
         zenbu_update_dtype_category(selected_dtype, feature.name, feature.filter_valid, category_method, signal);
       } else if(feature.mdata && feature.mdata[datatype]) {
@@ -4045,13 +4156,15 @@ function reportElement_process_dtype_category(datasourceElement, selected_dtype,
     if(category_method=="count") { ctg_obj.value = ctg_obj.count; }
     if(category_method=="mean")  { 
       ctg_obj.mean_sum = ctg_obj.value;
-      ctg_obj.value = ctg_obj.value/ctg_obj.count;
+      ctg_obj.value = ctg_obj.value/(ctg_obj.count + ctg_obj.hidden_count);
     }
     ctg_cnt++;
     ctg_names += ctg_obj.ctg+" ";
     //console.log("dtype["+selected_dtype.datatype+"]  category ["+ctg_obj.ctg+"] cnt="+ctg_obj.count+" hidden_count="+ctg_obj.hidden_count);
   }
-  console.log(datasourceElement.elementID+" dtype["+selected_dtype.datatype+"] has "+ctg_cnt+" categories: "+ctg_names);
+  var endtime = new Date();
+  var runtime = (endtime.getTime() - starttime.getTime());
+  console.log("reportElement_process_dtype_category ", datasourceElement.elementID+" dtype["+selected_dtype.datatype+"] has "+ctg_cnt+" categories: "+ctg_names+" "+(runtime)+"msec");
 }
 
 
@@ -4063,8 +4176,8 @@ function zenbu_update_dtype_category(dtype_col, ctgval, filter_valid, category_m
   if(!ctgval) { return; }
   if(!categories[ctgval]) { categories[ctgval] = {ctg:ctgval, count:0, hidden_count:0, value:null, filtered:false}; }
 
-  if(!filter_valid) { categories[ctgval].hidden_count++; return; }
-  categories[ctgval].count++;
+  if(!filter_valid) { categories[ctgval].hidden_count++; }
+  else { categories[ctgval].count++; }
   
   if(category_method=="count") { return; }
   if(signal==null) { return; }
@@ -4118,7 +4231,16 @@ function reportElementLoadSourceFeatures(reportElement) {
   reportElement.table_num_pages = 0;
   reportElement.table_page = 1;
 
-  var paramXML = "<zenbu_query><format>fullxml</format><mode>features</mode>";
+  var paramXML = "<zenbu_query><format>fullxml</format>";
+  if(reportElement.load_region) {
+    console.log("load "+reportElement.elementID+" with region ["+reportElement.load_region+"]");
+    paramXML += "<mode>region</mode>";
+    paramXML += "<loc>"+reportElement.load_region+"</loc>";
+    paramXML += "<source_outmode>full_feature</source_outmode>";
+    paramXML += "<nocache/>";
+  } else {
+    paramXML += "<mode>features</mode>";
+  }
   paramXML += "<source_ids>"+reportElement.source_ids+"</source_ids>";
   var filter="";
   if(reportElement.query_filter) { filter += reportElement.query_filter; }
@@ -4145,6 +4267,7 @@ function reportElementLoadSourceFeatures(reportElement) {
   xhrObj.xhr        = null; //not active yet
   xhrObj.paramXML   = paramXML;
   xhrObj.mode       = "search";  //eedb_search.cgi
+  if(reportElement.load_region) { xhrObj.mode = "region"; }  //eedb_region.cgi
   
   reportElement.loading = true;
   reportElement.load_retry = 0;
@@ -4265,6 +4388,7 @@ function reportElementLoadSourceEdges(reportElement) {
   var feature_ids = "";
   if(reportElement.focus_feature) {
     feature_ids += reportElement.focus_feature.id;
+    console.log("load "+reportElement.elementID+" edges with focus_feature: "+reportElement.focus_feature.id);
   }
   if(reportElement.filter_feature_ids) {
     if(feature_ids!="") { feature_ids += ","; }
@@ -4292,7 +4416,8 @@ function reportElementLoadSourceEdges(reportElement) {
     paramXML += "</mdkey_list>";
   }
   paramXML += "</zenbu_query>\n";
-  
+  //console.log("load query"+paramXML);
+
   //var paramXML = "<zenbu_query><format>fullxml</format><mode>edges</mode><edge_search_depth>3</edge_search_depth>";
   //paramXML += "<source_ids>CCFED83C-F889-43DC-BA41-7843FCB90095::2:::EdgeSource</source_ids>";
   //paramXML += "<source_ids>CCFED83C-F889-43DC-BA41-7843FCB90095::1:::EdgeSource,CCFED83C-F889-43DC-BA41-7843FCB90095::2:::EdgeSource,CCFED83C-F889-43DC-BA41-7843FCB90095::10:::EdgeSource</source_ids>";
@@ -4340,7 +4465,7 @@ function reportElementPostprocessEdgesQuery(reportElement) {
   
   if(reportElement.focus_feature) {
     //if(!reportElement.selected_feature) { reportElement.selected_feature = reportElement.focus_feature; }  //DONT do this anymore
-    console.log("reportElementPostprocessEdgesQuery "+elementID+" focus_feature["+reportElement.focus_feature.name+"]");
+    console.log("reportElementPostprocessEdgesQuery "+elementID+" focus_feature["+reportElement.focus_feature.name + " : "+ reportElement.focus_feature.id+"]");
   }
   
   var filter_feature_ids_hash = {};
@@ -4621,7 +4746,7 @@ function reportsLoadElement(elementID) {
   var reportElement = current_report.elements[elementID];
   if(!reportElement) { return; }
 
-  console.log("reportsLoadElement ["+elementID+"]");
+  console.log("reportsLoadElement ["+elementID+"] datasource["+reportElement.datasource_mode+"]");
   reportsResetElement(elementID);
 
   //datasource general
@@ -4658,7 +4783,7 @@ function reportsPostprocessElement(elementID) {
   console.log("reportsPostprocessElement "+elementID);
   
   //datasource general
-  if(reportElement.datasource_mode == "feature") {
+  if(reportElement.datasource_mode == "feature" || reportElement.datasource_mode == "search") {
     reportElementPostprocessFeaturesQuery(reportElement);
   }
   if(reportElement.datasource_mode == "edge") {
@@ -4677,6 +4802,7 @@ function reportsPostprocessElement(elementID) {
         if(!dtype_col) { continue; }
         var t_col = reportElementAddDatatypeColumn(reportElement, dtype_col.datatype, dtype_col.title);
         t_col.col_type = dtype_col.col_type;
+        t_col.minuslog_transform = dtype_col.minuslog_transform;
       }
       //might be best to always copy the feature/edge/source array into the local to allow local sorting
       //shares feature/edge/source objects so does not use extra memory, but array and sort can be different
@@ -4852,6 +4978,7 @@ function reportsDrawElement(elementID) {
   if(reportElement.content_height && !reportElement.auto_content_height) { style += "height: "+(reportElement.content_height)+"px; "; }
   if(is_hidden == "none") { style += "display:none; "; }  //debug for tab-layout children
   main_div.setAttribute('style', style);
+  if(reportElement.backgroundColor) { main_div.style.backgroundColor = reportElement.backgroundColor; }
 
   if(current_report.edit_page_configuration) {
     main_div.setAttribute("onmousedown", "reportElementEvent(\""+reportElement.elementID+"\", 'main_div_resize_mousedown');");
@@ -4859,7 +4986,7 @@ function reportsDrawElement(elementID) {
   }
   reportElementDrawTitlebar(reportElement);
   
-  if(datasourceElement.loading) {
+  if(datasourceElement.loading && !reportElement.loading_custom_draw) {
     var load_info = main_div.appendChild(document.createElement('span'));
     load_info.setAttribute('style', "font-size:11px; ;margin-left:15px;");
     load_info.innerHTML = "loading...";
@@ -4870,6 +4997,9 @@ function reportsDrawElement(elementID) {
   if(reportElement.drawElement) {
     reportElement.drawElement();
   }
+  
+  if(datasourceElement.loading) { return; }
+  
   //if(reportElement.element_type == "table") {
   //  //reportsDrawTable(reportElement);
   //  reportElement.drawElement();
@@ -4902,18 +5032,20 @@ function reportsDrawElement(elementID) {
   }
   
   var master_div = document.getElementById("zenbuReportsDiv");
-  var masterRect = master_div.getBoundingClientRect();
-  //console.log("masterRect x:"+masterRect.x+" y:"+masterRect.y+" left:"+masterRect.left+" top:"+masterRect.top+ " bottom:"+masterRect.bottom);
-  var mainRect = main_div.getBoundingClientRect();
-  //console.log("mainRect "+reportElement.main_div_id+" rect x:"+mainRect.x+" y:"+mainRect.y+" left:"+mainRect.left+" top:"+mainRect.top+" bottom:"+mainRect.bottom);
-  if(masterRect.bottom < mainRect.bottom + 10) {
-    //console.log("master_div top:"+masterRect.top+" bottom:"+masterRect.bottom+" height:"+masterRect.height+" adjust because "+reportElement.elementID + " bottom is "+mainRect.bottom);
-    var t_height = mainRect.bottom - masterRect.top + 10;
-    if(t_height < 100) { t_height = 100; }
-    //console.log("master_div["+elementID+"] new height: "+t_height);
-    master_div.style.height = t_height + "px";
+  if(master_div) {
+    var masterRect = master_div.getBoundingClientRect();
+    //console.log("masterRect x:"+masterRect.x+" y:"+masterRect.y+" left:"+masterRect.left+" top:"+masterRect.top+ " bottom:"+masterRect.bottom);
+    var mainRect = main_div.getBoundingClientRect();
+    //console.log("mainRect "+reportElement.main_div_id+" rect x:"+mainRect.x+" y:"+mainRect.y+" left:"+mainRect.left+" top:"+mainRect.top+" bottom:"+mainRect.bottom);
+    if(masterRect.bottom < mainRect.bottom + 10) {
+      //console.log("master_div top:"+masterRect.top+" bottom:"+masterRect.bottom+" height:"+masterRect.height+" adjust because "+reportElement.elementID + " bottom is "+mainRect.bottom);
+      var t_height = mainRect.bottom - masterRect.top + 10;
+      if(t_height < 100) { t_height = 100; }
+      //console.log("master_div["+elementID+"] new height: "+t_height);
+      master_div.style.height = t_height + "px";
+    }
   }
-
+  
   var endtime = new Date();
   var runtime = (endtime.getTime() - starttime.getTime());
   console.log("reportsDrawElement "+reportElement.elementID+" "+(runtime)+"msec");
@@ -5194,6 +5326,8 @@ function reportElementTriggerCascade(reportElement, on_trigger) {
         for(var k=0; k<datasource.feature_array.length; k++) {
           var feature = datasource.feature_array[k];
           if(!feature) { continue; }
+          if(!feature.filter_valid) { continue; }
+          if(!feature.search_match) { continue; }
           if(all_feature_ids != "") { all_feature_ids += ","; }
           all_feature_ids += feature.id;
         }
@@ -5215,11 +5349,43 @@ function reportElementTriggerCascade(reportElement, on_trigger) {
       reportsPostprocessElement(trigger.targetElement.elementID);
       reportsDrawElement(trigger.targetElement.elementID);
     }
-    if(trigger.action_mode == "select_location") {
-      if(datasource.selected_location) {
-        reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_location);
-      } else if(datasource.selected_feature) {
-        reportElementCascadeEvent(trigger.targetElement, 'select_location', datasource.selected_feature.chromloc);
+    if((trigger.action_mode == "select_location") || (trigger.action_mode == "set_load_region")) {
+      //console.log("TRIGGER-CASCADE from element["+reportElement.elementID+"] datasource["+datasource.elementID+"] to["+trigger.targetElement.elementID+"] action["+trigger.action_mode+" - "+trigger.options+"]");
+      if(trigger.options == "current_region") {
+        //special mode for zenbugb. don't use datasource (which is track), use reportElement (which is the glyphsGB)
+        console.log("reportElementTriggerCascade reportElement("+reportElement.elementID+") "+trigger.action_mode + " current_region ["+reportElement.current_region+"]");
+        reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, reportElement.current_region);
+      }      
+      else if(datasource.selected_location) {
+        console.log(trigger.action_mode + " selected_location ["+datasource.selected_location+"]");
+        reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, datasource.selected_location);
+      } 
+      else if(trigger.options == "clear") {
+        reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, "");
+      } 
+      else if(trigger.options == "max_region") {
+        if(datasource.max_region) {
+          reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, datasource.max_region);
+        }
+      } 
+      else if(datasource.selected_feature) {
+        reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, datasource.selected_feature.chromloc);
+      } 
+      else if(datasource.selected_edge) {
+        console.log("select_location with EDGE, use opt:"+trigger.options);
+        switch(trigger.options) {
+          case "left_feature":
+            console.log("select_location with EDGE ["+trigger.options+"] : "+ datasource.selected_edge.feature1.chromloc);
+            reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, datasource.selected_edge.feature1.chromloc);
+            break;
+          case "right_feature":
+            console.log("select_location with EDGE ["+trigger.options+"] : "+ datasource.selected_edge.feature2.chromloc);
+            reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, datasource.selected_edge.feature2.chromloc);
+            break;
+          default:
+            reportElementCascadeEvent(trigger.targetElement, trigger.action_mode, datasource.selected_edge.chromloc);
+            break;
+        }
       }
       //reportElementCascadeEvent(trigger.targetElement, 'select', datasource.selected_edge.id); }
       //reportsDrawElement(trigger.targetElement.elementID);
@@ -5647,7 +5813,8 @@ function reportsPrepElement(reportElement) {
     var auxID = reportElement.main_div_id + "_subpanel_aux";
     var auxdiv = document.getElementById(auxID);
     if(!auxdiv) {
-      auxdiv = master_div.appendChild(document.createElement('div'));
+      auxdiv = document.createElement('div');
+      if(master_div) { master_div.appendChild(auxdiv); }
       auxdiv.id = auxID;
       reportElement.auxdiv = auxdiv;
       auxdiv.setAttribute('style', "position:absolute; z-index:10; left:0px; top:0px; width:100px;");
@@ -5657,7 +5824,7 @@ function reportsPrepElement(reportElement) {
     var headerID = reportElement.main_div_id + "_header_div";
     var header_div = document.getElementById(headerID);
     if(!header_div) {
-      header_div = main_div.appendChild(document.createElement('div'));
+      header_div = reportElement.main_div.appendChild(document.createElement('div'));
     }
     reportElement.header_div = header_div;
   }
@@ -5673,6 +5840,7 @@ function reportsDrawLayoutElement(layoutElement, traverse_down) {
 
   console.log("reportsDrawLayoutElement ["+layoutElement.elementID+"] "+layoutElement.layout_type);
   var master_div = document.getElementById("zenbuReportsDiv");
+  if(!master_div) { return; }
   var masterRect = master_div.getBoundingClientRect();
   //console.log("masterRect x:"+masterRect.x+" y:"+masterRect.y+" left:"+masterRect.left+" top:"+masterRect.top+ " bottom:"+masterRect.bottom);
 
@@ -6700,6 +6868,12 @@ function reportElementCascadeEvent(reportElement, mode, value, value2) {
     return true;
   }
   
+  if(mode == "set_load_region") { 
+    console.log(reportElement.elementID+" set_load_region ["+value+"]");
+    reportElement.load_region = value;
+    return true;
+  }
+
   //if(mode == "search_filter") {
   //  //search_data_filter
   //}
@@ -6883,6 +7057,12 @@ function reportElementCascadeEvent(reportElement, mode, value, value2) {
     //reportElementColumnsInterface(elementID, 'refresh');
     reportElementToggleSubpanel(elementID, 'refresh');
   }
+  if(mode == "dtype-description") {
+    var dtype = reportElement.datatypes[value];
+    if(dtype) { dtype.description = value2; }
+    //reportElementColumnsInterface(elementID, 'refresh');
+    reportElementToggleSubpanel(elementID, 'refresh');
+  }
   if(mode == "dtype-colnum") {
     var dtype = reportElement.datatypes[value];
     if(dtype) {
@@ -6930,6 +7110,13 @@ function reportElementCascadeEvent(reportElement, mode, value, value2) {
   if(mode == "dtype-user_modifiable") {
     var dtype = reportElement.datatypes[value];
     if(dtype) { dtype.user_modifiable = !dtype.user_modifiable; }
+  }
+  if(mode == "dtype-minuslog_transform") {
+    var dtype = reportElement.datatypes[value];
+    if(dtype) { dtype.minuslog_transform = !dtype.minuslog_transform; }
+    //reportsPostprocessElement(elementID);
+    reportElementToggleSubpanel(elementID, 'none');
+    reportsLoadElement(elementID); //need to reload
   }
   if(mode == "dtype-filter") {  
     var dtype = reportElement.datatypes[value];
@@ -7279,7 +7466,8 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
   if(param == "title_focus_feature") { newconfig.title_focus_feature = value; }
   if(param == "title_load_filter") { newconfig.title_load_filter = value; }
 
-  if(param == "description") {  newconfig.description = value; return; }
+  if(param == "description") { newconfig.description = value; return; }
+  if(param == "description_tooltip") { newconfig.description_tooltip = value; }
   if(param == "backColor") {
     if(!value) { value = "#F6F6F6"; }
     if(value.charAt(0) != "#") { value = "#"+value; }
@@ -7589,7 +7777,9 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
         reportElement.title_prefix = newconfig.title_prefix;
       }
       reportElement.title=reportElement.title_prefix;
-  
+      if(newconfig.description !== undefined) { reportElement.description = newconfig.description; }
+      if(newconfig.description_tooltip !== undefined) { reportElement.description_tooltip = newconfig.description_tooltip; }
+
       if(newconfig.symetric_axis !== undefined) { reportElement.symetric_axis = newconfig.symetric_axis; }
 
       if(newconfig.xaxis_fixedscale !== undefined) { reportElement.xaxis.fixedscale = newconfig.xaxis_fixedscale; reportElement.chart=null; }
@@ -7635,6 +7825,7 @@ function reportElementReconfigParam(elementID, param, value, altvalue) {
     if(reportElement.datasource_mode != "shared_element") {
       reportElement.datasourceElementID = ""; //need to clear if not in shared mode
     }
+    if(!reportElement.load_on_page_init) { needReload=0; }  //never trigger reload on accept unless load_on_page_init is also set
 
     //check if anything changed
     //var new_atr_count = 0;
@@ -7672,16 +7863,22 @@ function reportElementDrawTitlebar(reportElement) {
   
   var datasourceElement = reportElement.datasource();
 
+  var main_div = reportElement.main_div;
+  if(!main_div) { return; }
+
+  if(reportElement.description_tooltip && !reportElement.show_titlebar) {
+    main_div.onmouseover= function(element) { return function() { eedbMessageTooltip(element.description, 400, 'left'); };}(reportElement);
+    main_div.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
+  }
+  
   var show_titlebar = reportElement.show_titlebar;
   if(reportElement.newconfig && reportElement.newconfig.show_titlebar != undefined) { show_titlebar = reportElement.newconfig.show_titlebar; }
   if(!current_report.edit_page_configuration && !show_titlebar) { return; }
     
   var master_div = document.getElementById("zenbuReportsDiv");
+  if(!master_div) { return; }
   var masterRect = master_div.getBoundingClientRect();
   //console.log("masterRect x:"+masterRect.x+" y:"+masterRect.y+" left:"+masterRect.left+" top:"+masterRect.top+ " bottom:"+masterRect.bottom);
-
-  var main_div = reportElement.main_div;
-  if(!main_div) { return; }
 
   var mainRect = main_div.getBoundingClientRect();
   //console.log("mainRect "+reportElement.main_div_id+" rect x:"+mainRect.x+" y:"+mainRect.y+" left:"+mainRect.left+" top:"+mainRect.top+" bottom:"+mainRect.bottom);
@@ -7741,6 +7938,7 @@ function reportElementDrawTitlebar(reportElement) {
 
   //widgets
   var header_g = svg.appendChild(document.createElementNS(svgNS,'g'));
+  header_g.setAttributeNS(null, "onmouseout", "eedbClearSearchTooltip();");
 
   var titleBar = header_g.appendChild(document.createElementNS(svgNS,'rect'));
   titleBar.setAttributeNS(null, 'x', '0px');
@@ -7751,6 +7949,9 @@ function reportElementDrawTitlebar(reportElement) {
   if(current_report.edit_page_configuration) {
     titleBar.setAttribute("onmousedown", "reportElementEvent(\""+reportElement.elementID+"\", 'start_element_drag');");
     titleBar.setAttribute("onmouseup",   "reportElementEvent(\""+reportElement.elementID+"\", 'stop_element_drag');");
+  }
+  if(reportElement.description_tooltip) {
+    titleBar.onmouseover= function(element) { return function() { eedbMessageTooltip(element.description, 400, 'left'); };}(reportElement);
   }
   
   var title = reportElement.title_prefix;
@@ -7779,6 +7980,10 @@ function reportElementDrawTitlebar(reportElement) {
     heading.setAttribute("onmousedown", "reportElementEvent(\""+reportElement.elementID+"\", 'start_element_drag');");
     heading.setAttribute("onmouseup",   "reportElementEvent(\""+reportElement.elementID+"\", 'stop_element_drag');");
   }
+  if(reportElement.description_tooltip) {
+    heading.onmouseover= function(element) { return function() { eedbMessageTooltip(element.description, 400, 'left'); };}(reportElement);
+  }
+
 
   //widgets
   var widget_pos = width - 4;
@@ -8668,7 +8873,37 @@ function reportElementConfigSubpanel(reportElement) {
     }
   }
 
+  //description and description_tooltip
+  var desc_div = general_ctrl_div.appendChild(document.createElement('div'));
+  tdiv2 = desc_div.appendChild(document.createElement('div'));
+  tdiv2.setAttribute('style', "margin-left:3px; font-size:12px; font-family:arial,helvetica,sans-serif;");
+  tdiv2.innerHTML = "description:";
+  
+  tcheck = tdiv2.appendChild(document.createElement('input'));
+  tcheck.setAttribute('style', "margin: 0px 1px 0px 25px; vertical-align: middle; ");
+  tcheck.setAttribute('type', "checkbox");
+  var val1 = reportElement.description_tooltip;
+  if(reportElement.newconfig && reportElement.newconfig.description_tooltip != undefined) { val1 = reportElement.newconfig.description_tooltip; }
+  if(val1) { tcheck.setAttribute('checked', "checked"); }
+  tcheck.setAttribute("onclick", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'description_tooltip', this.checked);");
+  tspan2 = tdiv2.appendChild(document.createElement('span'));
+  tspan2.setAttribute("style", "margin-bottom:3px;");
+  tspan2.innerHTML = "show description tooltip";
 
+  var description = reportElement.description;
+  if(reportElement.newconfig && reportElement.newconfig.description !== undefined) {  description = reportElement.newconfig.description; }
+  var descInput = desc_div.appendChild(document.createElement('textarea'));
+  descInput.setAttribute('style', "min-width:"+(configwidth-20)+"px; max-width:"+(configwidth-20)+"px; min-height:20px; margin: 3px 5px 3px 5px; font-size:10px; font-family:arial,helvetica,sans-serif;");
+  descInput.setAttribute('rows', 3);
+  //descInput.setAttribute("onkeydown", "if(event.keyCode==13) { reportElementReconfigParam(\""+reportElement.elementID+"\", 'description', this.value); }");
+  descInput.setAttribute("onkeyup", "reportElementReconfigParam(\""+reportElement.elementID+"\", 'description', this.value);");
+  descInput.setAttribute("onblur", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'refresh', this.value);");
+  if(description) { 
+    descInput.setAttribute("value", description); 
+    descInput.innerHTML = description; 
+  }
+
+  
   //-------  sources and triggers section -------------
   var sourcesDiv = reportElementBuildSourcesInterface(reportElement);
   
@@ -10350,9 +10585,24 @@ function zenbuReports_hoverInfo(reportElement, object) {
       } else if(datatype == "location_string") {
         val = t_feature.chromloc;
       }
-      if(val) { tspan.innerHTML = val; }      
+      if(val) { tspan.innerHTML = val; }
     }
-    
+    else if(t_feature && dtype_col.col_type == "location") {
+      var val = "";
+      if(datatype == "location_string" || datatype == "location_link") {
+        val = t_feature.chromloc;
+      } else if(datatype == "chrom_name") {
+        val = t_feature.chrom;
+      } else if(datatype == "chrom_start") {
+        val = t_feature.start;
+      } else if(datatype == "chrom_end") {
+        val = t_feature.end;
+      } else if(datatype == "chrom_strand") {
+        val = t_feature.strand;
+      }
+      if(val) { tspan.innerHTML = val; }
+    }
+
     if(tspan.innerHTML) { divFrame.appendChild(tdiv); }
     firstRow = false;
   }
@@ -10425,10 +10675,23 @@ function zenbu_object_dtypecol_value(object, dtype_col, mode) {
       val = t_feature.source.category;
     } else if(t_feature.source && (datatype == "source_name")) {
       val = t_feature.source.name;
-    } else if(datatype == "location_string") {
-      val = t_feature.chromloc;
     }
     if(val) { value = val; }      
+  }
+  else if(t_feature && dtype_col.col_type == "location") {
+    var val = "";
+    if(datatype == "location_string" || datatype == "location_link") {
+      val = t_feature.chromloc;
+    } else if(datatype == "chrom_name") {
+      val = t_feature.chrom;
+    } else if(datatype == "chrom_start") {
+      val = t_feature.start;
+    } else if(datatype == "chrom_end") {
+      val = t_feature.end;
+    } else if(datatype == "chrom_strand") {
+      val = t_feature.strand;
+    }
+    if(val) { value = val; }
   }
   
   return value;
@@ -10457,6 +10720,8 @@ function reportElementCascadeTriggersInterface(reportElement) {
   var configdiv = document.getElementById(cfgID);
   if(!configdiv) { return; }
   
+  var datasourceElement = reportElement.datasource();
+
   configdiv.appendChild(document.createElement('hr'));
   
   var cascadesID = reportElement.main_div_id + "_config_cascades_div";
@@ -10515,7 +10780,7 @@ function reportElementCascadeTriggersInterface(reportElement) {
     for(var trig_idx=0; trig_idx<reportElement.newconfig.cascade_triggers.length; trig_idx++){
       var trigger = reportElement.newconfig.cascade_triggers[trig_idx];
       if(!trigger) { continue; }
-      //console.log("trigger "+reportElement.elementID+" ["+trig_idx+"] on["+trigger.on_trigger+"]  action["+trigger.action_mode+" - "+trigger.options+"]");
+      console.log("trigger "+reportElement.elementID+" ["+trig_idx+"] on["+trigger.on_trigger+"]  action["+trigger.action_mode+" - "+trigger.options+"]");
       //if(!trigger.targetElement) { trigger.targetElement = current_report.elements[trigger.targetElementID]; }
       //if(!trigger.targetElement) { continue; }
 
@@ -10608,7 +10873,7 @@ function reportElementCascadeTriggersInterface(reportElement) {
         select.style.fontSize = "10px";
         select.setAttribute("onchange", "reportElementReconfigParam(\""+ reportElement.elementID +"\", 'trigger_action_mode', '"+trig_idx+"', this.value);");
         
-        var opts1 = ["select", "select_location", "search_filter", "set_focus", "focus_load", "set_filter_features", "set_load_filter", "reset", "load", "postprocess"];
+        var opts1 = ["select", "select_location", "search_filter", "set_focus", "focus_load", "set_filter_features", "set_load_filter", "set_load_region", "reset", "load", "postprocess"];
         if(trigger.targetElement) {
           if(trigger.targetElement.element_type == "zenbugb") { opts1.push("set_view_config"); }
           if(trigger.targetElement.element_type == "cytoscape") { opts1.push("highlight"); }
@@ -10652,11 +10917,21 @@ function reportElementCascadeTriggersInterface(reportElement) {
       if(trigger.action_mode == "set_filter_features") {
         opts2 = ["clear", "selection", "subnetwork", "all_features"];
       }
+      if((trigger.action_mode=="select_location") || (trigger.action_mode=="set_load_region")) {
+        if(datasourceElement.datasource_mode == "feature") { 
+          opts2 = ["feature"];
+        }
+        if(datasourceElement.datasource_mode == "edge") { 
+          opts2 = ["edge", "left_feature", "right_feature"];
+        }
+        opts2.push("max_region", "clear");
+        if(reportElement.element_type=="zenbugb") { opts2.push("current_region"); }
+      }
       if(reportElement.element_type=="category" && 
          (trigger.action_mode == "search_filter" || trigger.action_mode == "set_load_filter")) {
         opts2 = ["clear", "category_filter"]; 
       }
-
+      
       if(opts2.length>0) {
         var span1 = td1.appendChild(document.createElement('span'));
         span1.innerHTML = " send: ";
@@ -11080,6 +11355,36 @@ function reportElementColumnsInterfaceRender(reportElement, columns_div, signalM
       tcheck.setAttribute("onclick", "reportElementEvent(\""+reportElement.elementID+"\", 'dtype-user_modifiable', \""+selected_dtype_col.datatype+"\", this.value);");                        
       var tspan = tdiv.appendChild(document.createElement('span'));
       tspan.innerHTML = "column user modifiable";
+      
+      //-log transform
+      if((selected_dtype_col.col_type == "weight") || (selected_dtype_col.col_type == "signal")) {          
+        tcheck = tdiv.appendChild(document.createElement('input'));
+        tcheck.setAttribute('style', "margin: 2px 1px 0px 15px;");
+        tcheck.setAttribute('type', "checkbox");
+        if(selected_dtype_col.minuslog_transform) { tcheck.setAttribute('checked', "checked"); }
+        tcheck.setAttribute("onclick", "reportElementEvent(\""+reportElement.elementID+"\", 'dtype-minuslog_transform', \""+selected_dtype_col.datatype+"\", this.value);");                        
+        tspan = tdiv.appendChild(document.createElement('span'));
+        tspan.innerHTML = "-log transform";
+      }
+    }
+ 
+    //description and description_tooltip
+    if(current_report.edit_page_configuration) {
+      var desc_div = details_div.appendChild(document.createElement('div'));
+      tdiv2 = desc_div.appendChild(document.createElement('div'));
+      tdiv2.setAttribute('style', "margin:2px 0px 0px 3px; font-size:12px; font-family:arial,helvetica,sans-serif;");
+      tdiv2.innerHTML = "description:";
+      
+      var description = selected_dtype_col.description;
+      var descInput = desc_div.appendChild(document.createElement('textarea'));
+      descInput.setAttribute('style', "min-width:280px; max-width:280px; min-height:20px; margin: 3px 5px 3px 5px; font-size:10px; font-family:arial,helvetica,sans-serif;");
+      descInput.setAttribute('rows', 3);
+      descInput.setAttribute("onkeydown", "if(event.keyCode==13) { reportElementEvent(\""+reportElement.elementID+"\", 'dtype-description', \""+selected_dtype_col.datatype+"\", this.value); }");
+      descInput.setAttribute("onblur", "reportElementEvent(\""+reportElement.elementID+"\", 'dtype-description', \""+selected_dtype_col.datatype+"\", this.value);");  
+      if(description) { 
+        descInput.setAttribute("value", description); 
+        descInput.innerHTML = description; 
+      }
     }
   }
   return  columns_div;

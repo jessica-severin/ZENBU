@@ -88,6 +88,30 @@ function Colour(){
 
   };
 
+  /* Returns a string representing this Colour as a CSS hexadecimal RGBA colour
+   * value - that is, a string of the form #RRGGBBAA where each of RR, GG, BB and AA
+   * are two-digit hexadecimal numbers.
+   */
+  this.getCSSHexadecimalRGBA = function(){
+
+    // get the integer RGB components
+    var rgb = this.getIntegerRGB();
+
+    // determine the hexadecimal equivalents
+    var r16 = rgb.r.toString(16);
+    var g16 = rgb.g.toString(16);
+    var b16 = rgb.b.toString(16);
+    var a16 = Math.floor(rgb.a * 255).toString(16);
+
+    // return the CSS RGB colour value
+    return '#'
+        + (r16.length == 2 ? r16 : '0' + r16)
+        + (g16.length == 2 ? g16 : '0' + g16)
+        + (b16.length == 2 ? b16 : '0' + b16)
+        + (a16.length == 2 ? a16 : '0' + a16);
+
+  };
+
   /* Returns a string representing this Colour as a CSS integer RGB colour
    * value - that is, a string of the form rgb(r,g,b) where each of r, g, and b
    * are integers in the range [0,255].
